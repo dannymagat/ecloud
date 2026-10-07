@@ -259,7 +259,7 @@ suite(title, () => {
       const reply = await sendAccounting(file, replacements);
       expect(reply.code, `${file}: ${reply.output}`).toBe('Accounting-Response');
       // NAS retransmit of the identical packet: must not create a second row (the reply to
-      // the retransmit is asserted separately below, see KNOWN GAP)
+      // the retransmit is asserted separately below)
       await sendAccounting(file, replacements, 1);
     }
     const rows = await db.query<{
@@ -277,13 +277,9 @@ suite(title, () => {
     expect(rows.rows[2]?.acctoutputoctets).toBe(String(2 ** 32 + 987_654_321));
   });
 
-  // KNOWN GAP (found by A9, Phase 3): a retransmitted (duplicate) Accounting-Request is
-  // collapsed by ON CONFLICT DO NOTHING, rlm_sql then reports 0 affected rows (noop) and
-  // FreeRADIUS sends NO Accounting-Response, so a real NAS keeps retransmitting and may mark
-  // the server dead (RFC 2866 §2: the server must acknowledge after recording). Fix belongs in
-  // infra/freeradius (e.g. map the sql module's noop to ok for accounting). When fixed this
-  // `it.fails` starts failing: turn it into a plain `it`.
-  it.fails('T-A6 KNOWN GAP: a retransmitted accounting packet is acknowledged', async () => {
+  // A retransmit is collapsed by ON CONFLICT DO NOTHING (rlm_sql noop); sites-enabled/ecloud
+  // maps that noop to ok so the NAS still gets its Accounting-Response (RFC 2866 §2).
+  it('T-A6: a retransmitted accounting packet is acknowledged', async () => {
     const { replacements } = accountingReplacements();
     const first = await sendAccounting('acct-start.txt', replacements);
     expect(first.code, first.output).toBe('Accounting-Response');

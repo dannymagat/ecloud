@@ -334,19 +334,25 @@ await describeIntegration('isolation: tenant cases T-01…T-15 (database level)'
     });
   });
 
-  // KNOWN GAP (found by A9, Phase 3): the `roles` policy is FOR ALL with
-  // USING (organization_id IS NULL OR organization_id = current org), and DELETE only checks
-  // USING, so ecloud_app can DELETE platform templates (and, through role_permissions' USING,
-  // their grants). Fix belongs in a new migration (owner: packages/db): split the policy so
-  // DELETE/UPDATE use `organization_id = current org` only. When fixed, this `it.fails`
-  // starts failing: turn it into a plain `it`.
-  it.fails('T-15 KNOWN GAP: a tenant cannot DELETE a platform template role', async () => {
+  // Fixed by migration 012 (RESTRICTIVE DELETE guards on roles / role_permissions).
+  it('T-15: a tenant cannot DELETE a platform template role or its grants', async () => {
     await inRolledBackTransaction(dbs.appPool, t.a.organizationId, async (client) => {
-      const probe = await sqlProbe(
+      const grants = await sqlProbe(
         client,
         'DELETE FROM role_permissions WHERE role_id IN (SELECT id FROM roles WHERE organization_id IS NULL)',
       );
-      expect(probe.ok && probe.rowCount > 0, 'template grants deletable by tenant').toBe(false);
+      expect(grants.ok && grants.rowCount > 0, 'template grants deletable by tenant').toBe(false);
+      const roles = await sqlProbe(client, 'DELETE FROM roles WHERE organization_id IS NULL');
+      expect(roles.ok && roles.rowCount > 0, 'templates deletable by tenant').toBe(false);
+    });
+  });
+
+  it('T-15: a tenant can still DELETE its own custom role grants', async () => {
+    await inRolledBackTransaction(dbs.appPool, t.a.organizationId, async (client) => {
+      const own = await sqlProbe(client, 'DELETE FROM role_permissions WHERE role_id = $1', [
+        t.a.roleId,
+      ]);
+      expect(own.ok).toBe(true);
     });
   });
 

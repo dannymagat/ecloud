@@ -39,6 +39,7 @@ function raw(overrides: Partial<RawAccountingRow> = {}): RawAccountingRow {
     eventtimestamp: new Date('2026-01-01T00:00:00Z'),
     acctdelaytime: 0,
     received_at: new Date('2026-01-01T00:00:01Z'),
+    packet_src_ip: '192.0.2.10',
     ...overrides,
   };
 }

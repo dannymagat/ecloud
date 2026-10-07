@@ -1,7 +1,7 @@
 # Project Status
 
 ## Current Stage
-`PHASE 3 — FOUNDATION IMPLEMENTATION (LOCAL) IN PROGRESS`
+`PHASE 3 — FOUNDATION IMPLEMENTATION (LOCAL) COMPLETE — AWAITING OWNER REVIEW`
 
 Owner approved the Phase 2 decision gate on 2026-10-07 (DECISIONS.md D-021 … D-034). Phase 3 is authorised for **local development on the MacBook only**. **VPS deployment is gated (D-031)**: no remote host, EZEAP, EZE controller, DNS, firewall, Caddy or RADIUS exposure change may happen until the exact change list is presented and approved.
 
@@ -26,15 +26,24 @@ Not authorised: EZEAP changes, EZE controller changes, public RADIUS, public DNS
 | M2 | Monorepo scaffold (npm workspaces, TypeScript, lint, test runner, Compose dev stack, env template) | DONE 2026-10-07 — build, lint, 48 tests green |
 | M3 | Database package: migrations, RLS, seeds (permissions, role templates), migration runner, tests | DONE 2026-10-07 — 11 migrations, 37 tables, FORCE RLS on 31, 53 tests incl. 12 integration |
 | M4 | Policy engine + adapters packages: intent model, resolution, capability declarations (four-state), translation, golden tests | DONE 2026-10-07 — 125 tests, ~98% line coverage; orchestrator downgraded 2 CoA declarations per D-006 |
-| M5 | API foundation: auth, sessions, RBAC middleware, tenant context, core CRUD, internal AAA authorize, OpenAPI | IN PROGRESS |
-| M6 | Worker skeleton + FreeRADIUS dev container definition (rlm_rest / rlm_sql insert-only) | FreeRADIUS container DONE 2026-10-07 (smoke-tested accept/reject/unavailable + insert-only accounting); worker IN PROGRESS |
-| M7 | Integration-test framework, tenant-isolation tests, CI workflow | IN PROGRESS |
-| M8 | Security review of auth/RBAC/RLS code; reconciliation; docs | PENDING |
+| M5 | API foundation: auth, sessions, RBAC middleware, tenant context, core CRUD, internal AAA authorize, OpenAPI | DONE 2026-10-07 — endpoint list and deliberate exclusions in API_ARCHITECTURE.md "Implemented endpoints" / "Not implemented in Phase 3"; MFA enforcement, AAA tenant attribution hardened in M8 |
+| M6 | Worker skeleton + FreeRADIUS dev container definition (rlm_rest / rlm_sql insert-only) | DONE 2026-10-07 — FreeRADIUS container (accept/reject/unavailable, insert-only accounting, retransmit ACK); worker: accounting drain, quota, reap, CoA dispatcher (disabled by default, D-006), outbox → webhooks with SSRF guard, partitions, retention (dry-run default) |
+| M7 | Integration-test framework, tenant-isolation tests, CI workflow | DONE 2026-10-07 — 578 tests green against PostgreSQL 16 + Redis 7 (`npm run test:integration`), 0 `it.fails` left; FreeRADIUS contract suite (8 tests) runs in CI `radius-contract` (needs Docker) |
+| M8 | Security review of auth/RBAC/RLS code; reconciliation; docs | DONE 2026-10-07 — see reconciliation log; findings fixed with regression tests |
 
 ## Orchestrator Reconciliation Log (Phase 3)
 - 2026-10-07 — Adapter declarations `coovachilli-uam.coaChange` and `openwifi-config.coaChange` were delivered as VERIFIED_SUPPORTED (documentation-verified); downgraded to REQUIRES_DEVICE_TEST per owner rule D-006/D-034 and a guard test added so no adapter can declare verified CoA/Disconnect before device tests.
 - 2026-10-07 — `infra/compose/postgres-init/01_roles.sql` gained the `ecloud_radius` role and `GRANT CREATE ON DATABASE` for the platform role (needed by migration 009); applied out-of-band to the running local dev stack.
 - 2026-10-07 — Incident (local dev DB only, no remote impact): while cleaning temporary test objects the FreeRADIUS agent dropped the `radius` schema on the local `ecloud` dev database after migrations had been applied; it re-applied migration 009 and verified objects and ownership. Grants to `ecloud_radius` were re-applied by the orchestrator. No files, volumes or remote systems affected. Lesson recorded: agents must not drop shared schemas on the dev stack.
+
+- 2026-10-07 — M8 security review (findings from the A9 audit + Codex audit pass, rebuilt and verified in the cloud dev container; local only, no remote change):
+  - **T-15** tenant could DELETE platform role templates / their grants → migration 012 (`RESTRICTIVE … FOR DELETE` guards). `it.fails` → `it`.
+  - **T-A6** retransmitted Accounting-Request got no Accounting-Response → `sites-enabled/ecloud` maps rlm_sql `noop` to `ok`. `it.fails` → `it`; verified on FreeRADIUS 3.2.5 locally, 3.2.10 in CI.
+  - **MFA** was reported but not enforced for platform bindings / `mfa_enforced` → migration 013 `admin_sessions.mfa_verified_at`; sessions without a proved factor hold no permissions (SECURITY_ARCHITECTURE §6.2). Closes API_ARCHITECTURE open question 4.
+  - **AAA tenant attribution**: authorize fell back to the NAS-supplied NAS-Identifier; post-auth trusted any `Class`; the accounting drainer resolved the NAS from NAS-IP-Address and attached Class-matched records even for unknown NAS → resolution only from authenticated source IP / client shortname; migration 014 `radacct_raw.packet_src_ip` written by FreeRADIUS; unattributed rows never touch sessions/usage (T-05, T-08 regression tests).
+  - **Webhook SSRF**: delivery used global `fetch` on tenant URLs (http, internal addresses, redirects) → https-only transport with public-address check and DNS pinning, no redirects; delivery re-checks webhook/job/envelope organization (T-12).
+  - `format:check` failed on three `tsconfig.build.json` files (CI `check` job) → formatted.
+- Not done in M8 (needs owner input or later phase): `openwifi_ucentral` adapter ambiguity (API_ARCHITECTURE open question 1); MFA reset/disable for a lost device; `sessions.status = authorized` (open question 2).
 
 ## Verified Environment Facts
 See REMOTE_ENVIRONMENT.md and PHASE2_VALIDATION.md. Ledger: 105 claims — 40 verified, 17 proposed, 1 unknown, 47 requires device test; 24 device tests (DT-01…DT-24), none executed yet.
@@ -45,4 +54,4 @@ See REMOTE_ENVIRONMENT.md and PHASE2_VALIDATION.md. Ledger: 105 claims — 40 ve
 - Production regulatory retention (D-025) before production.
 
 ## Next Action
-Execute Phase 3 milestones M2–M8 locally. Report milestones, test results, unresolved risks and any decision needing owner approval. Present the VPS change list and stop before any remote change.
+Phase 3 milestones M1–M8 complete locally. Owner decisions pending: API_ARCHITECTURE open questions 1–3, then the D-031 VPS change list (no remote change until approved).

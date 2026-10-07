@@ -2,7 +2,9 @@
  * Internal AAA endpoints for FreeRADIUS rlm_rest (docs/contracts/aaa-authorize.md).
  *
  * authorize: NAS → tenant/site/adapter (nas_clients by packet source IP, then the
- * `ECLOUD-Client-Shortname` = nas id, then a unique NAS-Identifier) → subject (subscriber
+ * `ECLOUD-Client-Shortname` = nas id; both are server-side facts tied to the shared secret.
+ * NAS-Identifier is NAS-supplied and never selects a tenant, SECURITY_ARCHITECTURE.md §3.2)
+ * → subject (subscriber
  * `users` with Argon2id password, `vouchers` by HMAC, or MAC-auth `client_devices`) →
  * resolveEffectivePolicy + adapter translation → `sessions` row → 200 with
  * `control:Auth-Type = Accept`, reply attributes and `reply:Class = ai:<32hex>`; otherwise
@@ -109,10 +111,16 @@ export function decisionKey(body: RadiusRequestBody): string {
   return `aaa:dec:${sha256Hex(keyParts(body).join('|'))}`;
 }
 
-async function resolveNas(deps: AppDeps, body: RadiusRequestBody): Promise<NasRow | null> {
+/**
+ * Only server-side facts select the NAS (and so the tenant): the UDP source address and the
+ * `clients.conf` shortname, both bound to the client's shared secret. Packet attributes
+ * (NAS-Identifier, NAS-IP-Address) can be set to anything by any accepted client, so a
+ * fallback on them would let one tenant's NAS authenticate against another tenant
+ * (SECURITY_ARCHITECTURE.md §3.2: NAS-Identifier never distinguishes across tenants).
+ */
+export async function resolveNas(deps: AppDeps, body: RadiusRequestBody): Promise<NasRow | null> {
   const srcIp = attr(body, 'ECLOUD-Packet-Src-IP-Address');
   const shortname = attr(body, 'ECLOUD-Client-Shortname');
-  const nasIdentifier = attr(body, 'NAS-Identifier');
   return withPlatform(deps.dbPlatform, AUTHN_ACCESS, async (trx) => {
     const base = () =>
       trx
@@ -137,14 +145,6 @@ async function resolveNas(deps: AppDeps, body: RadiusRequestBody): Promise<NasRo
     if (shortname !== undefined && isUuid(shortname)) {
       const byId = await base().where('id', '=', shortname).executeTakeFirst();
       if (byId !== undefined) return byId;
-    }
-    if (nasIdentifier !== undefined && nasIdentifier !== '') {
-      const byIdentifier = await base()
-        .where('nas_identifier', '=', nasIdentifier)
-        .limit(2)
-        .execute();
-      // Ambiguous identifiers never resolve a tenant (SECURITY_ARCHITECTURE.md §3.2).
-      if (byIdentifier.length === 1) return byIdentifier[0] ?? null;
     }
     return null;
   });
@@ -598,7 +598,9 @@ export function postAuthHandler(deps: AppDeps): RequestHandler {
       const rawFacts = await deps.kv.get(decisionKey(body)).catch(() => null);
       let facts = rawFacts === null ? null : (JSON.parse(rawFacts) as DecisionFacts);
       if (facts === null && replyClassSession !== null) {
-        // Decision cache miss (e.g. other API replica): the Class names our session row.
+        // Decision cache miss (e.g. other API replica): the Class names our session row, but
+        // Class is request data. Trust it only for a session of the NAS that sent the packet.
+        const nas = await resolveNas(deps, body);
         const session = await withPlatform(deps.dbPlatform, AUTHN_ACCESS, (trx) =>
           trx
             .selectFrom('sessions')
@@ -613,7 +615,7 @@ export function postAuthHandler(deps: AppDeps): RequestHandler {
             .where('id', '=', replyClassSession)
             .executeTakeFirst(),
         );
-        if (session !== undefined) {
+        if (session !== undefined && nas !== null && session.nas_client_id === nas.id) {
           facts = {
             organization_id: session.organization_id,
             nas_client_id: session.nas_client_id,
@@ -659,7 +661,9 @@ export function postAuthHandler(deps: AppDeps): RequestHandler {
       } else {
         await withTenant(deps.db, row.organization_id, async (trx) => {
           await trx.insertInto('auth_events').values(row).execute();
-          const sessionId = replyClassSession ?? facts?.session_id ?? null;
+          // Only the session bound to this decision (cache, or a Class verified against the
+          // sending NAS above): never an arbitrary Class value from the packet.
+          const sessionId = facts?.session_id ?? null;
           if (result === 'reject' && sessionId !== null) {
             await trx
               .updateTable('sessions')

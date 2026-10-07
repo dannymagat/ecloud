@@ -22,6 +22,8 @@ export async function createAdminSession(
     userAgent: string | null;
     impersonatingOrganizationId?: string;
     impersonationReason?: string;
+    /** Set when the session was established with a second factor (see migration 013). */
+    mfaVerifiedAt?: Date | null;
   },
 ): Promise<NewSession> {
   const token = randomToken(32);
@@ -39,6 +41,7 @@ export async function createAdminSession(
       impersonation_reason: input.impersonationReason ?? null,
       expires_at: expiresAt,
       last_seen_at: input.now,
+      mfa_verified_at: input.mfaVerifiedAt ?? null,
     })
     .execute();
   return { id, token, expiresAt };

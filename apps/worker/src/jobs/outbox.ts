@@ -6,13 +6,15 @@
  * (event, webhook) with a deterministic job id, and sets `published_at` in the same
  * transaction. Delivery POSTs the envelope with `X-ECLOUD-Signature: t=<unix>,v1=<hex>`
  * (HMAC-SHA-256 over `<t>.<body>`), 5 s timeout, one `webhook_deliveries` row per attempt,
- * auto-disable after 50 consecutive failures.
+ * auto-disable after 50 consecutive failures. The default transport refuses non-https and
+ * non-public targets and pins the resolved address (./webhook-transport.ts, SSRF).
  */
 import { createHmac } from 'node:crypto';
 import { withPlatform, type Db, type WebhookDeliveryStatus } from '@ecloud/db';
 import { sql } from 'kysely';
 import type { OutboxPayload } from '../events.js';
 import type { SecretResolver } from '../infra/secrets.js';
+import { createSafeWebhookFetch } from './webhook-transport.js';
 
 export const OUTBOX_REASON = 'worker:outbox.publish';
 export const WEBHOOK_REASON = 'worker:webhooks.deliver';
@@ -143,6 +145,7 @@ export type FetchLike = (
 export interface DeliverDeps {
   db: Db;
   resolveSecret: SecretResolver;
+  /** Tests only: replaces the SSRF-guarded transport. */
   fetch?: FetchLike;
   now?: () => Date;
 }
@@ -153,6 +156,8 @@ export class WebhookDeliveryError extends Error {
     this.name = 'WebhookDeliveryError';
   }
 }
+
+const defaultFetch: FetchLike = createSafeWebhookFetch();
 
 export type DeliveryOutcome =
   { status: 'success'; httpStatus: number } | { status: 'skipped'; reason: string };
@@ -173,6 +178,13 @@ export async function deliverWebhook(
     .executeTakeFirst();
   if (hook === undefined) return { status: 'skipped', reason: 'webhook deleted' };
   if (!hook.enabled) return { status: 'skipped', reason: 'webhook disabled' };
+  // T-12: a job only ever goes to a webhook of the event's own tenant.
+  if (
+    hook.organization_id !== job.organizationId ||
+    job.envelope.organization_id !== job.organizationId
+  ) {
+    return { status: 'skipped', reason: 'webhook belongs to another organization' };
+  }
 
   const body = JSON.stringify(job.envelope);
   const headers: Record<string, string> = {
@@ -195,7 +207,7 @@ export async function deliverWebhook(
   let httpStatus: number | null = null;
   if (error === null) {
     try {
-      const response = await (deps.fetch ?? globalThis.fetch)(hook.url, {
+      const response = await (deps.fetch ?? defaultFetch)(hook.url, {
         method: 'POST',
         headers,
         body,

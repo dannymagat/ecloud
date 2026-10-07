@@ -127,10 +127,12 @@ transport part); accounting Start/Interim/Stop with retransmits → exactly one
 
 ### 5.4 Known gaps pinned as `it.fails` (turn into `it` when fixed)
 
-| Test | Gap | Owner of the fix |
+None open. Closed in M8 (both tests are plain `it` now):
+
+| Test | Gap | Fix |
 |---|---|---|
-| `tenant-cases` "T-15 KNOWN GAP" | `roles` / `role_permissions` policies are `FOR ALL` with `USING (organization_id IS NULL OR = current org)`; DELETE checks only USING, so `ecloud_app` in any tenant context can delete platform role templates and their grants (verified, rolled back) | packages/db (new migration splitting the policies per command) |
-| `freeradius-rest` "T-A6 KNOWN GAP" | a retransmitted accounting packet is collapsed by `ON CONFLICT DO NOTHING`, rlm_sql reports 0 rows (noop) and FreeRADIUS sends **no Accounting-Response**; a NAS keeps retransmitting and may fail over | infra/freeradius (treat the sql module's noop as ok in `accounting`) |
+| `tenant-cases` "T-15" | `roles` / `role_permissions` policies are `FOR ALL` with `USING (organization_id IS NULL OR = current org)`; DELETE checks only USING, so `ecloud_app` could delete platform role templates and their grants | migration 012: `RESTRICTIVE … FOR DELETE` guards (`organization_id = current org`); `tenant_isolation` stays the single permissive policy |
+| `freeradius-rest` "T-A6" | a retransmitted accounting packet hit `ON CONFLICT DO NOTHING`, rlm_sql returned noop and FreeRADIUS sent **no Accounting-Response** | `sites-enabled/ecloud` accounting: `sql` then `if (noop) { ok }`; an INSERT failure still sends nothing |
 
 ## 6. API-level security / isolation tests expected from A5 (apps/api)
 
@@ -143,11 +145,11 @@ seeded with `withTwoTenants()`):
 | T-02 | org-A admin `GET /users/{id of B}` (and every `/{id}` route, generated from the router) | 404, never 403 |
 | T-03 | `POST /policy_assignments` with B's `policy_id` (any FK of another tenant) | 404/422, no row (the DB does **not** stop cross-tenant FKs: RI checks bypass RLS) |
 | T-04 | site-admin of A-1 reads sessions of A-2 | 404 / empty |
-| T-05/T-06 | `/internal/aaa/authorize` from NAS of A with B-only username; same username in A and B from NAS of B | Reject + `auth_events` (`organization_id = A`); B's user accepted, A's `last_login` untouched |
+| T-05/T-06 | `/internal/aaa/authorize` from NAS of A with B-only username; same username in A and B from NAS of B | Reject + `auth_events` (`organization_id = A`); B's user accepted, A's `last_login` untouched. **Implemented (api integration "T-05")**: an unknown source claiming A's NAS-Identifier is rejected; B's NAS replaying A's Class in post-auth changes nothing |
 | T-07 | voucher of A on B's portal | reject, `portal_login_attempts.reason = 'tenant_mismatch'` for B |
-| T-08 | accounting drainer: foreign `acct_unique_id` from B's NAS | stored with `organization_id NULL`, flagged; A's session unchanged |
+| T-08 | accounting drainer: foreign `acct_unique_id` from B's NAS | stored with `organization_id NULL`, flagged; A's session unchanged. **Implemented (worker integration "T-08")**: the drainer resolves the NAS only from `radacct_raw.packet_src_ip` (migration 014, written by FreeRADIUS from the authenticated UDP source); a spoofed NAS-IP-Address / Class or a row without `packet_src_ip` is stored unattributed |
 | T-11 / S-08 | impersonating support: `PATCH /organizations/{B}`, `PATCH /administrators/{id}`, `POST /nas/{id}/secret:rotate` | 403/404, audit row with `impersonator_id` (note: `organizations`/`administrators` are platform tables without RLS and `ecloud_app` has DML on them, so this is enforced only by the API) |
-| T-12 | webhook fan-out for an event of A | delivered only to A's webhooks; payload has no B ids |
+| T-12 | webhook fan-out for an event of A | delivered only to A's webhooks; payload has no B ids. Delivery also re-checks webhook org = job org = envelope org, and the transport (`apps/worker/src/jobs/webhook-transport.ts`) refuses non-https and non-public targets with DNS pinning (SSRF; unit-tested) |
 | T-13 | export job of A downloaded with B's token | 404 (no export table exists yet) |
 | T-14 | API key of A with a read-only role calls `session:disconnect` | 403 + audit row |
 | T-15 | custom role edited in A, template updated by platform | A's role unchanged; templates not writable via API |
@@ -155,7 +157,7 @@ seeded with `withTwoTenants()`):
 | S-07 | webhook replay with `X-ECloud-Timestamp` older than 5 min | receiver reference rejects |
 | S-09 | portal request with valid `nasid` of site A but `md` from site B's secret | generic error, no credential, `reason = 'md_mismatch'` |
 | S-10 | worker Disconnect for a session of B while scoped to A | refused before send, no `session_actions` row |
-| SEC | authn: Argon2id params, lockout 10/5 min, TOTP enforced for platform bindings, recovery codes single-use; CSRF (`Origin` / token); rate limits (login 10/5 min, API 600/min, portal per `nasid+mac`); `/internal` requires `X-Internal-Token` (constant-time, 401 without body); RFC 9457 errors leak no SQL/stack; every mutating call writes `audit_logs` in the same transaction; endpoint × role matrix generated from the permission catalogue | per `SECURITY.md` / `PHASE2_VALIDATION.md` §6.5 |
+| SEC | authn: Argon2id params, lockout 10/5 min, TOTP enforced for platform bindings (**implemented**: api integration "MFA is enforced…"), recovery codes single-use; CSRF (`Origin` / token); rate limits (login 10/5 min, API 600/min, portal per `nasid+mac`); `/internal` requires `X-Internal-Token` (constant-time, 401 without body); RFC 9457 errors leak no SQL/stack; every mutating call writes `audit_logs` in the same transaction; endpoint × role matrix generated from the permission catalogue | per `SECURITY.md` / `PHASE2_VALIDATION.md` §6.5 |
 
 Lab-only: S-01…S-03 (overlay probes from a tenant WireGuard peer; DT-19/DT-20). S-04 also
 needs the API half (`auth_events` row `error`) once tenant resolution exists.
@@ -207,9 +209,9 @@ verifies FreeRADIUS ↔ ECLOUD wiring only and resolves no DT.
 | authenticates through the intended flow | aaa-contract (rlm_rest ↔ stub, HTTP-code mapping, no fail-open) | DT-03, DT-09, DT-11, DT-15 | PARTIAL — contract only; real authorize logic and devices pending |
 | receives the correct authorized policy | policy-engine / adapter unit + golden tests (packages) | DT-04, DT-05, DT-06, DT-10, DT-14 | PARTIAL — translation tested; enforcement unverified |
 | actual bandwidth enforcement | cannot be automated | DT-02, DT-04, DT-06, DT-14, DT-15 | NOT MET |
-| validated accounting records | aaa-contract rlm_sql dedupe + Gigawords folding; known gap on retransmit ACK | DT-03, DT-05, DT-16 | PARTIAL — drainer integration and devices pending |
+| validated accounting records | aaa-contract rlm_sql dedupe + Gigawords folding + retransmit ACK; worker drainer integration (Start/Interim/Stop/Accounting-On, replay idempotency, attribution) | DT-03, DT-05, DT-16 | PARTIAL — devices pending |
 | appears in admin session/usage views | — (API/UI phases) | DT-16, DT-17 | NOT MET |
-| managed securely | isolation matrix (T-cases DB level), security probes (S-05/S-06/S-10 DB part), secrets scan; 1 known RLS gap (templates) | DT-07, DT-22, DT-24 | PARTIAL |
+| managed securely | isolation matrix (T-cases DB level), security probes (S-05/S-06/S-10 DB part), secrets scan, MFA enforcement, AAA/accounting tenant attribution from authenticated source only, webhook SSRF guard | DT-07, DT-22, DT-24 | PARTIAL |
 | no fabricated / unverified integrations | adapter capability declaration tests (packages/adapters); this repo never auto-flips a DT | §5.4 results only | ENFORCED by process |
 
 ## 9. CI (`.github/workflows/ci.yml`)

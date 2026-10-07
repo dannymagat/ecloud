@@ -71,6 +71,8 @@ await describeIntegration('@ecloud/worker against PostgreSQL', () => {
           framedipaddress: '192.0.2.100',
           acctdelaytime: 0,
           ...r,
+          // FreeRADIUS writes the authenticated UDP source; default it to the NAS address.
+          packet_src_ip: 'packet_src_ip' in r ? r.packet_src_ip : (r.nasipaddress ?? NAS_IP),
           eventtimestamp: r.received_at as Date,
         })) as never,
       )
@@ -312,6 +314,66 @@ await describeIntegration('@ecloud/worker against PostgreSQL', () => {
       .where('organization_id', '=', org.id)
       .executeTakeFirstOrThrow();
     expect(Number(eventCount.n)).toBe(6);
+  });
+
+  it('T-08: NAS-IP-Address / Class from an unauthenticated source never attribute a record', async () => {
+    const before = await db
+      .selectFrom('sessions')
+      .select(['input_octets', 'output_octets', 'session_time_s', 'status'])
+      .where('id', '=', sessionA)
+      .executeTakeFirstOrThrow();
+    const ids = await insertRaw([
+      {
+        // claims this tenant's NAS address and session A's Class, sent from an unknown source
+        acctuniqueid: `spoof-${RUN}`,
+        acctsessionid: `spoof-${RUN}`,
+        acctstatustype: 'Interim-Update',
+        nasipaddress: NAS_IP,
+        packet_src_ip: UNKNOWN_NAS_IP,
+        class: classFor(sessionA),
+        acctinputoctets: 9_999_999_999,
+        acctsessiontime: 99_999,
+        received_at: at(80),
+      },
+      {
+        // legacy row written before migration 014: no authenticated source
+        acctuniqueid: `legacy-${RUN}`,
+        acctsessionid: `legacy-${RUN}`,
+        acctstatustype: 'Start',
+        packet_src_ip: null,
+        class: classFor(sessionA),
+        received_at: at(81),
+      },
+    ]);
+    const result = await drainOnce({
+      db,
+      state: await freshState(ids[0] ?? 0),
+      logger,
+      batchSize: 500,
+      lagMs: 0,
+    });
+    expect(result.unresolved).toBe(2);
+    const records = await db
+      .selectFrom('accounting_records')
+      .select(['organization_id', 'session_id'])
+      .where('acct_unique_id', 'in', [`spoof-${RUN}`, `legacy-${RUN}`])
+      .execute();
+    expect(records).toEqual([
+      { organization_id: null, session_id: null },
+      { organization_id: null, session_id: null },
+    ]);
+    const after = await db
+      .selectFrom('sessions')
+      .select(['input_octets', 'output_octets', 'session_time_s', 'status'])
+      .where('id', '=', sessionA)
+      .executeTakeFirstOrThrow();
+    expect(after).toEqual(before);
+    const created = await db
+      .selectFrom('sessions')
+      .select('id')
+      .where('acct_unique_id', 'in', [`spoof-${RUN}`, `legacy-${RUN}`])
+      .execute();
+    expect(created).toEqual([]);
   });
 
   it('quota breach: pending while CoA is disabled, disconnect + dispatcher when enabled', async () => {

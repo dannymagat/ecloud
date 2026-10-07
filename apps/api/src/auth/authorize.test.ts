@@ -38,6 +38,8 @@ function admin(grants: Grant[], impersonating?: string): Principal {
         }
       : null,
     grants,
+    mfaVerifiedAt: null,
+    mfaPending: false,
   };
 }
 

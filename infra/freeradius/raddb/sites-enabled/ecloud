@@ -133,7 +133,16 @@ server ecloud {
 		#  (mods-config/sql/main/postgresql/queries.conf). A failed INSERT
 		#  returns no Accounting-Response, so the NAS retransmits (AAA §5.3).
 		#
+		#  A retransmit of a packet already stored hits ON CONFLICT DO NOTHING:
+		#  0 rows affected makes rlm_sql return noop, and FreeRADIUS only answers
+		#  ok/updated. The packet IS recorded, so acknowledge it (RFC 2866 §2);
+		#  otherwise the NAS keeps retransmitting and may mark the server dead.
+		#  fail (INSERT error) still sends no response.
+		#
 		sql
+		if (noop) {
+			ok
+		}
 	}
 
 	session {

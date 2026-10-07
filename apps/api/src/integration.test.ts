@@ -7,6 +7,7 @@
 import { describeIntegration, migrateTestDatabase } from '@ecloud/testing';
 import { newId } from '@ecloud/shared';
 import { generate } from 'otplib';
+import { MemoryKv } from './kv.js';
 import request from 'supertest';
 import { afterAll, beforeAll, expect, it } from 'vitest';
 import { createApp } from './app.js';
@@ -42,8 +43,8 @@ await describeIntegration('@ecloud/api against ecloud_test', () => {
     await closeDeps(deps);
   });
 
-  async function login(admin: AdminFixture): Promise<Agent> {
-    const agent = request.agent(apps.publicApp);
+  async function login(admin: AdminFixture, app = apps.publicApp): Promise<Agent> {
+    const agent = request.agent(app);
     const res = await agent
       .post('/api/v1/auth/login')
       .set(BROWSER)
@@ -51,6 +52,17 @@ await describeIntegration('@ecloud/api against ecloud_test', () => {
     expect(res.status).toBe(200);
     expect(res.body.mfa_required).toBe(false);
     return agent;
+  }
+
+  /** Enrols + confirms TOTP inside the agent's session, which makes it MFA-verified. */
+  async function enrolMfa(agent: Agent): Promise<void> {
+    const enrol = await agent.post('/api/v1/auth/mfa/enrol').set(BROWSER);
+    expect(enrol.status).toBe(201);
+    const confirm = await agent
+      .post('/api/v1/auth/mfa/confirm')
+      .set(BROWSER)
+      .send({ code: await generate({ secret: enrol.body.secret as string }) });
+    expect(confirm.status).toBe(200);
   }
 
   function randomIp(): string {
@@ -181,6 +193,51 @@ await describeIntegration('@ecloud/api against ecloud_test', () => {
       .set(BROWSER)
       .send({ mfa_token: third.body.mfa_token, recovery_code: recovery[0] });
     expect(reused.status).toBe(401);
+  });
+
+  it('MFA is enforced for platform bindings and mfa_enforced accounts (SEC §6.2)', async () => {
+    // own rate-limit store: this test logs in four times from the shared supertest address
+    const app = createApp({ ...deps, kv: new MemoryKv() }).publicApp;
+    const superAdmin = await createAdmin(deps.dbPlatform, [
+      { template: 'platform_super_admin', scope: 'platform' },
+    ]);
+    const first = await request(app)
+      .post('/api/v1/auth/login')
+      .set(BROWSER)
+      .send({ email: superAdmin.email, password: superAdmin.password });
+    expect(first.status).toBe(200);
+    expect(first.body.mfa_enrolment_required).toBe(true);
+    const agent = await login(superAdmin, app);
+    // password-only session: no permissions at all until a second factor is proved
+    expect((await agent.get('/api/v1/platform/organizations')).status).toBe(403);
+    const pending = await agent.get('/api/v1/auth/me');
+    expect(pending.body.mfa).toMatchObject({ required: true, enrolled: false, pending: true });
+    expect(pending.body.permissions_by_scope).toEqual([]);
+    await enrolMfa(agent);
+    expect((await agent.get('/api/v1/platform/organizations')).status).toBe(200);
+    const verified = await agent.get('/api/v1/auth/me');
+    expect(verified.body.mfa).toMatchObject({ required: true, enrolled: true, pending: false });
+
+    // an organization admin with mfa_enforced is held the same way
+    const { orgId } = await createTenant(deps.dbPlatform);
+    const enforced = await createAdmin(deps.dbPlatform, [
+      { template: 'org_admin', scope: 'organization', orgId },
+    ]);
+    await deps.dbPlatform
+      .updateTable('administrators')
+      .set({ mfa_enforced: true })
+      .where('id', '=', enforced.id)
+      .execute();
+    const orgAgent = await login(enforced, app);
+    expect((await orgAgent.get(`/api/v1/orgs/${orgId}/sites`)).status).toBe(403);
+    await enrolMfa(orgAgent);
+    expect((await orgAgent.get(`/api/v1/orgs/${orgId}/sites`)).status).toBe(200);
+
+    // an org admin without mfa_enforced keeps working with a password-only session
+    const plain = await createAdmin(deps.dbPlatform, [
+      { template: 'org_admin', scope: 'organization', orgId },
+    ]);
+    expect((await (await login(plain, app)).get(`/api/v1/orgs/${orgId}/sites`)).status).toBe(200);
   });
 
   it('cookie-authenticated mutations require Origin + X-Requested-With (CSRF)', async () => {
@@ -434,6 +491,7 @@ await describeIntegration('@ecloud/api against ecloud_test', () => {
       { template: 'platform_support', scope: 'platform' },
     ]);
     const agent = await login(support);
+    await enrolMfa(agent);
     // platform support without impersonation cannot write tenant config
     expect(
       (
@@ -521,6 +579,7 @@ await describeIntegration('@ecloud/api against ecloud_test', () => {
       { template: 'platform_super_admin', scope: 'platform' },
     ]);
     const agent = await login(superAdmin);
+    await enrolMfa(agent);
     const slug = unique('acme').toLowerCase().slice(0, 50);
     const created = await agent
       .post('/api/v1/platform/organizations')
@@ -558,12 +617,12 @@ await describeIntegration('@ecloud/api against ecloud_test', () => {
 
   // ---------------------------------------------------------------------------------- AAA
 
-  async function aaaFixture() {
+  async function aaaFixture(app = apps.publicApp) {
     const { orgId, siteId } = await createTenant(deps.dbPlatform);
     const admin = await createAdmin(deps.dbPlatform, [
       { template: 'org_admin', scope: 'organization', orgId },
     ]);
-    const agent = await login(admin);
+    const agent = await login(admin, app);
     const nasIp = randomIp();
     const nas = await agent
       .post(`/api/v1/orgs/${orgId}/nas`)
@@ -688,6 +747,69 @@ await describeIntegration('@ecloud/api against ecloud_test', () => {
     expect(events).toEqual([
       { result: 'accept', organization_id: f.orgId, auth_method: 'password' },
     ]);
+  });
+
+  it('T-05: only the authenticated packet source selects the tenant (no NAS-Identifier / Class trust)', async () => {
+    // own rate-limit store: two more admin logins from the shared supertest address
+    const app = createApp({ ...deps, kv: new MemoryKv() }).publicApp;
+    const a = await aaaFixture(app);
+    const b = await aaaFixture(app);
+    const nasIdentifier = unique('ap-a');
+    await deps.dbPlatform
+      .updateTable('nas_clients')
+      .set({ nas_identifier: nasIdentifier })
+      .where('nas_ip', '=', a.nasIp)
+      .execute();
+    // a client whose source address is not A's NAS claims A's NAS-Identifier
+    const spoofed = await authorize(
+      radius({
+        'User-Name': a.username,
+        'User-Password': 'sub-password-1',
+        'ECLOUD-Packet-Src-IP-Address': '203.0.113.251',
+        'NAS-Identifier': nasIdentifier,
+        'Calling-Station-Id': 'AA-BB-CC-DD-EE-05',
+        'Acct-Session-Id': unique('acct'),
+      }),
+    );
+    expect(spoofed.status).toBe(401);
+
+    const acct = unique('acct');
+    const ok = await authorize(
+      radius({
+        'User-Name': a.username,
+        'User-Password': 'sub-password-1',
+        'ECLOUD-Packet-Src-IP-Address': a.nasIp,
+        'Calling-Station-Id': 'AA-BB-CC-DD-EE-06',
+        'Acct-Session-Id': acct,
+      }),
+    );
+    expect(ok.status).toBe(200);
+    const cls = (ok.body['reply:Class'] as { value: string[] }).value[0] as string;
+    // B's NAS replays A's Class in a reject post-auth: A's session must stay untouched
+    await request(apps.internalApp)
+      .post('/internal/aaa/post-auth')
+      .set('X-Internal-Token', TEST_INTERNAL_TOKEN)
+      .send({
+        ...radius({
+          'ECLOUD-Auth-Result': 'reject',
+          'User-Name': unique('other'),
+          'ECLOUD-Packet-Src-IP-Address': b.nasIp,
+        }),
+        'ECLOUD-Reply-Class': { type: 'string', value: [`0x${Buffer.from(cls).toString('hex')}`] },
+      })
+      .expect(204);
+    const session = await deps.dbPlatform
+      .selectFrom('sessions')
+      .select(['status', 'organization_id'])
+      .where('acct_unique_id', '=', cls)
+      .executeTakeFirstOrThrow();
+    expect(session).toEqual({ status: 'active', organization_id: a.orgId });
+    const leaked = await deps.dbPlatform
+      .selectFrom('auth_events')
+      .select('organization_id')
+      .where('nas_ip', '=', b.nasIp)
+      .execute();
+    expect(leaked.every((e) => e.organization_id !== a.orgId)).toBe(true);
   });
 
   it('AAA authorize: single-use voucher is consumed once; post-auth reject closes the session', async () => {

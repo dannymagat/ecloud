@@ -73,6 +73,22 @@ export async function loadAdminGrants(
   return foldGrants(rows);
 }
 
+/** True when the administrator holds any unexpired platform-scope binding. */
+export async function hasPlatformBinding(
+  trx: DbExecutor,
+  administratorId: string,
+  now: Date,
+): Promise<boolean> {
+  const row = await trx
+    .selectFrom('role_bindings')
+    .select('id')
+    .where('administrator_id', '=', administratorId)
+    .where('scope_type', '=', 'platform')
+    .where((eb) => eb.or([eb('expires_at', 'is', null), eb('expires_at', '>', now)]))
+    .executeTakeFirst();
+  return row !== undefined;
+}
+
 /** Permissions of the platform role template used for impersonation (MULTITENANCY §4.4 step 7). */
 export async function loadTemplatePermissions(
   trx: DbExecutor,
@@ -114,9 +130,11 @@ export async function resolveSession(
         's.created_at',
         's.impersonating_organization_id',
         's.impersonation_reason',
+        's.mfa_verified_at',
         'a.email',
         'a.status',
         'a.deleted_at',
+        'a.mfa_enforced',
       ])
       .where('s.token_hash', '=', tokenHash)
       .where('s.revoked_at', 'is', null)
@@ -163,6 +181,14 @@ export async function resolveSession(
     } else {
       grants = await loadAdminGrants(trx, row.administrator_id, now);
     }
+    // SECURITY_ARCHITECTURE.md §6.2: MFA is mandatory for platform bindings and for accounts
+    // with mfa_enforced. Impersonation is only startable from a platform binding, so it always
+    // requires it. Without a proved factor the session keeps no permissions at all.
+    const mfaRequired =
+      row.mfa_enforced ||
+      impersonation !== null ||
+      (await hasPlatformBinding(trx, row.administrator_id, now));
+    const mfaPending = mfaRequired && row.mfa_verified_at === null;
     return {
       tokenHash,
       principal: {
@@ -171,7 +197,9 @@ export async function resolveSession(
         email: row.email,
         sessionId: row.id,
         impersonation,
-        grants,
+        grants: mfaPending ? [] : grants,
+        mfaVerifiedAt: row.mfa_verified_at,
+        mfaPending,
       },
     };
   });

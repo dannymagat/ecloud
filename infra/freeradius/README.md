@@ -132,6 +132,7 @@ the object form with `"do_xlat": false` for every attribute (contract §3 rule 1
 | Wrong PAP credential after a `200` | `Access-Reject` without the welcome text; `/post-auth` carries `Module-Failure-Message = pap: Cleartext password does not match "known good" password` |
 | Accounting before the table exists | no Accounting-Response (NAS would retransmit); log shows the PostgreSQL connection attempt (`rlm_sql_postgresql: Connection failed ... password authentication failed for user "ecloud_radius"` while the role was missing) -- the module loads and serves auth regardless (`pool { start = 0 }`) |
 | Accounting with `radius.radacct_raw` created from migration 009 (temporary dev role) | Start, Interim, Interim retransmit, Stop, Accounting-On -> 4 rows (duplicate collapsed by `uq_radacct_raw_packet`), output octets folded `(1 << 32) + n`, `UPDATE` as `ecloud_radius` denied; schema and role dropped again afterwards |
+| M8 (2026-10-07, cloud dev container, distro FreeRADIUS 3.2.5 with this raddb, PostgreSQL 16 migrated to 014; the 3.2.10 image is exercised by the CI `radius-contract` job) | `freeradius -C` OK; Accounting Start -> `Accounting-Response`; identical retransmit -> `Accounting-Response` (was: none) and still one row; row has `nasipaddress = 192.0.2.10` (packet attribute) and `packet_src_ip = 127.0.0.1` (authenticated source) |
 
 ## 6. Open items / dependencies
 
@@ -141,9 +142,9 @@ the object form with `"do_xlat": false` for every attribute (contract §3 rule 1
    fail (auth is unaffected). Proposed addition to `01_roles.sql` (A6/A5 to confirm):
    `CREATE ROLE ecloud_radius LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOBYPASSRLS PASSWORD :'radius_password';`
    with `\getenv radius_password RADIUS_SQL_PASSWORD` and `GRANT CONNECT ON DATABASE :"DBNAME" TO ecloud_radius;`.
-2. `radius.radacct_raw` has no column for the UDP source address; `nasipaddress` (NOT NULL) receives
-   `NAS-IP-Address` or, when the NAS omits it, the source address. The drainer should treat
-   `nasidentifier` + `nasipaddress` as hints and the authorize-time binding as truth (AAA §3).
+2. ~~`radius.radacct_raw` has no column for the UDP source address.~~ Done (M8): migration 014 adds
+   `packet_src_ip`, written by `queries.conf` from `Packet-Src-IP(v6)-Address`; the drainer resolves the
+   NAS / tenant from it only. `nasipaddress` / `nasidentifier` stay NAS-supplied display fields.
 3. 802.1X (EAP) and RadSec listeners, `read_clients`, `radius.radpostauth_raw` and the `linelog` audit
    lines are outside this milestone.
 4. `-X` must never be used in production (config dump includes secrets); use
@@ -220,7 +221,7 @@ Encoding rules (VERIFIED on 3.2.10):
 |---|---|---|
 | `ECLOUD-Packet-Src-IP-Address` (string) | server, `policy.d/ecloud` | **primary** NAS/tenant resolution (`nas_clients` by source IP, MULTITENANCY §3.3 A). Dev: the Docker bridge gateway `172.19.0.1` for host-originated packets. |
 | `ECLOUD-Client-Shortname` (string) | `clients.conf` `shortname` | secondary NAS key once production clients are rendered (renderer will set it to the `nas_clients` id). Dev: `ecloud-dev`. |
-| `NAS-Identifier`, `NAS-IP-Address`, `NAS-Port-Type`, `NAS-Port-Id` | NAS | NAS resolution fallback / logging only (`NAS-IP-Address` differs from the source behind NAT) |
+| `NAS-Identifier`, `NAS-IP-Address`, `NAS-Port-Type`, `NAS-Port-Id` | NAS | logging and same-tenant consistency checks only: NAS-supplied, **never** used to select a NAS or tenant (`NAS-IP-Address` also differs from the source behind NAT) |
 | `ECLOUD-Packet-Dst-Port` (1812) | server | listener telemetry |
 | `User-Name` | NAS | identity: portal credential (`pc-...`), MAC, voucher, subscriber username |
 | `User-Password` (cleartext, PAP) | NAS (decrypted by FreeRADIUS) | **never log, never persist.** Needed only when ECLOUD verifies itself (Argon2 subscriber password, voucher HMAC, MAC password) and answers `Auth-Type = Accept`. For broker credentials ECLOUD returns `Cleartext-Password` instead and lets `rlm_pap` compare. |

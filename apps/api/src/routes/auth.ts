@@ -111,7 +111,7 @@ export function authRoutes(deps: AppDeps): AnyRouteSpec[] {
           .leftJoin('mfa_credentials as m', (join) =>
             join.onRef('m.administrator_id', '=', 'a.id').on('m.verified_at', 'is not', null),
           )
-          .select([
+          .select((eb) => [
             'a.id',
             'a.email',
             'a.display_name',
@@ -119,6 +119,18 @@ export function authRoutes(deps: AppDeps): AnyRouteSpec[] {
             'a.password_hash',
             'a.mfa_enforced',
             'm.id as mfa_id',
+            eb
+              .exists(
+                eb
+                  .selectFrom('role_bindings as rb')
+                  .select('rb.id')
+                  .whereRef('rb.administrator_id', '=', 'a.id')
+                  .where('rb.scope_type', '=', 'platform')
+                  .where((w) =>
+                    w.or([w('rb.expires_at', 'is', null), w('rb.expires_at', '>', at)]),
+                  ),
+              )
+              .as('platform_bound'),
           ])
           .where((eb) => eb(eb.fn('lower', ['a.email']), '=', body.email))
           .where('a.deleted_at', 'is', null)
@@ -186,7 +198,8 @@ export function authRoutes(deps: AppDeps): AnyRouteSpec[] {
         body: {
           mfa_required: false,
           administrator: adminView(admin),
-          mfa_enrolment_required: admin.mfa_enforced,
+          // Until enrolment is confirmed the session holds no permissions (auth/principal.ts).
+          mfa_enrolment_required: admin.mfa_enforced || admin.platform_bound,
         },
       };
     },
@@ -267,6 +280,7 @@ export function authRoutes(deps: AppDeps): AnyRouteSpec[] {
           now: at,
           ip: ctx.ip,
           userAgent: ctx.userAgent,
+          mfaVerifiedAt: at,
         });
         await trx
           .updateTable('administrators')
@@ -395,6 +409,12 @@ export function authRoutes(deps: AppDeps): AnyRouteSpec[] {
           .set({ verified_at: at, last_used_at: at, recovery_codes_hash: recovery.hashes })
           .where('id', '=', row.id)
           .execute();
+        // The code just proved possession of the factor: the enrolling session is now MFA-verified.
+        await trx
+          .updateTable('admin_sessions')
+          .set({ mfa_verified_at: at })
+          .where('id', '=', principal.sessionId)
+          .execute();
         await writeAudit(trx, ctx, {
           organizationId: null,
           action: 'auth:mfa:confirm',
@@ -498,6 +518,8 @@ export function authRoutes(deps: AppDeps): AnyRouteSpec[] {
             enrolled: row.enrolled,
             // SECURITY_ARCHITECTURE.md §6.2: mandatory for platform bindings.
             required: row.admin.mfa_enforced || hasPlatformBinding,
+            // true: this session holds no permissions until TOTP is confirmed / used at login.
+            pending: principal.mfaPending,
           },
           bindings: row.bindings,
           permissions_by_scope,
@@ -665,5 +687,7 @@ function adminPrincipalStub(administratorId: string, sessionId: string): Princip
     sessionId,
     impersonation: null,
     grants: [],
+    mfaVerifiedAt: null,
+    mfaPending: false,
   };
 }

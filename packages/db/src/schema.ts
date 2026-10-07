@@ -127,6 +127,7 @@ export interface AdminSessionsTable {
   expires_at: Timestamp;
   last_seen_at: NullableTimestamp;
   revoked_at: NullableTimestamp;
+  mfa_verified_at: NullableTimestamp;
   created_at: GeneratedTimestamp;
 }
 
@@ -728,6 +729,8 @@ export interface RadacctRawTable {
   eventtimestamp: NullableTimestamp;
   acctdelaytime: number | null;
   received_at: GeneratedTimestamp;
+  /** UDP source FreeRADIUS authenticated (migration 014); the only trusted NAS identity. */
+  packet_src_ip: Inet | null;
 }
 
 export interface RadpostauthRawTable {

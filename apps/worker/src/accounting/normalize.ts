@@ -29,6 +29,8 @@ export interface RawAccountingRow {
   eventtimestamp: Date | null;
   acctdelaytime: number | null;
   received_at: Date;
+  /** Authenticated UDP source (migration 014); null on rows written before it. */
+  packet_src_ip: string | null;
 }
 
 export interface NormalizedAccounting {
@@ -36,7 +38,10 @@ export interface NormalizedAccounting {
   statusType: AccountingStatusType;
   acctSessionId: string;
   acctUniqueId: string;
+  /** NAS-IP-Address as sent by the NAS: stored for display, never used for attribution. */
   nasIp: string;
+  /** Authenticated packet source: the only key that resolves the NAS / tenant. */
+  packetSrcIp: string | null;
   nasIdentifier: string | null;
   nasPortId: string | null;
   username: string | null;
@@ -150,6 +155,7 @@ export function normalizeAccounting(row: RawAccountingRow): NormalizedAccounting
     acctSessionId: row.acctsessionid,
     acctUniqueId: row.acctuniqueid,
     nasIp: row.nasipaddress,
+    packetSrcIp: row.packet_src_ip,
     nasIdentifier: row.nasidentifier,
     nasPortId: row.nasportid,
     username: row.username,

@@ -42,6 +42,13 @@ export type Principal =
       readonly sessionId: string;
       readonly impersonation: Impersonation | null;
       readonly grants: readonly Grant[];
+      /** When the session proved a second factor; null otherwise. */
+      readonly mfaVerifiedAt: Date | null;
+      /**
+       * MFA is required (mfa_enforced or a platform binding) but this session has not proved
+       * it: `grants` is empty, only enrolment, /auth/me and logout are usable.
+       */
+      readonly mfaPending: boolean;
     }
   | {
       readonly kind: 'api_key';

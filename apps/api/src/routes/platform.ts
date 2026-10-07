@@ -439,6 +439,8 @@ export function platformRoutes(deps: AppDeps): AnyRouteSpec[] {
             userAgent: ctx.userAgent,
             impersonatingOrganizationId: body.organizationId,
             impersonationReason: body.reason,
+            // inherits the parent session's MFA proof (required for every impersonation session)
+            mfaVerifiedAt: principal.mfaVerifiedAt,
           });
           await writeAudit(trx, ctx, {
             organizationId: body.organizationId,

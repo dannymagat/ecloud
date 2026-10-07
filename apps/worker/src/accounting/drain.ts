@@ -112,6 +112,7 @@ export async function drainOnce(deps: DrainDeps): Promise<DrainResult> {
       'eventtimestamp',
       'acctdelaytime',
       'received_at',
+      'packet_src_ip',
     ])
     .where('radacctid', '>', cursor)
     .orderBy('radacctid')
@@ -218,23 +219,20 @@ async function findSession(
   rec: NormalizedAccounting,
   nas: NasInfo | null,
 ): Promise<SessionRow | null> {
+  // The NAS binding is the truth (infra/freeradius/README.md): without an authenticated NAS
+  // a record is never attached to a session, and never to another tenant's session because
+  // of a forged or stale Class / Acct-Unique-Session-Id.
+  if (nas === null) return null;
   if (rec.classSessionId !== null) {
     const byClass = await sessionQuery(trx)
       .where('se.id', '=', rec.classSessionId)
       .executeTakeFirst();
-    // The NAS binding is the truth (infra/freeradius/README.md): never attach a record to
-    // another tenant's session because of a forged or stale Class.
-    if (byClass && (nas === null || byClass.organization_id === nas.organization_id)) {
-      return byClass;
-    }
+    if (byClass && byClass.organization_id === nas.organization_id) return byClass;
   }
   const byUnique = await sessionQuery(trx)
     .where('se.acct_unique_id', '=', rec.acctUniqueId)
     .executeTakeFirst();
-  if (byUnique && (nas === null || byUnique.organization_id === nas.organization_id)) {
-    return byUnique;
-  }
-  if (nas === null) return null;
+  if (byUnique && byUnique.organization_id === nas.organization_id) return byUnique;
   const byNas = await sessionQuery(trx)
     .where('se.nas_client_id', '=', nas.id)
     .where('se.acct_session_id', '=', rec.acctSessionId)
@@ -385,7 +383,9 @@ export async function processRecord(
   /** First accounting packet of this session: counts towards usage_counters.session_count. */
   const firstRecord = Number(prior.n) === 0;
 
-  const nas = await lookupNas(trx, rec.nasIp, nasCache);
+  // Tenant attribution comes from the authenticated packet source only (migration 014):
+  // NAS-IP-Address is NAS-supplied and could name another tenant's NAS.
+  const nas = rec.packetSrcIp === null ? null : await lookupNas(trx, rec.packetSrcIp, nasCache);
 
   if (rec.statusType === 'accounting_on' || rec.statusType === 'accounting_off') {
     await insertAccountingRecord(trx, rec, nas?.organization_id ?? null, null);

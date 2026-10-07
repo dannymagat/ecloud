@@ -78,7 +78,9 @@ CREATE POLICY tenant_isolation ON t
   with SQLSTATE 42501.
 - `roles`: tenants read platform templates (`organization_id IS NULL`) plus their own rows, but
   may write only their own (`WITH CHECK organization_id = current org`). `role_permissions`
-  follows its role through an `EXISTS` policy.
+  follows its role through an `EXISTS` policy. DELETE checks only `USING`, so migration 012 adds
+  `RESTRICTIVE … FOR DELETE` policies (`template_delete_guard`, own organization only) on both:
+  templates and their grants cannot be deleted from a tenant connection (T-15).
 - Partitions do not inherit policies when addressed directly, so `enable_tenant_rls(regclass)`
   protects the parent and every partition, and `ensure_month_partitions()` re-applies it for new
   partitions. Rows with `organization_id IS NULL` (unresolved tenant in `accounting_records`,
@@ -136,7 +138,9 @@ explicit sequences (`<table>_id_seq`).
 (AAA_ARCHITECTURE.md §5): official `radacct` column names + `acctstatustype`, `nasidentifier`,
 `eventtimestamp`, `acctdelaytime`, `received_at`; unique key
 `(acctuniqueid, acctstatustype, acctsessiontime, acctinputoctets, acctoutputoctets)` makes NAS
-retransmits a no-op. A worker drains it by `radacctid` watermark into `accounting_records` /
+retransmits a no-op. `packet_src_ip` (migration 014) is the UDP source FreeRADIUS authenticated
+and the only column the drainer uses to resolve the NAS / tenant (`nasipaddress` is whatever the
+NAS put in NAS-IP-Address). A worker drains it by `radacctid` watermark into `accounting_records` /
 `sessions` and deletes drained rows after 7 days. `radius.radpostauth_raw` has no password
 column on purpose. `radius.nas` + view `radius.nas_v` carry the official `nas` shape for a future
 `rlm_sql read_clients` setup; the pilot renders `clients.conf` instead and leaves them empty.

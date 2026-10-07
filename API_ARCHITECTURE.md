@@ -476,8 +476,12 @@ not VERIFIED DEVICE CAPABILITY: everything device-facing below inherits the adap
 - **MFA.** TOTP (otplib v13, ±30 s). Secret sealed AES-256-GCM with a key derived (HKDF) from
   `MFA_ENCRYPTION_KEY` into `mfa_credentials.secret_enc`; 10 recovery codes stored SHA-256, shown
   once, single use. With a verified credential, login returns `{mfa_required, mfa_token}` (Redis,
-  5 min, 5 attempts) and `/auth/mfa/verify` creates the session. Enforcement for platform
-  bindings is **reported** (`/auth/me` → `mfa.required`), not yet blocking (see risks).
+  5 min, 5 attempts) and `/auth/mfa/verify` creates the session. **Enforced** (SECURITY §6.2):
+  `admin_sessions.mfa_verified_at` (migration 013) is set by `/auth/mfa/verify` and by
+  `/auth/mfa/confirm` in the enrolling session; an impersonation session inherits it. A session of
+  an administrator with `mfa_enforced` or any platform binding that has not proved a factor holds
+  **no permissions** (only enrol/confirm, `/auth/me` → `mfa.pending: true`, logout). Login reports
+  `mfa_enrolment_required` for both cases.
 - **CSRF.** Unsafe methods on cookie sessions — and the cookie-issuing public POSTs (login, MFA
   verify, accept-invitation) — require `Origin` (or `Referer`) = `PUBLIC_ADMIN_ORIGIN` and a
   non-empty `X-Requested-With`. Bearer API keys are exempt.
@@ -529,8 +533,11 @@ not VERIFIED DEVICE CAPABILITY: everything device-facing below inherits the adap
 
 - `X-Internal-Token` compared in constant time; mismatch → `401` with an empty body.
 - NAS resolution: `nas_clients.nas_ip = ECLOUD-Packet-Src-IP-Address`, else
-  `ECLOUD-Client-Shortname` when it is a NAS id, else a NAS-Identifier matching exactly one active
-  NAS; when the record and the request both carry a NAS-Identifier they must match.
+  `ECLOUD-Client-Shortname` when it is a NAS id. Both are server-side facts bound to the client's
+  shared secret. NAS-Identifier / NAS-IP-Address are NAS-supplied and **never select a tenant**
+  (SECURITY §3.2; the earlier "unique NAS-Identifier" fallback let any accepted client claim
+  another tenant's NAS). When the record and the request both carry a NAS-Identifier they must
+  match.
 - Subjects: subscriber `users` (case-insensitive username, Argon2id, status, validity, site
   restriction), vouchers (User-Name = code, PAP password must equal the code, HMAC lookup,
   `FOR UPDATE`, batch site restriction), MAC authentication (`Service-Type = Call-Check` →
@@ -562,7 +569,9 @@ not VERIFIED DEVICE CAPABILITY: everything device-facing below inherits the adap
   cache. The password is never logged, persisted or used as a cache key in clear.
 - `post-auth` writes `auth_events` (`organization_id` NULL for unknown NAS, via the platform
   connection) and, on a final reject (e.g. local PAP mismatch), marks the provisional session
-  `stopped` with `terminate_cause = 'auth-rejected'`. It always answers 204.
+  `stopped` with `terminate_cause = 'auth-rejected'`. It always answers 204. On a decision-cache
+  miss the `ECLOUD-Reply-Class` session is used only when it belongs to the NAS that sent the
+  packet; a Class replayed from another NAS attributes nothing and closes nothing.
 
 ### Implemented endpoints (public, `/api/v1`)
 
@@ -597,5 +606,6 @@ portal themes/assets, users import/export, `users/{id}/reset-password` and `effe
    `authorized` (promoted to `active` by Accounting-Start) would keep concurrency counts exact.
 3. Voucher semantics of `max_uses` with `duration_s` (currently: time-limited vouchers allow
    re-login until expiry, count-limited ones allow `max_uses` logins).
-4. MFA enforcement for platform bindings is reported, not blocking: decide whether a session
-   without MFA may do anything other than enrol.
+4. ~~MFA enforcement for platform bindings is reported, not blocking.~~ Resolved in M8 per
+   SECURITY_ARCHITECTURE §6.2: blocking (see "MFA" above). MFA reset / disable flow for a lost
+   device is still not implemented (platform super admin path needed).

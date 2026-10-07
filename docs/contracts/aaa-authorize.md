@@ -66,7 +66,7 @@ Encoding rules (VERIFIED on 3.2.10):
 |---|---|---|
 | `ECLOUD-Packet-Src-IP-Address` (string) | server, `policy.d/ecloud` | **primary** NAS/tenant resolution (`nas_clients` by source IP, MULTITENANCY §3.3 A). Dev: the Docker bridge gateway `172.19.0.1` for host-originated packets. |
 | `ECLOUD-Client-Shortname` (string) | `clients.conf` `shortname` | secondary NAS key once production clients are rendered (renderer will set it to the `nas_clients` id). Dev: `ecloud-dev`. |
-| `NAS-Identifier`, `NAS-IP-Address`, `NAS-Port-Type`, `NAS-Port-Id` | NAS | NAS resolution fallback / logging only (`NAS-IP-Address` differs from the source behind NAT) |
+| `NAS-Identifier`, `NAS-IP-Address`, `NAS-Port-Type`, `NAS-Port-Id` | NAS | logging and same-tenant consistency checks only: NAS-supplied, **never** used to select a NAS or tenant (`NAS-IP-Address` also differs from the source behind NAT) |
 | `ECLOUD-Packet-Dst-Port` (1812) | server | listener telemetry |
 | `User-Name` | NAS | identity: portal credential (`pc-...`), MAC, voucher, subscriber username |
 | `User-Password` (cleartext, PAP) | NAS (decrypted by FreeRADIUS) | **never log, never persist.** Needed only when ECLOUD verifies itself (Argon2 subscriber password, voucher HMAC, MAC password) and answers `Auth-Type = Accept`. For broker credentials ECLOUD returns `Cleartext-Password` instead and lets `rlm_pap` compare. |

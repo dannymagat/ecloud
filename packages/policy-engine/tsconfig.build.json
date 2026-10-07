@@ -5,13 +5,8 @@
     "outDir": "dist",
     "tsBuildInfoFile": "dist/.tsbuildinfo"
   },
-  "include": [
-    "src"
-  ],
-  "exclude": [
-    "src/**/*.test.ts",
-    "src/**/*.fixture.ts"
-  ],
+  "include": ["src"],
+  "exclude": ["src/**/*.test.ts", "src/**/*.fixture.ts"],
   "references": [
     {
       "path": "../shared/tsconfig.build.json"
