@@ -1,0 +1,21 @@
+# DT-16 / T-A6 -- Stop. Terminate cause 5 = Session-Timeout (quota/validity),
+# 4 = Idle-Timeout, 2 = Lost-Carrier, 6 = Admin-Reset (Disconnect-Request).
+Acct-Status-Type = Stop
+Acct-Session-Id = "<uam-sessionid-placeholder>"
+Acct-Authentic = RADIUS
+Acct-Delay-Time = 0
+Acct-Session-Time = 3600
+Acct-Input-Octets = 2097152
+Acct-Output-Octets = 987654321
+Acct-Output-Gigawords = 1
+Acct-Input-Gigawords = 0
+Acct-Terminate-Cause = Session-Timeout
+User-Name = "pc-PLACEHOLDER"
+Framed-IP-Address = 192.0.2.100
+Calling-Station-Id = "AA-BB-CC-DD-EE-FF"
+Called-Station-Id = "00-11-22-33-44-55:lab-uam"
+NAS-Identifier = "<nasid-placeholder>"
+NAS-IP-Address = 192.0.2.10
+NAS-Port-Type = Wireless-802.11
+Class = "ai:00000000000000000000000000000000"
+Event-Timestamp = "Jan  1 2026 01:00:00 UTC"

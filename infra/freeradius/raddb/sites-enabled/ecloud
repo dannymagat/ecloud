@@ -1,0 +1,209 @@
+# -*- text -*-
+######################################################################
+#
+#  ECLOUD virtual server -- FreeRADIUS 3.2.x as protocol front-end only
+#  (AAA_ARCHITECTURE.md §0, §2.1). Every Access-Request becomes one rlm_rest
+#  POST to ECLOUD /internal/aaa/authorize (§4, docs/contracts/aaa-authorize.md);
+#  accounting is an insert-only rlm_sql INSERT into radius.radacct_raw (§5).
+#  No subscriber data or policy lives in this configuration.
+#
+#  Listeners: RADIUS_LISTEN_IP is the address INSIDE the container
+#  ("*" or 0.0.0.0 -- Compose publishes the ports: 127.0.0.1 in the dev stack,
+#  the WireGuard hub address RADIUS_BIND_IP=100.100.0.1 in production,
+#  DEPLOYMENT_ARCHITECTURE.md §2.1). No CoA/DAS listener (port 3799): dynamic
+#  authorization originates from the ECLOUD worker (AAA §6).
+#
+#  802.1X (EAP / inner-tunnel, AAA §2.4) is NOT enabled in this milestone;
+#  the image's `eap` module and `inner-tunnel` site are removed in the Dockerfile.
+#
+######################################################################
+
+server ecloud {
+	listen {
+		type = auth
+		ipaddr = $ENV{RADIUS_LISTEN_IP}
+		port = 1812
+	}
+
+	listen {
+		type = acct
+		ipaddr = $ENV{RADIUS_LISTEN_IP}
+		port = 1813
+	}
+
+	authorize {
+		#
+		#  1. Normalisation (stock policies). Calling-Station-Id becomes
+		#     AA-BB-CC-DD-EE-FF; Called-Station-Id "mac:ssid" yields
+		#     Called-Station-SSID (tenant refinement, MULTITENANCY §3.3 C).
+		#
+		filter_username
+		rewrite_calling_station_id
+		rewrite_called_station_id
+
+		#
+		#  2. BlastRADIUS: every response carries Message-Authenticator
+		#     (freeradius.org/security guidance; AAA §8).
+		#
+		if (!&EAP-Message) {
+			update reply {
+				&Message-Authenticator := 0x00
+			}
+		}
+
+		#
+		#  3. Decision from ECLOUD. HTTP code -> module code (mods-available/rest):
+		#     200 body applied -> updated (control:Auth-Type + reply attrs)
+		#     401 -> reject (body applied: Reply-Message)   403 -> userlock
+		#     404/410 -> notfound   5xx / timeout / connection error -> fail
+		#     No fail-open: an unreachable backend rejects (AAA §4.2, Q2).
+		#     control:ECLOUD-Decision records which path was taken (post-auth).
+		#
+		ecloud_request_context
+		ecloud_rest_headers
+		rest {
+			fail = 1
+			invalid = 1
+			notfound = 1
+			userlock = 1
+			reject = 1
+		}
+		if (fail || invalid) {
+			update control {
+				&ECLOUD-Decision := "unavailable"
+			}
+			update reply {
+				&Reply-Message := "AAA backend unavailable"
+			}
+			reject
+		}
+		elsif (reject || notfound || userlock) {
+			update control {
+				&ECLOUD-Decision := "reject"
+			}
+			reject
+		}
+		update control {
+			&ECLOUD-Decision := "accept"
+		}
+
+		#
+		#  4. Auth-Type fallbacks when ECLOUD returned a known-good password
+		#     (control:Cleartext-Password) without an explicit Auth-Type:
+		#     these only set Auth-Type when it is still unset.
+		#
+		chap
+		mschap
+		pap
+	}
+
+	authenticate {
+		#
+		#  control:Auth-Type is chosen by ECLOUD (AAA §2.2, §2.6):
+		#  PAP / CHAP / MS-CHAP verify against control:Cleartext-Password
+		#  (portal broker credential or voucher secret); "Accept" skips
+		#  this section entirely (ECLOUD verified Argon2 / MAC itself).
+		#
+		Auth-Type PAP {
+			pap
+		}
+		Auth-Type CHAP {
+			chap
+		}
+		Auth-Type MS-CHAP {
+			mschap
+		}
+	}
+
+	preacct {
+		#
+		#  Acct-Unique-Session-Id (AAA §5.2): md5(Class, Acct-Session-Id) when
+		#  the NAS echoes a server-issued Class (ASCII "ai:" + 32 hex chars --
+		#  never raw UUID bytes, %{string:} stops at NUL; contract §3.5), else
+		#  md5(User-Name, Acct-Session-Id, NAS-IP, NAS-Identifier, NAS-Port-Id, NAS-Port).
+		#
+		acct_unique
+		rewrite_calling_station_id
+		rewrite_called_station_id
+	}
+
+	accounting {
+		#
+		#  Single INSERT ... ON CONFLICT DO NOTHING per packet
+		#  (mods-config/sql/main/postgresql/queries.conf). A failed INSERT
+		#  returns no Accounting-Response, so the NAS retransmits (AAA §5.3).
+		#
+		sql
+	}
+
+	session {
+	}
+
+	post-auth {
+		update {
+			&reply: += &session-state:
+		}
+
+		#
+		#  Class: ECLOUD normally supplies reply:Class ("ai:" + 32 hex chars of
+		#  its session id so acct_unique recognises it). Fallback to the stock
+		#  insert_acct_class so accounting always has a stable key.
+		#
+		if (!&reply:Class) {
+			insert_acct_class
+		}
+
+		#
+		#  Outcome notification -> POST /internal/aaa/post-auth (204 expected).
+		#  The JSON body is the request list, so the outcome is added to it and
+		#  the credentials are removed first (authentication is finished).
+		#  Purely informational: no return code may change the decision.
+		#
+		ecloud_post_auth_context
+		update request {
+			&ECLOUD-Auth-Result := "accept"
+		}
+		ecloud_rest_headers
+		rest {
+			fail = 1
+			invalid = 1
+			reject = 1
+			userlock = 1
+			notfound = 1
+			noop = 1
+		}
+		if (fail || invalid || reject || userlock || notfound || noop) {
+			ok
+		}
+
+		Post-Auth-Type REJECT {
+			#
+			#  ECLOUD said "accept" but the local password check failed
+			#  (wrong PAP/CHAP credential): drop the welcome text it returned.
+			#
+			if (&control:ECLOUD-Decision == "accept") {
+				update reply {
+					&Reply-Message !* ANY
+				}
+			}
+			attr_filter.access_reject
+
+			#  Skip the notification when the backend itself was unreachable.
+			if (&control:ECLOUD-Decision != "unavailable") {
+				ecloud_post_auth_context
+				update request {
+					&ECLOUD-Auth-Result := "reject"
+				}
+				ecloud_rest_headers
+				rest {
+					fail = 1
+					invalid = 1
+					reject = 1
+					userlock = 1
+					notfound = 1
+					noop = 1
+				}
+			}
+		}
+	}
+}

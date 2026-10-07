@@ -1,0 +1,8 @@
+# DT-16 / T-A7 -- Accounting-On after a NAS (uspot) restart; the drainer closes that
+# NAS's open sessions. Accounting-Off: change the status type.
+Acct-Status-Type = Accounting-On
+Acct-Session-Id = "<nas-boot-sessionid-placeholder>"
+Acct-Delay-Time = 0
+NAS-Identifier = "<nasid-placeholder>"
+NAS-IP-Address = 192.0.2.10
+Event-Timestamp = "Jan  1 2026 02:00:00 UTC"

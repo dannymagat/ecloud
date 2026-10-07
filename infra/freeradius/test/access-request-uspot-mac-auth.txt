@@ -1,0 +1,14 @@
+# DT-09 / T-A3 -- uspot `mac-auth: true` (handler.uc l.23-27, AAA_ARCHITECTURE.md §2.3):
+# User-Name = formatted MAC (+ mac_suffix), User-Password = mac_passwd || formatted MAC,
+# Service-Type = Call-Check (10). `mac-format` decides the spelling -- capture per enum value.
+User-Name = "aa-bb-cc-dd-ee-ff<mac-suffix-placeholder>"
+User-Password = "<mac_passwd-placeholder>"
+Service-Type = Call-Check
+Acct-Session-Id = "<uam-sessionid-placeholder>"
+Framed-IP-Address = 192.0.2.100
+Calling-Station-Id = "aa:bb:cc:dd:ee:ff"
+Called-Station-Id = "00-11-22-33-44-55:lab-uam"
+NAS-Identifier = "<nasid-placeholder>"
+NAS-IP-Address = 192.0.2.10
+NAS-Port-Type = Wireless-802.11
+Message-Authenticator = 0x00

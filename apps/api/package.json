@@ -1,0 +1,46 @@
+{
+  "name": "@ecloud/api",
+  "version": "0.1.0",
+  "private": true,
+  "description": "ECLOUD REST API (/api/v1) and internal listener",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -b tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "clean": "rm -rf dist",
+    "test": "vitest run",
+    "dev": "tsx watch src/main.ts",
+    "start": "node dist/main.js",
+    "test:integration": "ECLOUD_TEST_REQUIRE_INTEGRATION=1 vitest run"
+  },
+  "dependencies": {
+    "@ecloud/adapters": "*",
+    "@ecloud/db": "*",
+    "@ecloud/policy-engine": "*",
+    "@ecloud/shared": "*",
+    "argon2": "^0.45.1",
+    "express": "^5.2.1",
+    "helmet": "^8.3.0",
+    "ioredis": "^5.11.1",
+    "kysely": "^0.29.6",
+    "otplib": "^13.5.0",
+    "pino": "^10.4.0",
+    "pino-http": "^11.0.0",
+    "zod": "^4.6.5",
+    "zod-openapi": "^6.0.2"
+  },
+  "devDependencies": {
+    "@ecloud/testing": "*"
+  }
+}

@@ -1,0 +1,80 @@
+# -*- text -*-
+##############################################################################
+#
+#  ECLOUD dictionary additions -- AAA_ARCHITECTURE.md §4.3 ("Gap") and §12 Q7.
+#
+#  1. ChilliSpot vendor 14559: attributes that FreeRADIUS 3.2.10
+#     share/dictionary.chillispot does NOT define (it stops at 1-9, 100-102)
+#     but that uspot and CoovaChilli use.
+#
+#     Source of the names/numbers (Phase 2 evidence, A4 cache):
+#       - uspot upstream radcli dictionary
+#         f00b4r0/uspot files/etc/radcli/dictionary.chillispot l.12-14
+#         (cached: /Users/danny/.claude/jobs/6ede8b14/tmp/p2/a4_src/uspot_git/files/etc/radcli/dictionary.chillispot)
+#           ChilliSpot-Max-Input-Gigawords   21 integer
+#           ChilliSpot-Max-Output-Gigawords  22 integer
+#           ChilliSpot-Max-Total-Gigawords   23 integer
+#       - CoovaChilli doc/dictionary.coovachilli l.29-53 (same vendor id 14559,
+#         "CoovaChilli-" prefix): Session-State 15, Max-*-Gigawords 21-23, VLAN-Id 24
+#         (cached: /Users/danny/.claude/jobs/6ede8b14/tmp/p2/a4_src/coova/doc/dictionary.coovachilli)
+#
+#     Naming: FreeRADIUS 3.x has no attribute aliases and a second VENDOR with
+#     the same number (CoovaChilli = 14559) would change the names used when
+#     DECODING vendor 14559 attributes, so everything is defined once under the
+#     existing "ChilliSpot" vendor. ECLOUD adapters therefore emit
+#     "ChilliSpot-*" names for both uspot and CoovaChilli; on the wire the
+#     result is identical to CoovaChilli's own "CoovaChilli-*" definitions.
+#
+#  2. TIP / OpenWiFi vendor 0x0000e608 (58888) request TLV (NETWORK_INTEGRATION.md §4,
+#     PHASE2_VALIDATION.md DT-03 "dump vendor TLV 0000e608 bytes"):
+#     REQUIRES DEVICE TEST, not defined. No attribute definitions have been
+#     verified from an authoritative source; until a capture (DT-03) shows the
+#     TLV layout, FreeRADIUS keeps decoding it as an unknown VSA
+#     ("Vendor-Specific" / Attr-26.58888.x), which rlm_rest still forwards.
+#
+#  3. Internal attributes (numbers 3000-3999 are never put in a RADIUS packet;
+#     see the comment in the stock raddb/dictionary). They carry server-side
+#     facts into the JSON rlm_rest posts to ECLOUD (policy.d/ecloud,
+#     docs/contracts/aaa-authorize.md).
+#
+##############################################################################
+
+BEGIN-VENDOR	ChilliSpot
+
+ATTRIBUTE	ChilliSpot-Session-State		15	integer
+ATTRIBUTE	ChilliSpot-Max-Input-Gigawords		21	integer
+ATTRIBUTE	ChilliSpot-Max-Output-Gigawords		22	integer
+ATTRIBUTE	ChilliSpot-Max-Total-Gigawords		23	integer
+ATTRIBUTE	ChilliSpot-VLAN-Id			24	integer
+
+# CoovaChilli-Session-State values (doc/dictionary.coovachilli l.31-42)
+VALUE	ChilliSpot-Session-State	Authorized		1
+VALUE	ChilliSpot-Session-State	NotAuthorized		2
+VALUE	ChilliSpot-Session-State	Started			3
+VALUE	ChilliSpot-Session-State	Stopped			4
+VALUE	ChilliSpot-Session-State	UserLogoutUrl		10
+VALUE	ChilliSpot-Session-State	IdleTimeoutReached	11
+VALUE	ChilliSpot-Session-State	TimeoutReached		12
+VALUE	ChilliSpot-Session-State	LogoutTimeReached	13
+VALUE	ChilliSpot-Session-State	InDataLimitReached	14
+VALUE	ChilliSpot-Session-State	OutDataLimitReached	15
+VALUE	ChilliSpot-Session-State	TotalDataLimitReached	16
+VALUE	ChilliSpot-Session-State	LocationChanged		17
+
+END-VENDOR	ChilliSpot
+
+# TIP vendor 0x0000e608 (58888): REQUIRES DEVICE TEST, not defined (see header).
+
+#
+#  ECLOUD internal attributes (never on the wire)
+#
+ATTRIBUTE	ECLOUD-Packet-Src-IP-Address	3000	string
+ATTRIBUTE	ECLOUD-Packet-Src-Port		3001	integer
+ATTRIBUTE	ECLOUD-Packet-Dst-Port		3002	integer
+ATTRIBUTE	ECLOUD-Client-Shortname		3003	string
+ATTRIBUTE	ECLOUD-Decision			3004	string
+#  Set in post-auth so /internal/aaa/post-auth learns the outcome (the JSON
+#  body is the request list; reply attributes are not serialised by rlm_rest).
+ATTRIBUTE	ECLOUD-Auth-Result		3005	string
+ATTRIBUTE	ECLOUD-Reply-Class		3006	string
+ATTRIBUTE	ECLOUD-Reply-Message		3007	string

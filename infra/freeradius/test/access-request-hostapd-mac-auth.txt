@@ -1,0 +1,12 @@
+# DT-09 / T-A3 -- hostapd `radius.authentication.mac-filter: true` (NETWORK_INTEGRATION.md §4).
+# The User-Name / User-Password spelling (separator, case) and Service-Type that hostapd
+# uses REQUIRE DEVICE TEST (AAA_ARCHITECTURE.md §2.3); correct this file from the DT-09 capture.
+User-Name = "aabbccddeeff"
+User-Password = "aabbccddeeff"
+Service-Type = Call-Check
+Calling-Station-Id = "AA-BB-CC-DD-EE-FF"
+Called-Station-Id = "00-11-22-33-44-55:lab-mac"
+NAS-Identifier = "<nasid-placeholder>"
+NAS-IP-Address = 192.0.2.10
+NAS-Port-Type = Wireless-802.11
+Message-Authenticator = 0x00

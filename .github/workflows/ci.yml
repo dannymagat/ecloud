@@ -1,0 +1,146 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+# Every password below is a CI-only / dev-only throwaway for ephemeral containers that exist
+# for the duration of one job (D-033). They match the obviously-fake dev defaults of
+# infra/compose/docker-compose.dev.yml so the test helpers can derive per-role URLs.
+jobs:
+  secrets:
+    name: Secrets scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: bash scripts/check-no-secrets.sh
+
+  check:
+    name: Build, lint, unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - run: npm run typecheck --workspace @ecloud/tests
+      - run: npm run lint
+      - run: npm run format:check
+      # integration suites skip cleanly here (no ECLOUD_TEST_DATABASE_URL)
+      - run: npm test
+
+  integration:
+    name: Integration + isolation + security (postgres:16, redis:7)
+    runs-on: ubuntu-latest
+    needs: check
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: ecloud
+          POSTGRES_USER: ecloud
+          POSTGRES_PASSWORD: ecloud_ci_password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U ecloud -d ecloud"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      ECLOUD_TEST_DATABASE_URL: postgres://ecloud_platform:ecloud_dev_password@localhost:5432/ecloud_test
+      ECLOUD_TEST_APP_DATABASE_URL: postgres://ecloud_app:ecloud_dev_password@localhost:5432/ecloud_test
+      ECLOUD_TEST_REDIS_URL: redis://localhost:6379/1
+      DATABASE_URL: postgres://ecloud_app:ecloud_dev_password@localhost:5432/ecloud_test
+      DATABASE_URL_PLATFORM: postgres://ecloud_platform:ecloud_dev_password@localhost:5432/ecloud_test
+      REDIS_URL: redis://localhost:6379
+      NODE_ENV: test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - name: Create ecloud_app / ecloud_platform / ecloud_radius and the ecloud_test database
+        # Same script the dev stack runs on first start (psql 16 inside the service container).
+        run: >-
+          docker exec -i
+          -e ECLOUD_APP_PASSWORD=ecloud_dev_password
+          -e ECLOUD_PLATFORM_PASSWORD=ecloud_dev_password
+          -e RADIUS_SQL_PASSWORD=ecloud_dev_password
+          ${{ job.services.postgres.id }}
+          psql -v ON_ERROR_STOP=1 -U ecloud -d ecloud
+          < infra/compose/postgres-init/01_roles.sql
+      - run: npm ci
+      - run: npm run build
+      - name: Apply database migrations (@ecloud/db runner, as ecloud_platform)
+        run: npm run db:migrate
+      - name: Seed permission catalogue + role templates
+        run: npm run seed --workspace @ecloud/db
+      - name: Integration suites (fail instead of skip) with coverage
+        run: npm run test:integration -- --coverage
+      - name: Upload coverage
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-integration
+          path: coverage/
+          if-no-files-found: warn
+          retention-days: 14
+
+  radius-contract:
+    name: FreeRADIUS <-> AAA contract (dev compose stack + stub API)
+    runs-on: ubuntu-latest
+    needs: check
+    env:
+      COMPOSE: docker compose --project-directory . -f infra/compose/docker-compose.dev.yml
+      # FreeRADIUS calls the stub started by the test on the runner (host-gateway).
+      ECLOUD_INTERNAL_URL: http://host.docker.internal:3901
+      ECLOUD_TEST_DATABASE_URL: postgres://ecloud_platform:ecloud_dev_password@127.0.0.1:5432/ecloud_test
+      ECLOUD_TEST_RADIUS_DATABASE_URL: postgres://ecloud_platform:ecloud_dev_password@127.0.0.1:5432/ecloud
+      ECLOUD_TEST_AAA_STUB_HOST: 0.0.0.0
+      ECLOUD_TEST_REQUIRE_INTEGRATION: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - name: Build and start postgres + freeradius (image runs `freeradius -C` at build)
+        run: $COMPOSE up -d --build --wait postgres freeradius
+      - name: Migrate + seed the database FreeRADIUS writes to (RADIUS_SQL_DB=ecloud)
+        env:
+          DATABASE_URL_PLATFORM: postgres://ecloud_platform:ecloud_dev_password@127.0.0.1:5432/ecloud
+        run: |
+          npm run db:migrate
+          npm run seed --workspace @ecloud/db
+      - name: Contract suite (radclient inside the container -> rlm_rest -> stub)
+        run: npm run test:aaa-contract
+      - name: FreeRADIUS / postgres logs
+        if: failure()
+        run: $COMPOSE logs --no-color freeradius postgres
+      - name: Stop the stack
+        if: always()
+        run: $COMPOSE down -v

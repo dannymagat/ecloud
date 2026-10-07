@@ -1,0 +1,33 @@
+{
+  "name": "@ecloud/portal",
+  "version": "0.1.0",
+  "private": true,
+  "description": "ECLOUD captive portal server (Phase 3 skeleton)",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -b tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "clean": "rm -rf dist",
+    "test": "vitest run",
+    "dev": "tsx watch src/main.ts",
+    "start": "node dist/main.js"
+  },
+  "dependencies": {
+    "@ecloud/adapters": "*",
+    "@ecloud/db": "*",
+    "@ecloud/policy-engine": "*",
+    "@ecloud/shared": "*",
+    "express": "^5.2.1"
+  }
+}

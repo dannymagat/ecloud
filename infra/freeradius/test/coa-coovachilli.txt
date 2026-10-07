@@ -1,0 +1,10 @@
+# DT-15 / T-A9 -- CoA-Request to CoovaChilli `coaport`: re-applies timeouts / bandwidth /
+# quota live (CAPTIVE_PORTAL_ARCHITECTURE.md §4). WISPr-Bandwidth-* in bit/s,
+# ChilliSpot-Bandwidth-* in kbit/s. Measure with iperf3 before/after. PLACEHOLDERS ONLY.
+User-Name = "pc-PLACEHOLDER"
+Acct-Session-Id = "<chilli-sessionid-placeholder>"
+Session-Timeout = 600
+WISPr-Bandwidth-Max-Down = 2000000
+WISPr-Bandwidth-Max-Up = 1000000
+ChilliSpot-Max-Total-Octets = 52428800
+Message-Authenticator = 0x00

@@ -27,3 +27,23 @@ See:
 
 ## Definition of Done
 The project is complete only when a real client can connect through a supported network device, authenticate through the intended access flow, receive the correct authorized policy, access the network, generate validated accounting records, appear in administrator session/usage views, and be managed securely without relying on fabricated or unverified integrations.
+
+## Repository layout & developer quick start
+
+Phase 3 turns this repository into an npm-workspaces TypeScript monorepo (Node 22, ESM, Vitest,
+Express 5, PostgreSQL 16, Redis 7). Governance documents stay at the root; code lives in:
+
+```
+apps/        api · worker · portal
+packages/    shared · db · policy-engine · adapters · testing
+infra/       compose (DEV ONLY stack) · freeradius (M6)
+docs/        DEVELOPMENT.md and other developer guides
+```
+
+```bash
+nvm use && npm install
+npm run build && npm run lint && npm test   # must be green before handing work back
+npm run dev:stack                           # optional: local PostgreSQL 16 + Redis 7
+```
+
+Full instructions, conventions and the no-secrets rule: [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md).

@@ -1,0 +1,29 @@
+{
+  "name": "@ecloud/shared",
+  "version": "0.1.0",
+  "private": true,
+  "description": "ECLOUD shared foundation: validated config, ids, errors, logger, permission catalogue, adapter status, tenancy types",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -b tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "clean": "rm -rf dist",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "pino": "^10.4.0",
+    "uuidv7": "^1.2.1",
+    "zod": "^4.6.5"
+  }
+}

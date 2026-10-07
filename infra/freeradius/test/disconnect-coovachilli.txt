@@ -1,0 +1,6 @@
+# DT-15 / T-A8 -- Disconnect-Request to CoovaChilli `coaport` (User-Name is MANDATORY,
+# Acct-Session-Id optional; source IP must be a configured radiusserver unless coanoipcheck).
+# Expected: ACK, Accounting-Stop with Acct-Terminate-Cause = Admin-Reset. PLACEHOLDERS ONLY.
+User-Name = "pc-PLACEHOLDER"
+Acct-Session-Id = "<chilli-sessionid-placeholder>"
+Message-Authenticator = 0x00

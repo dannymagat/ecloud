@@ -1,0 +1,7 @@
+# -*- text -*-
+#
+#  ECLOUD local dictionary (overlay of /etc/raddb/dictionary).
+#  The main dictionaries are loaded automatically from /usr/share/freeradius;
+#  only ECLOUD additions live here. See infra/freeradius/README.md.
+#
+$INCLUDE dictionary.ecloud

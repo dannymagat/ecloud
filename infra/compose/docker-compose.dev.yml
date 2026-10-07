@@ -1,0 +1,97 @@
+# ============================================================================
+#  ECLOUD LOCAL DEVELOPMENT STACK  --  DEV ONLY
+#
+#  This file is for the developer workstation. It is NEVER used on the VPS
+#  as-is (the pilot deployment is a separate, owner-approved Compose project,
+#  gated by D-031). Ports bind to 127.0.0.1 only. All passwords are
+#  obviously-fake defaults that can be overridden from the root `.env`
+#  (loaded via `--project-directory .`, see root package.json `dev:stack`).
+#
+#  Start:  npm run dev:stack        Stop: npm run dev:stack:down
+#  Reset:  npm run dev:stack:reset  (drops the postgres volume)
+# ============================================================================
+name: ecloud-dev
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: ecloud-dev-postgres
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-ecloud}
+      POSTGRES_USER: ${POSTGRES_USER:-ecloud}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-ecloud_dev_password}
+      # Consumed by postgres-init/01_roles.sql (psql \getenv). DEV ONLY values.
+      ECLOUD_APP_PASSWORD: ${ECLOUD_APP_PASSWORD:-ecloud_dev_password}
+      ECLOUD_PLATFORM_PASSWORD: ${ECLOUD_PLATFORM_PASSWORD:-ecloud_dev_password}
+      RADIUS_SQL_PASSWORD: ${RADIUS_SQL_PASSWORD:-ecloud_dev_password}
+    ports:
+      - '127.0.0.1:${POSTGRES_PORT:-5432}:5432'
+    volumes:
+      - ecloud_dev_pgdata:/var/lib/postgresql/data
+      # Relative to the Compose project directory (repository root).
+      - ./infra/compose/postgres-init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER:-ecloud} -d ${POSTGRES_DB:-ecloud}']
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    container_name: ecloud-dev-redis
+    command: ['redis-server', '--save', '', '--appendonly', 'no']
+    ports:
+      - '127.0.0.1:${REDIS_PORT:-6379}:6379'
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 5s
+      timeout: 3s
+      retries: 12
+    restart: unless-stopped
+
+  # FreeRADIUS 3.2.10 front-end (M6; infra/freeradius/README.md, AAA_ARCHITECTURE.md §9).
+  # DEV ONLY wiring: UDP 1812/1813 published on 127.0.0.1; authorize calls the api
+  # process on the developer host (ECLOUD_INTERNAL_URL); accounting inserts into
+  # radius.radacct_raw as RADIUS_SQL_USER (role + table come from packages/db).
+  # All secrets below are obviously-fake dev defaults overridable from `.env`.
+  freeradius:
+    build:
+      context: ./infra/freeradius
+    image: ecloud-dev-freeradius:3.2.10
+    container_name: ecloud-dev-freeradius
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      # Address inside the container; Compose decides what is published.
+      RADIUS_LISTEN_IP: ${RADIUS_LISTEN_IP:-0.0.0.0}
+      # The one dev client (clients.conf): the compose network incl. the bridge
+      # gateway, which is the source of packets published from the host.
+      RADIUS_DEV_CLIENT_CIDR: ${RADIUS_DEV_CLIENT_CIDR:-172.16.0.0/12}
+      RADIUS_DEV_CLIENT_SECRET: ${RADIUS_DEV_CLIENT_SECRET:-ecloud_dev_radius_secret}
+      RADIUS_STATUS_SECRET: ${RADIUS_STATUS_SECRET:-ecloud_dev_status_secret}
+      RADIUS_SQL_HOST: postgres
+      RADIUS_SQL_PORT: '5432'
+      RADIUS_SQL_DB: ${POSTGRES_DB:-ecloud}
+      RADIUS_SQL_USER: ${RADIUS_SQL_USER:-ecloud_radius}
+      RADIUS_SQL_PASSWORD: ${RADIUS_SQL_PASSWORD:-ecloud_dev_password}
+      ECLOUD_INTERNAL_URL: ${ECLOUD_INTERNAL_URL:-http://host.docker.internal:3001}
+      INTERNAL_API_TOKEN: ${INTERNAL_API_TOKEN:-ecloud_dev_internal_token_change_me}
+    extra_hosts:
+      - 'host.docker.internal:host-gateway'
+    ports:
+      - '127.0.0.1:${RADIUS_AUTH_PORT:-1812}:1812/udp'
+      - '127.0.0.1:${RADIUS_ACCT_PORT:-1813}:1813/udp'
+    healthcheck:
+      # Status-Server against the loopback listener 127.0.0.1:18121 (image script).
+      test: ['CMD', '/usr/local/bin/ecloud-healthcheck.sh']
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped
+
+volumes:
+  ecloud_dev_pgdata:

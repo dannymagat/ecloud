@@ -1,0 +1,13 @@
+# DT-03 / T-A1 -- uspot (TIP fork) UAM login via /logon with the portal-issued single-use
+# credential (CAPTIVE_PORTAL_ARCHITECTURE.md §3.4, AAA_ARCHITECTURE.md §2.2). PLACEHOLDERS ONLY.
+User-Name = "pc-PLACEHOLDER"
+User-Password = "PLACEHOLDER_PORTAL_CREDENTIAL"
+Acct-Session-Id = "<uam-sessionid-placeholder>"
+Framed-IP-Address = 192.0.2.100
+Calling-Station-Id = "aa:bb:cc:dd:ee:ff"
+Called-Station-Id = "00-11-22-33-44-55:lab-uam"
+NAS-Identifier = "<nasid-placeholder>"
+NAS-IP-Address = 192.0.2.10
+NAS-Port-Type = Wireless-802.11
+WISPr-Logoff-URL = "http://192.0.2.1:3990/logoff"
+Message-Authenticator = 0x00

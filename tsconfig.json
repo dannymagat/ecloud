@@ -1,0 +1,14 @@
+{
+  "extends": "./tsconfig.base.json",
+  "files": [],
+  "references": [
+    { "path": "packages/shared/tsconfig.build.json" },
+    { "path": "packages/testing/tsconfig.build.json" },
+    { "path": "packages/db/tsconfig.build.json" },
+    { "path": "packages/policy-engine/tsconfig.build.json" },
+    { "path": "packages/adapters/tsconfig.build.json" },
+    { "path": "apps/api/tsconfig.build.json" },
+    { "path": "apps/worker/tsconfig.build.json" },
+    { "path": "apps/portal/tsconfig.build.json" }
+  ]
+}

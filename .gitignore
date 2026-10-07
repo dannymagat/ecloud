@@ -1,0 +1,15 @@
+# dependencies / build output
+node_modules
+dist
+coverage
+*.tsbuildinfo
+
+# environment - only .env.example is committed (D-033: no secrets in git)
+.env
+.env.*
+!.env.example
+
+# local runtime data
+var/
+*.log
+.DS_Store

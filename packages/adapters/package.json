@@ -1,0 +1,28 @@
+{
+  "name": "@ecloud/adapters",
+  "version": "0.1.0",
+  "private": true,
+  "description": "ECLOUD NAS adapters: capability declarations and reply-attribute emitters",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -b tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "clean": "rm -rf dist",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@ecloud/policy-engine": "*",
+    "@ecloud/shared": "*"
+  }
+}

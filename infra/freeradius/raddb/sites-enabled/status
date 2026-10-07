@@ -1,0 +1,35 @@
+# -*- text -*-
+######################################################################
+#
+#  Status-Server health listener (AAA_ARCHITECTURE.md §9 "Health check";
+#  stock raddb/sites-available/status). Loopback only, never published.
+#
+#  Probe (Dockerfile HEALTHCHECK, healthcheck.sh):
+#    echo "Message-Authenticator = 0x00" | radclient 127.0.0.1:18121 status <RADIUS_STATUS_SECRET>
+#
+######################################################################
+
+server status {
+	listen {
+		type = status
+		ipaddr = 127.0.0.1
+		port = 18121
+	}
+
+	client status_admin {
+		ipaddr		= 127.0.0.1
+		secret		= $ENV{RADIUS_STATUS_SECRET}
+		shortname	= status-admin
+
+		require_message_authenticator = yes
+		limit_proxy_state = auto
+	}
+
+	authorize {
+		ok
+
+		Autz-Type Status-Server {
+			ok
+		}
+	}
+}

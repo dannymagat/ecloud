@@ -1,0 +1,16 @@
+# DT-15 / T-A2 -- CoovaChilli /logon PAP with the portal-issued credential
+# (CAPTIVE_PORTAL_ARCHITECTURE.md §4). CHAP variant: replace User-Password with
+# CHAP-Password/CHAP-Challenge captured from the gateway. PLACEHOLDERS ONLY.
+User-Name = "pc-PLACEHOLDER"
+User-Password = "PLACEHOLDER_PORTAL_CREDENTIAL"
+Service-Type = Login-User
+Acct-Session-Id = "<chilli-sessionid-placeholder>"
+Framed-IP-Address = 192.0.2.101
+Calling-Station-Id = "AA-BB-CC-DD-EE-FF"
+Called-Station-Id = "00-11-22-33-44-55"
+NAS-Identifier = "<radiusnasid-placeholder>"
+NAS-IP-Address = 192.0.2.20
+NAS-Port-Type = Wireless-802.11
+ChilliSpot-Version = "<chilli-version-placeholder>"
+WISPr-Logoff-URL = "http://192.0.2.1:3990/logoff"
+Message-Authenticator = 0x00

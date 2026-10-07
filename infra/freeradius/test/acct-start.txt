@@ -1,0 +1,16 @@
+# DT-16 / T-A6 -- Accounting Start. Class echoes the server-issued value
+# (ASCII "ai:" + 32 hex chars of the session UUID) so acct_unique keys on (Class, Acct-Session-Id).
+# PLACEHOLDERS ONLY.
+Acct-Status-Type = Start
+Acct-Session-Id = "<uam-sessionid-placeholder>"
+Acct-Authentic = RADIUS
+Acct-Delay-Time = 0
+User-Name = "pc-PLACEHOLDER"
+Framed-IP-Address = 192.0.2.100
+Calling-Station-Id = "AA-BB-CC-DD-EE-FF"
+Called-Station-Id = "00-11-22-33-44-55:lab-uam"
+NAS-Identifier = "<nasid-placeholder>"
+NAS-IP-Address = 192.0.2.10
+NAS-Port-Type = Wireless-802.11
+Class = "ai:00000000000000000000000000000000"
+Event-Timestamp = "Jan  1 2026 00:00:00 UTC"

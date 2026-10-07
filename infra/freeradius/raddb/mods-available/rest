@@ -1,0 +1,73 @@
+# -*- text -*-
+######################################################################
+#
+#  rlm_rest -> ECLOUD internal API (AAA_ARCHITECTURE.md §4.1/§4.2;
+#  contract: docs/contracts/aaa-authorize.md).
+#
+#  ECLOUD_INTERNAL_URL  base URL of the ECLOUD internal listener
+#                       (dev: http://host.docker.internal:3001 -- the api
+#                       process runs on the developer host, INTERNAL_PORT;
+#                       prod: the api container on the compose network, or
+#                       https with the `tls` block below).
+#  INTERNAL_API_TOKEN   sent as "X-Internal-Token" (policy.d/ecloud).
+#
+#  `body = json` serialises EVERY attribute of the request list as
+#  {"<Attr>":{"type":"<type>","value":[...]}} -- including User-Password
+#  (ECLOUD must never log it). Responses are JSON policies
+#  {"<list>:<Attr>": {"value":[...],"op":":=","do_xlat":false}}.
+#
+#  `do_xlat = no` disables xlat expansion of response values for requests
+#  made from the section (documented for 3.2.x; ECLOUD additionally sets
+#  "do_xlat": false per attribute so an API echoing untrusted input can
+#  never become an injection vector -- see README "do_xlat").
+#
+######################################################################
+
+rest {
+	tls {
+		#  Used only when ECLOUD_INTERNAL_URL is https://.
+		#  Production: pin the ECLOUD-issued CA and verify the hostname.
+		#  ca_file = /run/secrets/ecloud_internal_ca.pem
+		check_cert = yes
+		check_cert_cn = yes
+	}
+
+	connect_uri = "$ENV{ECLOUD_INTERNAL_URL}"
+
+	#  TCP connect timeout (seconds). Keep well under the NAS retransmit
+	#  timer (uspot/radcli 3-5 s): a dead backend must reject, not stall.
+	connect_timeout = 1.0
+
+	#  Section names match the virtual-server sections that call `rest`.
+	authorize {
+		uri = "${..connect_uri}/internal/aaa/authorize"
+		method = 'post'
+		body = 'json'
+		timeout = 1.5
+		do_xlat = no
+		tls = ${..tls}
+	}
+
+	post-auth {
+		uri = "${..connect_uri}/internal/aaa/post-auth"
+		method = 'post'
+		body = 'json'
+		timeout = 1.0
+		do_xlat = no
+		tls = ${..tls}
+	}
+
+	#  Connection pool (AAA §9: max 8 on the pilot). start = 0 so the server
+	#  starts even when the api is still booting; connections are opened on
+	#  first use and re-tried every retry_delay seconds after a failure.
+	pool {
+		start = 0
+		min = 0
+		max = 8
+		spare = 2
+		uses = 0
+		retry_delay = 5
+		lifetime = 0
+		idle_timeout = 60
+	}
+}

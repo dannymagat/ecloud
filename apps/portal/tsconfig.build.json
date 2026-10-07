@@ -1,0 +1,16 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": "src",
+    "outDir": "dist",
+    "tsBuildInfoFile": "dist/.tsbuildinfo"
+  },
+  "include": ["src"],
+  "exclude": ["src/**/*.test.ts"],
+  "references": [
+    { "path": "../../packages/shared/tsconfig.build.json" },
+    { "path": "../../packages/db/tsconfig.build.json" },
+    { "path": "../../packages/policy-engine/tsconfig.build.json" },
+    { "path": "../../packages/adapters/tsconfig.build.json" }
+  ]
+}

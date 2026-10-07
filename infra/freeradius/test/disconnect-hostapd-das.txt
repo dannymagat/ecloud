@@ -1,0 +1,9 @@
+# DT-07 / T-A8 -- Disconnect-Request to the EZEAP hostapd DAS (radius.dynamic-authorization,
+# port 3799). Minimal identification set first (CAPTIVE_PORTAL_ARCHITECTURE.md §3.5);
+# then repeat adding User-Name, then Event-Timestamp. Expected: ACK + station deauthed;
+# NO Acct-Stop for uspot-gated clients. Sent FROM the hub/worker (route to the AP),
+# not from FreeRADIUS. PLACEHOLDERS ONLY.
+Calling-Station-Id = "<mac-as-captured-in-DT-03>"
+NAS-Identifier = "<nasid-placeholder>"
+Acct-Session-Id = "<sid-placeholder>"
+Message-Authenticator = 0x00

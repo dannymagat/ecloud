@@ -1,0 +1,40 @@
+{
+  "name": "@ecloud/db",
+  "version": "0.1.0",
+  "private": true,
+  "description": "ECLOUD database: SQL migrations, runner CLI, Kysely types, RLS helpers",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "migrations"
+  ],
+  "scripts": {
+    "build": "tsc -b tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "clean": "rm -rf dist",
+    "test": "vitest run",
+    "migrate": "node dist/cli.js migrate",
+    "migrate:status": "node dist/cli.js status",
+    "seed": "node dist/cli.js seed"
+  },
+  "dependencies": {
+    "@ecloud/shared": "*",
+    "argon2": "^0.45.1",
+    "kysely": "^0.29.6",
+    "pg": "^8.23.1"
+  },
+  "devDependencies": {
+    "@types/pg": "^8.23.1"
+  },
+  "bin": {
+    "ecloud-db": "./dist/cli.js"
+  }
+}

@@ -1,0 +1,74 @@
+# -*- text -*-
+######################################################################
+#
+#  rlm_sql (PostgreSQL) -- accounting sink ONLY (AAA_ARCHITECTURE.md §5,
+#  DATABASE_DESIGN.md §4.2 option (c)). The role used here
+#  (RADIUS_SQL_USER, provisioned by packages/db) has INSERT on
+#  radius.radacct_raw and nothing else; this module is not called from
+#  authorize/post-auth and `read_clients` stays off (clients are rendered,
+#  AAA §3).
+#
+#  Connection parameters come from the environment:
+#    RADIUS_SQL_HOST, RADIUS_SQL_PORT, RADIUS_SQL_USER, RADIUS_SQL_DB
+#    RADIUS_SQL_PASSWORD or RADIUS_SQL_PASSWORD_FILE (resolved by the entrypoint)
+#  RADIUS_SQL_DB may be a plain database name or a full libpq conninfo
+#  string ("dbname=ecloud sslmode=verify-full sslrootcert=..."), which the
+#  postgresql driver uses verbatim when it contains '=' (stock sql l.191-195).
+#
+######################################################################
+
+sql {
+	dialect = "postgresql"
+	driver = "rlm_sql_${dialect}"
+
+	postgresql {
+		send_application_name = yes
+	}
+
+	server = "$ENV{RADIUS_SQL_HOST}"
+	port = $ENV{RADIUS_SQL_PORT}
+	login = "$ENV{RADIUS_SQL_USER}"
+	password = "$ENV{RADIUS_SQL_PASSWORD}"
+	radius_db = "$ENV{RADIUS_SQL_DB}"
+
+	#  Append-only raw table; both names point at it so the stock
+	#  ${acct_table1} reference in queries.conf resolves.
+	acct_table1 = "radius.radacct_raw"
+	acct_table2 = "radius.radacct_raw"
+
+	#  Unused (authorize/post-auth are not routed through SQL) but the
+	#  module expects the items to exist.
+	postauth_table = "radius.radpostauth_raw"
+	authcheck_table = "radcheck"
+	authreply_table = "radreply"
+	groupcheck_table = "radgroupcheck"
+	groupreply_table = "radgroupreply"
+	usergroup_table = "radusergroup"
+
+	#  Driver-side escaping (PQescapeStringConn) keeps attribute values
+	#  byte-exact instead of the "=XX" safe_characters encoding.
+	auto_escape = yes
+
+	#  Never modify rows from FreeRADIUS (insert-only contract).
+	delete_stale_sessions = no
+	read_clients = no
+
+	#  AAA §9: max 8 connections on the pilot. start = 0 so the server
+	#  boots (and keeps authenticating) while PostgreSQL is unavailable;
+	#  accounting INSERTs then fail -> no Accounting-Response -> NAS retransmits.
+	pool {
+		start = 0
+		min = 0
+		max = 8
+		spare = 2
+		uses = 0
+		retry_delay = 5
+		lifetime = 0
+		idle_timeout = 60
+		max_retries = 3
+	}
+
+	group_attribute = "SQL-Group"
+
+	$INCLUDE ${modconfdir}/${.:name}/main/${dialect}/queries.conf
+}

@@ -1,0 +1,413 @@
+/**
+ * Tenant resources built on the generic CRUD factory: sites, network devices, NAS clients,
+ * subscribers, user groups, client devices, schedules.
+ */
+import { hashPassword } from '@ecloud/db';
+import { ScheduleRuleSchema, isValidTimeZone } from '@ecloud/policy-engine';
+import { NotFoundError } from '@ecloud/shared';
+import { z } from 'zod';
+import { writeAudit } from '../audit.js';
+import { requestIsImpersonating } from '../auth/middleware.js';
+import type { AppDeps } from '../context.js';
+import { Envelope, randomToken, sealSecretRef } from '../crypto.js';
+import { OrgIdParams, ResourceSchema, problemResponses } from '../http/common.js';
+import { ImpersonationForbiddenError } from '../http/errors.js';
+import { defineRoute, type AnyRouteSpec } from '../http/route.js';
+import { assertRef, inTenant, requireOnSite } from '../tenant.js';
+import { crudRoutes, loose, type Row } from './crud.js';
+
+const MAC_RE = /^([0-9A-Fa-f]{2}[:-]?){5}[0-9A-Fa-f]{2}$/;
+
+/** `aa:bb:cc:dd:ee:ff` (API_ARCHITECTURE.md §3.2 client-devices). */
+export function canonicalMac(value: string): string {
+  const hex = value.toLowerCase().replace(/[^0-9a-f]/g, '');
+  return hex.match(/.{2}/g)?.join(':') ?? hex;
+}
+
+const mac = z.string().trim().regex(MAC_RE, 'MAC address').transform(canonicalMac);
+const timezone = z
+  .string()
+  .trim()
+  .min(1)
+  .refine((tz) => isValidTimeZone(tz), 'IANA time zone');
+const slug = z
+  .string()
+  .trim()
+  .toLowerCase()
+  .regex(/^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/);
+const name = z.string().trim().min(1).max(200);
+const optionalText = z.string().trim().max(500).nullable().optional();
+const instant = z.iso.datetime({ offset: true }).transform((v) => new Date(v));
+
+// ---------------------------------------------------------------------------------------------
+
+const SiteCreate = z.strictObject({
+  slug,
+  name,
+  timezone: timezone.default('UTC'),
+  address: optionalText,
+  settings: z.record(z.string(), z.unknown()).optional(),
+});
+const SiteUpdate = z.strictObject({
+  name: name.optional(),
+  timezone: timezone.optional(),
+  address: optionalText,
+  status: z.enum(['active', 'suspended', 'archived']).optional(),
+  settings: z.record(z.string(), z.unknown()).optional(),
+});
+
+const NetworkDeviceCreate = z.strictObject({
+  site_id: z.uuid(),
+  serial: z.string().trim().min(1).max(128),
+  mac: mac.nullable().optional(),
+  model: optionalText,
+  firmware: optionalText,
+  mode: z.enum(['bridge', 'routed', 'unknown']).optional(),
+  adapter_type_key: z
+    .string()
+    .regex(/^[a-z][a-z0-9_]{1,63}$/)
+    .nullable()
+    .optional(),
+});
+const NetworkDeviceUpdate = NetworkDeviceCreate.partial().omit({ serial: true });
+
+const NasCreate = z.strictObject({
+  site_id: z.uuid(),
+  name,
+  nas_ip: z.union([z.ipv4(), z.ipv6()]),
+  nas_identifier: z.string().trim().min(1).max(253).nullable().optional(),
+  adapter_type_key: z.string().regex(/^[a-z][a-z0-9_]{1,63}$/),
+  network_device_id: z.uuid().nullable().optional(),
+  coa_port: z.number().int().min(1).max(65535).nullable().optional(),
+  coa_supported: z.boolean().nullable().optional(),
+  require_message_authenticator: z.boolean().optional(),
+});
+const NasUpdate = NasCreate.partial().extend({ status: z.enum(['active', 'disabled']).optional() });
+
+const AUTH_METHODS = ['password', 'mac', 'voucher', 'idp'] as const;
+const UserCreate = z.strictObject({
+  username: z.string().trim().min(1).max(253).regex(/^\S+$/, 'no whitespace'),
+  password: z.string().min(8).max(256).optional(),
+  site_id: z.uuid().nullable().optional(),
+  user_group_id: z.uuid().nullable().optional(),
+  display_name: optionalText,
+  email: z.email().nullable().optional(),
+  phone: z.string().trim().max(32).nullable().optional(),
+  status: z.enum(['active', 'suspended', 'expired', 'disabled']).optional(),
+  valid_from: instant.nullable().optional(),
+  valid_until: instant.nullable().optional(),
+  max_devices: z.number().int().positive().nullable().optional(),
+  auth_methods: z.array(z.enum(AUTH_METHODS)).min(1).optional(),
+});
+const UserUpdate = UserCreate.partial().omit({ username: true });
+
+const UserGroupCreate = z.strictObject({
+  name,
+  description: z.string().trim().max(500).optional(),
+  site_id: z.uuid().nullable().optional(),
+  is_default: z.boolean().optional(),
+});
+const UserGroupUpdate = UserGroupCreate.partial();
+
+const ClientDeviceCreate = z.strictObject({
+  mac,
+  user_id: z.uuid().nullable().optional(),
+  name: optionalText,
+  device_type: optionalText,
+  mac_auth_enabled: z.boolean().optional(),
+  blocked: z.boolean().optional(),
+});
+const ClientDeviceUpdate = ClientDeviceCreate.partial().omit({ mac: true });
+
+const ScheduleCreate = z.strictObject({
+  name,
+  timezone,
+  rules: z.array(ScheduleRuleSchema).min(1).max(50),
+});
+const ScheduleUpdate = ScheduleCreate.partial();
+
+// ---------------------------------------------------------------------------------------------
+
+function withoutKeys(row: Row, keys: readonly string[]): Row {
+  const out: Row = {};
+  for (const [k, v] of Object.entries(row)) if (!keys.includes(k)) out[k] = v;
+  return out;
+}
+
+export function resourceRoutes(deps: AppDeps): AnyRouteSpec[] {
+  const dataEnvelope = new Envelope(deps.config.dataEncryptionKey, 'ecloud:nas:secret:v1');
+  const argonMemory = deps.config.base.argon2.memoryKib;
+
+  const sites = crudRoutes(deps, {
+    table: 'sites',
+    path: '/sites',
+    resource: 'site',
+    tag: 'sites',
+    permissions: {
+      read: 'site:read',
+      create: 'site:create',
+      update: 'site:update',
+      delete: 'site:delete',
+    },
+    siteMode: 'self',
+    softDelete: true,
+    createSchema: SiteCreate,
+    updateSchema: SiteUpdate,
+    serialize: (row) => withoutKeys(row, ['geo']),
+    prepareCreate: (body) => Promise.resolve({ ...body, settings: body.settings ?? {} }),
+  });
+
+  const networkDevices = crudRoutes(deps, {
+    table: 'network_devices',
+    path: '/network-devices',
+    resource: 'network_device',
+    tag: 'network-devices',
+    permissions: {
+      read: 'network_device:read',
+      create: 'network_device:create',
+      update: 'network_device:update',
+      delete: 'network_device:delete',
+    },
+    siteMode: 'column',
+    softDelete: true,
+    createSchema: NetworkDeviceCreate,
+    updateSchema: NetworkDeviceUpdate,
+    prepareCreate: async (body, { trx }) => {
+      await assertRef(trx, 'sites', body.site_id as string, 'site');
+      return body;
+    },
+    preparePatch: async (body, _before, { trx }) => {
+      if (typeof body.site_id === 'string') await assertRef(trx, 'sites', body.site_id, 'site');
+      return body;
+    },
+  });
+
+  const nas = crudRoutes(deps, {
+    table: 'nas_clients',
+    path: '/nas',
+    resource: 'nas_client',
+    tag: 'nas',
+    permissions: {
+      read: 'nas:read',
+      create: 'nas:create',
+      update: 'nas:update',
+      delete: 'nas:delete',
+    },
+    siteMode: 'column',
+    softDelete: true,
+    createSchema: NasCreate,
+    updateSchema: NasUpdate,
+    filters: { status: z.enum(['active', 'disabled']).optional() },
+    idempotency: 'optional',
+    secretFields: ['secret'],
+    serialize: (row) => withoutKeys(row, ['secret_ref']),
+    prepareCreate: async (body, hook) => {
+      await assertRef(hook.trx, 'sites', body.site_id as string, 'site');
+      if (typeof body.network_device_id === 'string') {
+        await assertRef(hook.trx, 'network_devices', body.network_device_id, 'network_device');
+      }
+      // 32 random bytes → 43 base64url chars; RADIUS shared secrets ≤ 128 octets.
+      const secret = randomToken(32);
+      hook.scratch.secret = secret;
+      return { ...body, secret_ref: sealSecretRef(dataEnvelope, secret) };
+    },
+    afterCreate: (row, hook) => Promise.resolve({ ...row, secret: hook.scratch.secret }),
+    preparePatch: async (body, _before, { trx }) => {
+      if (typeof body.site_id === 'string') await assertRef(trx, 'sites', body.site_id, 'site');
+      if (typeof body.network_device_id === 'string') {
+        await assertRef(trx, 'network_devices', body.network_device_id, 'network_device');
+      }
+      return body;
+    },
+  });
+
+  const rotateNasSecret = defineRoute({
+    method: 'post',
+    path: '/api/v1/orgs/:orgId/nas/:id/rotate-secret',
+    summary: 'Rotate the RADIUS shared secret of a NAS (returned once)',
+    tags: ['nas'],
+    auth: 'principal',
+    permission: 'nas:secret:rotate',
+    scope: 'any-site',
+    params: OrgIdParams,
+    idempotency: 'required',
+    secretFields: ['secret'],
+    responses: { 200: { description: 'New secret', schema: ResourceSchema }, ...problemResponses },
+    handler: async ({ params, req, ctx }) => {
+      if (requestIsImpersonating(req)) throw new ImpersonationForbiddenError('nas:secret:rotate');
+      const secret = randomToken(32);
+      const row = await inTenant(deps, params.orgId, async (trx) => {
+        const before = await loose(trx)
+          .selectFrom('nas_clients')
+          .select(['id', 'site_id', 'name'])
+          .where('id', '=', params.id)
+          .where('deleted_at', 'is', null)
+          .forUpdate()
+          .executeTakeFirst();
+        if (before === undefined) throw new NotFoundError('nas_client', params.id);
+        requireOnSite(
+          ctx,
+          'nas:secret:rotate',
+          params.orgId,
+          before.site_id as string,
+          'nas_client',
+          'nas:read',
+        );
+        await trx
+          .updateTable('nas_clients')
+          .set({ secret_ref: sealSecretRef(dataEnvelope, secret) })
+          .where('id', '=', params.id)
+          .execute();
+        await writeAudit(trx, ctx, {
+          organizationId: params.orgId,
+          action: 'nas:secret:rotate',
+          targetType: 'nas_client',
+          targetId: params.id,
+          after: { rotated: true },
+        });
+        return before;
+      });
+      return { status: 200, body: { id: row.id, secret } };
+    },
+  });
+
+  const users = crudRoutes(deps, {
+    table: 'users',
+    path: '/users',
+    resource: 'user',
+    tag: 'users',
+    permissions: {
+      read: 'user:read',
+      create: 'user:create',
+      update: 'user:update',
+      delete: 'user:delete',
+    },
+    siteMode: 'column',
+    softDelete: true,
+    createSchema: UserCreate,
+    updateSchema: UserUpdate,
+    filters: {
+      status: z.enum(['active', 'suspended', 'expired', 'disabled']).optional(),
+      user_group_id: z.uuid().optional(),
+    },
+    serialize: (row) => withoutKeys(row, ['password_hash']),
+    patchPermission: (body, before) => {
+      if (body.password !== undefined) return 'user:password:reset';
+      if (body.status !== undefined && body.status !== before.status) return 'user:suspend';
+      return undefined;
+    },
+    prepareCreate: async (body, { trx }) => {
+      if (typeof body.site_id === 'string') await assertRef(trx, 'sites', body.site_id, 'site');
+      if (typeof body.user_group_id === 'string') {
+        await assertRef(trx, 'user_groups', body.user_group_id, 'user_group');
+      }
+      const { password, auth_methods, ...rest } = body;
+      return {
+        ...rest,
+        auth_methods: auth_methods ?? ['password'],
+        password_hash:
+          typeof password === 'string'
+            ? await hashPassword(password, { memoryKib: argonMemory })
+            : null,
+      };
+    },
+    preparePatch: async (body, _before, { trx }) => {
+      if (typeof body.site_id === 'string') await assertRef(trx, 'sites', body.site_id, 'site');
+      if (typeof body.user_group_id === 'string') {
+        await assertRef(trx, 'user_groups', body.user_group_id, 'user_group');
+      }
+      const { password, ...rest } = body;
+      return typeof password === 'string'
+        ? { ...rest, password_hash: await hashPassword(password, { memoryKib: argonMemory }) }
+        : rest;
+    },
+  });
+
+  const userGroups = crudRoutes(deps, {
+    table: 'user_groups',
+    path: '/user-groups',
+    resource: 'user_group',
+    tag: 'user-groups',
+    permissions: {
+      read: 'user_group:read',
+      create: 'user_group:create',
+      update: 'user_group:update',
+      delete: 'user_group:delete',
+    },
+    siteMode: 'column',
+    softDelete: false,
+    createSchema: UserGroupCreate,
+    updateSchema: UserGroupUpdate,
+    prepareCreate: async (body, { trx }) => {
+      if (typeof body.site_id === 'string') await assertRef(trx, 'sites', body.site_id, 'site');
+      return body;
+    },
+    preparePatch: async (body, _before, { trx }) => {
+      if (typeof body.site_id === 'string') await assertRef(trx, 'sites', body.site_id, 'site');
+      return body;
+    },
+  });
+
+  const clientDevices = crudRoutes(deps, {
+    table: 'client_devices',
+    path: '/client-devices',
+    resource: 'client_device',
+    tag: 'client-devices',
+    permissions: {
+      read: 'client_device:read',
+      create: 'client_device:create',
+      update: 'client_device:update',
+      delete: 'client_device:delete',
+    },
+    siteMode: 'none',
+    softDelete: true,
+    createSchema: ClientDeviceCreate,
+    updateSchema: ClientDeviceUpdate,
+    filters: { user_id: z.uuid().optional(), mac: mac.optional() },
+    patchPermission: (body, before) =>
+      body.blocked !== undefined && body.blocked !== before.blocked
+        ? 'client_device:block'
+        : undefined,
+    prepareCreate: async (body, { trx }) => {
+      if (typeof body.user_id === 'string') await assertRef(trx, 'users', body.user_id, 'user');
+      return body;
+    },
+    preparePatch: async (body, _before, { trx }) => {
+      if (typeof body.user_id === 'string') await assertRef(trx, 'users', body.user_id, 'user');
+      return body;
+    },
+  });
+
+  const schedules = crudRoutes(deps, {
+    table: 'schedules',
+    path: '/schedules',
+    resource: 'schedule',
+    tag: 'policies',
+    permissions: {
+      read: 'policy:read',
+      create: 'policy:create',
+      update: 'policy:update',
+      delete: 'policy:delete',
+    },
+    siteMode: 'none',
+    softDelete: false,
+    createSchema: ScheduleCreate,
+    updateSchema: ScheduleUpdate,
+    prepareCreate: (body) => Promise.resolve({ ...body, rules: JSON.stringify(body.rules) }),
+    preparePatch: (body) =>
+      Promise.resolve(
+        body.rules === undefined ? body : { ...body, rules: JSON.stringify(body.rules) },
+      ),
+  });
+
+  return [
+    ...sites,
+    ...networkDevices,
+    ...nas,
+    rotateNasSecret,
+    ...users,
+    ...userGroups,
+    ...clientDevices,
+    ...schedules,
+  ];
+}

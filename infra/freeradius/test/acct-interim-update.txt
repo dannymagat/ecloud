@@ -1,0 +1,22 @@
+# DT-16 / T-A6 -- Interim-Update with Gigawords (> 4 GiB download, AAA_ARCHITECTURE.md §5.2:
+# stored as (Gigawords << 32) + Octets). Send twice to verify the duplicate collapses.
+Acct-Status-Type = Interim-Update
+Acct-Session-Id = "<uam-sessionid-placeholder>"
+Acct-Authentic = RADIUS
+Acct-Delay-Time = 0
+Acct-Session-Time = 600
+Acct-Input-Octets = 1048576
+Acct-Output-Octets = 123456789
+Acct-Output-Gigawords = 1
+Acct-Input-Gigawords = 0
+Acct-Input-Packets = 1000
+Acct-Output-Packets = 90000
+User-Name = "pc-PLACEHOLDER"
+Framed-IP-Address = 192.0.2.100
+Calling-Station-Id = "AA-BB-CC-DD-EE-FF"
+Called-Station-Id = "00-11-22-33-44-55:lab-uam"
+NAS-Identifier = "<nasid-placeholder>"
+NAS-IP-Address = 192.0.2.10
+NAS-Port-Type = Wireless-802.11
+Class = "ai:00000000000000000000000000000000"
+Event-Timestamp = "Jan  1 2026 00:10:00 UTC"
