@@ -53,8 +53,8 @@ describe('seedCatalogue', () => {
     const result = await seedCatalogue(exec);
 
     expect(result.permissions.total).toBe(PERMISSION_CATALOGUE.length);
-    expect(result.permissions.total).toBe(105);
-    expect(result.permissions.inserted).toBe(105);
+    expect(result.permissions.total).toBe(109);
+    expect(result.permissions.inserted).toBe(109);
     expect(result.permissions.orphans).toEqual(['legacy:thing']);
     expect(result.templates.map((t) => t.key)).toEqual(ROLE_TEMPLATES.map((t) => t.key));
     expect(result.templates).toHaveLength(6);
@@ -73,7 +73,7 @@ describe('seedCatalogue', () => {
     expect(texts.at(-2)).toBe('COMMIT');
     expect(texts.at(-1)).toContain('pg_advisory_unlock');
     const upsert = exec.statements.find((s) => s.text.startsWith('INSERT INTO permissions'));
-    expect((upsert?.values?.[0] as string[]).length).toBe(105);
+    expect((upsert?.values?.[0] as string[]).length).toBe(109);
     expect(upsert?.values?.[4]).toEqual(PERMISSION_CATALOGUE.map((p) => p.minScope));
     // template rows are platform templates: organization_id NULL, is_template true
     const roleInsert = exec.statements.find((s) => s.text.startsWith('INSERT INTO roles'));

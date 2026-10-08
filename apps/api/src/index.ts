@@ -1,5 +1,6 @@
 import { createDb } from '@ecloud/db';
 import { createLogger, redactConfig, type Logger } from '@ecloud/shared';
+import { createStorage } from '@ecloud/storage';
 import type { Server } from 'node:http';
 import { createApp } from './app.js';
 import { loadApiConfig, type ApiConfig } from './config.js';
@@ -13,6 +14,7 @@ export { loadApiConfig, type ApiConfig } from './config.js';
 export type { AppDeps, Principal, Grant, RequestContext } from './context.js';
 export { MemoryKv, RedisKv, type KvStore } from './kv.js';
 export { buildOpenApiDocument, OPENAPI_PATH } from './openapi.js';
+export { UAM_SECRET_PURPOSE, sealUamSecret } from './internal/portal.js';
 
 export interface MainOptions {
   config?: ApiConfig;
@@ -72,6 +74,7 @@ export async function main(options: MainOptions = {}): Promise<RunningApi> {
       max: 5,
     }),
     kv,
+    storage: createStorage(config.base.storage),
   };
   const { publicApp, internalApp, routes } = createApp(deps);
   const publicServer = await listen(publicApp, config.base.ports.api, config.apiBindHost);
@@ -99,7 +102,12 @@ export async function main(options: MainOptions = {}): Promise<RunningApi> {
         closeServer(publicServer, config.shutdownGraceMs),
         closeServer(internalServer, config.shutdownGraceMs),
       ]);
-      await Promise.allSettled([deps.db.destroy(), deps.dbPlatform.destroy(), kv.close()]);
+      await Promise.allSettled([
+        deps.db.destroy(),
+        deps.dbPlatform.destroy(),
+        kv.close(),
+        deps.storage?.close(),
+      ]);
       logger.info('api stopped');
     })();
     return stopping;

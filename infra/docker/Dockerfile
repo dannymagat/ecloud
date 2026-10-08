@@ -66,9 +66,14 @@ RUN --mount=type=cache,target=/root/.npm \
 COPY tsconfig.base.json ./
 COPY packages ./packages
 COPY apps/api ./apps/api
+# The designer preview renders with the portal page templates (`renderPreview` of @ecloud/portal).
+COPY apps/portal ./apps/portal
 COPY infra/docker/assemble.sh /usr/local/bin/assemble.sh
 RUN npx tsc -b apps/api/tsconfig.build.json \
- && sh /usr/local/bin/assemble.sh apps/api /out
+ && sh /usr/local/bin/assemble.sh apps/api /out \
+ && mkdir -p /out/apps/portal \
+ && cp -R apps/portal/dist /out/apps/portal/dist \
+ && find /out/apps/portal \( -name '*.map' -o -name '*.d.ts' -o -name '*.tsbuildinfo' -o -name '*.test.js' \) -delete
 
 FROM node-base AS api-prod-deps
 COPY --from=manifests /manifests/ ./

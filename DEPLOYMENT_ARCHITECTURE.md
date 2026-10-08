@@ -463,3 +463,12 @@ image started with the default `NODE_ENV=production` and no configuration refuse
   backup of it.
 - Caddy site blocks (§3.2) and the procedure of D-030; DNS (D-029); firewall/`DOCKER-USER`
   rules; Docker log rotation (§2.3) — all unchanged and unapplied.
+- Captive portal (Phase 6 P6-A): behind native Caddy the `portal` service MUST run with
+  `PORTAL_TRUST_PROXY_HOPS=1` (default 0 = direct exposure). With 0 behind Caddy every request
+  appears to come from the proxy address, so the portal's per-client-IP limits (attempts and
+  redirects per IP, `apps/api/src/internal/portal.ts` `PORTAL_LIMITS`) collapse into one shared
+  bucket for all clients; with more hops than the real chain a client could spoof
+  `X-Forwarded-For`. Also required there: `NODE_ENV=production` (refuses the dev
+  `PORTAL_STATE_SECRET`; set a ≥ 32-character secret via the secret store),
+  `PORTAL_COOKIE_SECURE=true` (`__Host-pf` cookie + HSTS) and
+  `PORTAL_INTERNAL_API_URL=http://api:<INTERNAL_PORT>` on the private network.

@@ -139,6 +139,23 @@ Out of Phase 3 scope: portal UI beyond skeleton (Phase 6), backups (Phase 10), a
 - Evidence limits: S3 driver tested against RustFS only (AWS/R2/B2/Wasabi untested). Not wired into the API yet (no asset endpoint exists).
 
 
+## P5 lab session 2026-10-08 — SKIPPED by owner
+- Owner approved the lab changes (FreeRADIUS reachable on the lab network; AP changed directly). Mac side prepared and seeded a lab tenant through the API; owner applied the lab AP config (uuid 1791450130) and restarted captive services.
+- Result: no device test executed. uspot did not start because the rendered captive instance section was not in the AP's stored `/etc/config/uspot` (recorded as a DT-03 attempt in PHASE2_VALIDATION.md). Owner then skipped AP testing.
+- Mac side restored: lab API stopped, FreeRADIUS back to 127.0.0.1 only. **The AP still runs the lab config** (open SSID on a routed guest network, no working portal) until rolled back with `lab/rollback-lab.sh` (outside the repo). The lab RADIUS secret was printed in the apply output; it is no longer accepted anywhere and must not be reused.
+
+## Phase 6 — Captive portal (LOCAL) — CODE COMPLETE 2026-10-08 (device exit criterion pending)
+Owner: "go to next phase" after skipping P5 device tests; interpreted as Phase 6, built locally with the Continuous Engineering Loop (spec in the job's TASK_P6.md, summarised here).
+| Cycle | Scope | Status |
+|---|---|---|
+| P6-A | Portal service: server-rendered pages, UAM flow via VendorAdapter, identity broker with single-use portal credentials, /internal/portal API, AAA portal-credential path, abuse controls, end-to-end through the UAM simulator and local FreeRADIUS | **DONE 2026-10-08** — reviewed (PASS WITH FIXES: per-account brute-force lock, username timing oracle, 30 s decision cache, hand-off bound to NAS origin, asset cache forwarding) |
+| P6-B | Portal administration: portals/themes CRUD, branding assets via @ecloud/storage, permissions, admin portal designer | **DONE 2026-10-08** — reviewed (PASS WITH FIXES: audit-log leak of sealed UAM secret ref fixed), write-only UAM secret rotation, NAS pin + UAM server URL, migrations 021–022; 1068 integration tests |
+Exit criterion "real client completes end-to-end login" stays REQUIRES_DEVICE_TEST (AP testing skipped).
+- **Owner awareness — non-additive migration:** `022_portal_theme_logo_fk.sql` changes `portal_themes.logo_asset_ref` from text to uuid and first clears logo references that cannot resolve to a same-organization asset, then adds a same-tenant FK. No valid data is removed and nothing is deployed, but it is not purely additive (loop stop rule: destructive migrations need owner awareness).
+- **Orchestrator verification 2026-10-08:** dev DB migrated to 022; build, lint, format:check, secrets scan OK; integration 1069 passed, 1 skipped (S3 contract) across 90 files; portal → FreeRADIUS e2e 4/4. Evidence is simulator/local only (SIMULATOR_TESTED); D-006 unchanged.
+- Known limits: logos fetchable by random asset id (accepted: branding is public); a known username can be locked at the portal for 15 min (trade-off of the per-account lock); timing equalisation is a design target, not a measured property; `PORTAL_TRUST_PROXY_HOPS=1` and production portal settings are VPS change-list items.
+- Portal onboarding order (fail-closed by design): create portal → set NAS pin + UAM server URL → rotate UAM secret (shown once) → configure the NAS.
+
 ## Verified Environment Facts
 See REMOTE_ENVIRONMENT.md and PHASE2_VALIDATION.md. Ledger: 105 claims — 40 verified, 17 proposed, 1 unknown, 47 requires device test; 24 device tests (DT-01…DT-24). **DT-01 executed 2026-10-07 (PASS, identification only)** on lab AP EZE-AP1832, EZEAP 6 r32912, uCentral schema 4.2.0: uspot is the TIP fork; no WireGuard/unetd on the AP (topology B unsupported on this firmware); hostapd supports DAS and dynamic VLAN. DT-02…DT-24 not executed. No device configuration was changed.
 

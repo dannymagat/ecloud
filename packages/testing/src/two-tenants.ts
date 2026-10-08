@@ -78,6 +78,8 @@ export const TENANT_GRAPH_TABLES: readonly string[] = Object.freeze([
   'portal_themes',
   'captive_portals',
   'portal_login_attempts',
+  'portal_assets',
+  'portal_terms_versions',
   'sessions',
   'accounting_records',
   'auth_events',
@@ -365,6 +367,23 @@ export async function seedTenantGraph(
     [organizationId, captivePortalId],
   );
   ref('portal_login_attempts', attemptId);
+
+  // 021: branding asset metadata (key pinned to the tenant prefix) and an immutable terms version
+  const assetId = newId();
+  await db.query(
+    `INSERT INTO portal_assets (id, organization_id, storage_key, content_type, byte_size, sha256)
+     VALUES ($1, $2, $3, 'image/png', 68, $4)`,
+    [assetId, organizationId, `org/${organizationId}/branding/${assetId}`, hex(32)],
+  );
+  ref('portal_assets', assetId);
+
+  const termsId = await insertReturning<string>(
+    db,
+    `INSERT INTO portal_terms_versions (organization_id, captive_portal_id, version, body)
+     VALUES ($1, $2, 1, 'fixture terms') RETURNING id`,
+    [organizationId, captivePortalId],
+  );
+  ref('portal_terms_versions', termsId);
 
   const acctUniqueId = `${slug}-${hex(8)}`;
   const sessionId = await insertReturning<string>(

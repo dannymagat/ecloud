@@ -598,8 +598,11 @@ not VERIFIED DEVICE CAPABILITY: everything device-facing below inherits the adap
   restriction), vouchers (User-Name = code, PAP password must equal the code, HMAC lookup,
   `FOR UPDATE`, batch site restriction), MAC authentication (`Service-Type = Call-Check` →
   `client_devices.mac_auth_enabled`). Blocked client devices are rejected. CHAP is rejected
-  (ECLOUD stores only one-way hashes). **Portal single-use credentials are not implemented: the
-  schema has no table for them** (Phase 4 portal).
+  (ECLOUD stores only one-way hashes). Portal single-use credentials (`pc-<16 hex>`, identity
+  broker, Phase 6 P6-A): kept in Redis for 90 s (SHA-256 of the password only), accepted only from
+  the bound NAS (packet source) + Calling-Station-Id + Acct-Session-Id, consumed once (SET NX),
+  identity re-checked; their decision is cached for 30 s (NAS retransmit horizon) so retransmits
+  get the same Class (`apps/api/src/internal/portal-credential.ts`).
 - Policy: `loadResolutionInput` (assignments by site/user/group/device/voucher batch, schedules,
   org default, usage counters for the site's local day/month, active sessions) →
   `resolveEffectivePolicy` → adapter `translate` + `buildReplyAttributes` (non-experimental only).
@@ -659,15 +662,39 @@ Added in Phase 4 (P4 backend, 2026-10-07): `me/sessions` (GET), `me/sessions/{id
 
 ### Not implemented yet (deliberately)
 
-Reports, accounting endpoints, webhooks, WireGuard peers, identity providers, captive portals,
-portal themes/assets, users export, `users/{id}/reset-password` and `effective-policy`
+Reports, accounting endpoints, webhooks, WireGuard peers, identity providers (captive portals,
+portal themes/assets: implemented in P6-B, see below), users export, `users/{id}/reset-password` and `effective-policy`
 (covered by PATCH `password` with `user:password:reset` and by `policies/simulate`),
 `policies/{id}/preview`, voucher print and code reveal (hash-only default: there is nothing to
 reveal), session disconnect/reauthorize (worker CoA path), `/platform/settings`,
 `POST /platform/administrators` (platform invitations), `PATCH /platform/role-templates`
 (templates are owned by `ecloud-db seed`; editing them in the DB would be reverted on the next
 seed), self-service MFA disable (D-038: not provided), async import/export jobs (`/jobs`),
-`/internal/aaa/accounting`, `/internal/aaa/clients`, `/internal/portal/*`, SSE.
+`/internal/aaa/accounting`, `/internal/aaa/clients`, `/internal/portal/idp/*` (Q64: no social
+IdP in the pilot), SSE.
+
+### Implementation notes (Phase 6 P6-A, captive portal)
+
+- `/internal/portal/redirects` (UAM entry + `res=` callbacks), `/internal/portal/flows/{id}`
+  (page data), `…/identify` (password | voucher | click_through → single-use credential →
+  adapter `authorizeSession` hand-off URL), `…/status`, `…/logout`
+  (`apps/api/src/internal/portal.ts`). `resolve-nas` is folded into `redirects` so a NAS is never
+  resolved without verifying the signed redirect in the same step; every validation failure
+  answers one generic `{kind:"error"}`. Flows (15 min), the replay store (24 h) and credentials
+  (90 s) live in Redis; no migration was needed. UAM secrets: `captive_portals.uam_secret_ref`
+  sealed with the data key, purpose `ecloud:nas:secret:v1` (`sealUamSecret`).
+- Portal public routes are served by `apps/portal` (server-rendered, no script, CSP
+  `default-src 'none'`, form-action limited to the flow's `http://uamip:uamport`).
+- Abuse limits as implemented (`PORTAL_LIMITS`): per NAS + client MAC 5 password failures / 5 min
+  → 15 min lock, 10 voucher failures / h → 1 h lock; per (site, lower(username)) 10 failures /
+  15 min → 15 min lock regardless of MAC/IP; per site 100 voucher failures / h → 15 min voucher
+  lock; 60 attempts / 10 min per client IP; 2 000 / 10 min per site; 60 redirects / min per IP;
+  300 flows / h per NAS. Every lock is the same generic 429. Rejections share one generic body;
+  an unknown username still runs one Argon2id verification against a dummy hash, but response
+  timing is **not** claimed to be constant (the "constant-time" wording above is the design
+  target, not a verified property). Behind Caddy, per-IP limits require
+  `PORTAL_TRUST_PROXY_HOPS=1` (DEPLOYMENT_ARCHITECTURE.md VPS change list).
+- The decision for a portal credential is cached 30 s (NAS retransmit horizon).
 
 ### Open questions raised by the implementation
 
@@ -703,3 +730,57 @@ seed), self-service MFA disable (D-038: not provided), async import/export jobs 
   endpoint lands it must use `forTenant(storage, orgId)`, add `storage.checkHealth()` to
   readiness, cap the request body itself, and serve bytes with `Content-Type` from stored
   metadata plus `X-Content-Type-Options: nosniff` (see `packages/storage/README.md`).
+
+### Implementation notes (P6-B, portal administration, 2026-10-08)
+
+- **Endpoints** (`apps/api/src/portal-admin/routes.ts`, all under `/api/v1/orgs/{orgId}`, one audit
+  row per mutation): `captive-portals` (CRUD, site-scoped; `auth_methods` ⊆ `password`, `voucher`,
+  `click_through` — `idp`/`mac` refused, Q64; `uam_secret_ref` never returned, only
+  `uam_secret_configured`; `social_login: "not_configured"`), `captive-portals/{id}/terms`
+  (GET versions / POST `{texts: {locale: body}}` → new immutable version, sets
+  `captive_portals.terms_version`), `portal-themes` (CRUD; colour tokens `#rrggbb` only, WCAG AA
+  4.5:1 enforced → 422 `contrast_issues`; `strings` per locale; `logo_asset_id`; `custom_css` not
+  accepted; `version` bumps on PATCH), `portal-assets` (POST raw image body — **deviation**: raw
+  `image/png|jpeg|webp` body instead of multipart; GET list/meta, GET `/{id}/content`, DELETE → 409
+  while a theme uses it), `portal-previews` (POST → 5-min ticket bound to principal + org; GET
+  serves the page HTML under `default-src 'none'; style-src 'unsafe-inline'; img-src data:;
+  frame-ancestors 'self'; sandbox`).
+- **Permissions**: new `portal_asset:{read,create,delete}` (organization); templates list the
+  portal keys explicitly; operator / read_only / platform_support are read-only
+  (`captive_portal:read`, `portal_theme:read`, `portal_asset:read`); site_admin keeps
+  `captive_portal:{read,update}`.
+- **Storage**: `deps.storage = createStorage(config.base.storage)`; keys via `forTenant` →
+  `org/{orgId}/branding/{assetId}`; migration 021 pins `portal_assets.storage_key` to exactly that
+  prefix (CHECK); `/readyz` adds `storage`. The upload body is capped by `express.raw` (5 MiB)
+  after the authorization pre-check.
+- **Portal origin `/a/{assetId}`**: the portal proxies `GET /internal/portal-assets/{assetId}`
+  (internal listener, `X-Internal-Token`): stored Content-Type, `nosniff`, sandbox CSP, `ETag` =
+  SHA-256, `Cache-Control: public, max-age=86400` (one day, so a deleted logo stops being served
+  by caches within a bounded time; review finding 4), 304 on `If-None-Match`. **Accepted risk
+  (review finding 2):** any asset is fetchable by its random UUID without a tenant check —
+  branding is shown before login and is public by design.
+- **UAM secret** (`POST captive-portals/{id}/rotate-uam-secret`, `captive_portal:secret:rotate`,
+  org_admin + platform_super_admin only, `Idempotency-Key` required): the server generates a
+  32-char secret, seals it with `sealUamSecret` (P6-A, purpose `ecloud:nas:secret:v1`) into
+  `uam_secret_ref`, returns it once (`secretFields`, `Cache-Control: no-store`); refused while
+  impersonating (D-027); audited as `{uam_secret_configured, rotated}` only. `uam_secret_ref` is
+  in the audit `SECRET_KEYS`, so no portal snapshot carries the envelope.
+- **Preview contract**: `RenderPortalPreview` in `@ecloud/shared/portal-theme`; the API calls
+  `renderPreview` exported by `@ecloud/portal` (P6-A templates, inline mode) with sample data and
+  the logo inlined as a `data:` URI (≤ 1 MiB).
+- **Migration 021** (`portal_assets`, `portal_terms_versions`, `uq_captive_portals_org_id`):
+  additive, RLS forced; `ecloud_app` has no UPDATE on either table (terms are immutable).
+- **Hotspot binding** (`captive-portals` POST/PATCH, `captive_portal:create|update`, audited via
+  the `adapter_config` snapshot): `uam_server_url` → `adapter_config.uam_server_url` (same origin
+  as `PUBLIC_PORTAL_ORIGIN` — never another host —, https unless the configured portal origin is
+  itself http (local dev), no userinfo/query/fragment, path `/uam/uspot/` for `uspot` or
+  `/uam/chilli/` for `coovachilli`; null = portal default) and `nas_client_id` →
+  `adapter_config.nas_client_id` (a NAS of the same organization **and** the portal's site, G9;
+  null = unpinned). Changing `portal_type` re-validates a stored URL.
+- **Onboarding order**: (1) create the portal; (2) set the NAS pin and the UAM server URL;
+  (3) `rotate-uam-secret` — mandatory, no secret is generated on create; (4) configure the NAS
+  with the UAM server URL and the secret shown once. Until step 3 the portal has no secret and
+  P6-A's flow fails closed.
+- **Migration 022**: `portal_themes.logo_asset_ref` becomes `uuid` with a same-tenant composite FK
+  `(organization_id, logo_asset_ref) → portal_assets` (ON DELETE RESTRICT); unresolvable values
+  are cleared first. A delete racing a logo assignment now fails (API answers 409).

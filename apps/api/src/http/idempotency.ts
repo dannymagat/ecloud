@@ -8,6 +8,7 @@
 import { ConflictError, isUuid } from '@ecloud/shared';
 import type { Request } from 'express';
 import type { AppDeps } from '../context.js';
+import { createHash } from 'node:crypto';
 import { sha256Hex } from '../crypto.js';
 import { canonicalJson } from '@ecloud/policy-engine';
 import {
@@ -64,7 +65,10 @@ export async function withIdempotency(
     throw new IdempotencyConflictError('Idempotency-Key must be a UUID.');
   }
   const scope = `idem:${principalKey(req)}:${spec.method}:${req.path}:${key}`;
-  const fingerprint = sha256Hex(canonicalJson(req.body ?? null));
+  // Binary bodies (branding uploads) are fingerprinted by their bytes, JSON bodies canonically.
+  const fingerprint = Buffer.isBuffer(req.body)
+    ? `bin:${createHash('sha256').update(req.body).digest('hex')}`
+    : sha256Hex(canonicalJson(req.body ?? null));
 
   let existing: string | null;
   try {

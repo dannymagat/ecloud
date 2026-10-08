@@ -8,3 +8,4 @@ export * from './permissions.js';
 export * from './tenancy.js';
 export * from './queues.js';
 export * from './net-guard.js';
+export * from './portal-theme.js';

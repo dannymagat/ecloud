@@ -3,6 +3,7 @@
  */
 import type { Db } from '@ecloud/db';
 import type { Logger, PermissionScope } from '@ecloud/shared';
+import type { ObjectStorage } from '@ecloud/storage';
 import type { ApiConfig } from './config.js';
 import type { KvStore } from './kv.js';
 
@@ -14,6 +15,12 @@ export interface AppDeps {
   /** BYPASSRLS `ecloud_platform` connection (DATABASE_URL_PLATFORM): authn + platform routes. */
   dbPlatform: Db;
   kv: KvStore;
+  /**
+   * Object storage for portal branding assets (D-026, `createStorage(config.base.storage)`).
+   * Optional so tools that only assemble routes (OpenAPI generation) need none; asset endpoints
+   * answer 503 without it.
+   */
+  storage?: ObjectStorage;
   /** Clock (tests may freeze it). */
   now?: () => Date;
 }

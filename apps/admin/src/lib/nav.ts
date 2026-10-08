@@ -21,6 +21,7 @@ import {
   Users,
   UsersRound,
   Eye,
+  Wifi,
   type LucideIcon,
 } from 'lucide-react';
 import type { Me } from '../api/types';
@@ -65,6 +66,12 @@ export const ORG_NAV: readonly NavItem[] = [
     label: 'Policy assignments',
     icon: Link2,
     anyOf: ['policy_assignment:read'],
+  },
+  {
+    path: 'portals',
+    label: 'Captive portals',
+    icon: Wifi,
+    anyOf: ['captive_portal:read'],
   },
   { path: 'sessions', label: 'Sessions', icon: Activity, anyOf: ['session:read'] },
   { path: 'audit-log', label: 'Audit log', icon: ScrollText, anyOf: ['audit_log:read'] },

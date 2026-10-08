@@ -16,7 +16,10 @@
  *
  * Retransmits: the decision is cached for 10 s under SHA-256(src IP, Acct-Session-Id,
  * Calling-Station-Id, User-Name, SHA-256(User-Password)) so a NAS retransmit gets the same
- * answer (same Class, no second voucher use) and a different password does not.
+ * answer (same Class, no second voucher use) and a different password does not. Portal
+ * credentials (`pc-<16 hex>`, identity broker, `portal-credential.ts`) are single-use, so their
+ * decision is cached for the NAS retransmit horizon (PORTAL_RETRANSMIT_TTL_S = 30 s: the
+ * NAS retries an Access-Request every few seconds, a handful of times) instead of 10 s.
  */
 import { verifyPassword, withPlatform, withTenant, type DbTransaction } from '@ecloud/db';
 import { resolveEffectivePolicy, toJsonValue, type Subject } from '@ecloud/policy-engine';
@@ -28,6 +31,9 @@ import { nasAdapter } from '../nas-adapter.js';
 import { AUTHN_ACCESS } from '../auth/principal.js';
 import { loadResolutionInput } from '../policy-data.js';
 import { voucherHash } from '../routes/vouchers.js';
+import { identifyPortalCredential, type PortalAuthMethod } from './portal-credential.js';
+import { IdentityRejected } from './portal-identity.js';
+import { isPortalCredentialUsername } from './portal-store.js';
 import {
   FORBIDDEN_REPLY_ATTRIBUTES,
   PolicyBuilder,
@@ -41,6 +47,8 @@ import {
 } from './radius.js';
 
 export const RETRANSMIT_TTL_S = 10;
+/** Decision cache of single-use portal credentials: the NAS retransmit horizon. */
+export const PORTAL_RETRANSMIT_TTL_S = 30;
 const DECISION_TTL_S = 60;
 
 interface NasRow {
@@ -153,7 +161,7 @@ export async function resolveNas(deps: AppDeps, body: RadiusRequestBody): Promis
 
 interface Identity {
   subject: Subject;
-  authMethod: 'password' | 'voucher' | 'mac';
+  authMethod: 'password' | 'voucher' | 'mac' | PortalAuthMethod;
   userId: string | null;
   voucherId: string | null;
   voucherBatchId: string | null;
@@ -174,6 +182,18 @@ async function identify(
   if (hasAttr(body, 'CHAP-Password')) {
     // ECLOUD stores only one-way hashes: CHAP cannot be verified (contract §2.1).
     throw new Reject('chap_unsupported', 'Authentication method not supported');
+  }
+
+  if (isPortalCredentialUsername(userName)) {
+    // Identity broker credential (D-018, SECURITY §5.6): never falls through to users/vouchers.
+    try {
+      return await identifyPortalCredential(deps, trx, body, nas, now);
+    } catch (error) {
+      if (error instanceof IdentityRejected) {
+        throw new Reject(error.reason, error.replyMessage, { auth_method: 'portal' });
+      }
+      throw error;
+    }
   }
 
   if (serviceType === 'Call-Check') {
@@ -576,7 +596,12 @@ export function authorizeHandler(deps: AppDeps): RequestHandler {
       }
       const decision = await decide(deps, body, now());
       const cachedValue: CachedDecision = { status: decision.status, body: decision.body };
-      await deps.kv.set(rtKey, JSON.stringify(cachedValue), RETRANSMIT_TTL_S);
+      // A portal credential is single-use: keep its decision for the NAS retransmit horizon so
+      // every retransmit of the same packet gets the same answer (same Class).
+      const rtTtl = isPortalCredentialUsername(attr(body, 'User-Name') ?? '')
+        ? PORTAL_RETRANSMIT_TTL_S
+        : RETRANSMIT_TTL_S;
+      await deps.kv.set(rtKey, JSON.stringify(cachedValue), rtTtl);
       await deps.kv
         .set(decisionKey(body), JSON.stringify(decision.facts), DECISION_TTL_S)
         .catch(() => undefined);

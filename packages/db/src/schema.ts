@@ -588,7 +588,8 @@ export interface PortalThemesTable {
   id: Generated<Uuid>;
   organization_id: Uuid;
   name: string;
-  logo_asset_ref: string | null;
+  /** Migration 022: uuid, FK (organization_id, logo_asset_ref) -> portal_assets. */
+  logo_asset_ref: Uuid | null;
   colors: GeneratedJsonb<Record<string, unknown>>;
   strings: GeneratedJsonb<Record<string, unknown>>;
   custom_css: string | null;
@@ -616,6 +617,32 @@ export interface CaptivePortalsTable {
   status: Generated<EnabledStatus>;
   created_at: GeneratedTimestamp;
   updated_at: GeneratedTimestamp;
+}
+
+/** Migration 021: metadata of branding objects in @ecloud/storage (key = org/{org}/{purpose}/{id}). */
+export interface PortalAssetsTable {
+  id: Generated<Uuid>;
+  organization_id: Uuid;
+  purpose: Generated<'branding'>;
+  storage_key: string;
+  content_type: 'image/png' | 'image/jpeg' | 'image/webp';
+  byte_size: number;
+  sha256: string;
+  original_filename: string | null;
+  created_by: Uuid | null;
+  created_at: GeneratedTimestamp;
+}
+
+/** Migration 021: immutable terms / click-through text versions per captive portal. */
+export interface PortalTermsVersionsTable {
+  id: Generated<Uuid>;
+  organization_id: Uuid;
+  captive_portal_id: Uuid;
+  version: number;
+  locale: Generated<string>;
+  body: string;
+  created_by: Uuid | null;
+  created_at: GeneratedTimestamp;
 }
 
 export interface PortalLoginAttemptsTable {
@@ -903,6 +930,8 @@ export interface Database {
   portal_themes: PortalThemesTable;
   captive_portals: CaptivePortalsTable;
   portal_login_attempts: PortalLoginAttemptsTable;
+  portal_assets: PortalAssetsTable;
+  portal_terms_versions: PortalTermsVersionsTable;
   sessions: SessionsTable;
   accounting_records: AccountingRecordsTable;
   auth_events: AuthEventsTable;

@@ -10,6 +10,10 @@
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
+    },
+    "./portal-theme": {
+      "types": "./dist/portal-theme.d.ts",
+      "import": "./dist/portal-theme.js"
     }
   },
   "files": [

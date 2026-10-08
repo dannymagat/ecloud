@@ -1421,6 +1421,262 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/api/v1/orgs/{orgId}/captive-portals': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * List captive_portals
+     * @description Permission: `captive_portal:read`
+     */
+    get: operations['get_api_v1_orgs_orgId_captive_portals'];
+    put?: never;
+    /**
+     * Create a captive_portal
+     * @description Permission: `captive_portal:create`
+     */
+    post: operations['post_api_v1_orgs_orgId_captive_portals'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/orgs/{orgId}/captive-portals/{id}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Get a captive_portal
+     * @description Permission: `captive_portal:read`
+     */
+    get: operations['get_api_v1_orgs_orgId_captive_portals_id'];
+    put?: never;
+    post?: never;
+    /**
+     * Delete a captive_portal
+     * @description Permission: `captive_portal:delete`
+     */
+    delete: operations['delete_api_v1_orgs_orgId_captive_portals_id'];
+    options?: never;
+    head?: never;
+    /**
+     * Update a captive_portal (If-Match supported)
+     * @description Permission: `captive_portal:update`
+     */
+    patch: operations['patch_api_v1_orgs_orgId_captive_portals_id'];
+    trace?: never;
+  };
+  '/api/v1/orgs/{orgId}/captive-portals/{id}/rotate-uam-secret': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Generate / rotate the UAM shared secret of a captive portal (returned once; configure it on the AP or gateway)
+     * @description Permission: `captive_portal:secret:rotate`
+     */
+    post: operations['post_api_v1_orgs_orgId_captive_portals_id_rotate_uam_secret'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/orgs/{orgId}/captive-portals/{id}/terms': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * List the terms versions of a captive portal
+     * @description Permission: `captive_portal:read`
+     */
+    get: operations['get_api_v1_orgs_orgId_captive_portals_id_terms'];
+    put?: never;
+    /**
+     * Publish a new terms version (immutable; becomes the current version)
+     * @description Permission: `captive_portal:update`
+     */
+    post: operations['post_api_v1_orgs_orgId_captive_portals_id_terms'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/orgs/{orgId}/portal-themes': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * List portal_themes
+     * @description Permission: `portal_theme:read`
+     */
+    get: operations['get_api_v1_orgs_orgId_portal_themes'];
+    put?: never;
+    /**
+     * Create a portal_theme
+     * @description Permission: `portal_theme:create`
+     */
+    post: operations['post_api_v1_orgs_orgId_portal_themes'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/orgs/{orgId}/portal-themes/{id}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Get a portal_theme
+     * @description Permission: `portal_theme:read`
+     */
+    get: operations['get_api_v1_orgs_orgId_portal_themes_id'];
+    put?: never;
+    post?: never;
+    /**
+     * Delete a portal_theme
+     * @description Permission: `portal_theme:delete`
+     */
+    delete: operations['delete_api_v1_orgs_orgId_portal_themes_id'];
+    options?: never;
+    head?: never;
+    /**
+     * Update a portal_theme (If-Match supported)
+     * @description Permission: `portal_theme:update`
+     */
+    patch: operations['patch_api_v1_orgs_orgId_portal_themes_id'];
+    trace?: never;
+  };
+  '/api/v1/orgs/{orgId}/portal-assets': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * List portal branding assets
+     * @description Permission: `portal_asset:read`
+     */
+    get: operations['get_api_v1_orgs_orgId_portal_assets'];
+    put?: never;
+    /**
+     * Upload a portal branding asset (raw image body, PNG/JPEG/WebP, ≤ 5 MiB)
+     * @description Permission: `portal_asset:create`
+     */
+    post: operations['post_api_v1_orgs_orgId_portal_assets'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/orgs/{orgId}/portal-assets/{id}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Get portal branding asset metadata
+     * @description Permission: `portal_asset:read`
+     */
+    get: operations['get_api_v1_orgs_orgId_portal_assets_id'];
+    put?: never;
+    post?: never;
+    /**
+     * Delete a portal branding asset (refused while a theme uses it)
+     * @description Permission: `portal_asset:delete`
+     */
+    delete: operations['delete_api_v1_orgs_orgId_portal_assets_id'];
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/orgs/{orgId}/portal-assets/{id}/content': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Download a portal branding asset (admin designer thumbnails)
+     * @description Permission: `portal_asset:read`
+     */
+    get: operations['get_api_v1_orgs_orgId_portal_assets_id_content'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/orgs/{orgId}/portal-previews': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Prepare a designer preview (sample data; returns a short-lived same-origin URL)
+     * @description Permission: `portal_theme:read`
+     */
+    post: operations['post_api_v1_orgs_orgId_portal_previews'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/orgs/{orgId}/portal-previews/{token}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Rendered designer preview (HTML, strict CSP sandbox; frame from the admin app)
+     * @description Permission: `portal_theme:read`
+     */
+    get: operations['get_api_v1_orgs_orgId_portal_previews_token'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/healthz': {
     parameters: {
       query?: never;
@@ -1462,7 +1718,7 @@ export interface paths {
       path?: never;
       cookie?: never;
     };
-    /** Readiness probe (database + Redis) */
+    /** Readiness probe (database, Redis, object storage) */
     get: {
       parameters: {
         query?: never;
@@ -8647,6 +8903,1500 @@ export interface operations {
             }[];
             next_cursor: string | null;
           };
+        };
+      };
+      /** @description Validation failed (application/problem+json) */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Authentication required */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Permission denied */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Not found (also returned for objects of other tenants) */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+    };
+  };
+  get_api_v1_orgs_orgId_captive_portals: {
+    parameters: {
+      query?: {
+        limit?: number;
+        cursor?: string;
+        status?: 'active' | 'disabled';
+        site_id?: string;
+      };
+      header?: never;
+      path: {
+        orgId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description captive_portal page */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            data: {
+              [key: string]: unknown;
+            }[];
+            next_cursor: string | null;
+          };
+        };
+      };
+      /** @description Validation failed (application/problem+json) */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Authentication required */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Permission denied */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Not found (also returned for objects of other tenants) */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+    };
+  };
+  post_api_v1_orgs_orgId_captive_portals: {
+    parameters: {
+      query?: never;
+      header?: {
+        'Idempotency-Key'?: string;
+      };
+      path: {
+        orgId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: {
+      content: {
+        'application/json': {
+          auth_methods?: ('password' | 'voucher' | 'click_through')[];
+          name: string;
+          nas_client_id?: string | null;
+          network_ref: string;
+          /** @enum {string} */
+          portal_type: 'uspot' | 'coovachilli' | 'external';
+          public_slug: string;
+          redirect_url?: string | null;
+          /** Format: uuid */
+          site_id: string;
+          /** @enum {string} */
+          status?: 'active' | 'disabled';
+          theme_id?: string | null;
+          uam_server_url?: string | null;
+          walled_garden?: string[];
+        };
+      };
+    };
+    responses: {
+      /** @description Created */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            id: string;
+          } & {
+            [key: string]: unknown;
+          };
+        };
+      };
+      /** @description Validation failed (application/problem+json) */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Authentication required */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Permission denied */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Not found (also returned for objects of other tenants) */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+    };
+  };
+  get_api_v1_orgs_orgId_captive_portals_id: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        orgId: string;
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description captive_portal */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            id: string;
+          } & {
+            [key: string]: unknown;
+          };
+        };
+      };
+      /** @description Validation failed (application/problem+json) */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Authentication required */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Permission denied */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Not found (also returned for objects of other tenants) */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+    };
+  };
+  delete_api_v1_orgs_orgId_captive_portals_id: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        orgId: string;
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Deleted */
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Validation failed (application/problem+json) */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Authentication required */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Permission denied */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Not found (also returned for objects of other tenants) */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+    };
+  };
+  patch_api_v1_orgs_orgId_captive_portals_id: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        orgId: string;
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: {
+      content: {
+        'application/json': {
+          auth_methods?: ('password' | 'voucher' | 'click_through')[];
+          name?: string;
+          nas_client_id?: string | null;
+          network_ref?: string;
+          /** @enum {string} */
+          portal_type?: 'uspot' | 'coovachilli' | 'external';
+          public_slug?: string;
+          redirect_url?: string | null;
+          /** @enum {string} */
+          status?: 'active' | 'disabled';
+          theme_id?: string | null;
+          uam_server_url?: string | null;
+          walled_garden?: string[];
+        };
+      };
+    };
+    responses: {
+      /** @description Updated */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            id: string;
+          } & {
+            [key: string]: unknown;
+          };
+        };
+      };
+      /** @description Validation failed (application/problem+json) */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Authentication required */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Permission denied */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Not found (also returned for objects of other tenants) */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description If-Match mismatch */
+      412: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+    };
+  };
+  post_api_v1_orgs_orgId_captive_portals_id_rotate_uam_secret: {
+    parameters: {
+      query?: never;
+      header: {
+        'Idempotency-Key': string;
+      };
+      path: {
+        orgId: string;
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description New secret (shown once, never stored in clear or returned again) */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            /** Format: uuid */
+            id: string;
+            uam_secret: string;
+            /** @constant */
+            uam_secret_configured: true;
+          };
+        };
+      };
+      /** @description Validation failed (application/problem+json) */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Authentication required */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Permission denied */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Not found (also returned for objects of other tenants) */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+    };
+  };
+  get_api_v1_orgs_orgId_captive_portals_id_terms: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        orgId: string;
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Versions, newest first */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            current_version: string | null;
+            data: {
+              body: string;
+              /** Format: uuid */
+              captive_portal_id: string;
+              created_at: string;
+              /** Format: uuid */
+              id: string;
+              locale: string;
+              version: number;
+            }[];
+          };
+        };
+      };
+      /** @description Validation failed (application/problem+json) */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Authentication required */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Permission denied */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Not found (also returned for objects of other tenants) */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+    };
+  };
+  post_api_v1_orgs_orgId_captive_portals_id_terms: {
+    parameters: {
+      query?: never;
+      header?: {
+        'Idempotency-Key'?: string;
+      };
+      path: {
+        orgId: string;
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: {
+      content: {
+        'application/json': {
+          texts: {
+            [key: string]: string;
+          };
+        };
+      };
+    };
+    responses: {
+      /** @description Published */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            data: {
+              body: string;
+              /** Format: uuid */
+              captive_portal_id: string;
+              created_at: string;
+              /** Format: uuid */
+              id: string;
+              locale: string;
+              version: number;
+            }[];
+            version: string;
+          };
+        };
+      };
+      /** @description Validation failed (application/problem+json) */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Authentication required */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Permission denied */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Not found (also returned for objects of other tenants) */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+    };
+  };
+  get_api_v1_orgs_orgId_portal_themes: {
+    parameters: {
+      query?: {
+        limit?: number;
+        cursor?: string;
+      };
+      header?: never;
+      path: {
+        orgId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description portal_theme page */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            data: {
+              [key: string]: unknown;
+            }[];
+            next_cursor: string | null;
+          };
+        };
+      };
+      /** @description Validation failed (application/problem+json) */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Authentication required */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Permission denied */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Not found (also returned for objects of other tenants) */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+    };
+  };
+  post_api_v1_orgs_orgId_portal_themes: {
+    parameters: {
+      query?: never;
+      header?: {
+        'Idempotency-Key'?: string;
+      };
+      path: {
+        orgId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: {
+      content: {
+        'application/json': {
+          colors?: {
+            background?: string;
+            brand?: string;
+            brand_text?: string;
+            error?: string;
+            muted?: string;
+            surface?: string;
+            text?: string;
+          };
+          logo_asset_id?: string | null;
+          name: string;
+          strings?: {
+            [key: string]: {
+              click_through_button?: string;
+              error_text?: string;
+              expired_text?: string;
+              footer_text?: string;
+              login_button?: string;
+              success_text?: string;
+              voucher_button?: string;
+              welcome_text?: string;
+              welcome_title?: string;
+            };
+          };
+        };
+      };
+    };
+    responses: {
+      /** @description Created */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            id: string;
+          } & {
+            [key: string]: unknown;
+          };
+        };
+      };
+      /** @description Validation failed (application/problem+json) */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Authentication required */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Permission denied */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Not found (also returned for objects of other tenants) */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+    };
+  };
+  get_api_v1_orgs_orgId_portal_themes_id: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        orgId: string;
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description portal_theme */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            id: string;
+          } & {
+            [key: string]: unknown;
+          };
+        };
+      };
+      /** @description Validation failed (application/problem+json) */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Authentication required */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Permission denied */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Not found (also returned for objects of other tenants) */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+    };
+  };
+  delete_api_v1_orgs_orgId_portal_themes_id: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        orgId: string;
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Deleted */
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Validation failed (application/problem+json) */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Authentication required */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Permission denied */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Not found (also returned for objects of other tenants) */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+    };
+  };
+  patch_api_v1_orgs_orgId_portal_themes_id: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        orgId: string;
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: {
+      content: {
+        'application/json': {
+          colors?: {
+            background?: string;
+            brand?: string;
+            brand_text?: string;
+            error?: string;
+            muted?: string;
+            surface?: string;
+            text?: string;
+          };
+          logo_asset_id?: string | null;
+          name?: string;
+          strings?: {
+            [key: string]: {
+              click_through_button?: string;
+              error_text?: string;
+              expired_text?: string;
+              footer_text?: string;
+              login_button?: string;
+              success_text?: string;
+              voucher_button?: string;
+              welcome_text?: string;
+              welcome_title?: string;
+            };
+          };
+        };
+      };
+    };
+    responses: {
+      /** @description Updated */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            id: string;
+          } & {
+            [key: string]: unknown;
+          };
+        };
+      };
+      /** @description Validation failed (application/problem+json) */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Authentication required */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Permission denied */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Not found (also returned for objects of other tenants) */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description If-Match mismatch */
+      412: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+    };
+  };
+  get_api_v1_orgs_orgId_portal_assets: {
+    parameters: {
+      query?: {
+        limit?: number;
+        cursor?: string;
+      };
+      header?: never;
+      path: {
+        orgId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Asset page */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            data: {
+              byte_size: number;
+              content_type: string;
+              created_at: string;
+              /** Format: uuid */
+              id: string;
+              /** Format: uuid */
+              organization_id: string;
+              original_filename: string | null;
+              /** @constant */
+              purpose: 'branding';
+              sha256: string;
+              url: string;
+            }[];
+            next_cursor: string | null;
+          };
+        };
+      };
+      /** @description Validation failed (application/problem+json) */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Authentication required */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Permission denied */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Not found (also returned for objects of other tenants) */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+    };
+  };
+  post_api_v1_orgs_orgId_portal_assets: {
+    parameters: {
+      query?: {
+        filename?: string;
+      };
+      header?: {
+        'Idempotency-Key'?: string;
+      };
+      path: {
+        orgId: string;
+      };
+      cookie?: never;
+    };
+    /** @description The image bytes. Content-Type must be image/png, image/jpeg or image/webp and match the file signature. */
+    requestBody: {
+      content: {
+        'image/jpeg': string;
+        'image/png': string;
+        'image/webp': string;
+      };
+    };
+    responses: {
+      /** @description Stored */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            byte_size: number;
+            content_type: string;
+            created_at: string;
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            organization_id: string;
+            original_filename: string | null;
+            /** @constant */
+            purpose: 'branding';
+            sha256: string;
+            url: string;
+          };
+        };
+      };
+      /** @description Validation failed (application/problem+json) */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Authentication required */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Permission denied */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Not found (also returned for objects of other tenants) */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Larger than 5 MiB */
+      413: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Not PNG/JPEG/WebP, or bytes do not match the declared type */
+      415: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+    };
+  };
+  get_api_v1_orgs_orgId_portal_assets_id: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        orgId: string;
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Asset */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            byte_size: number;
+            content_type: string;
+            created_at: string;
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            organization_id: string;
+            original_filename: string | null;
+            /** @constant */
+            purpose: 'branding';
+            sha256: string;
+            url: string;
+          };
+        };
+      };
+      /** @description Validation failed (application/problem+json) */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Authentication required */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Permission denied */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Not found (also returned for objects of other tenants) */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+    };
+  };
+  delete_api_v1_orgs_orgId_portal_assets_id: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        orgId: string;
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Deleted */
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Validation failed (application/problem+json) */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Authentication required */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Permission denied */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Not found (also returned for objects of other tenants) */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Still referenced by a portal theme */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+    };
+  };
+  get_api_v1_orgs_orgId_portal_assets_id_content: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        orgId: string;
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Image bytes (Content-Type from stored metadata, nosniff) */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'image/*': string;
+        };
+      };
+      /** @description Validation failed (application/problem+json) */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Authentication required */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Permission denied */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Not found (also returned for objects of other tenants) */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+    };
+  };
+  post_api_v1_orgs_orgId_portal_previews: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        orgId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: {
+      content: {
+        'application/json': {
+          /** Format: uuid */
+          captive_portal_id?: string;
+          draft?: {
+            colors?: {
+              background?: string;
+              brand?: string;
+              brand_text?: string;
+              error?: string;
+              muted?: string;
+              surface?: string;
+              text?: string;
+            };
+            logo_asset_id?: string | null;
+            strings?: {
+              [key: string]: {
+                click_through_button?: string;
+                error_text?: string;
+                expired_text?: string;
+                footer_text?: string;
+                login_button?: string;
+                success_text?: string;
+                voucher_button?: string;
+                welcome_text?: string;
+                welcome_title?: string;
+              };
+            };
+          };
+          /** @default en */
+          locale?: string;
+          /** @enum {string} */
+          page:
+            'landing' | 'login' | 'voucher' | 'terms' | 'success' | 'error' | 'expired' | 'status';
+          /** Format: uuid */
+          theme_id?: string;
+        };
+      };
+    };
+    responses: {
+      /** @description Preview ticket */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            expires_in: number;
+            preview_url: string;
+          };
+        };
+      };
+      /** @description Validation failed (application/problem+json) */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Authentication required */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Permission denied */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Not found (also returned for objects of other tenants) */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+    };
+  };
+  get_api_v1_orgs_orgId_portal_previews_token: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        orgId: string;
+        token: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description HTML document */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'text/html': string;
         };
       };
       /** @description Validation failed (application/problem+json) */

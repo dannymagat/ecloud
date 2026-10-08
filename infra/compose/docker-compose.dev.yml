@@ -210,6 +210,13 @@ services:
     environment:
       <<: *app-env
       PORTAL_PORT: '3002'
+      # The portal reaches the api only over its internal listener (/internal/portal/*).
+      PORTAL_INTERNAL_API_URL: http://api:3001
+      PORTAL_STATE_SECRET: ${PORTAL_STATE_SECRET:-ecloud_dev_portal_state_secret_change_me}
+      PORTAL_COOKIE_SECURE: 'false'
+      # Dev: no proxy in front (0). Behind native Caddy on the VPS this MUST be 1
+      # (DEPLOYMENT_ARCHITECTURE.md, VPS change list): per-IP portal limits depend on it.
+      # PORTAL_TRUST_PROXY_HOPS: '1'
       NODE_OPTIONS: --max-old-space-size=160
     ports:
       - '127.0.0.1:${APP_PORTAL_PORT:-3002}:3002'

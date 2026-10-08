@@ -4,7 +4,7 @@
  * document (openapi.ts), so an undocumented public route cannot exist.
  */
 import { UnauthorizedError, ForbiddenError, type PermissionKey } from '@ecloud/shared';
-import type { Request, Response, Router } from 'express';
+import express, { type Request, type RequestHandler, type Response, type Router } from 'express';
 import { type z } from 'zod';
 import { assertPermissionKey, evaluate, type AuthzTarget } from '../auth/authorize.js';
 import type { AppDeps, RequestContext } from '../context.js';
@@ -17,7 +17,7 @@ export interface HandlerResult {
   status: number;
   body?: unknown;
   headers?: Record<string, string>;
-  /** Non-JSON body (e.g. `text/csv`): `body` must then be a string and is sent verbatim. */
+  /** Non-JSON body (e.g. `text/csv`): `body` must then be a string or Buffer, sent verbatim. */
   contentType?: string;
 }
 
@@ -64,6 +64,12 @@ export interface RouteSpec<
   params?: PS;
   query?: QS;
   body?: BS;
+  /**
+   * Binary request body instead of JSON (e.g. branding uploads): the handler receives the bytes
+   * as `req.body` (Buffer). The body is capped at `limitBytes` before the handler runs (413);
+   * other content types leave `req.body` undefined and the handler answers 415.
+   */
+  rawBody?: { contentTypes: readonly string[]; limitBytes: number; description: string };
   /** `required` for non-idempotent POSTs (API_ARCHITECTURE.md §3.1); `optional` otherwise. */
   idempotency?: 'required' | 'optional';
   /** Response fields that are shown once and must not be kept for idempotent replay. */
@@ -117,31 +123,50 @@ function resolveTarget(
   return scope(req, params);
 }
 
+/** Authentication and the route-level permission pre-check (runs before any body is read). */
+function checkRouteAccess(spec: AnyRouteSpec, req: Request): void {
+  const ctx = req.ctx;
+  if (spec.auth !== 'public') {
+    if (ctx.principal === null) throw new UnauthorizedError();
+    if (spec.auth === 'session' && ctx.principal.kind !== 'admin') {
+      throw new ForbiddenError({ detail: 'This endpoint requires an administrator session.' });
+    }
+  }
+  if (spec.permission !== undefined && spec.scope !== undefined) {
+    const target = resolveTarget(spec.scope, req, req.params as Record<string, string>);
+    const memoKey = `${spec.permission}|${target.organizationId ?? ''}|${target.siteId ?? ''}|${String(target.anySite ?? false)}|${String(target.anyBinding ?? false)}`;
+    let allowed = ctx.decisions.get(memoKey);
+    if (allowed === undefined) {
+      allowed = evaluate(ctx.principal, spec.permission, target);
+      ctx.decisions.set(memoKey, allowed);
+    }
+    if (!allowed) {
+      throw new ForbiddenError();
+    }
+  }
+}
+
 export function mountRoute(router: Router, deps: AppDeps, spec: AnyRouteSpec): void {
-  router[spec.method](spec.path, async (req: Request, res: Response) => {
+  // Binary bodies are only read once the caller is known to be allowed (no 5 MB buffering for
+  // anonymous or unauthorised requests).
+  const pre: RequestHandler[] =
+    spec.rawBody === undefined
+      ? []
+      : [
+          (req, _res, next) => {
+            checkRouteAccess(spec, req);
+            next();
+          },
+          express.raw({ type: [...spec.rawBody.contentTypes], limit: spec.rawBody.limitBytes }),
+        ];
+  router[spec.method](spec.path, ...pre, async (req: Request, res: Response) => {
     const ctx = req.ctx;
-    if (spec.auth !== 'public') {
-      if (ctx.principal === null) throw new UnauthorizedError();
-      if (spec.auth === 'session' && ctx.principal.kind !== 'admin') {
-        throw new ForbiddenError({ detail: 'This endpoint requires an administrator session.' });
-      }
-    }
+    if (spec.rawBody === undefined) checkRouteAccess(spec, req);
     const rawParams = req.params as Record<string, string>;
-    if (spec.permission !== undefined && spec.scope !== undefined) {
-      const target = resolveTarget(spec.scope, req, rawParams);
-      const memoKey = `${spec.permission}|${target.organizationId ?? ''}|${target.siteId ?? ''}|${String(target.anySite ?? false)}|${String(target.anyBinding ?? false)}`;
-      let allowed = ctx.decisions.get(memoKey);
-      if (allowed === undefined) {
-        allowed = evaluate(ctx.principal, spec.permission, target);
-        ctx.decisions.set(memoKey, allowed);
-      }
-      if (!allowed) {
-        throw new ForbiddenError();
-      }
-    }
     const params: unknown = parsePart(spec.params, rawParams, 'path');
     const query: unknown = parsePart(spec.query, req.query, 'query');
-    const body: unknown = parsePart(spec.body, req.body ?? {}, 'body');
+    const body: unknown =
+      spec.rawBody === undefined ? parsePart(spec.body, req.body ?? {}, 'body') : undefined;
 
     const run = () => spec.handler({ params, query, body, req, res, ctx, deps });
     const result =
@@ -156,7 +181,10 @@ export function mountRoute(router: Router, deps: AppDeps, spec: AnyRouteSpec): v
     for (const [name, value] of Object.entries(result.headers ?? {})) res.setHeader(name, value);
     if (result.body === undefined) {
       res.status(result.status).end();
-    } else if (result.contentType !== undefined && typeof result.body === 'string') {
+    } else if (
+      result.contentType !== undefined &&
+      (typeof result.body === 'string' || Buffer.isBuffer(result.body))
+    ) {
       res.status(result.status).type(result.contentType).send(result.body);
     } else {
       res.status(result.status).json(result.body);

@@ -162,3 +162,47 @@ export function api<M extends HttpMethod, P extends PathFor<M>>(
     pathTemplate: path,
   });
 }
+
+/**
+ * Binary upload (branding assets): the file is the raw request body with its own image type;
+ * same CSRF / idempotency headers as `request`. Non-2xx responses throw `ApiError`.
+ */
+export async function uploadFile<T>(
+  url: string,
+  file: Blob,
+  init: { idempotencyKey?: string; pathTemplate?: string } = {},
+): Promise<T> {
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      method: 'POST',
+      headers: {
+        Accept: 'application/json, application/problem+json',
+        'X-Requested-With': 'XMLHttpRequest',
+        'Content-Type': file.type || 'application/octet-stream',
+        'Idempotency-Key': init.idempotencyKey ?? newIdempotencyKey(),
+      },
+      credentials: 'same-origin',
+      body: file,
+    });
+  } catch {
+    throw new ApiError({
+      type: 'about:blank',
+      title: 'Network error',
+      status: 0,
+      detail: 'The ECLOUD API could not be reached. Check your connection and try again.',
+    });
+  }
+  const text = await res.text();
+  let parsed: unknown = undefined;
+  try {
+    parsed = text ? JSON.parse(text) : undefined;
+  } catch {
+    parsed = undefined;
+  }
+  if (!res.ok) {
+    if (res.status === 401) for (const listener of sessionExpiredListeners) listener();
+    throw new ApiError(toProblem(res.status, parsed, res.statusText || `HTTP ${res.status}`));
+  }
+  return parsed as T;
+}

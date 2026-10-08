@@ -25,7 +25,7 @@ const ProblemSchema = z
 /** Routes outside the registry that are still part of the public listener. */
 export const STATIC_PUBLIC_ROUTES: readonly { method: string; path: string; summary: string }[] = [
   { method: 'get', path: '/healthz', summary: 'Liveness probe' },
-  { method: 'get', path: '/readyz', summary: 'Readiness probe (database + Redis)' },
+  { method: 'get', path: '/readyz', summary: 'Readiness probe (database, Redis, object storage)' },
   { method: 'get', path: OPENAPI_PATH, summary: 'This OpenAPI document' },
 ];
 
@@ -73,6 +73,20 @@ export function buildOpenApiDocument(routes: readonly AnyRouteSpec[], version: s
       },
       ...(route.body
         ? { requestBody: { content: { 'application/json': { schema: route.body as z.ZodType } } } }
+        : {}),
+      ...(route.rawBody
+        ? {
+            requestBody: {
+              required: true,
+              description: route.rawBody.description,
+              content: Object.fromEntries(
+                route.rawBody.contentTypes.map((type) => [
+                  type,
+                  { schema: { type: 'string', format: 'binary' } },
+                ]),
+              ),
+            },
+          }
         : {}),
       responses: responses as ZodOpenApiOperationObject['responses'],
     };

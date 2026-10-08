@@ -27,6 +27,7 @@
     "test:integration": "ECLOUD_TEST_REQUIRE_INTEGRATION=1 vitest run",
     "test:isolation": "ECLOUD_TEST_REQUIRE_INTEGRATION=1 vitest run --project tests tests/isolation tests/security",
     "test:aaa-contract": "ECLOUD_TEST_RADIUS=1 vitest run --project tests tests/aaa-contract",
+    "test:portal-e2e": "ECLOUD_TEST_RADIUS=1 vitest run --project tests-portal-radius",
     "dev:stack": "docker compose --project-directory . -f infra/compose/docker-compose.dev.yml up -d --wait",
     "dev:stack:down": "docker compose --project-directory . -f infra/compose/docker-compose.dev.yml down",
     "dev:stack:reset": "docker compose --project-directory . -f infra/compose/docker-compose.dev.yml down -v",

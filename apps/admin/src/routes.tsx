@@ -21,6 +21,8 @@ import { PlatformAdministratorsPage } from './features/platform/PlatformAdminist
 import { PlatformAuditPage } from './features/platform/PlatformAuditPage';
 import { RoleTemplatesPage } from './features/platform/RoleTemplatesPage';
 import { PoliciesPage } from './features/policies/PoliciesPage';
+import { PortalDesignerPage } from './features/portals/PortalDesignerPage';
+import { PortalsPage } from './features/portals/PortalsPage';
 import { PolicyEditorPage } from './features/policies/PolicyEditorPage';
 import { SessionsPage } from './features/sessions/SessionsPage';
 import { VouchersPage } from './features/vouchers/VouchersPage';
@@ -73,6 +75,8 @@ export const routes: RouteObject[] = [
                   { path: 'policies', element: <PoliciesPage /> },
                   { path: 'policies/:policyId', element: <PolicyEditorPage /> },
                   { path: 'policy-assignments', element: <PolicyAssignmentsPage /> },
+                  { path: 'portals', element: <PortalsPage /> },
+                  { path: 'portals/:portalId', element: <PortalDesignerPage /> },
                   { path: 'sessions', element: <SessionsPage /> },
                   { path: 'audit-log', element: <AuditLogPage /> },
                   { path: 'administrators', element: <AdministratorsPage /> },

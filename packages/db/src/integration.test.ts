@@ -151,7 +151,7 @@ await describeIntegration('@ecloud/db schema', () => {
       .sort();
     expect(publicTables).toEqual([...ALL_TABLES].sort());
     expect(radiusTables).toEqual([...RADIUS_TABLES].sort());
-    expect(publicTables).toHaveLength(42);
+    expect(publicTables).toHaveLength(44); // + portal_assets, portal_terms_versions (021)
 
     const view = await sql<{ count: number }>`
       SELECT count(*)::int AS count FROM pg_views WHERE schemaname = 'radius' AND viewname = 'nas_v'
@@ -196,7 +196,7 @@ await describeIntegration('@ecloud/db schema', () => {
 
   it('seeds the shared permission catalogue and the six role templates exactly', async () => {
     const permissions = await platform.selectFrom('permissions').selectAll().execute();
-    expect(permissions).toHaveLength(105); // + administrator:mfa_reset (D-038); + controller:* (5), compatibility:read (019)
+    expect(permissions).toHaveLength(109); // + administrator:mfa_reset (D-038); + controller:* (5), compatibility:read (019); + portal_asset:* (3, 021), captive_portal:secret:rotate (P6-B)
     expect(permissions.map((p) => p.key).sort()).toEqual(
       PERMISSION_CATALOGUE.map((p) => p.key).sort(),
     );
@@ -237,7 +237,7 @@ await describeIntegration('@ecloud/db schema', () => {
       .select(({ fn }) => fn.countAll<number>().as('n'))
       .where('role_id', '=', superAdmin?.id ?? '')
       .executeTakeFirst();
-    expect(Number(count?.n)).toBe(105);
+    expect(Number(count?.n)).toBe(109);
   });
 
   it('hides cross-tenant rows from ecloud_app and shows everything to the platform role', async () => {
@@ -712,7 +712,7 @@ await describeIntegration('@ecloud/db schema', () => {
       .selectFrom('permissions')
       .select(({ fn }) => fn.countAll<number>().as('n'))
       .executeTakeFirst();
-    expect(Number(perms?.n)).toBe(105);
+    expect(Number(perms?.n)).toBe(109);
     const templates = await platform
       .selectFrom('roles')
       .select(({ fn }) => fn.countAll<number>().as('n'))

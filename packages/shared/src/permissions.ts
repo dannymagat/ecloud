@@ -204,13 +204,23 @@ const RESOURCES: readonly ResourceSpec[] = [
     resource: 'captive_portal',
     label: 'captive portals',
     minScope: 'site',
-    actions: ['read', 'create', 'update', 'delete'],
+    // secret:rotate (P6-B): generates the UAM shared secret; organization-level only.
+    actions: ['read', 'create', 'update', 'delete', 'secret:rotate'],
+    scopeOverrides: { 'secret:rotate': 'organization' },
   },
   {
     resource: 'portal_theme',
     label: 'portal themes',
     minScope: 'organization',
     actions: ['read', 'create', 'update', 'delete'],
+  },
+  {
+    // Branding objects of the portal designer (migration 021, @ecloud/storage purpose `branding`).
+    // Organization-level like portal themes; no update: an asset is immutable, replace = upload.
+    resource: 'portal_asset',
+    label: 'portal branding assets',
+    minScope: 'organization',
+    actions: ['read', 'create', 'delete'],
   },
   {
     resource: 'identity_provider',
@@ -358,6 +368,10 @@ export const ROLE_TEMPLATES: readonly RoleTemplate[] = Object.freeze([
       // 019, written out explicitly (already covered by "all *:read")
       'controller:read',
       'compatibility:read',
+      // 021 (P6-B), written out explicitly (already covered by "all *:read")
+      'captive_portal:read',
+      'portal_theme:read',
+      'portal_asset:read',
       'tenant:list',
       'tenant:impersonate',
       'session:disconnect',
@@ -375,6 +389,10 @@ export const ROLE_TEMPLATES: readonly RoleTemplate[] = Object.freeze([
       ...NON_PLATFORM_KEYS,
       ...keysOf('controller'),
       ...keysOf('compatibility'),
+      // 021 (P6-B): portal administration, written out explicitly
+      ...keysOf('captive_portal'),
+      ...keysOf('portal_theme'),
+      ...keysOf('portal_asset'),
     ]),
   },
   {
@@ -420,6 +438,10 @@ export const ROLE_TEMPLATES: readonly RoleTemplate[] = Object.freeze([
       // 019: operators see controllers and the compatibility registry (read only)
       ...keysOf('controller', ['read']),
       ...keysOf('compatibility', ['read']),
+      // 021 (P6-B): captive-portal administration is read-only for operators
+      'captive_portal:read',
+      'portal_theme:read',
+      'portal_asset:read',
     ]),
   },
   {
@@ -433,6 +455,10 @@ export const ROLE_TEMPLATES: readonly RoleTemplate[] = Object.freeze([
       // 019, written out explicitly (already covered by "every *:read")
       'controller:read',
       'compatibility:read',
+      // 021 (P6-B), written out explicitly (already covered by "every *:read")
+      'captive_portal:read',
+      'portal_theme:read',
+      'portal_asset:read',
     ]),
   },
 ]);

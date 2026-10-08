@@ -54,9 +54,27 @@ export const crossPackageProject: TestProjectConfiguration = {
   test: {
     name: 'tests',
     include: ['**/*.test.ts'],
+    exclude: ['**/node_modules/**', 'e2e/portal-uam-radius.test.ts'],
     testTimeout: 30_000,
     hookTimeout: 120_000,
     sequence: { groupOrder: 2 },
+  },
+};
+
+/**
+ * Portal → FreeRADIUS end-to-end suite (Phase 6 P6-A). It runs the real api internal listener
+ * where the dev freeradius container sends rlm_rest (ECLOUD_INTERNAL_URL, port 3001) — the same
+ * port the aaa-contract stub binds — so it runs alone, after the `tests` group (groupOrder 3).
+ */
+export const portalRadiusProject: TestProjectConfiguration = {
+  extends: true,
+  root: resolve(ROOT_DIR, 'tests'),
+  test: {
+    name: 'tests-portal-radius',
+    include: ['e2e/portal-uam-radius.test.ts'],
+    testTimeout: 60_000,
+    hookTimeout: 120_000,
+    sequence: { groupOrder: 3 },
   },
 };
 
@@ -82,6 +100,7 @@ export const workspaceProjects: TestProjectConfiguration[] = [
       },
     })),
   crossPackageProject,
+  portalRadiusProject,
 ];
 
 export default workspaceProjects;

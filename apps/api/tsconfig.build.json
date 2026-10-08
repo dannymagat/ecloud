@@ -19,6 +19,12 @@
     },
     {
       "path": "../../packages/adapters/tsconfig.build.json"
+    },
+    {
+      "path": "../../packages/storage/tsconfig.build.json"
+    },
+    {
+      "path": "../portal/tsconfig.build.json"
     }
   ]
 }

@@ -13,7 +13,9 @@ import { clientIp } from './http/common.js';
 import { notFoundHandler, problemHandler } from './http/errors.js';
 import { mountRoute, type AnyRouteSpec } from './http/route.js';
 import { authorizeHandler, internalTokenGuard, postAuthHandler } from './internal/aaa.js';
+import { portalInternalRouter } from './internal/portal.js';
 import { OPENAPI_PATH, buildOpenApiDocument } from './openapi.js';
+import { internalAssetHandler, portalAdminRoutes } from './portal-admin/routes.js';
 import { accessRoutes } from './routes/access.js';
 import { administratorRoutes } from './routes/administrators.js';
 import { authRoutes } from './routes/auth.js';
@@ -49,6 +51,7 @@ export function allRoutes(deps: AppDeps): AnyRouteSpec[] {
     ...registryRoutes(deps),
     ...voucherRoutes(deps),
     ...runtimeRoutes(deps),
+    ...portalAdminRoutes(deps),
   ];
 }
 
@@ -113,6 +116,13 @@ async function readiness(deps: AppDeps): Promise<{ ok: boolean; checks: Record<s
     timeout(deps.kv.ping())
       .then(() => (checks.redis = 'ok'))
       .catch(() => (checks.redis = 'unavailable')),
+    ...(deps.storage === undefined
+      ? []
+      : [
+          timeout(deps.storage.checkHealth())
+            .then(() => (checks.storage = 'ok'))
+            .catch(() => (checks.storage = 'unavailable')),
+        ]),
   ]);
   return { ok: Object.values(checks).every((v) => v === 'ok'), checks };
 }
@@ -181,6 +191,9 @@ export function createApp(deps: AppDeps): Apps {
   internalApp.use(express.json({ limit: INTERNAL_BODY_LIMIT }));
   internalApp.post('/internal/aaa/authorize', authorizeHandler(deps));
   internalApp.post('/internal/aaa/post-auth', postAuthHandler(deps));
+  internalApp.use('/internal/portal', portalInternalRouter(deps));
+  // P6-B: branding bytes for the portal's public /a/{assetId} (the portal proxies this).
+  internalApp.get('/internal/portal-assets/:assetId', internalAssetHandler(deps));
   internalApp.use(notFoundHandler());
   internalApp.use(problemHandler(deps.logger));
 

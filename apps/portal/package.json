@@ -2,7 +2,7 @@
   "name": "@ecloud/portal",
   "version": "0.1.0",
   "private": true,
-  "description": "ECLOUD captive portal server (Phase 3 skeleton)",
+  "description": "ECLOUD captive portal server (server-rendered pages, UAM hand-off via /internal/portal)",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -28,6 +28,7 @@
     "@ecloud/db": "*",
     "@ecloud/policy-engine": "*",
     "@ecloud/shared": "*",
-    "express": "^5.2.1"
+    "express": "^5.2.1",
+    "zod": "^4.6.5"
   }
 }

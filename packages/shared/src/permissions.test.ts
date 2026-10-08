@@ -73,8 +73,9 @@ describe('PERMISSION_CATALOGUE', () => {
       session: 3,
       accounting: 2,
       report: 2,
-      captive_portal: 4,
+      captive_portal: 5, // + secret:rotate (P6-B)
       portal_theme: 4,
+      portal_asset: 3, // migration 021 (P6-B)
       identity_provider: 4,
       api_key: 3,
       webhook: 4,
@@ -214,5 +215,56 @@ describe('multi-vendor keys (MULTI_VENDOR_INTEGRATION_PLAN.md §8.2)', () => {
     for (const template of ['site_admin', 'operator', 'read_only', 'platform_support'] as const) {
       expect(held(template), template).toEqual(['controller:read', 'compatibility:read']);
     }
+  });
+});
+
+describe('portal administration keys (Phase 6 P6-B, migration 021)', () => {
+  const portalKeys = PERMISSION_CATALOGUE.filter((p) =>
+    ['captive_portal', 'portal_theme', 'portal_asset'].includes(p.resource),
+  ).map((p) => p.key);
+
+  it('catalogues portal_asset:{read,create,delete} at organization scope', () => {
+    expect(
+      PERMISSION_CATALOGUE.filter((p) => p.resource === 'portal_asset').map((p) => p.key),
+    ).toEqual(['portal_asset:read', 'portal_asset:create', 'portal_asset:delete']);
+    for (const p of PERMISSION_CATALOGUE.filter((d) => d.resource === 'portal_asset')) {
+      expect(p).toMatchObject({ minScope: 'organization', platformOnly: false });
+    }
+  });
+
+  it('grants every portal key to org_admin and platform_super_admin', () => {
+    expect(portalKeys).toHaveLength(12);
+    for (const template of ['org_admin', 'platform_super_admin'] as const) {
+      expect(getRoleTemplate(template).permissions, template).toEqual(
+        expect.arrayContaining(portalKeys),
+      );
+    }
+  });
+
+  it('keeps operator, read_only and platform_support read-only on portals', () => {
+    for (const template of ['operator', 'read_only', 'platform_support'] as const) {
+      const held = portalKeys.filter((k) => getRoleTemplate(template).permissions.includes(k));
+      expect(held, template).toEqual([
+        'captive_portal:read',
+        'portal_theme:read',
+        'portal_asset:read',
+      ]);
+    }
+  });
+
+  it('reserves captive_portal:secret:rotate for org_admin and platform_super_admin', () => {
+    expect(getPermission('captive_portal:secret:rotate')).toMatchObject({
+      minScope: 'organization',
+      platformOnly: false,
+    });
+    const holders = ROLE_TEMPLATES.filter((t) =>
+      t.permissions.includes('captive_portal:secret:rotate'),
+    ).map((t) => t.key);
+    expect(holders.sort()).toEqual(['org_admin', 'platform_super_admin']);
+  });
+
+  it('leaves site_admin with captive_portal read/update only (themes/assets are organization-level)', () => {
+    const held = portalKeys.filter((k) => getRoleTemplate('site_admin').permissions.includes(k));
+    expect(held).toEqual(['captive_portal:read', 'captive_portal:update']);
   });
 });

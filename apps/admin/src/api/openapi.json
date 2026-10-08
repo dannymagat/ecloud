@@ -8797,6 +8797,1954 @@
         "tags": ["audit"]
       }
     },
+    "/api/v1/orgs/{orgId}/captive-portals": {
+      "get": {
+        "description": "Permission: `captive_portal:read`",
+        "operationId": "get_api_v1_orgs_orgId_captive_portals",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "orgId",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "schema": { "default": 50, "maximum": 200, "minimum": 1, "type": "integer" }
+          },
+          { "in": "query", "name": "cursor", "schema": { "maxLength": 200, "type": "string" } },
+          {
+            "in": "query",
+            "name": "status",
+            "schema": { "enum": ["active", "disabled"], "type": "string" }
+          },
+          {
+            "in": "query",
+            "name": "site_id",
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "data": {
+                      "items": { "additionalProperties": {}, "properties": {}, "type": "object" },
+                      "type": "array"
+                    },
+                    "next_cursor": { "type": ["string", "null"] }
+                  },
+                  "required": ["data", "next_cursor"],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "captive_portal page"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Validation failed (application/problem+json)"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Authentication required"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Permission denied"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Not found (also returned for objects of other tenants)"
+          }
+        },
+        "summary": "List captive_portals",
+        "tags": ["captive-portal"]
+      },
+      "post": {
+        "description": "Permission: `captive_portal:create`",
+        "operationId": "post_api_v1_orgs_orgId_captive_portals",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "orgId",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "auth_methods": {
+                    "items": { "enum": ["password", "voucher", "click_through"], "type": "string" },
+                    "maxItems": 10,
+                    "minItems": 1,
+                    "type": "array"
+                  },
+                  "name": { "maxLength": 200, "minLength": 1, "type": "string" },
+                  "nas_client_id": {
+                    "anyOf": [
+                      {
+                        "format": "uuid",
+                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                        "type": "string"
+                      },
+                      { "type": "null" }
+                    ]
+                  },
+                  "network_ref": {
+                    "maxLength": 64,
+                    "minLength": 1,
+                    "pattern": "^[A-Za-z0-9._:-]+$",
+                    "type": "string"
+                  },
+                  "portal_type": { "enum": ["uspot", "coovachilli", "external"], "type": "string" },
+                  "public_slug": {
+                    "pattern": "^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$",
+                    "type": "string"
+                  },
+                  "redirect_url": {
+                    "anyOf": [
+                      { "format": "uri", "maxLength": 2048, "type": "string" },
+                      { "type": "null" }
+                    ]
+                  },
+                  "site_id": {
+                    "format": "uuid",
+                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                    "type": "string"
+                  },
+                  "status": { "enum": ["active", "disabled"], "type": "string" },
+                  "theme_id": {
+                    "anyOf": [
+                      {
+                        "format": "uuid",
+                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                        "type": "string"
+                      },
+                      { "type": "null" }
+                    ]
+                  },
+                  "uam_server_url": {
+                    "anyOf": [
+                      { "format": "uri", "maxLength": 2048, "type": "string" },
+                      { "type": "null" }
+                    ]
+                  },
+                  "walled_garden": {
+                    "items": {
+                      "maxLength": 253,
+                      "pattern": "^(\\*\\.)?([a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\\.)+[a-z]{2,63}$",
+                      "type": "string"
+                    },
+                    "maxItems": 64,
+                    "type": "array"
+                  }
+                },
+                "required": ["site_id", "name", "public_slug", "portal_type", "network_ref"],
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {},
+                  "properties": { "id": { "type": "string" } },
+                  "required": ["id"],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Created"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Validation failed (application/problem+json)"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Authentication required"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Permission denied"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Not found (also returned for objects of other tenants)"
+          }
+        },
+        "summary": "Create a captive_portal",
+        "tags": ["captive-portal"]
+      }
+    },
+    "/api/v1/orgs/{orgId}/captive-portals/{id}": {
+      "delete": {
+        "description": "Permission: `captive_portal:delete`",
+        "operationId": "delete_api_v1_orgs_orgId_captive_portals_id",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "orgId",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": { "description": "Deleted" },
+          "400": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Validation failed (application/problem+json)"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Authentication required"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Permission denied"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Not found (also returned for objects of other tenants)"
+          }
+        },
+        "summary": "Delete a captive_portal",
+        "tags": ["captive-portal"]
+      },
+      "get": {
+        "description": "Permission: `captive_portal:read`",
+        "operationId": "get_api_v1_orgs_orgId_captive_portals_id",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "orgId",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {},
+                  "properties": { "id": { "type": "string" } },
+                  "required": ["id"],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "captive_portal"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Validation failed (application/problem+json)"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Authentication required"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Permission denied"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Not found (also returned for objects of other tenants)"
+          }
+        },
+        "summary": "Get a captive_portal",
+        "tags": ["captive-portal"]
+      },
+      "patch": {
+        "description": "Permission: `captive_portal:update`",
+        "operationId": "patch_api_v1_orgs_orgId_captive_portals_id",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "orgId",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "auth_methods": {
+                    "items": { "enum": ["password", "voucher", "click_through"], "type": "string" },
+                    "maxItems": 10,
+                    "minItems": 1,
+                    "type": "array"
+                  },
+                  "name": { "maxLength": 200, "minLength": 1, "type": "string" },
+                  "nas_client_id": {
+                    "anyOf": [
+                      {
+                        "format": "uuid",
+                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                        "type": "string"
+                      },
+                      { "type": "null" }
+                    ]
+                  },
+                  "network_ref": {
+                    "maxLength": 64,
+                    "minLength": 1,
+                    "pattern": "^[A-Za-z0-9._:-]+$",
+                    "type": "string"
+                  },
+                  "portal_type": { "enum": ["uspot", "coovachilli", "external"], "type": "string" },
+                  "public_slug": {
+                    "pattern": "^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$",
+                    "type": "string"
+                  },
+                  "redirect_url": {
+                    "anyOf": [
+                      { "format": "uri", "maxLength": 2048, "type": "string" },
+                      { "type": "null" }
+                    ]
+                  },
+                  "status": { "enum": ["active", "disabled"], "type": "string" },
+                  "theme_id": {
+                    "anyOf": [
+                      {
+                        "format": "uuid",
+                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                        "type": "string"
+                      },
+                      { "type": "null" }
+                    ]
+                  },
+                  "uam_server_url": {
+                    "anyOf": [
+                      { "format": "uri", "maxLength": 2048, "type": "string" },
+                      { "type": "null" }
+                    ]
+                  },
+                  "walled_garden": {
+                    "items": {
+                      "maxLength": 253,
+                      "pattern": "^(\\*\\.)?([a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\\.)+[a-z]{2,63}$",
+                      "type": "string"
+                    },
+                    "maxItems": 64,
+                    "type": "array"
+                  }
+                },
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {},
+                  "properties": { "id": { "type": "string" } },
+                  "required": ["id"],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Updated"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Validation failed (application/problem+json)"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Authentication required"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Permission denied"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Not found (also returned for objects of other tenants)"
+          },
+          "412": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "If-Match mismatch"
+          }
+        },
+        "summary": "Update a captive_portal (If-Match supported)",
+        "tags": ["captive-portal"]
+      }
+    },
+    "/api/v1/orgs/{orgId}/captive-portals/{id}/rotate-uam-secret": {
+      "post": {
+        "description": "Permission: `captive_portal:secret:rotate`",
+        "operationId": "post_api_v1_orgs_orgId_captive_portals_id_rotate_uam_secret",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "orgId",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "id": {
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                      "type": "string"
+                    },
+                    "uam_secret": { "type": "string" },
+                    "uam_secret_configured": { "const": true, "type": "boolean" }
+                  },
+                  "required": ["id", "uam_secret", "uam_secret_configured"],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "New secret (shown once, never stored in clear or returned again)"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Validation failed (application/problem+json)"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Authentication required"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Permission denied"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Not found (also returned for objects of other tenants)"
+          }
+        },
+        "summary": "Generate / rotate the UAM shared secret of a captive portal (returned once; configure it on the AP or gateway)",
+        "tags": ["captive-portal"]
+      }
+    },
+    "/api/v1/orgs/{orgId}/captive-portals/{id}/terms": {
+      "get": {
+        "description": "Permission: `captive_portal:read`",
+        "operationId": "get_api_v1_orgs_orgId_captive_portals_id_terms",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "orgId",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "current_version": { "type": ["string", "null"] },
+                    "data": {
+                      "items": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "body": { "type": "string" },
+                          "captive_portal_id": {
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                            "type": "string"
+                          },
+                          "created_at": { "type": "string" },
+                          "id": {
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                            "type": "string"
+                          },
+                          "locale": { "type": "string" },
+                          "version": {
+                            "maximum": 9007199254740991,
+                            "minimum": -9007199254740991,
+                            "type": "integer"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "captive_portal_id",
+                          "version",
+                          "locale",
+                          "body",
+                          "created_at"
+                        ],
+                        "type": "object"
+                      },
+                      "type": "array"
+                    }
+                  },
+                  "required": ["current_version", "data"],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Versions, newest first"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Validation failed (application/problem+json)"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Authentication required"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Permission denied"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Not found (also returned for objects of other tenants)"
+          }
+        },
+        "summary": "List the terms versions of a captive portal",
+        "tags": ["captive-portal"]
+      },
+      "post": {
+        "description": "Permission: `captive_portal:update`",
+        "operationId": "post_api_v1_orgs_orgId_captive_portals_id_terms",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "orgId",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "texts": {
+                    "additionalProperties": {
+                      "maxLength": 20000,
+                      "minLength": 1,
+                      "type": "string"
+                    },
+                    "propertyNames": {
+                      "pattern": "^[a-z]{2,3}(-[A-Za-z0-9]{2,8})*$",
+                      "type": "string"
+                    },
+                    "type": "object"
+                  }
+                },
+                "required": ["texts"],
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "data": {
+                      "items": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "body": { "type": "string" },
+                          "captive_portal_id": {
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                            "type": "string"
+                          },
+                          "created_at": { "type": "string" },
+                          "id": {
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                            "type": "string"
+                          },
+                          "locale": { "type": "string" },
+                          "version": {
+                            "maximum": 9007199254740991,
+                            "minimum": -9007199254740991,
+                            "type": "integer"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "captive_portal_id",
+                          "version",
+                          "locale",
+                          "body",
+                          "created_at"
+                        ],
+                        "type": "object"
+                      },
+                      "type": "array"
+                    },
+                    "version": { "type": "string" }
+                  },
+                  "required": ["version", "data"],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Published"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Validation failed (application/problem+json)"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Authentication required"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Permission denied"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Not found (also returned for objects of other tenants)"
+          }
+        },
+        "summary": "Publish a new terms version (immutable; becomes the current version)",
+        "tags": ["captive-portal"]
+      }
+    },
+    "/api/v1/orgs/{orgId}/portal-themes": {
+      "get": {
+        "description": "Permission: `portal_theme:read`",
+        "operationId": "get_api_v1_orgs_orgId_portal_themes",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "orgId",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "schema": { "default": 50, "maximum": 200, "minimum": 1, "type": "integer" }
+          },
+          { "in": "query", "name": "cursor", "schema": { "maxLength": 200, "type": "string" } }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "data": {
+                      "items": { "additionalProperties": {}, "properties": {}, "type": "object" },
+                      "type": "array"
+                    },
+                    "next_cursor": { "type": ["string", "null"] }
+                  },
+                  "required": ["data", "next_cursor"],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "portal_theme page"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Validation failed (application/problem+json)"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Authentication required"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Permission denied"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Not found (also returned for objects of other tenants)"
+          }
+        },
+        "summary": "List portal_themes",
+        "tags": ["captive-portal"]
+      },
+      "post": {
+        "description": "Permission: `portal_theme:create`",
+        "operationId": "post_api_v1_orgs_orgId_portal_themes",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "orgId",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "colors": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "background": { "pattern": "^#[0-9a-fA-F]{6}$", "type": "string" },
+                      "brand": { "pattern": "^#[0-9a-fA-F]{6}$", "type": "string" },
+                      "brand_text": { "pattern": "^#[0-9a-fA-F]{6}$", "type": "string" },
+                      "error": { "pattern": "^#[0-9a-fA-F]{6}$", "type": "string" },
+                      "muted": { "pattern": "^#[0-9a-fA-F]{6}$", "type": "string" },
+                      "surface": { "pattern": "^#[0-9a-fA-F]{6}$", "type": "string" },
+                      "text": { "pattern": "^#[0-9a-fA-F]{6}$", "type": "string" }
+                    },
+                    "type": "object"
+                  },
+                  "logo_asset_id": {
+                    "anyOf": [
+                      {
+                        "format": "uuid",
+                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                        "type": "string"
+                      },
+                      { "type": "null" }
+                    ]
+                  },
+                  "name": { "maxLength": 200, "minLength": 1, "type": "string" },
+                  "strings": {
+                    "additionalProperties": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "click_through_button": { "maxLength": 1000, "type": "string" },
+                        "error_text": { "maxLength": 1000, "type": "string" },
+                        "expired_text": { "maxLength": 1000, "type": "string" },
+                        "footer_text": { "maxLength": 1000, "type": "string" },
+                        "login_button": { "maxLength": 1000, "type": "string" },
+                        "success_text": { "maxLength": 1000, "type": "string" },
+                        "voucher_button": { "maxLength": 1000, "type": "string" },
+                        "welcome_text": { "maxLength": 1000, "type": "string" },
+                        "welcome_title": { "maxLength": 1000, "type": "string" }
+                      },
+                      "type": "object"
+                    },
+                    "propertyNames": {
+                      "pattern": "^[a-z]{2,3}(-[A-Za-z0-9]{2,8})*$",
+                      "type": "string"
+                    },
+                    "type": "object"
+                  }
+                },
+                "required": ["name"],
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {},
+                  "properties": { "id": { "type": "string" } },
+                  "required": ["id"],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Created"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Validation failed (application/problem+json)"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Authentication required"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Permission denied"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Not found (also returned for objects of other tenants)"
+          }
+        },
+        "summary": "Create a portal_theme",
+        "tags": ["captive-portal"]
+      }
+    },
+    "/api/v1/orgs/{orgId}/portal-themes/{id}": {
+      "delete": {
+        "description": "Permission: `portal_theme:delete`",
+        "operationId": "delete_api_v1_orgs_orgId_portal_themes_id",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "orgId",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": { "description": "Deleted" },
+          "400": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Validation failed (application/problem+json)"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Authentication required"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Permission denied"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Not found (also returned for objects of other tenants)"
+          }
+        },
+        "summary": "Delete a portal_theme",
+        "tags": ["captive-portal"]
+      },
+      "get": {
+        "description": "Permission: `portal_theme:read`",
+        "operationId": "get_api_v1_orgs_orgId_portal_themes_id",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "orgId",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {},
+                  "properties": { "id": { "type": "string" } },
+                  "required": ["id"],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "portal_theme"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Validation failed (application/problem+json)"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Authentication required"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Permission denied"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Not found (also returned for objects of other tenants)"
+          }
+        },
+        "summary": "Get a portal_theme",
+        "tags": ["captive-portal"]
+      },
+      "patch": {
+        "description": "Permission: `portal_theme:update`",
+        "operationId": "patch_api_v1_orgs_orgId_portal_themes_id",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "orgId",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "colors": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "background": { "pattern": "^#[0-9a-fA-F]{6}$", "type": "string" },
+                      "brand": { "pattern": "^#[0-9a-fA-F]{6}$", "type": "string" },
+                      "brand_text": { "pattern": "^#[0-9a-fA-F]{6}$", "type": "string" },
+                      "error": { "pattern": "^#[0-9a-fA-F]{6}$", "type": "string" },
+                      "muted": { "pattern": "^#[0-9a-fA-F]{6}$", "type": "string" },
+                      "surface": { "pattern": "^#[0-9a-fA-F]{6}$", "type": "string" },
+                      "text": { "pattern": "^#[0-9a-fA-F]{6}$", "type": "string" }
+                    },
+                    "type": "object"
+                  },
+                  "logo_asset_id": {
+                    "anyOf": [
+                      {
+                        "format": "uuid",
+                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                        "type": "string"
+                      },
+                      { "type": "null" }
+                    ]
+                  },
+                  "name": { "maxLength": 200, "minLength": 1, "type": "string" },
+                  "strings": {
+                    "additionalProperties": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "click_through_button": { "maxLength": 1000, "type": "string" },
+                        "error_text": { "maxLength": 1000, "type": "string" },
+                        "expired_text": { "maxLength": 1000, "type": "string" },
+                        "footer_text": { "maxLength": 1000, "type": "string" },
+                        "login_button": { "maxLength": 1000, "type": "string" },
+                        "success_text": { "maxLength": 1000, "type": "string" },
+                        "voucher_button": { "maxLength": 1000, "type": "string" },
+                        "welcome_text": { "maxLength": 1000, "type": "string" },
+                        "welcome_title": { "maxLength": 1000, "type": "string" }
+                      },
+                      "type": "object"
+                    },
+                    "propertyNames": {
+                      "pattern": "^[a-z]{2,3}(-[A-Za-z0-9]{2,8})*$",
+                      "type": "string"
+                    },
+                    "type": "object"
+                  }
+                },
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {},
+                  "properties": { "id": { "type": "string" } },
+                  "required": ["id"],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Updated"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Validation failed (application/problem+json)"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Authentication required"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Permission denied"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Not found (also returned for objects of other tenants)"
+          },
+          "412": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "If-Match mismatch"
+          }
+        },
+        "summary": "Update a portal_theme (If-Match supported)",
+        "tags": ["captive-portal"]
+      }
+    },
+    "/api/v1/orgs/{orgId}/portal-assets": {
+      "get": {
+        "description": "Permission: `portal_asset:read`",
+        "operationId": "get_api_v1_orgs_orgId_portal_assets",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "orgId",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "schema": { "default": 50, "maximum": 200, "minimum": 1, "type": "integer" }
+          },
+          { "in": "query", "name": "cursor", "schema": { "maxLength": 200, "type": "string" } }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "data": {
+                      "items": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "byte_size": {
+                            "maximum": 9007199254740991,
+                            "minimum": -9007199254740991,
+                            "type": "integer"
+                          },
+                          "content_type": { "type": "string" },
+                          "created_at": { "type": "string" },
+                          "id": {
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                            "type": "string"
+                          },
+                          "organization_id": {
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                            "type": "string"
+                          },
+                          "original_filename": { "type": ["string", "null"] },
+                          "purpose": { "const": "branding", "type": "string" },
+                          "sha256": { "type": "string" },
+                          "url": { "type": "string" }
+                        },
+                        "required": [
+                          "id",
+                          "organization_id",
+                          "purpose",
+                          "content_type",
+                          "byte_size",
+                          "sha256",
+                          "original_filename",
+                          "url",
+                          "created_at"
+                        ],
+                        "type": "object"
+                      },
+                      "type": "array"
+                    },
+                    "next_cursor": { "type": ["string", "null"] }
+                  },
+                  "required": ["data", "next_cursor"],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Asset page"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Validation failed (application/problem+json)"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Authentication required"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Permission denied"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Not found (also returned for objects of other tenants)"
+          }
+        },
+        "summary": "List portal branding assets",
+        "tags": ["captive-portal"]
+      },
+      "post": {
+        "description": "Permission: `portal_asset:create`",
+        "operationId": "post_api_v1_orgs_orgId_portal_assets",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "orgId",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "filename",
+            "schema": { "maxLength": 255, "minLength": 1, "type": "string" }
+          },
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "image/jpeg": { "schema": { "format": "binary", "type": "string" } },
+            "image/png": { "schema": { "format": "binary", "type": "string" } },
+            "image/webp": { "schema": { "format": "binary", "type": "string" } }
+          },
+          "description": "The image bytes. Content-Type must be image/png, image/jpeg or image/webp and match the file signature.",
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "byte_size": {
+                      "maximum": 9007199254740991,
+                      "minimum": -9007199254740991,
+                      "type": "integer"
+                    },
+                    "content_type": { "type": "string" },
+                    "created_at": { "type": "string" },
+                    "id": {
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                      "type": "string"
+                    },
+                    "organization_id": {
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                      "type": "string"
+                    },
+                    "original_filename": { "type": ["string", "null"] },
+                    "purpose": { "const": "branding", "type": "string" },
+                    "sha256": { "type": "string" },
+                    "url": { "type": "string" }
+                  },
+                  "required": [
+                    "id",
+                    "organization_id",
+                    "purpose",
+                    "content_type",
+                    "byte_size",
+                    "sha256",
+                    "original_filename",
+                    "url",
+                    "created_at"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Stored"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Validation failed (application/problem+json)"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Authentication required"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Permission denied"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Not found (also returned for objects of other tenants)"
+          },
+          "413": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Larger than 5 MiB"
+          },
+          "415": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Not PNG/JPEG/WebP, or bytes do not match the declared type"
+          }
+        },
+        "summary": "Upload a portal branding asset (raw image body, PNG/JPEG/WebP, ≤ 5 MiB)",
+        "tags": ["captive-portal"]
+      }
+    },
+    "/api/v1/orgs/{orgId}/portal-assets/{id}": {
+      "delete": {
+        "description": "Permission: `portal_asset:delete`",
+        "operationId": "delete_api_v1_orgs_orgId_portal_assets_id",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "orgId",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": { "description": "Deleted" },
+          "400": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Validation failed (application/problem+json)"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Authentication required"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Permission denied"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Not found (also returned for objects of other tenants)"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Still referenced by a portal theme"
+          }
+        },
+        "summary": "Delete a portal branding asset (refused while a theme uses it)",
+        "tags": ["captive-portal"]
+      },
+      "get": {
+        "description": "Permission: `portal_asset:read`",
+        "operationId": "get_api_v1_orgs_orgId_portal_assets_id",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "orgId",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "byte_size": {
+                      "maximum": 9007199254740991,
+                      "minimum": -9007199254740991,
+                      "type": "integer"
+                    },
+                    "content_type": { "type": "string" },
+                    "created_at": { "type": "string" },
+                    "id": {
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                      "type": "string"
+                    },
+                    "organization_id": {
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                      "type": "string"
+                    },
+                    "original_filename": { "type": ["string", "null"] },
+                    "purpose": { "const": "branding", "type": "string" },
+                    "sha256": { "type": "string" },
+                    "url": { "type": "string" }
+                  },
+                  "required": [
+                    "id",
+                    "organization_id",
+                    "purpose",
+                    "content_type",
+                    "byte_size",
+                    "sha256",
+                    "original_filename",
+                    "url",
+                    "created_at"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Asset"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Validation failed (application/problem+json)"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Authentication required"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Permission denied"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Not found (also returned for objects of other tenants)"
+          }
+        },
+        "summary": "Get portal branding asset metadata",
+        "tags": ["captive-portal"]
+      }
+    },
+    "/api/v1/orgs/{orgId}/portal-assets/{id}/content": {
+      "get": {
+        "description": "Permission: `portal_asset:read`",
+        "operationId": "get_api_v1_orgs_orgId_portal_assets_id_content",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "orgId",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": { "image/*": { "schema": { "format": "binary", "type": "string" } } },
+            "description": "Image bytes (Content-Type from stored metadata, nosniff)"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Validation failed (application/problem+json)"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Authentication required"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Permission denied"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Not found (also returned for objects of other tenants)"
+          }
+        },
+        "summary": "Download a portal branding asset (admin designer thumbnails)",
+        "tags": ["captive-portal"]
+      }
+    },
+    "/api/v1/orgs/{orgId}/portal-previews": {
+      "post": {
+        "description": "Permission: `portal_theme:read`",
+        "operationId": "post_api_v1_orgs_orgId_portal_previews",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "orgId",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "captive_portal_id": {
+                    "format": "uuid",
+                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                    "type": "string"
+                  },
+                  "draft": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "colors": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "background": { "pattern": "^#[0-9a-fA-F]{6}$", "type": "string" },
+                          "brand": { "pattern": "^#[0-9a-fA-F]{6}$", "type": "string" },
+                          "brand_text": { "pattern": "^#[0-9a-fA-F]{6}$", "type": "string" },
+                          "error": { "pattern": "^#[0-9a-fA-F]{6}$", "type": "string" },
+                          "muted": { "pattern": "^#[0-9a-fA-F]{6}$", "type": "string" },
+                          "surface": { "pattern": "^#[0-9a-fA-F]{6}$", "type": "string" },
+                          "text": { "pattern": "^#[0-9a-fA-F]{6}$", "type": "string" }
+                        },
+                        "type": "object"
+                      },
+                      "logo_asset_id": {
+                        "anyOf": [
+                          {
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                            "type": "string"
+                          },
+                          { "type": "null" }
+                        ]
+                      },
+                      "strings": {
+                        "additionalProperties": {
+                          "additionalProperties": false,
+                          "properties": {
+                            "click_through_button": { "maxLength": 1000, "type": "string" },
+                            "error_text": { "maxLength": 1000, "type": "string" },
+                            "expired_text": { "maxLength": 1000, "type": "string" },
+                            "footer_text": { "maxLength": 1000, "type": "string" },
+                            "login_button": { "maxLength": 1000, "type": "string" },
+                            "success_text": { "maxLength": 1000, "type": "string" },
+                            "voucher_button": { "maxLength": 1000, "type": "string" },
+                            "welcome_text": { "maxLength": 1000, "type": "string" },
+                            "welcome_title": { "maxLength": 1000, "type": "string" }
+                          },
+                          "type": "object"
+                        },
+                        "propertyNames": {
+                          "pattern": "^[a-z]{2,3}(-[A-Za-z0-9]{2,8})*$",
+                          "type": "string"
+                        },
+                        "type": "object"
+                      }
+                    },
+                    "type": "object"
+                  },
+                  "locale": {
+                    "default": "en",
+                    "pattern": "^[a-z]{2,3}(-[A-Za-z0-9]{2,8})*$",
+                    "type": "string"
+                  },
+                  "page": {
+                    "enum": [
+                      "landing",
+                      "login",
+                      "voucher",
+                      "terms",
+                      "success",
+                      "error",
+                      "expired",
+                      "status"
+                    ],
+                    "type": "string"
+                  },
+                  "theme_id": {
+                    "format": "uuid",
+                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                    "type": "string"
+                  }
+                },
+                "required": ["page"],
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "expires_in": {
+                      "maximum": 9007199254740991,
+                      "minimum": -9007199254740991,
+                      "type": "integer"
+                    },
+                    "preview_url": { "type": "string" }
+                  },
+                  "required": ["preview_url", "expires_in"],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Preview ticket"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Validation failed (application/problem+json)"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Authentication required"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Permission denied"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Not found (also returned for objects of other tenants)"
+          }
+        },
+        "summary": "Prepare a designer preview (sample data; returns a short-lived same-origin URL)",
+        "tags": ["captive-portal"]
+      }
+    },
+    "/api/v1/orgs/{orgId}/portal-previews/{token}": {
+      "get": {
+        "description": "Permission: `portal_theme:read`",
+        "operationId": "get_api_v1_orgs_orgId_portal_previews_token",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "orgId",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "token",
+            "required": true,
+            "schema": { "pattern": "^[A-Za-z0-9_-]{32}$", "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": { "text/html": { "schema": { "type": "string" } } },
+            "description": "HTML document"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Validation failed (application/problem+json)"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Authentication required"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Permission denied"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Not found (also returned for objects of other tenants)"
+          }
+        },
+        "summary": "Rendered designer preview (HTML, strict CSP sandbox; frame from the admin app)",
+        "tags": ["captive-portal"]
+      }
+    },
     "/healthz": {
       "get": {
         "responses": { "200": { "description": "OK" } },
@@ -8809,7 +10757,7 @@
       "get": {
         "responses": { "200": { "description": "OK" } },
         "security": [],
-        "summary": "Readiness probe (database + Redis)",
+        "summary": "Readiness probe (database, Redis, object storage)",
         "tags": ["meta"]
       }
     },

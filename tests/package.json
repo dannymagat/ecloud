@@ -9,7 +9,9 @@
     "test": "vitest run --root .. --project tests"
   },
   "dependencies": {
+    "@ecloud/api": "*",
     "@ecloud/db": "*",
+    "@ecloud/portal": "*",
     "@ecloud/shared": "*",
     "@ecloud/testing": "*",
     "kysely": "^0.29.6",

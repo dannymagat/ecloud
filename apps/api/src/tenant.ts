@@ -72,7 +72,9 @@ type RefTable =
   | 'network_devices'
   | 'nas_clients'
   | 'controllers'
-  | 'identity_providers';
+  | 'identity_providers'
+  | 'portal_themes'
+  | 'portal_assets';
 
 const SOFT_DELETE: ReadonlySet<RefTable> = new Set([
   'sites',
@@ -96,7 +98,13 @@ export async function assertRef(
   resource: string,
 ): Promise<{ site_id: string | null }> {
   const softDelete = SOFT_DELETE.has(table) ? sql`AND deleted_at IS NULL` : sql``;
-  const hasSite = !['client_devices', 'schedules', 'identity_providers'].includes(table);
+  const hasSite = ![
+    'client_devices',
+    'schedules',
+    'identity_providers',
+    'portal_themes',
+    'portal_assets',
+  ].includes(table);
   const siteColumn = table === 'sites' ? sql`id` : hasSite ? sql`site_id` : sql`NULL::uuid`;
   const result = await sql<{ site_id: string | null }>`
     SELECT ${siteColumn} AS site_id FROM ${sql.table(table)}
