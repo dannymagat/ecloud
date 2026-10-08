@@ -42,6 +42,23 @@ export const apiEnvSchema = z.object({
     .default('org_admin'),
   /** Acct-Interim-Interval sent to NASes whose adapter can carry it (null = not sent). */
   AAA_INTERIM_INTERVAL_S: z.coerce.number().int().min(60).max(86_400).optional(),
+  /**
+   * Q44: Session-Timeout cap while no lab-validated CoA can push a policy change into a live
+   * session (P7-A). 0 disables the cap.
+   */
+  AAA_SESSION_TIMEOUT_CAP_S: z.coerce
+    .number()
+    .int()
+    .min(0)
+    .max(86_400)
+    .refine((v) => v === 0 || v >= 300, {
+      message: 'must be 0 (disabled) or >= 300 s (Q45 re-auth cadence floor)',
+    })
+    .default(1_800),
+  /** P7-A: open sessions re-resolved per policy change; the rest are recorded unevaluated. */
+  ENFORCEMENT_MAX_SESSIONS: z.coerce.number().int().min(1).max(100_000).default(2_000),
+  /** Same variable as the worker (D-006, default off): the API only reads it to choose strategies. */
+  ECLOUD_COA_ENABLED: boolEnv(false),
   SHUTDOWN_GRACE_MS: z.coerce.number().int().min(0).max(120_000).default(10_000),
   RATE_LIMIT_DISABLED: boolEnv(false),
 });
@@ -63,6 +80,12 @@ export interface ApiConfig {
   kvDriver: 'redis' | 'memory';
   impersonationRoleTemplate: string;
   aaaInterimIntervalS: number | null;
+  /** Q44 cap in seconds; 0 = disabled. */
+  aaaSessionTimeoutCapS: number;
+  /** ENFORCEMENT_MAX_SESSIONS: re-resolution cap of one policy change. */
+  enforcementMaxSessions: number;
+  /** ECLOUD_COA_ENABLED as seen by the API (strategy selection only; nothing is sent from the API). */
+  coaEnabled: boolean;
   shutdownGraceMs: number;
   rateLimitDisabled: boolean;
 }
@@ -118,6 +141,9 @@ export function loadApiConfig(
     kvDriver: raw.KV_DRIVER,
     impersonationRoleTemplate: raw.IMPERSONATION_ROLE_TEMPLATE,
     aaaInterimIntervalS: raw.AAA_INTERIM_INTERVAL_S ?? null,
+    aaaSessionTimeoutCapS: raw.AAA_SESSION_TIMEOUT_CAP_S,
+    enforcementMaxSessions: raw.ENFORCEMENT_MAX_SESSIONS,
+    coaEnabled: raw.ECLOUD_COA_ENABLED,
     shutdownGraceMs: raw.SHUTDOWN_GRACE_MS,
     rateLimitDisabled: raw.RATE_LIMIT_DISABLED,
   };

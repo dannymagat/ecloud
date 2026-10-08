@@ -201,6 +201,45 @@ migration/seed that cites the evidence file (D-028), which re-runs unit/contract
 The aaa-contract suite uses the DT-03/DT-16 attribute files with **placeholder** values; it
 verifies FreeRADIUS ↔ ECLOUD wiring only and resolves no DT.
 
+### 7.1 Measurement harness for DT-04 / DT-05 / DT-06 (`tests/device/`, Phase 7)
+
+`tests/device/run.ts` scripts the iperf3 parts of DT-04 (WISPr/ChilliSpot rate, both
+directions, ±10 %), DT-05 (Session-Timeout cut-off with continuous traffic; Idle-Timeout
+before/after probes) and DT-06 (`ChilliSpot-Max-Total-Octets` cut-off vs quota + one 10 s poll
+at the measured rate). One invocation runs one case of a lab profile
+(`tests/device/profiles/lab.example.json`: lab description, iperf3 server, expectations — no
+field can hold a secret) and writes `var/device-results/<DT>_<case>_<stamp>.json` (raw 1 s
+samples, findings, proposed verdict, manual-observation slots such as Acct-Terminate-Cause) plus
+a `.row.md` draft of the PHASE2_VALIDATION.md §5.4 row. The analysis rules are stated at the top
+of `tests/device/harness/analyze.ts`.
+
+- **Never PASS.** The output verdict is always `PENDING_HUMAN_SIGNOFF` with a *proposed*
+  verdict (`PROPOSED_PASS` / `PROPOSED_FAIL` / `INCONCLUSIVE`); options such as `--pass`,
+  `--verdict`, `--sign-off` are refused (exit 2). A human records the result in §5.4.
+- **Dry run by default** with `tests/device/fake-iperf3.mjs` (no socket; output marked
+  `DRY RUN — NOT EVIDENCE`, `evidence_usable: false`). `--live` additionally requires
+  `ECLOUD_DEVICE_HARNESS_LIVE=1`; it is for the lab only and has not been run (no device in
+  Phase 7).
+- CI runs only the dry-run suite (`tests/device/harness.test.ts`).
+
+```bash
+npx tsx tests/device/run.ts --profile tests/device/profiles/lab.example.json --dt DT-04 --case u2
+ECLOUD_DEVICE_HARNESS_LIVE=1 npx tsx tests/device/run.ts --live --profile <lab.json> \
+  --dt DT-05 --case session-timeout-120 --login-offset-s 7
+```
+
+### 7.2 `openwifi-config` rate-limit fragment (export only)
+
+`GET /api/v1/orgs/{orgId}/sites/{siteId}/openwifi-config/rate-limit-fragment?ssid=<name>`
+(`policy:preview`; `&download=1` for the bare JSON file; admin: *SSID rate-limit export*)
+resolves the site baseline (site assignments + organization default only), translates it with
+the `openwifi-config` adapter and returns `interfaces[].ssids[{name, rate-limit{ingress-rate,
+egress-rate}}]` in integer Mbit/s. It is validated with ajv 8 against the vendored
+`packages/adapters/src/openwifi/schema/ucentral.full.json` (unmodified copy of ezecontroller
+`src/schemas/ucentral.full.json` at 3d6719a, sha256 recorded in `UCENTRAL_SCHEMA_SOURCE` and
+re-checked by the unit test). Nothing is pushed to any controller; `device_enforced` stays
+false until DT-02 lab-validates the rate-limit keys.
+
 ## 8. Definition of Done traceability (status after Phase 3)
 
 | DoD clause (README) | Automated evidence today | Device evidence | Status |

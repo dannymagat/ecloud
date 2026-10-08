@@ -213,9 +213,10 @@ export function maxCounters(a: SessionCounters, b: SessionCounters): SessionCoun
 
 // ---------------------------------------------------------------------------------------------
 // Per-vendor accounting quirks hook (MULTI_VENDOR_INTEGRATION_PLAN.md §6.1 `normalizeAccounting`
-// "+ per-vendor quirks hook", §8.3 SIM-14). REPORT ONLY: it never changes `normalizeAccounting`,
-// `counterDelta` or `maxCounters` output, and the worker does not call it (worker behaviour and
-// tests unchanged). How a real device wraps its counters is REQUIRES_DEVICE_TEST.
+// "+ per-vendor quirks hook", §8.3 SIM-14). The hook itself only REPORTS: it never changes
+// `normalizeAccounting`, `counterDelta` or `maxCounters` output. Since P7-A the worker drainer
+// calls it on every accounting delta of an adapter that declares it and corrects usage only via
+// `decideWrapCorrection` below. How a real device wraps its counters is REQUIRES_DEVICE_TEST.
 // ---------------------------------------------------------------------------------------------
 
 const TWO_POW_32 = 4_294_967_296;
@@ -272,5 +273,90 @@ export function counterWrap32Quirks(): AccountingQuirks {
       }
       return out;
     },
+  };
+}
+
+// ---------------------------------------------------------------------------------------------
+// Wrap correction rule (Phase 7 P7-A, closes the SIM-14 open finding). The worker calls the
+// quirks hook on every accounting delta of an adapter that declares it, records EVERY anomaly
+// (`accounting_anomalies`), and adds the estimated wrapped bytes to usage ONLY when this rule says
+// the wrap is unambiguous. Documented in AAA_ARCHITECTURE.md §14 "P7-A wrap correction".
+// ---------------------------------------------------------------------------------------------
+
+const TWO_POW_31 = 2_147_483_648;
+
+/** Default plausibility ceiling per counter direction: 1 Gbit/s (operator assumption, not a device fact). */
+export const DEFAULT_WRAP_MAX_BPS = 1_000_000_000;
+
+export interface WrapCorrectionInput {
+  readonly anomaly: AccountingAnomaly;
+  /** Acct-Session-Time advance between the stored state and the new record (s, > 0). */
+  readonly elapsedS: number;
+  /** Plausibility ceiling for one counter direction, bit/s. */
+  readonly maxBps: number;
+}
+
+export interface WrapCorrectionDecision {
+  readonly apply: boolean;
+  /** Bytes added to usage when `apply` (= `estimatedLostBytes`), else 0. */
+  readonly bytes: number;
+  /** Rule outcome, stored with the anomaly. */
+  readonly reason: string;
+  /**
+   * True when two or more wraps would also fit under `maxBps`: the correction is then a lower
+   * bound (exactly-one-wrap estimate), recorded as such.
+   */
+  readonly multipleWrapsPossible: boolean;
+}
+
+/**
+ * Unambiguous single wrap of a 32-bit octet counter, all of:
+ *   W1  the quirks hook flagged it (counter decreased while Acct-Session-Time advanced; the
+ *       previous value fits 32 bits) — so it is neither a retransmit nor an older reordered packet;
+ *   W2  the previous value was in the upper half of the counter range (>= 2^31);
+ *   W3  the observed value is in the lower half (< 2^31) — W2+W3 rule out a counter reset from
+ *       the LOWER half, which would otherwise be booked as up to 4 GiB of phantom usage;
+ *   W4  the bytes implied by exactly one wrap fit the plausibility ceiling over the elapsed time:
+ *       `estimatedLostBytes × 8 / elapsedS <= maxBps`.
+ * Anything else is recorded with `apply = false` and usage keeps the monotonic rule (which can
+ * only under-count). Accurate bound of an applied correction: a counter RESET from the upper half
+ * (previous >= 2^31) to a small value is indistinguishable from a wrap, so a single event can
+ * over-count by up to 2^31 bytes (`2^32 − previous + observed` with previous >= 2^31, observed
+ * < 2^31, bounded further by W4). A buggy or malicious NAS can therefore inflate the usage of its
+ * own sessions (own organization only; every event is visible in `accounting_anomalies`). Pure.
+ */
+export function decideWrapCorrection(input: WrapCorrectionInput): WrapCorrectionDecision {
+  const { anomaly, elapsedS, maxBps } = input;
+  const no = (reason: string): WrapCorrectionDecision => ({
+    apply: false,
+    bytes: 0,
+    reason,
+    multipleWrapsPossible: false,
+  });
+  if (anomaly.kind !== 'counter_wrap_32bit')
+    return no(`W1: unknown anomaly kind ${String(anomaly.kind)}`);
+  if (!(elapsedS > 0)) return no('W1: session time did not advance');
+  if (anomaly.previous >= TWO_POW_32) return no('W1: previous value does not fit 32 bits');
+  if (anomaly.previous < TWO_POW_31)
+    return no(
+      `W2: previous value ${String(anomaly.previous)} below 2^31 — a reset cannot be told from a wrap`,
+    );
+  if (anomaly.observed >= TWO_POW_31)
+    return no(`W3: observed value ${String(anomaly.observed)} not below 2^31`);
+  if (!(maxBps > 0)) return no('W4: no plausibility ceiling configured');
+  const impliedBps = (anomaly.estimatedLostBytes * 8) / elapsedS;
+  if (impliedBps > maxBps)
+    return no(
+      `W4: one wrap implies ${String(Math.round(impliedBps))} bit/s over ${String(elapsedS)} s, above the ${String(maxBps)} bit/s ceiling`,
+    );
+  const multipleWrapsPossible =
+    ((anomaly.estimatedLostBytes + TWO_POW_32) * 8) / elapsedS <= maxBps;
+  return {
+    apply: true,
+    bytes: anomaly.estimatedLostBytes,
+    reason: multipleWrapsPossible
+      ? 'W1-W4 hold; corrected by one wrap (lower bound: more wraps would also fit the ceiling)'
+      : 'W1-W4 hold; exactly one wrap fits the ceiling',
+    multipleWrapsPossible,
   };
 }

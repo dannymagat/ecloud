@@ -705,3 +705,15 @@ Verification (local): `npm run build`, `npm run lint`, `npm test -- --project po
 ### Orchestrator reconciliation (2026-10-07)
 - I22. `coovachilli-uam.coaChange` and `openwifi-config.coaChange` were downgraded from VERIFIED_SUPPORTED to REQUIRES_DEVICE_TEST (owner rule D-006/D-034: dynamic policy modification is never verified before the real-device test, DT-15 and DT-02). `buildCoa()` still produces the request, labelled REQUIRES_DEVICE_TEST, and the dispatcher must be feature-flagged (see AAA_ARCHITECTURE.md implementation notes). A test now asserts that no adapter declares `coaChange` or `disconnect` as VERIFIED_SUPPORTED.
 
+
+### Phase 7 P7-A implementation notes (2026-10-08)
+- `src/enforcement.ts`: `chooseEnforcementStrategy` (§5.3 per-adapter column, evidence-driven:
+  `coa_change` / `disconnect_reauth` require device-enforced LAB/PRODUCTION evidence and the
+  dispatcher; else `next_reauth`), `expectedReauthBy`, `impactMessage`,
+  `DEFAULT_SESSION_TIMEOUT_CAP_S = 1800` (Q44).
+- `translate()` accepts `sessionTimeoutCapS` → Session-Timeout candidate `policy_change_cap`
+  (unset = no cap, so the golden §4.3 outputs are unchanged).
+- §5.3 "never silently rewrite a live session's snapshot" holds: propagation writes
+  `session_enforcement` rows, never `policy_translations` of the live session; the next
+  authorization writes a new snapshot. Orchestration lives in `apps/api/src/enforcement.ts` and
+  `apps/worker/src/jobs/enforcement.ts` (AAA_ARCHITECTURE.md §14 "P7-A").

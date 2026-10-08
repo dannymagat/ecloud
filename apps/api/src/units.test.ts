@@ -188,6 +188,23 @@ describe('config extension', () => {
     expect(config.session.secureCookie).toBe(false);
     expect(config.session.idleSeconds).toBe(1800);
   });
+
+  it('AAA_SESSION_TIMEOUT_CAP_S: default 1800, 0 disables, 1–299 rejected (P7-A review fix 8)', () => {
+    expect(loadApiConfig({ NODE_ENV: 'test' }).aaaSessionTimeoutCapS).toBe(1800);
+    expect(
+      loadApiConfig({ NODE_ENV: 'test', AAA_SESSION_TIMEOUT_CAP_S: '0' }).aaaSessionTimeoutCapS,
+    ).toBe(0);
+    expect(
+      loadApiConfig({ NODE_ENV: 'test', AAA_SESSION_TIMEOUT_CAP_S: '300' }).aaaSessionTimeoutCapS,
+    ).toBe(300);
+    for (const bad of ['1', '60', '299', '-1', '86401']) {
+      expect(
+        () => loadApiConfig({ NODE_ENV: 'test', AAA_SESSION_TIMEOUT_CAP_S: bad }),
+        bad,
+      ).toThrow(ConfigError);
+    }
+    expect(loadApiConfig({ NODE_ENV: 'test' }).enforcementMaxSessions).toBe(2000);
+  });
 });
 
 describe('memory kv', () => {

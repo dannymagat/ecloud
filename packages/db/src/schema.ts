@@ -689,8 +689,63 @@ export interface SessionsTable {
   session_time_s: Generated<BigintColumn>;
   status: Generated<SessionStatus>;
   terminate_cause: string | null;
+  /** Migration 023: bytes added after unambiguous 32-bit counter wraps (offset + raw counter). */
+  input_wrap_offset: Generated<BigintColumn>;
+  output_wrap_offset: Generated<BigintColumn>;
   created_at: GeneratedTimestamp;
   updated_at: GeneratedTimestamp;
+}
+
+export type SessionEnforcementTrigger =
+  | 'policy_update'
+  | 'policy_delete'
+  | 'assignment_create'
+  | 'assignment_delete'
+  | 'quota_breach'
+  | 'schedule_end'
+  | 'concurrency';
+export type SessionEnforcementStrategy =
+  'coa_change' | 'disconnect_reauth' | 'next_reauth' | 'none';
+export type SessionEnforcementState = 'pending' | 'applied' | 'unsupported' | 'superseded';
+
+/** Migration 023: per-session enforcement state of a policy change or runtime breach. */
+export interface SessionEnforcementTable {
+  id: Generated<Uuid>;
+  organization_id: Uuid;
+  session_id: Uuid;
+  change_id: Uuid;
+  trigger: SessionEnforcementTrigger;
+  strategy: SessionEnforcementStrategy;
+  state: Generated<SessionEnforcementState>;
+  reason: string;
+  policy_id: Uuid | null;
+  previous_hash: string | null;
+  target_hash: string | null;
+  detail: GeneratedJsonb<Record<string, unknown>>;
+  expected_apply_by: NullableTimestamp;
+  created_by: Uuid | null;
+  created_at: GeneratedTimestamp;
+  updated_at: GeneratedTimestamp;
+  resolved_at: NullableTimestamp;
+}
+
+/** Migration 023: vendor-quirk anomalies recorded by the accounting drainer (SIM-14). */
+export interface AccountingAnomaliesTable {
+  id: Generated<Uuid>;
+  organization_id: Uuid;
+  session_id: Uuid;
+  nas_client_id: Uuid;
+  adapter_key: string;
+  kind: 'counter_wrap_32bit';
+  counter: 'inputOctets' | 'outputOctets';
+  previous: BigintColumn;
+  observed: BigintColumn;
+  estimated_lost_bytes: BigintColumn;
+  applied: boolean;
+  reason: string;
+  radacct_id: BigintColumn;
+  detail: GeneratedJsonb<Record<string, unknown>>;
+  created_at: GeneratedTimestamp;
 }
 
 export interface AccountingRecordsTable {
@@ -936,6 +991,8 @@ export interface Database {
   accounting_records: AccountingRecordsTable;
   auth_events: AuthEventsTable;
   session_actions: SessionActionsTable;
+  session_enforcement: SessionEnforcementTable;
+  accounting_anomalies: AccountingAnomaliesTable;
   usage_counters: UsageCountersTable;
   audit_logs: AuditLogsTable;
   outbox: OutboxTable;

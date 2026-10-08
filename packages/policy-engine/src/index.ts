@@ -7,3 +7,4 @@ export * from './snapshot.js';
 export * from './resolve.js';
 export * from './translate.js';
 export * from './simulate.js';
+export * from './enforcement.js';

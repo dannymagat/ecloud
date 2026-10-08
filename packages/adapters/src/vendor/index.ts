@@ -14,6 +14,8 @@ export {
   EVENT_TIME_TOLERANCE_MS,
   counterDelta,
   counterWrap32Quirks,
+  decideWrapCorrection,
+  DEFAULT_WRAP_MAX_BPS,
   deriveTimes,
   mapStatusType,
   maxCounters,
@@ -24,4 +26,6 @@ export {
   type AccountingStatusType,
   type RadiusAcctStatusType,
   type SessionCounters,
+  type WrapCorrectionDecision,
+  type WrapCorrectionInput,
 } from './accounting.js';

@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { useId, useState } from 'react';
+import { Link } from 'react-router';
 import { api, buildUrl, request } from '../../api/client';
 import type { Page, Row } from '../../api/types';
 import { DataTable } from '../../components/DataTable';
@@ -135,7 +136,17 @@ function SessionsScreen() {
             {
               key: 'actions',
               header: 'Actions',
-              render: (r) => <DisconnectButton gate={gateFor(r)} />,
+              render: (r) => (
+                <span className="inline-flex items-center gap-2">
+                  <Link
+                    to={`/orgs/${orgId}/sessions/${r.id}`}
+                    className="text-xs text-primary hover:underline"
+                  >
+                    Enforcement
+                  </Link>
+                  <DisconnectButton gate={gateFor(r)} />
+                </span>
+              ),
             },
           ]}
         />

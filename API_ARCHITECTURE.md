@@ -784,3 +784,129 @@ IdP in the pilot), SSE.
 - **Migration 022**: `portal_themes.logo_asset_ref` becomes `uuid` with a same-tenant composite FK
   `(organization_id, logo_asset_ref) → portal_assets` (ON DELETE RESTRICT); unresolvable values
   are cleared first. A delete racing a logo assignment now fails (API answers 409).
+
+### Implementation notes (P7-A, enforcement orchestration, 2026-10-08)
+
+Binding sources: POLICY_ENGINE.md §5.3 (policy edit → propagation), §5.1–5.2 (runtime loop),
+AAA_ARCHITECTURE.md §6 / §14 W6–W7 (dispatcher, `enforcement pending`), DECISIONS.md D-006,
+D-028 (V12: never device-enforced without LAB/PRODUCTION evidence), Q44 (30 min Session-Timeout
+cap), Q45 (300 s drain floor), Q67 (fallback + amber flag).
+
+#### Session-enforcement API contract (consumed by P7-B admin views)
+
+All responses are tenant-scoped (`withTenant`, RLS) and site-filtered by the caller's bindings.
+No new permission keys: the views use `session:read`, the impact preview uses `policy:preview`.
+
+**Strategy enum** (`strategy`): `coa_change` | `disconnect_reauth` | `next_reauth` | `none`.
+Chosen per session from the session NAS adapter's evidence
+(`@ecloud/policy-engine` `chooseEnforcementStrategy`):
+`coa_change` only when `coaChange.status = VERIFIED_SUPPORTED` **and** the registry presents the
+cell device-enforced (LAB/PRODUCTION evidence with a DT reference) **and** the CoA dispatcher is
+enabled; `disconnect_reauth` likewise for `disconnect`; otherwise `next_reauth` (the change applies
+at the session's next Access-Request, bounded by the emitted Session-Timeout, which AAA caps at
+`AAA_SESSION_TIMEOUT_CAP_S`, default 1800 s per Q44). `none` = no NAS adapter (state
+`unsupported`). Today no adapter has lab evidence, so the result is always `next_reauth` or
+`unsupported`.
+
+**State enum** (`state`, each change also carries `state_meaning` in plain words):
+`pending` (waiting: the session still runs with the policy it was authorized with) | `applied`
+(**the session ended; the next login uses the current policy** — not a device confirmation;
+`resolution = "session_closed"`) | `unsupported` (nothing can apply it: NAS without engine
+adapter) | `superseded` (a newer policy change replaced it, or `resolution = "reverted"`: a
+later change brought the session back to its authorized policy). At most one `pending` row per
+session. A pending row is never superseded across triggers when it carries a runtime breach:
+later triggers are merged into its `triggers` list.
+
+**Trigger enum** (`trigger`): `policy_update` | `policy_delete` | `assignment_create` |
+`assignment_delete` | `quota_breach` | `schedule_end` | `concurrency`.
+
+1. `GET /api/v1/orgs/{orgId}/session-enforcement` — permission `session:read` (any-site).
+   Query: `limit`, `cursor`, `site_id?`, `state?` (`pending|applied|unsupported|superseded`),
+   `open_only?` (default `true`: sessions in `authorized|active`). Response page
+   `{data: SessionEnforcementSummary[], next_cursor}` where
+   ```
+   SessionEnforcementSummary = {
+     session_id, status, site_id, nas_client_id, adapter_key|null, username, mac|null,
+     started_at, policy_id|null, policy_name|null, policy_version|null,
+     pending_change: EnforcementChange|null,
+     amber_fields: string[],          // set fields whose status is REQUIRES_DEVICE_TEST or ECLOUD_SIDE_ONLY
+     unsupported_fields: string[],    // set fields whose status is UNSUPPORTED
+     device_enforced_fields: string[] // V12; always [] until a DT lab-validates a cell
+   }
+   ```
+2. `GET /api/v1/orgs/{orgId}/sessions/{id}/enforcement` — permission `session:read` (site check
+   on the session's site). Response `SessionEnforcementView`:
+   ```
+   {
+     session_id, status, site_id, nas_client_id, adapter_key|null, adapter_version|null,
+     snapshot: { policy_id|null, policy_version|null, hash|null, authorized_at|null,
+                 effective: { <POLICY_FIELDS>: value|null, schedule: {...}|null } } | null,
+     attributes_sent: [{ name, value, field|null, fields: string[],  // first / all policy fields carried
+                         status|null, evidence_level|null, device_enforced:false }],
+     fields: [{ field, value, set, status, evidence, evidence_level|null, device_enforced,
+                mechanism: 'radius'|'ecloud_side'|'none'|'not_set', attributes: string[],
+                amber, detail? }],
+     unenforceable: [{ field, status, reason, detail? }],   // as stored at authorize
+     session_timeout: { value_s|null, sent: boolean, expected_reauth_by|null },
+     strategy_evidence: {
+       coa_change: { status, evidence_level|null, device_enforced },
+       disconnect: { status, evidence_level|null, device_enforced },
+       dispatcher_enabled: boolean,   // API view of ECLOUD_COA_ENABLED (false by default, D-006)
+       strategy                       // what a change made now would use
+     },
+     pending_change: EnforcementChange|null,
+     history: EnforcementChange[],    // newest first, max 20
+     counter_anomalies: [{ id, counter, previous, observed, estimated_lost_bytes, applied,
+                          reason, created_at }]
+   }
+   EnforcementChange = { id, change_id, trigger, triggers: string[], strategy, state,
+                         state_meaning, resolution|null, unevaluated: boolean, reason,
+                         policy_id|null, expected_apply_by|null, created_at, resolved_at|null }
+   ```
+   404 when the session does not exist in the organization; 403 outside the caller's sites.
+3. `POST /api/v1/orgs/{orgId}/policies/{id}/impact-preview` — permission `policy:preview`. Body =
+   the PATCH body of the policy (`PolicyUpdate`, all optional) **or** `{"delete": true}`; nothing is
+   written. Response:
+   ```
+   { policy_id, evaluated_sessions, affected_sessions, unevaluated_sessions,
+     by_strategy: { coa_change, disconnect_reauth, next_reauth, none },
+     max_apply_latency_s|null,   // longest expected wait until re-auth (Session-Timeout cap)
+     session_timeout_cap_s,      // AAA_SESSION_TIMEOUT_CAP_S (0 = disabled)
+     sessions: [{ session_id, site_id, nas_client_id, adapter_key|null, strategy, state, reason,
+                  expected_apply_by|null }],   // first 200
+     truncated: boolean,
+     message }                   // e.g. "3 sessions affected; strategy next_reauth; applies at next login, at most 30 min"
+   ```
+4. Mutations that propagate (same transaction as the change: rows in `session_enforcement`,
+   outbox `policy.changed` + one `session.enforcement_pending` per session, audit
+   `session_enforcement:propagate`): `PATCH policies/{id}` (only when the effective result of an
+   open session changes), `DELETE policies/{id}`, `POST policy-assignments`,
+   `DELETE policy-assignments/{id}`. `PATCH policies/{id}` and `POST policy-assignments` bodies
+   gain `enforcement: { change_id|null, evaluated_sessions, affected_sessions, by_strategy,
+   reverted_sessions, merged_sessions, unevaluated_sessions, truncated, skipped? }` (additive;
+   a PATCH that changes only `name` / `description` skips propagation entirely:
+   `skipped` set, `change_id` null, zero re-resolutions); the two DELETEs stay `204` (the summary is in the
+   audit row and the `policy.changed` event). A change that brings a session back to the policy
+   it was authorized with closes its pending policy-change row as `superseded`
+   (`detail.resolution = "reverted"`, counted in `reverted_sessions`).
+5. Worker-written rows (`quota_breach`, `schedule_end`, `concurrency`) appear in the same views;
+   `counter_anomalies` lists the SIM-14 32-bit wrap anomalies of the session
+   (AAA_ARCHITECTURE.md §14 "P7-A wrap correction").
+
+Affected-session rule: candidate open sessions (`authorized|active`) are those a target of any
+assignment of the policy could reach (user, user group, client device, voucher batch, site; every
+open session when the policy is or was the organization default); each candidate is re-resolved
+with the stored subject facts at `now` and is affected when the resolution hash differs from the
+hash stored at authorize (`policy_translations.input_snapshot.hash`). Known false positive:
+a session re-resolved outside its schedule window resolves differently even without a change.
+
+Configuration: `AAA_SESSION_TIMEOUT_CAP_S` (API, default 1800, 0 = off) and `ECLOUD_COA_ENABLED`
+(read by the API only to choose strategies; default false). Migration 023 (`session_enforcement`,
+`accounting_anomalies`, `sessions.{input,output}_wrap_offset`) is additive. Limits: at most
+`ENFORCEMENT_MAX_SESSIONS` (default 2000) open sessions are re-resolved per change; sessions in
+scope beyond the cap are **never dropped**: they get a pending row as affected without
+re-resolution (`detail.unevaluated = true`, counted in `unevaluated_sessions`, `truncated: true`).
+`loadResolutionInput` is cached per (site, subject, device, groups, voucher batch) and rows /
+outbox events are inserted in batches of 500; re-resolution still happens inside the mutation's
+transaction, so a change touching many sessions makes that request slower.
+`AAA_SESSION_TIMEOUT_CAP_S` accepts 0 (off) or 300–86400 (Q45 floor).

@@ -1,0 +1,88 @@
+{
+  "format": "ecloud-device-profile/v1",
+  "lab": {
+    "tester": "<name>",
+    "ezeap_model": "EZE-AP1832 (ezelink,ap1832)",
+    "firmware": "EZEAP 6 r32912-6639b15f62",
+    "schema_version": "uCentral 4.2.0",
+    "uspot_variant": "TIP fork (DT-01)",
+    "nas_path": "uam"
+  },
+  "iperf3": {
+    "server": "192.0.2.10",
+    "port": 5201,
+    "duration_s": 20,
+    "omit_s": 2
+  },
+  "cases": {
+    "DT-04": [
+      {
+        "id": "u2",
+        "description": "WISPr-Bandwidth-Max-Down 2000000 / Max-Up 1000000",
+        "expected_down_kbps": 2000,
+        "expected_up_kbps": 1000,
+        "tolerance_pct": 10
+      },
+      {
+        "id": "u5",
+        "description": "WISPr-Bandwidth-Max-Down 5000000 / Max-Up 2500000",
+        "expected_down_kbps": 5000,
+        "expected_up_kbps": 2500,
+        "tolerance_pct": 10
+      },
+      {
+        "id": "u20",
+        "description": "WISPr-Bandwidth-Max-Down 20000000 / Max-Up 10000000",
+        "expected_down_kbps": 20000,
+        "expected_up_kbps": 10000,
+        "tolerance_pct": 10
+      },
+      {
+        "id": "chilli-5000",
+        "description": "ChilliSpot-Bandwidth-Max-Down 5000 (kbit/s) alone",
+        "expected_down_kbps": 5000,
+        "expected_up_kbps": null,
+        "tolerance_pct": 10
+      }
+    ],
+    "DT-05": [
+      {
+        "id": "session-timeout-120",
+        "kind": "session_timeout",
+        "description": "Accept Session-Timeout=120, traffic flowing: expect Stop ~120 s, cause 5",
+        "expected_s": 120,
+        "tolerance_s": 10,
+        "max_duration_s": 200
+      },
+      {
+        "id": "idle-60-before",
+        "kind": "idle_probe",
+        "description": "Accept Idle-Timeout=60: idle 45 s then probe, session must survive",
+        "idle_timeout_s": 60,
+        "idle_wait_s": 45,
+        "expect_reachable": true,
+        "probe_s": 3
+      },
+      {
+        "id": "idle-60-after",
+        "kind": "idle_probe",
+        "description": "Accept Idle-Timeout=60 (fresh login): idle 80 s then probe, expect cut (cause 4)",
+        "idle_timeout_s": 60,
+        "idle_wait_s": 80,
+        "expect_reachable": false,
+        "probe_s": 3
+      }
+    ],
+    "DT-06": [
+      {
+        "id": "quota-50MB",
+        "description": "ChilliSpot-Max-Total-Octets 52428800, iperf3 -R -t 60",
+        "quota_bytes": 52428800,
+        "direction": "down",
+        "duration_s": 60,
+        "poll_interval_s": 10,
+        "early_tolerance_pct": 5
+      }
+    ]
+  }
+}

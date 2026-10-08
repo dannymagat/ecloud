@@ -6,7 +6,7 @@
  * to the draft too. Without a subject, platform operators see the static adapter catalogue.
  */
 import { useQuery } from '@tanstack/react-query';
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { api } from '../../api/client';
 import { ProblemAlert } from '../../components/ProblemAlert';
 import { Badge, Card, Notice, SelectField, Spinner } from '../../components/ui';
@@ -14,14 +14,17 @@ import { useAuth } from '../../lib/auth';
 import { display, str } from '../../lib/format';
 import { canPlatform } from '../../lib/permissions';
 import { useOptions } from '../resource/useOptions';
-import { EnforceabilityMatrix, toAdapterColumns } from './EnforceabilityMatrix';
+import { EnforceabilityMatrix, toAdapterColumns, type AdapterColumn } from './EnforceabilityMatrix';
 
 export function PreviewPanel({
   orgId,
   draftFields,
+  onColumns,
 }: {
   orgId: string;
   draftFields: readonly string[];
+  /** Receives the per-adapter field tables shown (simulation, else catalogue). */
+  onColumns?: (columns: AdapterColumn[]) => void;
 }) {
   const { me } = useAuth();
   const [userId, setUserId] = useState('');
@@ -53,7 +56,15 @@ export function PreviewPanel({
   });
 
   const sim = simulation.data;
-  const simColumns = toAdapterColumns(sim?.per_adapter);
+  const simColumns = useMemo(() => toAdapterColumns(sim?.per_adapter), [sim]);
+  const catalogueColumns = useMemo(
+    () => toAdapterColumns(catalogue.data?.adapters),
+    [catalogue.data],
+  );
+  const shown = userId === '' ? catalogueColumns : simColumns;
+  useEffect(() => {
+    onColumns?.(shown);
+  }, [onColumns, shown]);
   const rows =
     draftFields.length > 0
       ? draftFields
@@ -90,7 +101,7 @@ export function PreviewPanel({
         {userId === '' ? (
           catalogue.data ? (
             <EnforceabilityMatrix
-              adapters={toAdapterColumns(catalogue.data.adapters)}
+              adapters={catalogueColumns}
               fields={draftFields}
               caption="Adapter capability catalogue"
               mode="preview"

@@ -33,6 +33,16 @@ export const workerEnvSchema = z.object({
   /** D-036: an `authorized` session without accounting for this long becomes `expired`. */
   WORKER_AUTHORIZATION_TTL_S: z.coerce.number().int().min(30).max(86_400).default(300),
   WORKER_DRAIN_BATCH: positiveInt(500, 10_000),
+  /**
+   * P7-A wrap correction rule W4: plausibility ceiling per counter direction (bit/s) for a 32-bit
+   * octet counter wrap. Operator assumption, not a device fact. Default 1 Gbit/s.
+   */
+  WORKER_COUNTER_WRAP_MAX_BPS: z.coerce
+    .number()
+    .int()
+    .min(1)
+    .max(100_000_000_000)
+    .default(1_000_000_000),
 });
 
 export interface WorkerConfig {
@@ -41,7 +51,7 @@ export interface WorkerConfig {
   coa: { enabled: boolean; radclientPath: string; timeoutS: number; retries: number };
   retention: { apply: boolean };
   sessions: { interimIntervalS: number; reapGraceS: number; authorizationTtlS: number };
-  drain: { batchSize: number };
+  drain: { batchSize: number; wrapMaxBps: number };
 }
 
 export function loadWorkerConfig(
@@ -70,6 +80,6 @@ export function loadWorkerConfig(
       reapGraceS: raw.WORKER_REAP_GRACE_S,
       authorizationTtlS: raw.WORKER_AUTHORIZATION_TTL_S,
     },
-    drain: { batchSize: raw.WORKER_DRAIN_BATCH },
+    drain: { batchSize: raw.WORKER_DRAIN_BATCH, wrapMaxBps: raw.WORKER_COUNTER_WRAP_MAX_BPS },
   };
 }

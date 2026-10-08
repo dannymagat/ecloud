@@ -16,6 +16,7 @@ import { createSecretResolver, type SecretResolver } from './infra/secrets.js';
 import { RedisWorkerState, type WorkerState } from './infra/state.js';
 import { deliverWebhook, publishOutbox, type FetchLike, type WebhookJob } from './jobs/outbox.js';
 import { ensurePartitions } from './jobs/partitions.js';
+import { enforceRuntimeLimits, resolveClosedEnforcement } from './jobs/enforcement.js';
 import { enforceQuotas } from './jobs/quota.js';
 import { expireAuthorizations, reapSessions } from './jobs/reap.js';
 import { pruneRetention } from './jobs/retention.js';
@@ -92,7 +93,13 @@ export async function startWorker(options: StartOptions): Promise<RunningWorker>
 
   const processors: Record<QueueName, Processor> = {
     [QUEUES.accountingDrain]: singleFlight(QUEUES.accountingDrain, async () => {
-      const drained = await drainOnce({ db, state, logger, batchSize: config.drain.batchSize });
+      const drained = await drainOnce({
+        db,
+        state,
+        logger,
+        batchSize: config.drain.batchSize,
+        wrapMaxBps: config.drain.wrapMaxBps,
+      });
       const quota = await enforceQuotas(
         { db, state, logger, coaEnabled: config.coa.enabled, enqueueDisconnect },
         drained.touchedSessionIds,
@@ -100,9 +107,19 @@ export async function startWorker(options: StartOptions): Promise<RunningWorker>
       if (drained.read > 0) logger.debug({ drained, quota }, 'accounting.drain tick');
       return { ...drained, touchedSessionIds: drained.touchedSessionIds.length, quota };
     }),
-    [QUEUES.policyEnforce]: singleFlight(QUEUES.policyEnforce, () =>
-      enforceQuotas({ db, state, logger, coaEnabled: config.coa.enabled, enqueueDisconnect }),
-    ),
+    [QUEUES.policyEnforce]: singleFlight(QUEUES.policyEnforce, async () => {
+      const quota = await enforceQuotas({
+        db,
+        state,
+        logger,
+        coaEnabled: config.coa.enabled,
+        enqueueDisconnect,
+      });
+      // P7-A: schedule end + late concurrency (staged items 7–8), then close resolved rows.
+      const runtime = await enforceRuntimeLimits({ db, logger, coaEnabled: config.coa.enabled });
+      const applied = await resolveClosedEnforcement(db);
+      return { ...quota, runtime, enforcementApplied: applied };
+    }),
     [QUEUES.sessionsReap]: singleFlight(QUEUES.sessionsReap, async () => ({
       reaped: await reapSessions({
         db,

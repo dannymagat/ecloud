@@ -141,7 +141,10 @@ API-only environment variables (validated in `apps/api/src/config.ts`; dev defau
 rejected when `NODE_ENV=production`): `MFA_ENCRYPTION_KEY`, `DATA_ENCRYPTION_KEY` (NAS secrets),
 `VOUCHER_PEPPER`, `SESSION_IDLE_SECONDS`, `SESSION_COOKIE_SECURE`, `TRUST_PROXY_HOPS`,
 `API_BIND_HOST`, `INTERNAL_BIND_HOST`, `KV_DRIVER` (`redis`|`memory`), `IMPERSONATION_ROLE_TEMPLATE`,
-`AAA_INTERIM_INTERVAL_S`, `SHUTDOWN_GRACE_MS`, `RATE_LIMIT_DISABLED` (tests only).
+`AAA_INTERIM_INTERVAL_S`, `AAA_SESSION_TIMEOUT_CAP_S` (Q44, default 1800 s, 0 = off, else ≥ 300; P7-A),
+`ENFORCEMENT_MAX_SESSIONS` (sessions re-resolved per policy change, default 2000; the rest are recorded unevaluated),
+`ECLOUD_COA_ENABLED` (read only to choose the enforcement strategy; default false, D-006),
+`SHUTDOWN_GRACE_MS`, `RATE_LIMIT_DISABLED` (tests only).
 
 Tests: `npx vitest run --project api` (unit: supertest with an in-memory KV and a database
 handle on a closed port — exercises the 503 / fail-closed paths); with
@@ -163,7 +166,7 @@ npm run dev --workspace @ecloud/worker          # tsx watch
 | Queue | Cadence | Work |
 | --- | --- | --- |
 | `accounting.drain` | every 5 s, single-flight Redis lock | `radius.radacct_raw` past the Redis cursor (`ecloud:worker:cursor:radacct_raw`) → `accounting_records`, `sessions`, `usage_counters` (daily/monthly in the site timezone + total), outbox `session.*`; then quota check of touched sessions |
-| `policy.enforce` | every 30 s | quota re-evaluation of active policy-bound sessions; breach → `quota.exceeded` + Disconnect only when allowed (below) |
+| `policy.enforce` | every 30 s | quota re-evaluation of active policy-bound sessions; breach → `quota.exceeded` + `session_enforcement` pending `next_reauth` (+ Disconnect only when allowed, below); then schedule end and late concurrency (P7-A) and pending rows of ended sessions → `applied` |
 | `sessions.reap` | every 60 s | no accounting for > 2 × `WORKER_INTERIM_INTERVAL_S` + `WORKER_REAP_GRACE_S` → `stopped` / `lost_interim`; `authorized` sessions (D-036) without accounting for > `WORKER_AUTHORIZATION_TTL_S` → `expired` / `authorization_expired` |
 | `outbox.publish` | every 2 s | outbox → `webhooks.deliver` jobs (HMAC `X-ECLOUD-Signature`, 8 attempts, DLQ `dead.webhooks`) |
 | `partitions.ensure` | daily 00:10 UTC | monthly partitions 2 months ahead |
@@ -181,6 +184,7 @@ Worker-only environment (read by `apps/worker/src/config.ts`, not yet in the sha
 | `WORKER_INTERIM_INTERVAL_S`, `WORKER_REAP_GRACE_S` | `600`, `120` | reaper threshold |
 | `WORKER_AUTHORIZATION_TTL_S` | `300` | D-036: unpromoted authorization expiry (30–86400) |
 | `WORKER_DRAIN_BATCH` | `500` | raw rows per drain tick |
+| `WORKER_COUNTER_WRAP_MAX_BPS` | `1000000000` | P7-A 32-bit wrap correction, rule W4: plausibility ceiling per counter direction (bit/s); an operator assumption, not a device fact |
 
 NAS / webhook secrets are resolved at use time from `secret_ref` values `env:<VAR>` or
 `file:/absolute/path`; other schemes (the future encrypted `secret_blobs`) resolve to nothing and

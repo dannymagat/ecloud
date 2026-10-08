@@ -68,6 +68,12 @@ export const ORG_NAV: readonly NavItem[] = [
     anyOf: ['policy_assignment:read'],
   },
   {
+    path: 'ssid-rate-limit-export',
+    label: 'SSID rate-limit export',
+    icon: FileStack,
+    anyOf: ['policy:preview'],
+  },
+  {
     path: 'portals',
     label: 'Captive portals',
     icon: Wifi,

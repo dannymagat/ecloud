@@ -7,6 +7,12 @@
  * normalised (crash between commit and cursor save) is skipped. The cursor lives in Redis
  * because `radacct_raw` has no drained marker column (proposed in the Phase 3 report).
  */
+import {
+  DEFAULT_WRAP_MAX_BPS,
+  decideWrapCorrection,
+  listVendorAdapters,
+  type AccountingQuirks,
+} from '@ecloud/adapters';
 import { withPlatform, type Db, type DbTransaction, type SessionStatus } from '@ecloud/db';
 import { newId, type Logger } from '@ecloud/shared';
 import { sql } from 'kysely';
@@ -35,6 +41,13 @@ export interface DrainDeps {
   batchSize: number;
   lagMs?: number;
   now?: () => Date;
+  /** Plausibility ceiling of the 32-bit wrap correction rule (bit/s per direction). */
+  wrapMaxBps?: number;
+}
+
+export interface ProcessOptions {
+  /** Plausibility ceiling of the 32-bit wrap correction rule (bit/s per direction). */
+  wrapMaxBps?: number;
 }
 
 export interface DrainResult {
@@ -54,6 +67,7 @@ interface NasInfo {
   site_id: string;
   network_device_id: string | null;
   timezone: string;
+  adapter_key: string | null;
 }
 
 interface SessionRow {
@@ -73,6 +87,8 @@ interface SessionRow {
   output_octets: number;
   session_time_s: number;
   last_interim_at: Date | null;
+  input_wrap_offset: number;
+  output_wrap_offset: number;
   timezone: string;
 }
 
@@ -137,7 +153,7 @@ export async function drainOnce(deps: DrainDeps): Promise<DrainResult> {
     try {
       const rec = normalizeAccounting(row);
       const outcome = await withPlatform(deps.db, { reason: DRAIN_REASON, audit: false }, (trx) =>
-        processRecord(trx, rec, nasCache),
+        processRecord(trx, rec, nasCache, { wrapMaxBps: deps.wrapMaxBps }),
       );
       failures.delete(row.radacctid);
       if (outcome.outcome === 'duplicate') result.duplicates += 1;
@@ -178,7 +194,14 @@ async function lookupNas(
   const nas = await trx
     .selectFrom('nas_clients as n')
     .innerJoin('sites as s', 's.id', 'n.site_id')
-    .select(['n.id', 'n.organization_id', 'n.site_id', 'n.network_device_id', 's.timezone'])
+    .select([
+      'n.id',
+      'n.organization_id',
+      'n.site_id',
+      'n.network_device_id',
+      's.timezone',
+      'n.adapter_key',
+    ])
     .where(sql<boolean>`n.nas_ip = ${nasIp}::inet`)
     .where('n.deleted_at', 'is', null)
     .where('n.status', '=', 'active')
@@ -209,6 +232,8 @@ function sessionQuery(trx: DbTransaction) {
       'se.output_octets',
       'se.session_time_s',
       'se.last_interim_at',
+      'se.input_wrap_offset',
+      'se.output_wrap_offset',
       'st.timezone',
     ]);
 }
@@ -431,10 +456,134 @@ async function insertAccountingRecord(
   return inserted.id;
 }
 
+const TWO_POW_32 = 4_294_967_296;
+
+/** The vendor quirks hook of a NAS adapter (MULTI_VENDOR_INTEGRATION_PLAN.md §6.1), if any. */
+export function accountingQuirksFor(adapterKey: string | null): AccountingQuirks | undefined {
+  if (adapterKey === null) return undefined;
+  return listVendorAdapters().find((v) => v.key === adapterKey)?.accountingQuirks;
+}
+
+interface WrapOutcome {
+  incoming: { inputOctets: number; outputOctets: number; sessionTimeS: number };
+  inputOffset: number;
+  outputOffset: number;
+}
+
+/**
+ * Phase 7 P7-A (closes the SIM-14 finding): runs the adapter's quirks hook on the delta between
+ * the stored raw counters (stored − wrap offset) and the new record, records EVERY anomaly in
+ * `accounting_anomalies` (+ outbox `accounting.anomaly_detected`) and advances the wrap offset by
+ * 2^32 only when `decideWrapCorrection` says the wrap is unambiguous (rule W1–W4,
+ * AAA_ARCHITECTURE.md §14 P7-A). Usage is never corrected silently. An upper-half counter
+ * reset is indistinguishable from a wrap and may be over-counted by up to 2^31 bytes per event
+ * (see `decideWrapCorrection`). The returned `incoming` counters are cumulative (offset + raw).
+ */
+async function applyCounterQuirks(
+  trx: DbTransaction,
+  quirks: AccountingQuirks,
+  session: SessionRow,
+  nas: NasInfo,
+  rec: NormalizedAccounting,
+  wrapMaxBps: number,
+): Promise<WrapOutcome> {
+  let inputOffset = Number(session.input_wrap_offset);
+  let outputOffset = Number(session.output_wrap_offset);
+  const storedTime = Number(session.session_time_s);
+  const raw = {
+    inputOctets: rec.inputOctets,
+    outputOctets: rec.outputOctets,
+    sessionTimeS: rec.sessionTimeS,
+  };
+  if (rec.sessionTimeS < storedTime) {
+    // An older (reordered) record carries pre-wrap raw values: it must not be mapped onto a
+    // post-wrap offset. Its counters add nothing (the monotonic rule would ignore them anyway).
+    return {
+      incoming: {
+        inputOctets: inputOffset > 0 ? 0 : raw.inputOctets,
+        outputOctets: outputOffset > 0 ? 0 : raw.outputOctets,
+        sessionTimeS: raw.sessionTimeS,
+      },
+      inputOffset,
+      outputOffset,
+    };
+  }
+  const prevRaw = {
+    inputOctets: Math.max(0, Number(session.input_octets) - inputOffset),
+    outputOctets: Math.max(0, Number(session.output_octets) - outputOffset),
+    sessionTimeS: storedTime,
+  };
+  const anomalies = quirks.detectAnomalies(prevRaw, raw);
+  for (const anomaly of anomalies) {
+    const decision = decideWrapCorrection({
+      anomaly,
+      elapsedS: rec.sessionTimeS - storedTime,
+      maxBps: wrapMaxBps,
+    });
+    if (decision.apply) {
+      if (anomaly.counter === 'inputOctets') inputOffset += TWO_POW_32;
+      else outputOffset += TWO_POW_32;
+    }
+    const inserted = await trx
+      .insertInto('accounting_anomalies')
+      .values({
+        organization_id: session.organization_id,
+        session_id: session.id,
+        nas_client_id: nas.id,
+        adapter_key: nas.adapter_key ?? 'unknown',
+        kind: anomaly.kind,
+        counter: anomaly.counter,
+        previous: anomaly.previous,
+        observed: anomaly.observed,
+        estimated_lost_bytes: anomaly.estimatedLostBytes,
+        applied: decision.apply,
+        reason: decision.reason,
+        radacct_id: rec.radacctId,
+        detail: JSON.stringify({
+          detail: anomaly.detail,
+          elapsed_s: rec.sessionTimeS - storedTime,
+          wrap_max_bps: wrapMaxBps,
+          multiple_wraps_possible: decision.multipleWrapsPossible,
+          corrected_bytes: decision.bytes,
+        }),
+      })
+      .onConflict((oc) => oc.columns(['radacct_id', 'counter']).doNothing())
+      .returning('id')
+      .executeTakeFirst();
+    if (inserted !== undefined) {
+      await emitEvent(
+        trx,
+        'accounting.anomaly_detected',
+        session.organization_id,
+        session.site_id,
+        {
+          session_id: session.id,
+          anomaly_id: inserted.id,
+          kind: anomaly.kind,
+          counter: anomaly.counter,
+          estimated_lost_bytes: anomaly.estimatedLostBytes,
+          applied: decision.apply,
+          reason: decision.reason,
+        },
+      );
+    }
+  }
+  return {
+    incoming: {
+      inputOctets: inputOffset + raw.inputOctets,
+      outputOctets: outputOffset + raw.outputOctets,
+      sessionTimeS: raw.sessionTimeS,
+    },
+    inputOffset,
+    outputOffset,
+  };
+}
+
 export async function processRecord(
   trx: DbTransaction,
   rec: NormalizedAccounting,
   nasCache: Map<string, NasInfo | null> = new Map(),
+  options: ProcessOptions = {},
 ): Promise<RecordResult> {
   // Tenant attribution comes from the authenticated packet source only (migration 014):
   // NAS-IP-Address is NAS-supplied and could name another tenant's NAS.
@@ -499,11 +648,31 @@ export async function processRecord(
     outputOctets: session.output_octets,
     sessionTimeS: session.session_time_s,
   };
-  const incoming = {
+  let incoming = {
     inputOctets: rec.inputOctets,
     outputOctets: rec.outputOctets,
     sessionTimeS: rec.sessionTimeS,
   };
+  // Vendor quirks hook (SIM-14): only adapters that declare one (32-bit counters, uspot TIP).
+  const quirks = nas === null ? undefined : accountingQuirksFor(nas.adapter_key);
+  let wrapOffsets: { input: number; output: number } | null = null;
+  if (quirks !== undefined && nas !== null && rec.statusType !== 'start') {
+    const out = await applyCounterQuirks(
+      trx,
+      quirks,
+      session,
+      nas,
+      rec,
+      options.wrapMaxBps ?? DEFAULT_WRAP_MAX_BPS,
+    );
+    incoming = out.incoming;
+    if (
+      out.inputOffset !== Number(session.input_wrap_offset) ||
+      out.outputOffset !== Number(session.output_wrap_offset)
+    ) {
+      wrapOffsets = { input: out.inputOffset, output: out.outputOffset };
+    }
+  }
   const delta = counterDelta(stored, incoming);
   const counters = maxCounters(stored, incoming);
 
@@ -575,6 +744,9 @@ export async function processRecord(
       ...(adoptUniqueId ? { acct_unique_id: rec.acctUniqueId } : {}),
       ...(session.acct_session_id === '' ? { acct_session_id: rec.acctSessionId } : {}),
       ...(adoptStart ? { started_at: rec.effectiveTime } : {}),
+      ...(wrapOffsets !== null
+        ? { input_wrap_offset: wrapOffsets.input, output_wrap_offset: wrapOffsets.output }
+        : {}),
       input_octets: sql<number>`GREATEST(input_octets, ${counters.inputOctets})`,
       output_octets: sql<number>`GREATEST(output_octets, ${counters.outputOctets})`,
       session_time_s: sql<number>`GREATEST(session_time_s, ${counters.sessionTimeS})`,

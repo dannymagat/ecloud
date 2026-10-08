@@ -27,7 +27,7 @@ describe('table catalogue', () => {
     const created = [...sql.matchAll(/^CREATE TABLE (?!radius\.)([a-z_]+) \(/gm)].map((m) => m[1]);
     expect([...created].sort()).toEqual([...ALL_TABLES].sort());
     expect(new Set(ALL_TABLES).size).toBe(ALL_TABLES.length);
-    expect(ALL_TABLES).toHaveLength(44); // + 019: 4 registry-mirror tables, controllers; + 021: portal_assets, portal_terms_versions
+    expect(ALL_TABLES).toHaveLength(46); // + 019: 4 registry-mirror tables, controllers; + 021: portal_assets, portal_terms_versions; + 023: session_enforcement, accounting_anomalies
   });
 
   it('lists every radius table', () => {

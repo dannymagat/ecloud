@@ -88,6 +88,150 @@
         ],
         "type": "object"
       },
+      "EnforcementChange": {
+        "additionalProperties": false,
+        "properties": {
+          "change_id": { "type": "string" },
+          "created_at": { "type": "string" },
+          "expected_apply_by": { "type": ["string", "null"] },
+          "id": { "type": "string" },
+          "policy_id": { "type": ["string", "null"] },
+          "reason": { "type": "string" },
+          "resolution": { "type": ["string", "null"] },
+          "resolved_at": { "type": ["string", "null"] },
+          "state": {
+            "enum": ["pending", "applied", "unsupported", "superseded"],
+            "type": "string"
+          },
+          "state_meaning": { "type": "string" },
+          "strategy": { "type": "string" },
+          "trigger": { "type": "string" },
+          "triggers": { "items": { "type": "string" }, "type": "array" },
+          "unevaluated": { "type": "boolean" }
+        },
+        "required": [
+          "id",
+          "change_id",
+          "trigger",
+          "triggers",
+          "strategy",
+          "state",
+          "state_meaning",
+          "resolution",
+          "unevaluated",
+          "reason",
+          "policy_id",
+          "expected_apply_by",
+          "created_at",
+          "resolved_at"
+        ],
+        "type": "object"
+      },
+      "PolicyImpactPreview": {
+        "additionalProperties": false,
+        "description": "Open sessions a proposed policy change would affect and how it would reach them (P7-A). Nothing is written.",
+        "properties": {
+          "affected_sessions": {
+            "maximum": 9007199254740991,
+            "minimum": -9007199254740991,
+            "type": "integer"
+          },
+          "by_strategy": {
+            "additionalProperties": false,
+            "properties": {
+              "coa_change": {
+                "maximum": 9007199254740991,
+                "minimum": -9007199254740991,
+                "type": "integer"
+              },
+              "disconnect_reauth": {
+                "maximum": 9007199254740991,
+                "minimum": -9007199254740991,
+                "type": "integer"
+              },
+              "next_reauth": {
+                "maximum": 9007199254740991,
+                "minimum": -9007199254740991,
+                "type": "integer"
+              },
+              "none": {
+                "maximum": 9007199254740991,
+                "minimum": -9007199254740991,
+                "type": "integer"
+              }
+            },
+            "required": ["coa_change", "disconnect_reauth", "next_reauth", "none"],
+            "type": "object"
+          },
+          "evaluated_sessions": {
+            "maximum": 9007199254740991,
+            "minimum": -9007199254740991,
+            "type": "integer"
+          },
+          "max_apply_latency_s": {
+            "anyOf": [
+              { "maximum": 9007199254740991, "minimum": -9007199254740991, "type": "integer" },
+              { "type": "null" }
+            ]
+          },
+          "message": { "type": "string" },
+          "policy_id": { "type": "string" },
+          "session_timeout_cap_s": {
+            "maximum": 9007199254740991,
+            "minimum": -9007199254740991,
+            "type": "integer"
+          },
+          "sessions": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "adapter_key": { "type": ["string", "null"] },
+                "expected_apply_by": { "type": ["string", "null"] },
+                "nas_client_id": { "type": "string" },
+                "reason": { "type": "string" },
+                "session_id": { "type": "string" },
+                "site_id": { "type": "string" },
+                "state": { "enum": ["pending", "unsupported"], "type": "string" },
+                "strategy": {
+                  "enum": ["coa_change", "disconnect_reauth", "next_reauth", "none"],
+                  "type": "string"
+                }
+              },
+              "required": [
+                "session_id",
+                "site_id",
+                "nas_client_id",
+                "adapter_key",
+                "strategy",
+                "state",
+                "reason",
+                "expected_apply_by"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "truncated": { "type": "boolean" },
+          "unevaluated_sessions": {
+            "maximum": 9007199254740991,
+            "minimum": -9007199254740991,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "policy_id",
+          "evaluated_sessions",
+          "affected_sessions",
+          "by_strategy",
+          "unevaluated_sessions",
+          "max_apply_latency_s",
+          "session_timeout_cap_s",
+          "sessions",
+          "truncated",
+          "message"
+        ],
+        "type": "object"
+      },
       "Problem": {
         "additionalProperties": {},
         "description": "RFC 9457 problem details",
@@ -104,6 +248,127 @@
           "type": { "type": "string" }
         },
         "required": ["type", "title", "status"],
+        "type": "object"
+      },
+      "SessionEnforcementView": {
+        "additionalProperties": {},
+        "description": "Effective policy snapshot, attributes sent, per-field evidence and the pending change strategy of one session (P7-A).",
+        "properties": {
+          "adapter_key": { "type": ["string", "null"] },
+          "attributes_sent": {
+            "items": {
+              "additionalProperties": {},
+              "properties": {
+                "device_enforced": { "type": "boolean" },
+                "name": { "type": "string" }
+              },
+              "required": ["name", "device_enforced"],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "counter_anomalies": {
+            "items": {
+              "additionalProperties": {},
+              "properties": { "applied": { "type": "boolean" }, "id": { "type": "string" } },
+              "required": ["id", "applied"],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "fields": {
+            "items": {
+              "additionalProperties": {},
+              "properties": {
+                "amber": { "type": "boolean" },
+                "device_enforced": { "type": "boolean" },
+                "evidence_level": { "type": ["string", "null"] },
+                "field": { "type": "string" },
+                "status": { "type": "string" }
+              },
+              "required": ["field", "status", "evidence_level", "device_enforced", "amber"],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "history": {
+            "items": { "$ref": "#/components/schemas/EnforcementChange" },
+            "type": "array"
+          },
+          "pending_change": {
+            "anyOf": [{ "$ref": "#/components/schemas/EnforcementChange" }, { "type": "null" }]
+          },
+          "session_id": { "type": "string" },
+          "session_timeout": {
+            "additionalProperties": false,
+            "properties": {
+              "expected_reauth_by": { "type": ["string", "null"] },
+              "sent": { "type": "boolean" },
+              "value_s": { "type": ["number", "null"] }
+            },
+            "required": ["value_s", "sent", "expected_reauth_by"],
+            "type": "object"
+          },
+          "snapshot": {
+            "anyOf": [
+              { "additionalProperties": {}, "properties": {}, "type": "object" },
+              { "type": "null" }
+            ]
+          },
+          "status": { "type": "string" },
+          "strategy_evidence": {
+            "additionalProperties": false,
+            "properties": {
+              "coa_change": {
+                "anyOf": [
+                  {
+                    "additionalProperties": false,
+                    "properties": {
+                      "device_enforced": { "type": "boolean" },
+                      "evidence_level": { "type": ["string", "null"] },
+                      "status": { "type": "string" }
+                    },
+                    "required": ["status", "evidence_level", "device_enforced"],
+                    "type": "object"
+                  },
+                  { "type": "null" }
+                ]
+              },
+              "disconnect": {
+                "anyOf": [
+                  {
+                    "additionalProperties": false,
+                    "properties": {
+                      "device_enforced": { "type": "boolean" },
+                      "evidence_level": { "type": ["string", "null"] },
+                      "status": { "type": "string" }
+                    },
+                    "required": ["status", "evidence_level", "device_enforced"],
+                    "type": "object"
+                  },
+                  { "type": "null" }
+                ]
+              },
+              "dispatcher_enabled": { "type": "boolean" },
+              "strategy": { "type": "string" }
+            },
+            "required": ["coa_change", "disconnect", "dispatcher_enabled", "strategy"],
+            "type": "object"
+          }
+        },
+        "required": [
+          "session_id",
+          "status",
+          "adapter_key",
+          "snapshot",
+          "attributes_sent",
+          "fields",
+          "session_timeout",
+          "strategy_evidence",
+          "pending_change",
+          "history",
+          "counter_anomalies"
+        ],
         "type": "object"
       },
       "Vendor": {
@@ -3744,6 +4009,225 @@
         "tags": ["policies"]
       }
     },
+    "/api/v1/orgs/{orgId}/policies/{id}/impact-preview": {
+      "post": {
+        "description": "Permission: `policy:preview`",
+        "operationId": "post_api_v1_orgs_orgId_policies_id_impact_preview",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "orgId",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "burst_download_kbps": {
+                    "anyOf": [
+                      { "exclusiveMinimum": 0, "maximum": 9007199254740991, "type": "integer" },
+                      { "type": "null" }
+                    ]
+                  },
+                  "burst_duration_s": {
+                    "anyOf": [
+                      { "exclusiveMinimum": 0, "maximum": 9007199254740991, "type": "integer" },
+                      { "type": "null" }
+                    ]
+                  },
+                  "burst_upload_kbps": {
+                    "anyOf": [
+                      { "exclusiveMinimum": 0, "maximum": 9007199254740991, "type": "integer" },
+                      { "type": "null" }
+                    ]
+                  },
+                  "delete": { "type": "boolean" },
+                  "description": { "maxLength": 2000, "type": "string" },
+                  "download_rate_kbps": {
+                    "anyOf": [
+                      { "exclusiveMinimum": 0, "maximum": 9007199254740991, "type": "integer" },
+                      { "type": "null" }
+                    ]
+                  },
+                  "idle_timeout_s": {
+                    "anyOf": [
+                      { "exclusiveMinimum": 0, "maximum": 9007199254740991, "type": "integer" },
+                      { "type": "null" }
+                    ]
+                  },
+                  "is_default": { "type": "boolean" },
+                  "max_concurrent_sessions": {
+                    "anyOf": [
+                      { "exclusiveMinimum": 0, "maximum": 9007199254740991, "type": "integer" },
+                      { "type": "null" }
+                    ]
+                  },
+                  "max_devices": {
+                    "anyOf": [
+                      { "exclusiveMinimum": 0, "maximum": 9007199254740991, "type": "integer" },
+                      { "type": "null" }
+                    ]
+                  },
+                  "name": { "maxLength": 200, "minLength": 1, "type": "string" },
+                  "priority": { "maximum": 10000, "minimum": 0, "type": "integer" },
+                  "quota_daily_bytes": {
+                    "anyOf": [
+                      {
+                        "anyOf": [
+                          { "exclusiveMinimum": 0, "maximum": 9007199254740991, "type": "integer" },
+                          { "pattern": "^[1-9][0-9]*$", "type": "string" }
+                        ]
+                      },
+                      { "type": "null" }
+                    ]
+                  },
+                  "quota_monthly_bytes": {
+                    "anyOf": [
+                      {
+                        "anyOf": [
+                          { "exclusiveMinimum": 0, "maximum": 9007199254740991, "type": "integer" },
+                          { "pattern": "^[1-9][0-9]*$", "type": "string" }
+                        ]
+                      },
+                      { "type": "null" }
+                    ]
+                  },
+                  "quota_total_bytes": {
+                    "anyOf": [
+                      {
+                        "anyOf": [
+                          { "exclusiveMinimum": 0, "maximum": 9007199254740991, "type": "integer" },
+                          { "pattern": "^[1-9][0-9]*$", "type": "string" }
+                        ]
+                      },
+                      { "type": "null" }
+                    ]
+                  },
+                  "schedule_id": {
+                    "anyOf": [
+                      {
+                        "format": "uuid",
+                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                        "type": "string"
+                      },
+                      { "type": "null" }
+                    ]
+                  },
+                  "scope_type": {
+                    "enum": ["user", "group", "site", "temporary"],
+                    "type": "string"
+                  },
+                  "session_timeout_s": {
+                    "anyOf": [
+                      { "exclusiveMinimum": 0, "maximum": 9007199254740991, "type": "integer" },
+                      { "type": "null" }
+                    ]
+                  },
+                  "site_id": {
+                    "anyOf": [
+                      {
+                        "format": "uuid",
+                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                        "type": "string"
+                      },
+                      { "type": "null" }
+                    ]
+                  },
+                  "status": { "enum": ["draft", "active", "retired"], "type": "string" },
+                  "upload_rate_kbps": {
+                    "anyOf": [
+                      { "exclusiveMinimum": 0, "maximum": 9007199254740991, "type": "integer" },
+                      { "type": "null" }
+                    ]
+                  },
+                  "valid_from": {
+                    "anyOf": [
+                      {
+                        "format": "date-time",
+                        "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$",
+                        "type": "string"
+                      },
+                      { "type": "null" }
+                    ]
+                  },
+                  "valid_until": {
+                    "anyOf": [
+                      {
+                        "format": "date-time",
+                        "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$",
+                        "type": "string"
+                      },
+                      { "type": "null" }
+                    ]
+                  },
+                  "vlan_id": {
+                    "anyOf": [
+                      { "maximum": 4094, "minimum": 1, "type": "integer" },
+                      { "type": "null" }
+                    ]
+                  }
+                },
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/PolicyImpactPreview" }
+              }
+            },
+            "description": "Impact preview (read-only)"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Validation failed (application/problem+json)"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Authentication required"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Permission denied"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Not found (also returned for objects of other tenants)"
+          }
+        },
+        "summary": "Preview which open sessions a policy change (or delete) affects and the strategy",
+        "tags": ["policies"]
+      }
+    },
     "/api/v1/orgs/{orgId}/policy-assignments": {
       "get": {
         "description": "Permission: `policy_assignment:read`",
@@ -3988,6 +4472,179 @@
           }
         },
         "summary": "Delete a policy assignment",
+        "tags": ["policies"]
+      }
+    },
+    "/api/v1/orgs/{orgId}/sites/{siteId}/openwifi-config/rate-limit-fragment": {
+      "get": {
+        "description": "Permission: `policy:preview`",
+        "operationId": "get_api_v1_orgs_orgId_sites_siteId_openwifi_config_rate_limit_fragment",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "orgId",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "siteId",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "ssid",
+            "required": true,
+            "schema": { "maxLength": 32, "minLength": 1, "type": "string" }
+          },
+          {
+            "in": "query",
+            "name": "at",
+            "schema": {
+              "format": "date-time",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "download",
+            "schema": { "enum": ["0", "1", "true", "false"], "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "adapter": { "const": "openwifi-config", "type": "string" },
+                    "adapter_version": { "type": "string" },
+                    "available": { "type": "boolean" },
+                    "changes": {
+                      "items": { "additionalProperties": {}, "properties": {}, "type": "object" },
+                      "type": "array"
+                    },
+                    "device_enforced": { "type": "boolean" },
+                    "fragment": {
+                      "anyOf": [
+                        { "additionalProperties": {}, "properties": {}, "type": "object" },
+                        { "type": "null" }
+                      ]
+                    },
+                    "mode": { "const": "export_preview_only", "type": "string" },
+                    "omitted": {
+                      "items": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "field": { "type": "string" },
+                          "path": { "type": ["string", "null"] },
+                          "reason": { "type": "string" }
+                        },
+                        "required": ["field", "path", "reason"],
+                        "type": "object"
+                      },
+                      "type": "array"
+                    },
+                    "pushed": { "const": false, "type": "boolean" },
+                    "reason": { "type": ["string", "null"] },
+                    "resolution": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "decision": { "enum": ["accept", "reject"], "type": "string" },
+                        "policy_id": { "type": ["string", "null"] },
+                        "policy_version": { "type": ["number", "null"] },
+                        "reason_code": { "type": ["string", "null"] },
+                        "snapshot_hash": { "type": "string" }
+                      },
+                      "required": [
+                        "decision",
+                        "reason_code",
+                        "policy_id",
+                        "policy_version",
+                        "snapshot_hash"
+                      ],
+                      "type": "object"
+                    },
+                    "site_id": {
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                      "type": "string"
+                    },
+                    "ssid": { "type": "string" },
+                    "validation": {
+                      "anyOf": [
+                        { "additionalProperties": {}, "properties": {}, "type": "object" },
+                        { "type": "null" }
+                      ]
+                    },
+                    "warnings": { "items": { "type": "string" }, "type": "array" }
+                  },
+                  "required": [
+                    "available",
+                    "mode",
+                    "pushed",
+                    "site_id",
+                    "ssid",
+                    "reason",
+                    "resolution",
+                    "fragment",
+                    "changes",
+                    "omitted",
+                    "validation",
+                    "device_enforced",
+                    "warnings",
+                    "adapter",
+                    "adapter_version"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Export envelope (`available=false` with a reason when no rate-limit translates); with `download=1` the bare fragment as an attachment"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Validation failed (application/problem+json)"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Authentication required"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Permission denied"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Not found (also returned for objects of other tenants)"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "download=1 but no fragment is available (application/problem+json)"
+          }
+        },
+        "summary": "Export (preview only, never pushed) the uCentral SSID rate-limit fragment of the site baseline policy",
         "tags": ["policies"]
       }
     },
@@ -8795,6 +9452,163 @@
         },
         "summary": "Organization audit log (includes impersonation rows)",
         "tags": ["audit"]
+      }
+    },
+    "/api/v1/orgs/{orgId}/session-enforcement": {
+      "get": {
+        "description": "Permission: `session:read`",
+        "operationId": "get_api_v1_orgs_orgId_session_enforcement",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "orgId",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "schema": { "default": 50, "maximum": 200, "minimum": 1, "type": "integer" }
+          },
+          { "in": "query", "name": "cursor", "schema": { "maxLength": 200, "type": "string" } },
+          {
+            "in": "query",
+            "name": "site_id",
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "state",
+            "schema": {
+              "enum": ["pending", "applied", "unsupported", "superseded"],
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "open_only",
+            "schema": { "default": "true", "enum": ["true", "false"], "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "data": {
+                      "items": { "additionalProperties": {}, "properties": {}, "type": "object" },
+                      "type": "array"
+                    },
+                    "next_cursor": { "type": ["string", "null"] }
+                  },
+                  "required": ["data", "next_cursor"],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "SessionEnforcementSummary page"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Validation failed (application/problem+json)"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Authentication required"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Permission denied"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Not found (also returned for objects of other tenants)"
+          }
+        },
+        "summary": "Sessions with their enforcement summary (pending change, amber fields)",
+        "tags": ["sessions"]
+      }
+    },
+    "/api/v1/orgs/{orgId}/sessions/{id}/enforcement": {
+      "get": {
+        "description": "Permission: `session:read`",
+        "operationId": "get_api_v1_orgs_orgId_sessions_id_enforcement",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "orgId",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/SessionEnforcementView" }
+              }
+            },
+            "description": "SessionEnforcementView"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Validation failed (application/problem+json)"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Authentication required"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Permission denied"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Not found (also returned for objects of other tenants)"
+          }
+        },
+        "summary": "Enforcement view of one session: snapshot, attributes sent, evidence, pending change",
+        "tags": ["sessions"]
       }
     },
     "/api/v1/orgs/{orgId}/captive-portals": {

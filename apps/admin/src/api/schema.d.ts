@@ -677,6 +677,26 @@ export interface paths {
     patch: operations['patch_api_v1_orgs_orgId_policies_id'];
     trace?: never;
   };
+  '/api/v1/orgs/{orgId}/policies/{id}/impact-preview': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Preview which open sessions a policy change (or delete) affects and the strategy
+     * @description Permission: `policy:preview`
+     */
+    post: operations['post_api_v1_orgs_orgId_policies_id_impact_preview'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/api/v1/orgs/{orgId}/policy-assignments': {
     parameters: {
       query?: never;
@@ -716,6 +736,26 @@ export interface paths {
      * @description Permission: `policy_assignment:delete`
      */
     delete: operations['delete_api_v1_orgs_orgId_policy_assignments_id'];
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/orgs/{orgId}/sites/{siteId}/openwifi-config/rate-limit-fragment': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Export (preview only, never pushed) the uCentral SSID rate-limit fragment of the site baseline policy
+     * @description Permission: `policy:preview`
+     */
+    get: operations['get_api_v1_orgs_orgId_sites_siteId_openwifi_config_rate_limit_fragment'];
+    put?: never;
+    post?: never;
+    delete?: never;
     options?: never;
     head?: never;
     patch?: never;
@@ -1421,6 +1461,46 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/api/v1/orgs/{orgId}/session-enforcement': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Sessions with their enforcement summary (pending change, amber fields)
+     * @description Permission: `session:read`
+     */
+    get: operations['get_api_v1_orgs_orgId_session_enforcement'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/orgs/{orgId}/sessions/{id}/enforcement': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Enforcement view of one session: snapshot, attributes sent, evidence, pending change
+     * @description Permission: `session:read`
+     */
+    get: operations['get_api_v1_orgs_orgId_sessions_id_enforcement'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/api/v1/orgs/{orgId}/captive-portals': {
     parameters: {
       query?: never;
@@ -1825,6 +1905,52 @@ export interface components {
     } & {
       [key: string]: unknown;
     };
+    EnforcementChange: {
+      change_id: string;
+      created_at: string;
+      expected_apply_by: string | null;
+      id: string;
+      policy_id: string | null;
+      reason: string;
+      resolution: string | null;
+      resolved_at: string | null;
+      /** @enum {string} */
+      state: 'pending' | 'applied' | 'unsupported' | 'superseded';
+      state_meaning: string;
+      strategy: string;
+      trigger: string;
+      triggers: string[];
+      unevaluated: boolean;
+    };
+    /** @description Open sessions a proposed policy change would affect and how it would reach them (P7-A). Nothing is written. */
+    PolicyImpactPreview: {
+      affected_sessions: number;
+      by_strategy: {
+        coa_change: number;
+        disconnect_reauth: number;
+        next_reauth: number;
+        none: number;
+      };
+      evaluated_sessions: number;
+      max_apply_latency_s: number | null;
+      message: string;
+      policy_id: string;
+      session_timeout_cap_s: number;
+      sessions: {
+        adapter_key: string | null;
+        expected_apply_by: string | null;
+        nas_client_id: string;
+        reason: string;
+        session_id: string;
+        site_id: string;
+        /** @enum {string} */
+        state: 'pending' | 'unsupported';
+        /** @enum {string} */
+        strategy: 'coa_change' | 'disconnect_reauth' | 'next_reauth' | 'none';
+      }[];
+      truncated: boolean;
+      unevaluated_sessions: number;
+    };
     /** @description RFC 9457 problem details */
     Problem: {
       detail?: string;
@@ -1833,6 +1959,59 @@ export interface components {
       status: number;
       title: string;
       type: string;
+    } & {
+      [key: string]: unknown;
+    };
+    /** @description Effective policy snapshot, attributes sent, per-field evidence and the pending change strategy of one session (P7-A). */
+    SessionEnforcementView: {
+      adapter_key: string | null;
+      attributes_sent: ({
+        device_enforced: boolean;
+        name: string;
+      } & {
+        [key: string]: unknown;
+      })[];
+      counter_anomalies: ({
+        applied: boolean;
+        id: string;
+      } & {
+        [key: string]: unknown;
+      })[];
+      fields: ({
+        amber: boolean;
+        device_enforced: boolean;
+        evidence_level: string | null;
+        field: string;
+        status: string;
+      } & {
+        [key: string]: unknown;
+      })[];
+      history: components['schemas']['EnforcementChange'][];
+      pending_change: components['schemas']['EnforcementChange'] | null;
+      session_id: string;
+      session_timeout: {
+        expected_reauth_by: string | null;
+        sent: boolean;
+        value_s: number | null;
+      };
+      snapshot: {
+        [key: string]: unknown;
+      } | null;
+      status: string;
+      strategy_evidence: {
+        coa_change: {
+          device_enforced: boolean;
+          evidence_level: string | null;
+          status: string;
+        } | null;
+        disconnect: {
+          device_enforced: boolean;
+          evidence_level: string | null;
+          status: string;
+        } | null;
+        dispatcher_enabled: boolean;
+        strategy: string;
+      };
     } & {
       [key: string]: unknown;
     };
@@ -4896,6 +5075,96 @@ export interface operations {
       };
     };
   };
+  post_api_v1_orgs_orgId_policies_id_impact_preview: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        orgId: string;
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: {
+      content: {
+        'application/json': {
+          burst_download_kbps?: number | null;
+          burst_duration_s?: number | null;
+          burst_upload_kbps?: number | null;
+          delete?: boolean;
+          description?: string;
+          download_rate_kbps?: number | null;
+          idle_timeout_s?: number | null;
+          is_default?: boolean;
+          max_concurrent_sessions?: number | null;
+          max_devices?: number | null;
+          name?: string;
+          priority?: number;
+          quota_daily_bytes?: (number | string) | null;
+          quota_monthly_bytes?: (number | string) | null;
+          quota_total_bytes?: (number | string) | null;
+          schedule_id?: string | null;
+          /** @enum {string} */
+          scope_type?: 'user' | 'group' | 'site' | 'temporary';
+          session_timeout_s?: number | null;
+          site_id?: string | null;
+          /** @enum {string} */
+          status?: 'draft' | 'active' | 'retired';
+          upload_rate_kbps?: number | null;
+          valid_from?: string | null;
+          valid_until?: string | null;
+          vlan_id?: number | null;
+        };
+      };
+    };
+    responses: {
+      /** @description Impact preview (read-only) */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['PolicyImpactPreview'];
+        };
+      };
+      /** @description Validation failed (application/problem+json) */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Authentication required */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Permission denied */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Not found (also returned for objects of other tenants) */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+    };
+  };
   get_api_v1_orgs_orgId_policy_assignments: {
     parameters: {
       query?: {
@@ -5091,6 +5360,115 @@ export interface operations {
       };
       /** @description Not found (also returned for objects of other tenants) */
       404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+    };
+  };
+  get_api_v1_orgs_orgId_sites_siteId_openwifi_config_rate_limit_fragment: {
+    parameters: {
+      query: {
+        ssid: string;
+        at?: string;
+        download?: '0' | '1' | 'true' | 'false';
+      };
+      header?: never;
+      path: {
+        orgId: string;
+        siteId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Export envelope (`available=false` with a reason when no rate-limit translates); with `download=1` the bare fragment as an attachment */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            /** @constant */
+            adapter: 'openwifi-config';
+            adapter_version: string;
+            available: boolean;
+            changes: {
+              [key: string]: unknown;
+            }[];
+            device_enforced: boolean;
+            fragment: {
+              [key: string]: unknown;
+            } | null;
+            /** @constant */
+            mode: 'export_preview_only';
+            omitted: {
+              field: string;
+              path: string | null;
+              reason: string;
+            }[];
+            /** @constant */
+            pushed: false;
+            reason: string | null;
+            resolution: {
+              /** @enum {string} */
+              decision: 'accept' | 'reject';
+              policy_id: string | null;
+              policy_version: number | null;
+              reason_code: string | null;
+              snapshot_hash: string;
+            };
+            /** Format: uuid */
+            site_id: string;
+            ssid: string;
+            validation: {
+              [key: string]: unknown;
+            } | null;
+            warnings: string[];
+          };
+        };
+      };
+      /** @description Validation failed (application/problem+json) */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Authentication required */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Permission denied */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Not found (also returned for objects of other tenants) */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description download=1 but no fragment is available (application/problem+json) */
+      422: {
         headers: {
           [name: string]: unknown;
         };
@@ -8903,6 +9281,134 @@ export interface operations {
             }[];
             next_cursor: string | null;
           };
+        };
+      };
+      /** @description Validation failed (application/problem+json) */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Authentication required */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Permission denied */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Not found (also returned for objects of other tenants) */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+    };
+  };
+  get_api_v1_orgs_orgId_session_enforcement: {
+    parameters: {
+      query?: {
+        limit?: number;
+        cursor?: string;
+        site_id?: string;
+        state?: 'pending' | 'applied' | 'unsupported' | 'superseded';
+        open_only?: 'true' | 'false';
+      };
+      header?: never;
+      path: {
+        orgId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description SessionEnforcementSummary page */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            data: {
+              [key: string]: unknown;
+            }[];
+            next_cursor: string | null;
+          };
+        };
+      };
+      /** @description Validation failed (application/problem+json) */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Authentication required */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Permission denied */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Not found (also returned for objects of other tenants) */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+    };
+  };
+  get_api_v1_orgs_orgId_sessions_id_enforcement: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        orgId: string;
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description SessionEnforcementView */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['SessionEnforcementView'];
         };
       };
       /** @description Validation failed (application/problem+json) */

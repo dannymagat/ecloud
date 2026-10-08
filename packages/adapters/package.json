@@ -23,6 +23,7 @@
   },
   "dependencies": {
     "@ecloud/policy-engine": "*",
-    "@ecloud/shared": "*"
+    "@ecloud/shared": "*",
+    "ajv": "^8.20.0"
   }
 }

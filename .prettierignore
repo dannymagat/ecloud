@@ -5,3 +5,4 @@ package-lock.json
 .remember
 var
 *.md
+packages/adapters/src/openwifi/schema/ucentral.full.json

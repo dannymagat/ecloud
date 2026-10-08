@@ -84,6 +84,8 @@ export const TENANT_GRAPH_TABLES: readonly string[] = Object.freeze([
   'accounting_records',
   'auth_events',
   'session_actions',
+  'session_enforcement',
+  'accounting_anomalies',
   'usage_counters',
   'audit_logs',
   'outbox',
@@ -417,6 +419,25 @@ export async function seedTenantGraph(
     [organizationId, sessionId],
   );
   ref('session_actions', actionId);
+
+  const enforcementId = await insertReturning<string>(
+    db,
+    `INSERT INTO session_enforcement (organization_id, session_id, change_id, trigger, strategy, reason)
+     VALUES ($1, $2, gen_random_uuid(), 'policy_update', 'next_reauth', 'fixture') RETURNING id`,
+    [organizationId, sessionId],
+  );
+  ref('session_enforcement', enforcementId);
+
+  const anomalyId = await insertReturning<string>(
+    db,
+    `INSERT INTO accounting_anomalies (organization_id, session_id, nas_client_id, adapter_key, kind,
+                                       counter, previous, observed, estimated_lost_bytes, applied,
+                                       reason, radacct_id)
+     VALUES ($1, $2, $3, 'openwifi-uspot-uam', 'counter_wrap_32bit', 'outputOctets', 10, 5, 4294967291,
+             false, 'fixture', (floor(random() * 1000000000))::bigint) RETURNING id`,
+    [organizationId, sessionId, nasClientId],
+  );
+  ref('accounting_anomalies', anomalyId);
 
   await db.query(
     `INSERT INTO usage_counters (organization_id, subject_type, subject_id, period_type, period_start)

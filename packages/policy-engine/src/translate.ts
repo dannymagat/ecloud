@@ -44,6 +44,11 @@ export interface TranslationContext {
   /** SSID label for `openwifi-config` paths; `ssidIsCaptive` gates `captive.*` keys. */
   readonly ssidRef?: string;
   readonly ssidIsCaptive?: boolean;
+  /**
+   * Q44: upper bound of Session-Timeout while no lab-validated CoA can push a policy change into
+   * a live session (candidate `policy_change_cap`). Unset / null / <= 0 = no cap.
+   */
+  readonly sessionTimeoutCapS?: number | null;
 }
 
 export interface ReplyAttribute {
@@ -387,8 +392,11 @@ function deriveSessionTimeout(
   clip: Clip,
   verifiedOctetLimit: boolean,
   degradation: DegradationMode,
+  capS: number | null | undefined,
 ): SessionTimeoutDerivation {
   const candidates: Record<string, number> = {};
+  if (capS !== null && capS !== undefined && Number.isFinite(capS) && capS > 0)
+    candidates.policy_change_cap = Math.max(MIN_TIMEOUT_S, Math.floor(capS));
   if (clip.policy_session_timeout_s !== null)
     candidates.policy = Math.max(MIN_TIMEOUT_S, clip.policy_session_timeout_s);
   if (clip.window_end_s !== null)
@@ -628,7 +636,12 @@ export function translate(
   translateRates(b, effective, degradation);
   translateBurst(b, effective);
   const verifiedOctets = translateQuota(b, effective);
-  const st = deriveSessionTimeout(context.clip, verifiedOctets, degradation);
+  const st = deriveSessionTimeout(
+    context.clip,
+    verifiedOctets,
+    degradation,
+    context.sessionTimeoutCapS,
+  );
   translateTimers(b, effective, st);
   translateInterim(b);
   translateVlan(b, effective);

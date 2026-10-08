@@ -24,6 +24,8 @@ import { PoliciesPage } from './features/policies/PoliciesPage';
 import { PortalDesignerPage } from './features/portals/PortalDesignerPage';
 import { PortalsPage } from './features/portals/PortalsPage';
 import { PolicyEditorPage } from './features/policies/PolicyEditorPage';
+import { RateLimitExportPage } from './features/policies/RateLimitExportPage';
+import { SessionEnforcementPage } from './features/sessions/SessionEnforcementPage';
 import { SessionsPage } from './features/sessions/SessionsPage';
 import { VouchersPage } from './features/vouchers/VouchersPage';
 import { HomeRedirect, RequireAuth, SessionExpiryWatcher } from './layout/guards';
@@ -75,9 +77,11 @@ export const routes: RouteObject[] = [
                   { path: 'policies', element: <PoliciesPage /> },
                   { path: 'policies/:policyId', element: <PolicyEditorPage /> },
                   { path: 'policy-assignments', element: <PolicyAssignmentsPage /> },
+                  { path: 'ssid-rate-limit-export', element: <RateLimitExportPage /> },
                   { path: 'portals', element: <PortalsPage /> },
                   { path: 'portals/:portalId', element: <PortalDesignerPage /> },
                   { path: 'sessions', element: <SessionsPage /> },
+                  { path: 'sessions/:sessionId', element: <SessionEnforcementPage /> },
                   { path: 'audit-log', element: <AuditLogPage /> },
                   { path: 'administrators', element: <AdministratorsPage /> },
                   { path: 'api-keys', element: <ApiKeysPage /> },

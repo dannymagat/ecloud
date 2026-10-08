@@ -156,6 +156,17 @@ Exit criterion "real client completes end-to-end login" stays REQUIRES_DEVICE_TE
 - Known limits: logos fetchable by random asset id (accepted: branding is public); a known username can be locked at the portal for 15 min (trade-off of the per-account lock); timing equalisation is a design target, not a measured property; `PORTAL_TRUST_PROXY_HOPS=1` and production portal settings are VPS change-list items.
 - Portal onboarding order (fail-closed by design): create portal → set NAS pin + UAM server URL → rotate UAM secret (shown once) → configure the NAS.
 
+## Phase 7 — Bandwidth policy enforcement (LOCAL) — CODE COMPLETE 2026-10-08 (device exit criterion pending)
+Exit criterion (measured traffic matches policy on a real device) is REQUIRES_DEVICE_TEST; AP testing is skipped. Local scope only; no controller push (EZECONTROL changes not authorised), CoA dispatcher stays disabled (D-006).
+| Cycle | Scope | Status |
+|---|---|---|
+| P7-A | Policy-change propagation, session enforcement view API, worker use of the 32-bit wrap quirks hook, quota/schedule/concurrency end to end | **DONE 2026-10-08** — reviewed (PASS WITH FIXES: pending-row trigger flip-flop bug, propagation cost, silent truncation at the cap, API/worker race, runtime scan size); migration 023 additive |
+| P7-B | Device measurement harness (iperf3, dry-run; never auto-PASS), openwifi-config rate-limit fragment export/preview (no push), admin enforcement views and change-impact preview | **DONE 2026-10-08** — review PASS (low notes only); orchestrator made CoA/Disconnect strategy wording neutral so the UI never asserts lab validation itself |
+- **Orchestrator verification 2026-10-08:** admin API client regenerated (82 paths); build, lint, format:check, secrets scan OK; dev DB migrated to 023; integration 1159 passed, 1 skipped (S3 contract) across 101 files; portal → FreeRADIUS e2e 4/4; device harness dry-run 14/14.
+- **Behaviour change:** sessions with no other bound now receive Session-Timeout 1800 s (owner-accepted Q44 default, now implemented) so policy changes apply at the next login within 30 minutes. `AAA_SESSION_TIMEOUT_CAP_S` (0 = off, else 300–86400).
+- Strategy today is always `next_reauth`; CoA/Disconnect stay REQUIRES_DEVICE_TEST (D-006). `applied` means the session ended and the next login uses the current policy — not device confirmation.
+- Known limits: an upper-half counter reset is indistinguishable from a 32-bit wrap (over-count up to 2^31 bytes per event, visible in `accounting_anomalies`); schedule-window false positives in the affected count; re-resolution runs inside the policy mutation transaction (bounded by `ENFORCEMENT_MAX_SESSIONS`, unevaluated sessions still get a pending marker).
+
 ## Verified Environment Facts
 See REMOTE_ENVIRONMENT.md and PHASE2_VALIDATION.md. Ledger: 105 claims — 40 verified, 17 proposed, 1 unknown, 47 requires device test; 24 device tests (DT-01…DT-24). **DT-01 executed 2026-10-07 (PASS, identification only)** on lab AP EZE-AP1832, EZEAP 6 r32912, uCentral schema 4.2.0: uspot is the TIP fork; no WireGuard/unetd on the AP (topology B unsupported on this firmware); hostapd supports DAS and dynamic VLAN. DT-02…DT-24 not executed. No device configuration was changed.
 

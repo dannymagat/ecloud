@@ -12,7 +12,9 @@ export type WorkerEvent =
   | 'session.disconnect_requested'
   | 'session.disconnect_result'
   | 'session.coa_result'
-  | 'quota.exceeded';
+  | 'quota.exceeded'
+  | 'accounting.anomaly_detected'
+  | 'session.enforcement_pending';
 
 export interface OutboxPayload {
   site_id: string | null;

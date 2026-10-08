@@ -383,3 +383,59 @@ Status: implemented and tested locally (unit + integration against the dev stack
 | W10 | Retention | 7 d raw | `retention.prune` daily: drops whole monthly partitions of `accounting_records` (13 mo) / `audit_logs` (24 mo) and deletes drained raw rows older than 7 d; dry-run unless `RETENTION_APPLY=true`; rows in `_default` partitions past the cutoff are reported, not deleted (append-only trigger) | D-025 |
 
 Proposed schema changes (not made; migrations are owned by A6): `radius.radacct_raw.drained_at timestamptz` (+ partial index); `session_actions.status` CHECK add `'skipped_disabled'` (and optionally `'error'`); `sessions.enforcement_state text` (`pending_disconnect`/`pending_reauth`) to replace the Redis "enforcement pending" hash; `nas_clients.coa_secret_ref` (SECURITY_ARCHITECTURE.md: DAS secret should differ from the auth secret) — the dispatcher uses `secret_ref` until then.
+
+### P7-A enforcement orchestration (Phase 7, 2026-10-08)
+
+- **Session-Timeout cap (Q44).** `/internal/aaa/authorize` chooses the change strategy of the NAS
+  adapter (`chooseEnforcementStrategy`, below); while it is `next_reauth` (always today) the
+  translation gets `sessionTimeoutCapS = AAA_SESSION_TIMEOUT_CAP_S` (default 1800, 0 = off), a
+  `policy_change_cap` candidate of the Session-Timeout derivation. A session without any other
+  bound now receives `Session-Timeout = 1800` where the adapter's Session-Timeout attribute is
+  VERIFIED_SUPPORTED (uspot / CoovaChilli); on hostapd it stays REQUIRES_DEVICE_TEST (not sent,
+  flagged). This is the bound on how late a policy change reaches a live session.
+- **Strategy (D-006, D-028 V12).** `coa_change` / `disconnect_reauth` only when the mechanism is
+  VERIFIED_SUPPORTED **and** device-enforced in the registry (LAB/PRODUCTION evidence with a DT)
+  **and** `ECLOUD_COA_ENABLED=true`; otherwise `next_reauth`; `none` for a NAS without an engine
+  adapter. No first-party adapter qualifies today (asserted by `packages/adapters/src/enforcement.test.ts`).
+  The quota lab-mode Disconnect (W6, `ECLOUD_COA_ENABLED=true`) is unchanged and recorded as an
+  experiment (`detail.lab_disconnect_action_id`); the relied-on strategy stays `next_reauth`.
+- **Enforcement state** (migration 023 `session_enforcement`, the proposal above): at most one
+  pending row per session; `pending` → `applied` once the session has ended (`policy.enforce`
+  tick, `resolveClosedEnforcement`; `detail.resolution = "session_closed"`). **`applied` means
+  "session ended; the next login uses the current policy" — it is not a device confirmation.**
+  A newer policy change supersedes a pending policy-change row; a pending row that carries a
+  runtime breach is never superseded — further triggers (breaches or policy changes) are merged
+  into `detail.triggers` and the outbox event is emitted only when the trigger set changes.
+  `superseded` also closes a policy-change row when a later change brings the session back to its
+  authorize snapshot (`detail.resolution = "reverted"`); `unsupported` for `none`. Both writers
+  (API, worker) take `pg_advisory_xact_lock(7023, hashtext(session_id))` first. Writers: API policy /
+  assignment mutations (same transaction, outbox `policy.changed` + `session.enforcement_pending`,
+  audit `session_enforcement:propagate`) and the worker (`quota_breach`, `schedule_end`,
+  `concurrency`; outbox `session.enforcement_pending`). The Redis "enforcement pending" hash is
+  kept for compatibility.
+- **Runtime loop (staged items 6–8).** `policy.enforce` (30 s): quotas (as W6) → schedule end (an
+  open session whose authorize-time schedule window has closed; out-of-window overrides skipped)
+  → late concurrency (per subject, the newest open sessions beyond `max_concurrent_sessions` /
+  `max_devices` of the authorize snapshot) → close resolved rows. Rejection itself happens at the
+  next Access-Request (resolver: `quota_*`, `schedule`, `concurrency_*`).
+- **P7-A wrap correction (closes the SIM-14 finding).** The drainer calls the adapter's
+  `accountingQuirks.detectAnomalies` (only `openwifi-uspot-uam`, 32-bit counters without
+  Gigawords) on every Interim/Stop delta, comparing the stored RAW counters
+  (`sessions.*_octets − *_wrap_offset`) with the record. Every anomaly is stored in
+  `accounting_anomalies` (+ outbox `accounting.anomaly_detected`). The wrap offset is advanced by
+  2^32 — i.e. usage grows by `2^32 − previous + observed` — **only** when
+  `decideWrapCorrection` holds: W1 the hook flagged it (counter decreased while Acct-Session-Time
+  advanced, previous < 2^32); W2 previous ≥ 2^31; W3 observed < 2^31 (W2+W3 exclude a counter
+  reset from the lower half that would book up to 4 GiB of phantom usage); W4 one wrap fits
+  `WORKER_COUNTER_WRAP_MAX_BPS` (default 1 Gbit/s per direction, an operator assumption) over the
+  elapsed session time. Otherwise the anomaly is stored with `applied = false` and the reason, and
+  usage keeps the monotonic rule (which can only under-count). **Accurate bound:** a counter
+  reset from the upper half (previous ≥ 2^31) to a small value is indistinguishable from a wrap,
+  so an applied correction can over-count by up to 2^31 bytes per event (further bounded by W4).
+  A buggy or malicious NAS can therefore inflate the usage of its own sessions once per
+  accounting cycle — only within its own organization (attribution is by authenticated packet
+  source), and every event is visible in `accounting_anomalies` / the session enforcement view.
+  When more than one wrap would
+  also fit the ceiling the correction is a lower bound (`detail.multiple_wraps_possible`). A
+  reordered older record (smaller session time) never maps onto a post-wrap offset. How the real
+  TIP firmware wraps is REQUIRES_DEVICE_TEST.

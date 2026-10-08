@@ -22,7 +22,13 @@
  * NAS retries an Access-Request every few seconds, a handful of times) instead of 10 s.
  */
 import { verifyPassword, withPlatform, withTenant, type DbTransaction } from '@ecloud/db';
-import { resolveEffectivePolicy, toJsonValue, type Subject } from '@ecloud/policy-engine';
+import { dynamicAuthorizationEvidence } from '@ecloud/adapters';
+import {
+  chooseEnforcementStrategy,
+  resolveEffectivePolicy,
+  toJsonValue,
+  type Subject,
+} from '@ecloud/policy-engine';
 import { isUuid, newId } from '@ecloud/shared';
 import type { Request, RequestHandler, Response } from 'express';
 import type { AppDeps } from '../context.js';
@@ -462,11 +468,21 @@ async function decide(deps: AppDeps, body: RadiusRequestBody, now: Date): Promis
       let adapterVersion: string | null = null;
       if (adapter !== null) {
         adapterVersion = adapter.version;
+        // Q44 (P7-A): without a lab-validated CoA / Disconnect a policy change reaches a live
+        // session only at its next Access-Request, so Session-Timeout is capped.
+        const evidence = dynamicAuthorizationEvidence(nas.adapter_key);
+        const strategy = chooseEnforcementStrategy({
+          adapterKey: nas.adapter_key,
+          coaChange: evidence?.coaChange ?? null,
+          disconnect: evidence?.disconnect ?? null,
+          dispatcherEnabled: deps.config.coaEnabled,
+        }).strategy;
         const plan = adapter.translate(resolution.effective, {
           clip: resolution.clip,
           controls: resolution.controls,
           now,
           interimIntervalS: deps.config.aaaInterimIntervalS,
+          sessionTimeoutCapS: strategy === 'next_reauth' ? deps.config.aaaSessionTimeoutCapS : null,
         });
         if (plan.decision === 'reject') {
           throw new Reject(plan.reasonCode ?? 'unenforceable', 'Access denied', {
@@ -528,8 +544,22 @@ async function decide(deps: AppDeps, body: RadiusRequestBody, now: Date): Promis
           nas_client_id: nas.id,
           session_id: sessionId,
           trigger: 'authorize',
+          // `facts` (P7-A): the subject facts this decision was resolved with, so a later policy
+          // change can re-resolve the live session exactly (session-enforcement propagation).
           input_snapshot: JSON.stringify(
-            toJsonValue({ effective: resolution.effective, hash: resolution.snapshot.hash }),
+            toJsonValue({
+              effective: resolution.effective,
+              hash: resolution.snapshot.hash,
+              facts: {
+                subject_kind: identity.subject.kind,
+                user_id: identity.userId,
+                client_device_id: clientDeviceId,
+                voucher_id: identity.voucherId,
+                voucher_batch_id: identity.voucherBatchId,
+                group_ids: identity.groupIds,
+                mac,
+              },
+            }),
           ),
           emitted: JSON.stringify(toJsonValue(emitted)),
           unsupported: JSON.stringify(toJsonValue(unsupported)),

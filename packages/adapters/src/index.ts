@@ -15,8 +15,10 @@ export {
 export { SRC as SOURCE_REFS } from './source-refs.js';
 export * from './registry/index.js';
 export * from './vendor/index.js';
+export * from './enforcement.js';
 export { capabilities as openwifiHostapdRadiusCapabilities } from './adapters/openwifi-hostapd-radius.js';
 export { capabilities as openwifiUspotUamCapabilities } from './adapters/openwifi-uspot-uam.js';
 export { capabilities as uspotUpstreamUamCapabilities } from './adapters/uspot-upstream-uam.js';
 export { capabilities as coovachilliUamCapabilities } from './adapters/coovachilli-uam.js';
 export { capabilities as openwifiConfigCapabilities } from './adapters/openwifi-config.js';
+export * from './openwifi/ucentral-fragment.js';

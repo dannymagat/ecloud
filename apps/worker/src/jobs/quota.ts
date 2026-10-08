@@ -14,6 +14,7 @@ import { periodStarts } from '../accounting/normalize.js';
 import { resolveAdapter } from '../nas-adapter.js';
 import { emitEvent } from '../events.js';
 import type { WorkerState } from '../infra/state.js';
+import { recordRuntimeEnforcement } from './enforcement.js';
 
 export const ENFORCE_REASON = 'worker:policy.enforce';
 /** Breach markers outlive the longest period (monthly) so one breach yields one event. */
@@ -108,6 +109,7 @@ interface CandidateRow {
   client_device_id: string | null;
   voucher_id: string | null;
   policy_id: string;
+  started_at: Date;
   quota_daily_bytes: number | null;
   quota_monthly_bytes: number | null;
   quota_total_bytes: number | null;
@@ -160,6 +162,7 @@ export async function enforceQuotas(
           'se.client_device_id',
           'se.voucher_id',
           'p.id as policy_id',
+          'se.started_at',
           'p.quota_daily_bytes',
           'p.quota_monthly_bytes',
           'p.quota_total_bytes',
@@ -221,6 +224,21 @@ export async function enforceQuotas(
       disconnect: describeAdapterDisconnect(row.adapter_key),
       nasCoaSupported: row.coa_supported,
     });
+    const breachText = fresh
+      .map((b) => `quota_${b.period}: ${String(b.used)} >= ${String(b.limit)} bytes`)
+      .join(', ');
+    const runtime = {
+      organizationId: row.organization_id,
+      siteId: row.site_id,
+      sessionId: row.session_id,
+      startedAt: row.started_at,
+      adapterKey: row.adapter_key,
+      trigger: 'quota_breach' as const,
+      breach: breachText,
+      policyId: row.policy_id,
+      coaEnabled: deps.coaEnabled,
+      now,
+    };
     const breachData = {
       session_id: row.session_id,
       subject_type: subject.type,
@@ -259,6 +277,12 @@ export async function enforceQuotas(
             session_action_id: action.id,
             reason: `quota_${first.period}`,
           });
+          // The strategy relied on stays evidence-based (next_reauth: Disconnect is not
+          // lab-validated); the lab-mode Disconnect is an experiment recorded alongside (D-006).
+          await recordRuntimeEnforcement(trx, {
+            ...runtime,
+            detail: { lab_disconnect_action_id: action.id },
+          });
           return action.id;
         },
       );
@@ -268,12 +292,17 @@ export async function enforceQuotas(
       await withPlatform(
         deps.db,
         { reason: ENFORCE_REASON, audit: false, organizationId: row.organization_id },
-        (trx) =>
-          emitEvent(trx, 'quota.exceeded', row.organization_id, row.site_id, {
+        async (trx) => {
+          await emitEvent(trx, 'quota.exceeded', row.organization_id, row.site_id, {
             ...breachData,
             enforcement: 'pending',
             pending_reason: decision.reason,
-          }),
+          });
+          await recordRuntimeEnforcement(trx, {
+            ...runtime,
+            detail: { pending_reason: decision.reason },
+          });
+        },
       );
       await deps.state.setPending(row.session_id, {
         reason: decision.reason,

@@ -1,6 +1,6 @@
 /** Policy intent editor with API validation errors and the live enforceability preview. */
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router';
 import { api, newIdempotencyKey, type RequestBody } from '../../api/client';
 import { problemOf, type Problem } from '../../api/problem';
@@ -14,6 +14,8 @@ import { can } from '../../lib/permissions';
 import { initialValues, toBody, type FormValues } from '../resource/form';
 import { ResourceForm } from '../resource/ResourceForm';
 import { ENFORCEMENT_FIELDS, POLICY_FORM_FIELDS } from './policyFields';
+import type { AdapterColumn } from './EnforceabilityMatrix';
+import { ImpactPreview } from './ImpactPreview';
 import { PreviewPanel } from './PreviewPanel';
 import { str } from '../../lib/format';
 
@@ -31,7 +33,9 @@ function Editor({ row }: { row?: Row }) {
   const { me } = useAuth();
   const navigate = useNavigate();
   const qc = useQueryClient();
-  const [values, setValues] = useState<FormValues>(() => initialValues(POLICY_FORM_FIELDS, row));
+  const original = useMemo(() => initialValues(POLICY_FORM_FIELDS, row), [row]);
+  const [values, setValues] = useState<FormValues>(original);
+  const [columns, setColumns] = useState<AdapterColumn[]>([]);
   const [problem, setProblem] = useState<Problem | null>(null);
   const [idemKey] = useState(newIdempotencyKey);
   const mode = row ? 'edit' : 'create';
@@ -86,7 +90,16 @@ function Editor({ row }: { row?: Row }) {
         />
       </Card>
       <div className="space-y-4">
-        <PreviewPanel orgId={orgId} draftFields={setFields(values)} />
+        <PreviewPanel orgId={orgId} draftFields={setFields(values)} onColumns={setColumns} />
+        {row ? (
+          <ImpactPreview
+            orgId={orgId}
+            policyId={row.id}
+            changes={toBody(POLICY_FORM_FIELDS, values, 'edit', original)}
+            columns={columns}
+            allowed={can(me, 'policy:preview', { organizationId: orgId, anySite: true })}
+          />
+        ) : null}
       </div>
     </div>
   );

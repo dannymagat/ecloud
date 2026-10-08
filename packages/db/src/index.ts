@@ -2,6 +2,7 @@ export const PACKAGE_NAME = '@ecloud/db';
 
 export * from './admin.js';
 export * from './client.js';
+export * from './enforcement.js';
 export * from './migrate.js';
 export * from './partitions.js';
 export * from './schema.js';

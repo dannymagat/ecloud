@@ -20,8 +20,10 @@ import { accessRoutes } from './routes/access.js';
 import { administratorRoutes } from './routes/administrators.js';
 import { authRoutes } from './routes/auth.js';
 import { controllerRoutes } from './routes/controllers.js';
+import { enforcementRoutes } from './routes/enforcement.js';
 import { importRoutes } from './routes/imports.js';
 import { meRoutes } from './routes/me.js';
+import { openwifiConfigRoutes } from './routes/openwifi-config.js';
 import { platformOpsRoutes } from './routes/platform-ops.js';
 import { platformRoutes } from './routes/platform.js';
 import { policyRoutes } from './routes/policies.js';
@@ -45,12 +47,14 @@ export function allRoutes(deps: AppDeps): AnyRouteSpec[] {
     ...administratorRoutes(deps),
     ...accessRoutes(deps),
     ...policyRoutes(deps),
+    ...openwifiConfigRoutes(deps),
     ...importRoutes(deps),
     ...resourceRoutes(deps),
     ...controllerRoutes(deps),
     ...registryRoutes(deps),
     ...voucherRoutes(deps),
     ...runtimeRoutes(deps),
+    ...enforcementRoutes(deps),
     ...portalAdminRoutes(deps),
   ];
 }
