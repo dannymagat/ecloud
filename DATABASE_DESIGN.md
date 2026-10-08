@@ -425,3 +425,15 @@ Forward-only; 001–014 are untouched (checksums immutable).
 | `017_voucher_limits` | D-037 | `voucher_batches.max_uses` nullable (DEFAULT 1 kept); CHECK requires `duration_s` or `max_uses`; both enforced when both set | backfill `max_uses = NULL` where `duration_s` is set (it was ignored for those before), so existing vouchers keep their behaviour |
 | `018_admin_mfa_reset` | D-038 | `administrators.mfa_reenrol_required boolean NOT NULL DEFAULT false` | set by the MFA reset endpoint (credentials deleted, sessions revoked), cleared by the next confirmed TOTP enrolment; while true the API grants no permissions |
 
+
+### 14.x Phase 9 additions (P9-A dashboard & reports, 2026-10-08)
+
+Forward-only; 001–025 untouched. `026_dashboard_reports` (next free number):
+
+| Change | Notes |
+|---|---|
+| `usage_hourly (organization_id, site_id, hour_start, bytes_in, bytes_out, session_count, session_time_s, last_record_id, created_at, updated_at)`, PK `(organization_id, site_id, hour_start)`, `idx_usage_hourly_org_hour`, tenant RLS (FORCE), FK site `RESTRICT` | Hourly site rollup written by the accounting drainer in the same transaction as `usage_counters` (one upsert per accounting delta). `hour_start` = instant the **site-local** hour began (exact for :30 / :45 offsets; a repeated DST hour gets its own row). Plain table (small: sites × 24 × days); `retention.prune` deletes rows older than the accounting cutoff (13 months, D-025) when `RETENTION_APPLY=true`. No backfill |
+| `portal_login_attempts.triggered_lockout boolean NOT NULL DEFAULT false` | Catalog-only change on the partitioned parent. Set on the failed identify attempt that activated a portal lock (lock state lives in Redis and has no history) |
+| Indexes `idx_sessions_open_org_site_nas` (partial, open sessions), `idx_auth_events_org_nas_time`, `idx_accounting_org_nas_received`, `idx_accounting_anomalies_org_created` | Dashboard reads: open sessions per site / NAS, newest auth request / accounting record per NAS (`ORDER BY … DESC LIMIT 1` per partition), anomalies per window. Partitioned-table indexes are not built CONCURRENTLY (as 024) |
+
+Counts after 026: 47 tables in `public` (+ `schema_migrations`).

@@ -20,7 +20,10 @@ import {
 } from '@ecloud/testing';
 import { afterAll, beforeAll, expect, it } from 'vitest';
 import { processRecord } from './accounting/drain.js';
+import { localHourStart } from './accounting/normalize.js';
 import { sweepPendingSessionActions } from './coa/sweep.js';
+import { MemoryWorkerState } from './infra/state.js';
+import { pruneRetention } from './jobs/retention.js';
 
 const RUN = randomBytes(4).toString('hex');
 const octet = () => String(2 + randomInt(250));
@@ -157,6 +160,22 @@ await describeIntegration('@ecloud/worker P8-A site counters and action sweep', 
       .where('period_type', '=', 'total')
       .executeTakeFirstOrThrow();
     expect(userTotal).toEqual({ bytes_in: 700, bytes_out: 1300 });
+
+    // Migration 026 (P9-A): the hourly site rollup receives the same deltas, keyed by the
+    // site-local hour of each accounting event.
+    const hourly = await db
+      .selectFrom('usage_hourly')
+      .select(['hour_start', 'bytes_in', 'bytes_out', 'session_count'])
+      .where('organization_id', '=', org.id)
+      .where('site_id', '=', site.id)
+      .orderBy('hour_start')
+      .execute();
+    const hours = [...new Set([t0, t1].map((t) => localHourStart(t, 'Asia/Dubai').toISOString()))];
+    expect(hourly.map((h) => h.hour_start.toISOString())).toEqual(hours);
+    expect(hourly.reduce((a, h) => a + h.bytes_in, 0)).toBe(700);
+    expect(hourly.reduce((a, h) => a + h.bytes_out, 0)).toBe(1300);
+    expect(hourly.reduce((a, h) => a + h.session_count, 0)).toBe(1);
+    expect(hourly[0]?.session_count).toBe(1); // the Start's hour counts the session
   });
 
   it('sweep enqueues fresh pending actions on the right queue, skips terminal and stale rows', async () => {
@@ -224,5 +243,39 @@ await describeIntegration('@ecloud/worker P8-A site counters and action sweep', 
       .set({ status: 'timeout' })
       .where('id', 'in', [fresh, freshCoa, stale])
       .execute();
+  });
+
+  it('retention.prune counts old usage_hourly rows in dry-run and deletes only them when applied', async () => {
+    const old = new Date(Date.now() - 14 * 31 * 86_400_000); // past the 13-month cutoff
+    old.setUTCMinutes(0, 0, 0);
+    const recent = localHourStart(new Date(), 'Asia/Dubai');
+    await db
+      .insertInto('usage_hourly')
+      .values([
+        { organization_id: org.id, site_id: site.id, hour_start: old, bytes_in: 1 },
+        { organization_id: org.id, site_id: site.id, hour_start: recent, bytes_in: 1 },
+      ])
+      .onConflict((oc) => oc.columns(['organization_id', 'site_id', 'hour_start']).doNothing())
+      .execute();
+    const hoursOf = async () =>
+      (
+        await db
+          .selectFrom('usage_hourly')
+          .select('hour_start')
+          .where('site_id', '=', site.id)
+          .execute()
+      ).map((r) => r.hour_start.toISOString());
+
+    const dry = await pruneRetention({ db, state: new MemoryWorkerState(), apply: false });
+    expect(dry.usageHourlyRowsEligible).toBeGreaterThanOrEqual(1);
+    expect(dry.usageHourlyRowsDeleted).toBe(0);
+    expect(await hoursOf()).toContain(old.toISOString());
+
+    const applied = await pruneRetention({ db, state: new MemoryWorkerState(), apply: true });
+    expect(applied.applied).toBe(true);
+    expect(applied.usageHourlyRowsDeleted).toBeGreaterThanOrEqual(1);
+    const left = await hoursOf();
+    expect(left).not.toContain(old.toISOString());
+    expect(left).toContain(recent.toISOString());
   });
 });

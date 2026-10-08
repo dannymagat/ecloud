@@ -125,7 +125,7 @@ function Tiles({ counters, title }: { counters: UsageCounters | null; title: str
     { label: 'Downloaded', value: formatBytes(counters.bytes_out) },
     { label: 'Uploaded', value: formatBytes(counters.bytes_in) },
     { label: 'Sessions', value: display(counters.session_count) },
-    { label: 'Online time', value: formatDuration(counters.session_time_s) },
+    { label: 'Session time', value: formatDuration(counters.session_time_s) },
   ];
   return (
     <div>
@@ -278,7 +278,7 @@ function SubjectCard({
                 { key: 'session_count', header: 'Sessions' },
                 {
                   key: 'session_time_s',
-                  header: 'Online time',
+                  header: 'Session time',
                   render: (b) => formatDuration(b.session_time_s),
                 },
               ]}
@@ -504,7 +504,7 @@ function UsageScreen() {
                       { key: 'session_count', header: 'Sessions' },
                       {
                         key: 'session_time_s',
-                        header: 'Online time',
+                        header: 'Session time',
                         render: (r) => formatDuration(r.session_time_s),
                       },
                       { key: 'period_start', header: 'Period (site-local)' },

@@ -87,6 +87,7 @@ export const TENANT_GRAPH_TABLES: readonly string[] = Object.freeze([
   'session_enforcement',
   'accounting_anomalies',
   'usage_counters',
+  'usage_hourly',
   'audit_logs',
   'outbox',
   'webhooks',
@@ -445,6 +446,14 @@ export async function seedTenantGraph(
     [organizationId, userId],
   );
   ref('usage_counters', userId, 'subject_id');
+
+  // migration 026 (P9-A): hourly site usage rollup
+  await db.query(
+    `INSERT INTO usage_hourly (organization_id, site_id, hour_start)
+     VALUES ($1, $2, date_trunc('hour', now()))`,
+    [organizationId, siteId],
+  );
+  ref('usage_hourly', siteId, 'site_id');
 
   const auditId = await insertReturning<number>(
     db,

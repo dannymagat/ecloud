@@ -307,15 +307,22 @@ async function assertNotLocked(deps: AppDeps, counters: readonly FailureCounter[
   }
 }
 
-async function recordFailure(deps: AppDeps, counters: readonly FailureCounter[]): Promise<void> {
-  if (deps.config.rateLimitDisabled) return;
+/**
+ * Counts one failure against every counter; returns true when it activated a lock (recorded as
+ * `portal_login_attempts.triggered_lockout`, migration 026, so lockouts are reportable).
+ */
+async function recordFailure(deps: AppDeps, counters: readonly FailureCounter[]): Promise<boolean> {
+  if (deps.config.rateLimitDisabled) return false;
+  let locked = false;
   for (const c of counters) {
     const n = await deps.kv.incr(c.fail, c.limit.windowS);
     if (n >= c.limit.max) {
       await deps.kv.set(c.lock, '1', c.limit.lockS);
       await deps.kv.del(c.fail);
+      locked = true;
     }
   }
+  return locked;
 }
 
 /** Success clears the per-device and per-account counters (never the site-wide voucher cap). */
@@ -696,6 +703,8 @@ export function portalInternalRouter(deps: AppDeps): Router {
           failure = error.reason;
           identity = { kind: 'click_through' };
         }
+        // Counted before the attempt row so the row can say whether it activated a lock.
+        const triggeredLockout = failure !== null ? await recordFailure(deps, counters) : false;
         await trx
           .insertInto('portal_login_attempts')
           .values({
@@ -707,6 +716,7 @@ export function portalInternalRouter(deps: AppDeps): Router {
             client_ip: clientIp,
             result: failure === null ? 'accept' : 'reject',
             reason: failure,
+            triggered_lockout: triggeredLockout,
           })
           .execute();
         if (failure !== null) return { ok: false, reason: failure, status: 422 } as const;
@@ -714,7 +724,6 @@ export function portalInternalRouter(deps: AppDeps): Router {
       });
 
       if (!outcome.ok) {
-        if (outcome.status === 422) await recordFailure(deps, counters);
         req.log.info(
           { flowId: flow.id, method, reason: outcome.reason },
           'portal identify refused',

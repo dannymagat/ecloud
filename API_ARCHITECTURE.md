@@ -1113,3 +1113,204 @@ started_at DESC)`, `idx_sessions_org_user_started`, `idx_sessions_org_device_sta
 period_start)`, `idx_session_actions_open (session_id, action) WHERE status IN
 ('pending','sent')`. The session detail loads the timeline, anomalies, enforcement rows and
 actions with one bounded query each (no N+1); list queries are keyset-paged with `limit ≤ 200`.
+
+### Implementation notes (P9-A, dashboard & reports, 2026-10-08)
+
+Binding sources: IMPLEMENTATION_PLAN.md Phase 9, API_ARCHITECTURE.md "P8-A" (freshness fields,
+site-local periods), DATABASE_DESIGN.md (`auth_events`, `sessions`, `usage_counters`,
+`portal_login_attempts`, `accounting_anomalies`, `session_enforcement`, `audit_logs`),
+ADMIN_UI_ARCHITECTURE.md (dashboard KPIs), MULTITENANCY.md G6 (aggregates run under
+`app.current_org`; platform aggregates under `platform_access`, grouped by organization),
+DECISIONS.md D-021, D-025, D-027, D-028; Q65 (site-local periods), Q73 (polling, no SSE), Q75
+(Read Only may not export); ECLOUD_MULTI_VENDOR_HOTSPOT.md §8 (distinguish registered APs/NAS from
+those whose online status is actually known). Migration **026** (`026_dashboard_reports.sql`,
+next free number) is additive: the `usage_hourly` rollup, `portal_login_attempts.triggered_lockout`
+and read indexes (see "Performance").
+
+**Device state.** ECLOUD has no device-management telemetry (local-only phase: no controller, AP
+or VPS integration). The dashboard therefore never reports a NAS or AP as online/offline. Per NAS
+it reports only what ECLOUD itself observed: the newest RADIUS Access-Request (`auth_events`) and
+the newest accounting record (`accounting_records`) from that NAS, and an **observed-activity**
+status derived from them with explicit thresholds:
+
+| `activity` | meaning (all relative to `measured_at`) |
+|---|---|
+| `active` | newest auth request or accounting record is at most `active_within_s` old (2 × the NAS interim interval: 1 200 s with the 600 s default) |
+| `quiet`  | newest activity is older than `active_within_s` but at most `quiet_within_s` (86 400 s) old |
+| `silent` | newest activity is older than `quiet_within_s` |
+| `never`  | no auth request and no accounting record from this NAS is retained (D-025 retention) |
+
+A NAS with no clients is legitimately `quiet`/`silent`; the status says nothing about device
+reachability. `network_devices` are reported as `registered` with `online_status_known: 0`
+(nothing in ECLOUD observes AP state; `network_devices.mgmt_status` is not written by any ECLOUD
+component and is not used).
+
+#### Dashboard & reports API contract (consumed by P9-B admin views)
+
+All `/orgs/{orgId}/…` endpoints run under `withTenant` (RLS) and are filtered to the caller's
+`report:read` sites (`permittedSites`); a `site_id` outside them is 404. Organization-level data
+that has no site (RADIUS requests from a NAS without a resolved NAS row) is included only for
+organization-level grants. No new permission keys: `report:read` (dashboard, series, reports),
+`report:export` (CSV; Read Only lacks it, Q75), `platform:health:read` (platform summary). The UI
+polls (Q73, 30 s suggested; stop on error). Shared shapes:
+```
+Counters  = { bytes_in, bytes_out, bytes_total, session_count, session_time_s }
+Freshness = { measured_at, last_accounting_at|null, freshness_s|null, expected_lag_s }  // as P8-A
+SiteRef   = { id, name, timezone }
+```
+
+1. `GET /api/v1/orgs/{orgId}/dashboard` — `report:read` (any-site). Query `site_id?` (uuid; the
+   site dashboard), `window` (`1h|24h|7d`, default `24h`: the authentication / anomaly window).
+   One bounded call (≈ 12 indexed queries, no N+1):
+   ```
+   OrgDashboard = {
+     organization_id, site_id|null, sites: SiteRef[],     // sites the figures cover
+     timezone: string,                                     // the single site TZ, or 'mixed'
+     window: { key, from, to },                            // ISO instants
+     sessions: { open, authorized, active,                 // open = authorized + active (now)
+                 started_today, started_today_basis },     // since each site's local midnight
+     usage: { today: Counters, month: Counters,            // site counters, each site's current
+              label_basis, source: 'usage_counters (site rows, migration 024)', ...Freshness },
+     auth: {
+       radius: { total, accept, reject, challenge, error,
+                 by_method: [{ method|null, total, accept, reject, challenge, error }] },
+       portal: { total, accept, reject, error, lockouts,   // lockouts: attempts that activated a
+                 by_method: [{ method, total, accept, reject, error, lockouts }] }, // lock (026+)
+       top_reject_reasons: [{ source: 'radius'|'portal', reason, count }] },  // max 10, desc
+     enforcement: { pending, overdue, oldest_pending_at|null },  // overdue: expected_apply_by < now
+     anomalies: { count, estimated_lost_bytes },            // accounting_anomalies in the window
+     nas_activity: NasActivityBlock,
+     network_devices: { registered, online_status_known: 0, note },
+     measured_at }
+   NasActivityBlock = { thresholds: { active_within_s, quiet_within_s }, definition: string,
+     counts: { registered, active, quiet, silent, never },  // over every NAS in scope
+     data: NasActivity[], truncated: boolean }              // data ≤ 200 rows, by site, name
+   NasActivity = { nas_client_id, name, site_id, site_name, nas_ip, adapter_type_key,
+     admin_status: 'active'|'disabled', activity: 'active'|'quiet'|'silent'|'never',
+     last_auth_request_at|null, last_accounting_at|null, last_activity_at|null, open_sessions }
+   ```
+   RADIUS outcomes come from `auth_events` (attributed to a site through the NAS row); portal
+   outcomes from `portal_login_attempts` (site of the captive portal). `reason` is a reason
+   **code**: a stored reason matching `^[a-z0-9_]{1,64}$` is shown as is, anything else (a
+   free-text FreeRADIUS Module-Failure-Message, which can echo the User-Name / EAP identity) is
+   shown as `module_message` (review fix); the same rule applies to the `auth_outcomes` report
+   and its CSV.
+2. `GET /api/v1/orgs/{orgId}/dashboard/series/auth` and
+   `GET /api/v1/orgs/{orgId}/dashboard/series/usage` — `report:read`. Query `granularity`
+   (`hour|day`, default `hour`), `site_id?`, `from`, `to`:
+   - `hour`: ISO date-times; default the last 24 h; `to − from ≤ 31 days` (≤ 745 buckets). Buckets
+     are the **site-local hours** (start = the instant the local hour began; 1 h each, so a DST
+     fall-back hour appears twice and a spring-forward hour is absent — labels show it). When the
+     sites in scope span several timezones, `site_id` is required (400).
+   - `day`: `YYYY-MM-DD` labels, inclusive; default the last 31 local days; ≤ 397 buckets
+     (13 months). With several timezones every site counts its own local days (`timezone:
+     'mixed'`, as P8-A organization usage).
+   Every bucket of the range is present (**zero-filled**), ascending.
+   ```
+   AuthSeries  = { metric: 'auth_outcomes', granularity, timezone, site_id|null, from, to,
+     label_basis, buckets: [AuthBucket], totals: AuthCounts, measured_at }
+   AuthBucket  = { bucket_start, bucket_end, label, ...AuthCounts }  // hour: ISO instants, label
+                                                    // 'YYYY-MM-DD HH:00' local; day: date labels
+   AuthCounts  = { radius_accept, radius_reject, radius_challenge, radius_error,
+                   portal_accept, portal_reject, portal_error, portal_lockouts }
+   UsageSeries = { metric: 'usage', granularity, timezone, site_id|null, from, to, label_basis,
+     source: 'usage_hourly'|'usage_counters', data_since: string,
+     buckets: [{ bucket_start, bucket_end, label, ...Counters }], totals: Counters, ...Freshness }
+   ```
+   Hourly usage reads the `usage_hourly` rollup (migration 026; the drainer adds every accounting
+   delta to the site-local hour of its event time; **no backfill**: hours before 026 read 0);
+   daily usage reads the `site` rows of `usage_counters` (from migration 024). `session_count` in
+   a bucket = sessions whose first accounting fell into it.
+3. `GET /api/v1/orgs/{orgId}/reports` — `report:read` (any-site). `{ data: ReportDefinition[] }`,
+   `ReportDefinition = { key, title, description, params: [{ name, type, required, default|null,
+   description }], columns: [{ key, label, type: 'string'|'number'|'date'|'datetime', unit|null }],
+   export_permission: 'report:export' }`. Keys:
+   - `usage_by_site` — params `period` (`daily|monthly`, default daily), `from`/`to` (labels;
+     defaults 31 days / 13 months; ≤ 397 daily / 60 monthly buckets), `site_id?`. Rows `site_id,
+     site_name, period_start, bytes_in, bytes_out, bytes_total, session_count, session_time_s`
+     (site-local labels, rows with data only).
+   - `auth_outcomes` — params `from`/`to` (labels, default last 31 days, ≤ 397 days), `site_id?`.
+     Rows `period_start, site_id|null, site_name|null, source (radius|portal), method|null,
+     result, reason|null, count` (site-local day of the event).
+   - `session_summary` — params `from`/`to` (labels, default 31 days, ≤ 397 days), `site_id?`.
+     Rows per site-local start day and site: `period_start, site_id, site_name,
+     sessions_started, distinct_devices, distinct_users, still_open, bytes_in, bytes_out,
+     bytes_total, session_time_s, avg_session_time_s` (bytes / time of the sessions that started
+     that day, as currently known).
+   - `nas_activity` — params `from`/`to` (labels, default last 7 days, ≤ 31 days), `site_id?`.
+     Rows `nas_client_id, name, site_id, site_name, nas_ip, adapter_type_key, admin_status,
+     activity, last_auth_request_at, last_accounting_at, last_activity_at, open_sessions,
+     auth_accept, auth_reject, sessions_started` (counts within the window).
+4. `GET /api/v1/orgs/{orgId}/reports/{key}` — `report:read`; query = the report's params. `{ report,
+   title, params (resolved), timezone, label_basis, columns, rows: object[], row_count, measured_at,
+   notes: string[], freshness: Freshness|null }`. More than 10 000 rows → 422 (narrow the range or
+   export). Unknown key → 404.
+5. `POST /api/v1/orgs/{orgId}/reports/{key}/export` — `report:export`; body = the report's params.
+   `text/csv; charset=utf-8` attachment, header = `columns[].key`, formula-injection neutralised
+   (shared `toCsv`). P8 export guard: **refused while impersonating** (403
+   `impersonation-forbidden`), Read Only lacks `report:export` (403), at most 50 000 rows (422),
+   10 exports / hour / principal shared with the P8 exports (429), the budget consumed only after
+   every refusal check; audited `report:export` (`target_type: 'report'`, `after: { report,
+   params, rows }`) in the same transaction.
+6. `GET /api/v1/platform/dashboard` — `platform:health:read` (platform binding; runs under
+   `withPlatform`, audited `platform:access`). Query `limit` (1–50, 25), `cursor`, `status`
+   (`active|suspended|archived`), `organization_id?` (one organization's row). Counts only, no
+   subscriber data:
+   ```
+   { measured_at, window: { from, to },                       // last 24 h
+     thresholds: { active_within_s, quiet_within_s }, definition,
+     unattributed: { radius_requests_24h },                   // auth_events without organization
+     data: [{ organization_id, name, slug, status, sites, nas_registered,
+              nas_activity: { active, quiet, silent, never }, network_devices_registered,
+              open_sessions, sessions_started_24h, radius_accept_24h, radius_reject_24h,
+              nas_activity_truncated, portal_attempts_24h, portal_lockouts_24h,
+              enforcement_pending, anomalies_24h }],
+     next_cursor|null }
+   ```
+
+**Lockouts.** The portal identify path now counts a failure against the Redis lock counters
+*before* writing the `portal_login_attempts` row (inside the same tenant transaction), so the row
+records `triggered_lockout` when that failure activated a per-device, per-account or site-wide
+voucher lock. Attempts refused while a lock is active (429) are still not written (unchanged:
+writing them would let a locked client amplify DB writes).
+
+**Performance** (migration 026; EXPLAIN in `dashboard.integration.test.ts` with
+`enable_seqscan = off`, plus a seeded, rolled-back EXPLAIN ANALYZE on `ecloud_test`: 50 NAS,
+200 000 auth events, 100 000 accounting records, 9 600 hourly rows → NAS activity probe 9.0 ms,
+24 h RADIUS outcomes 2.4 ms, 31-day hourly usage 0.6 ms). Every dashboard aggregate is a range on
+an indexed time column (`idx_auth_events_org_time` / BRIN, `idx_portal_login_attempts_org_time`,
+`idx_accounting_anomalies_org_created`, `usage_hourly` PK / `idx_usage_hourly_org_hour`, the
+`usage_counters` PK), a partial-index count of open rows (`idx_sessions_open_org_site_nas`,
+`idx_session_enforcement_org_state`), or a per-NAS newest-row probe
+(`idx_auth_events_org_nas_time`, `idx_accounting_org_nas_received`: one backward index-only scan
+per partition, LIMIT 1). Bounds: dashboard window ≤ 7 days; hourly series ≤ 31 days; daily ≤ 397
+days; NAS rows examined per request ≤ 2 000 (`truncated` beyond, the dashboard returns ≤ 200
+rows); report JSON ≤ 10 000 rows, CSV ≤ 50 000; platform page ≤ 50 organizations. Hourly usage
+uses the `usage_hourly` rollup (raw `accounting_records` would need per-session window
+functions); authentication outcomes are aggregated from the raw partitioned tables over the
+bounded window (no rollup: index range + GROUP BY is sufficient at pilot volume; a worker-maintained
+hourly auth rollup is the next step if 7-day windows grow slow).
+
+**Not implemented (P9-A):** no SSE (Q73 polling); no per-AP state (no telemetry); unattributed
+RADIUS requests (unknown NAS) appear only as a platform count; `usage_hourly` and `site` counters
+are not backfilled.
+
+**Review fixes (P9-A loop step 6).**
+1. *Reject reasons* are reduced to codes at read time (dashboard top reasons, `auth_outcomes`
+   JSON/CSV): `^[a-z0-9_]{1,64}$` or `module_message`. Decision: no write-time change in
+   `internal/aaa.ts` — `auth_events.reason` keeps the raw module message for platform-side
+   diagnostics (it never leaves the database through a tenant endpoint), and the read-side rule
+   also covers rows written before the fix.
+2. *Export budget*: `POST /reports/{key}/export` first checks the budget read-only
+   (`assertExportBudgetAvailable`: 429 when 10 exports were already used this hour, nothing
+   consumed) and only then runs the report query; the unit is still consumed after every refusal
+   check (P8 semantics unchanged; the P8 exports are untouched).
+3. *Retention*: `GET /platform/retention/plan` reports `usage_hourly_rows_older_than_cutoff`
+   (same accounting cutoff as the worker's `retention.prune`, which deletes them only with
+   `RETENTION_APPLY=true`).
+4. *Deleted sites are excluded everywhere* — dashboard, series, reports and the platform summary
+   count only live sites (an organization-level scope means "every live site"); the only
+   site-less rows still counted for organization-level scopes are RADIUS requests without a NAS
+   row. *NAS IP reuse*: `accounting_records` carry no NAS id, so a NAS's last accounting is
+   matched by organization + NAS IP **and only from that NAS row's `created_at` on**; activity of
+   an earlier (deleted) NAS with the same IP is never inherited. Auth activity is matched by NAS id.

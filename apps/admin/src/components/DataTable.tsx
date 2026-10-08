@@ -14,7 +14,7 @@ export interface DataTableProps<T> {
   caption: string;
   columns: readonly Column<T>[];
   rows: readonly T[];
-  rowKey: (row: T) => string;
+  rowKey: (row: T, index: number) => string;
   loading?: boolean;
   error?: unknown;
   emptyTitle?: string;
@@ -68,8 +68,8 @@ export function DataTable<T>({
             </tr>
           </thead>
           <tbody className="divide-y divide-border bg-surface">
-            {rows.map((row) => (
-              <tr key={rowKey(row)} className="hover:bg-muted/40">
+            {rows.map((row, index) => (
+              <tr key={rowKey(row, index)} className="hover:bg-muted/40">
                 {columns.map((c) => (
                   <td
                     key={c.key}

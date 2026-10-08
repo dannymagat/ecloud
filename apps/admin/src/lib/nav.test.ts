@@ -26,6 +26,13 @@ describe('permission-driven navigation', () => {
     expect(visiblePlatformNav(me)).toEqual([]);
   });
 
+  it('report:read reveals the dashboard and reports; platform:health:read the platform summary', () => {
+    const me = adminMe([orgScope(ORG_A, ['report:read'])]);
+    expect(visibleOrgNav(me, ORG_A).map((i) => i.path)).toEqual(['dashboard', 'reports']);
+    const platform = adminMe([platformScope(['platform:health:read'])]);
+    expect(visiblePlatformNav(platform).map((i) => i.path)).toEqual(['summary', 'adapters']);
+  });
+
   it('never looks at role names: identical permissions give identical menus', () => {
     const a = adminMe([orgScope(ORG_A, ['session:read'])]);
     const b = adminMe([orgScope(ORG_A, ['session:read'])], {
@@ -56,7 +63,11 @@ describe('permission-driven navigation', () => {
 
   it('platform bindings cover every organization and reveal the platform menu', () => {
     const me = adminMe([platformScope(['tenant:list', 'platform:health:read', 'site:read'])]);
-    expect(visiblePlatformNav(me).map((i) => i.path)).toEqual(['organizations', 'adapters']);
+    expect(visiblePlatformNav(me).map((i) => i.path)).toEqual([
+      'summary',
+      'organizations',
+      'adapters',
+    ]);
     expect(can(me, 'site:read', { organizationId: ORG_B })).toBe(true);
   });
 

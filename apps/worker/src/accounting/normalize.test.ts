@@ -8,6 +8,7 @@ import {
   normalizeAccounting,
   normalizeMacAddress,
   normalizeTerminateCause,
+  localHourStart,
   parseClassSessionId,
   periodStarts,
   type RawAccountingRow,
@@ -215,5 +216,37 @@ describe('periodStarts (site timezone buckets)', () => {
     expect(periodStarts(new Date('2026-10-31T23:00:00Z'), 'Europe/Berlin').monthly).toBe(
       '2026-11-01',
     );
+  });
+});
+
+describe('localHourStart (usage_hourly buckets, migration 026)', () => {
+  const iso = (d: Date) => d.toISOString();
+  it('floors to the UTC hour for whole-hour offsets', () => {
+    expect(iso(localHourStart(new Date('2026-10-08T13:47:12.345Z'), 'UTC'))).toBe(
+      '2026-10-08T13:00:00.000Z',
+    );
+    expect(iso(localHourStart(new Date('2026-10-08T13:47:12Z'), 'Europe/Berlin'))).toBe(
+      '2026-10-08T13:00:00.000Z',
+    );
+  });
+  it('keeps :30 and :45 offsets on the local hour', () => {
+    // Asia/Kolkata = UTC+5:30: 13:47 UTC = 19:17 local → hour began 19:00 local = 13:30 UTC
+    expect(iso(localHourStart(new Date('2026-10-08T13:47:00Z'), 'Asia/Kolkata'))).toBe(
+      '2026-10-08T13:30:00.000Z',
+    );
+    expect(iso(localHourStart(new Date('2026-10-08T13:20:00Z'), 'Asia/Kolkata'))).toBe(
+      '2026-10-08T12:30:00.000Z',
+    );
+    // Asia/Kathmandu = UTC+5:45
+    expect(iso(localHourStart(new Date('2026-10-08T13:50:00Z'), 'Asia/Kathmandu'))).toBe(
+      '2026-10-08T13:15:00.000Z',
+    );
+  });
+  it('gives the repeated DST fall-back hour two distinct buckets', () => {
+    // Europe/Berlin 2026-10-25: 02:00–03:00 local occurs twice (00:00Z CEST and 01:00Z CET)
+    const first = localHourStart(new Date('2026-10-25T00:30:00Z'), 'Europe/Berlin');
+    const second = localHourStart(new Date('2026-10-25T01:30:00Z'), 'Europe/Berlin');
+    expect(iso(first)).toBe('2026-10-25T00:00:00.000Z');
+    expect(iso(second)).toBe('2026-10-25T01:00:00.000Z');
   });
 });

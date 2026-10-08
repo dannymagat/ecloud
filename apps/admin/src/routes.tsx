@@ -3,7 +3,7 @@ import { AuditLogPage } from './features/audit/AuditLogPage';
 import { AdministratorsPage } from './features/admins/AdministratorsPage';
 import { LoginPage } from './features/auth/LoginPage';
 import { MfaEnrolPage } from './features/auth/MfaEnrolPage';
-import { DashboardPage } from './features/dashboard/DashboardPage';
+import { DashboardPage, SiteDashboardPage } from './features/dashboard/DashboardPage';
 import { NasPage } from './features/org/NasPage';
 import {
   ApiKeysPage,
@@ -19,6 +19,8 @@ import { ImpersonatePage } from './features/platform/ImpersonatePage';
 import { OrganizationsPage } from './features/platform/OrganizationsPage';
 import { PlatformAdministratorsPage } from './features/platform/PlatformAdministratorsPage';
 import { PlatformAuditPage } from './features/platform/PlatformAuditPage';
+import { PlatformSummaryPage } from './features/platform/PlatformSummaryPage';
+import { ReportsPage } from './features/reports/ReportsPage';
 import { RoleTemplatesPage } from './features/platform/RoleTemplatesPage';
 import { PoliciesPage } from './features/policies/PoliciesPage';
 import { PortalDesignerPage } from './features/portals/PortalDesignerPage';
@@ -71,6 +73,7 @@ export const routes: RouteObject[] = [
                   { index: true, element: <Navigate to="dashboard" replace /> },
                   { path: 'dashboard', element: <DashboardPage /> },
                   { path: 'sites', element: <SitesPage /> },
+                  { path: 'sites/:siteId/dashboard', element: <SiteDashboardPage /> },
                   { path: 'network-devices', element: <NetworkDevicesPage /> },
                   { path: 'nas', element: <NasPage /> },
                   { path: 'users', element: <UsersPage /> },
@@ -91,6 +94,7 @@ export const routes: RouteObject[] = [
                   },
                   { path: 'usage', element: <UsagePage /> },
                   { path: 'accounting', element: <AccountingRecordsPage /> },
+                  { path: 'reports', element: <ReportsPage /> },
                   { path: 'audit-log', element: <AuditLogPage /> },
                   { path: 'administrators', element: <AdministratorsPage /> },
                   { path: 'api-keys', element: <ApiKeysPage /> },
@@ -100,6 +104,7 @@ export const routes: RouteObject[] = [
                 path: 'platform',
                 children: [
                   { index: true, element: <HomeRedirect /> },
+                  { path: 'summary', element: <PlatformSummaryPage /> },
                   { path: 'organizations', element: <OrganizationsPage /> },
                   { path: 'administrators', element: <PlatformAdministratorsPage /> },
                   { path: 'role-templates', element: <RoleTemplatesPage /> },

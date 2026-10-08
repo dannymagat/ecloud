@@ -8,6 +8,7 @@ import {
   Building,
   Database,
   Cpu,
+  FileBarChart,
   FileStack,
   KeyRound,
   LayoutDashboard,
@@ -43,7 +44,15 @@ export const ORG_NAV: readonly NavItem[] = [
     path: 'dashboard',
     label: 'Dashboard',
     icon: LayoutDashboard,
-    anyOf: ['organization:read', 'site:read', 'session:read', 'nas:read', 'user:read'],
+    anyOf: [
+      'organization:read',
+      'site:read',
+      'session:read',
+      'nas:read',
+      'user:read',
+      'accounting:read',
+      'report:read',
+    ],
   },
   { path: 'sites', label: 'Sites', icon: MapPin, anyOf: ['site:read'] },
   {
@@ -89,12 +98,19 @@ export const ORG_NAV: readonly NavItem[] = [
     icon: Database,
     anyOf: ['accounting:read'],
   },
+  { path: 'reports', label: 'Reports', icon: FileBarChart, anyOf: ['report:read'] },
   { path: 'audit-log', label: 'Audit log', icon: ScrollText, anyOf: ['audit_log:read'] },
   { path: 'administrators', label: 'Administrators', icon: UserCog, anyOf: ['administrator:read'] },
   { path: 'api-keys', label: 'API keys', icon: KeyRound, anyOf: ['api_key:read'] },
 ];
 
 export const PLATFORM_NAV: readonly NavItem[] = [
+  {
+    path: 'summary',
+    label: 'Summary',
+    icon: LayoutDashboard,
+    anyOf: ['platform:health:read'],
+  },
   { path: 'organizations', label: 'Organizations', icon: Building, anyOf: ['tenant:list'] },
   { path: 'administrators', label: 'Administrators', icon: UserCog, anyOf: ['administrator:read'] },
   {

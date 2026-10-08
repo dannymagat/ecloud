@@ -655,6 +655,8 @@ export interface PortalLoginAttemptsTable {
   client_ip: Inet | null;
   result: PortalLoginResult;
   reason: string | null;
+  /** Migration 026 (P9-A): this failed attempt activated a portal lock. */
+  triggered_lockout: Generated<boolean>;
   created_at: GeneratedTimestamp;
 }
 
@@ -813,6 +815,23 @@ export interface UsageCountersTable {
   session_time_s: Generated<BigintColumn>;
   last_record_id: BigintColumn | null;
   reconciled_at: NullableTimestamp;
+  created_at: GeneratedTimestamp;
+  updated_at: GeneratedTimestamp;
+}
+
+/**
+ * Per-site usage per site-local hour (migration 026, P9-A), written by the accounting drainer.
+ * `hour_start` is the instant the site-local hour began.
+ */
+export interface UsageHourlyTable {
+  organization_id: Uuid;
+  site_id: Uuid;
+  hour_start: Date;
+  bytes_in: Generated<BigintColumn>;
+  bytes_out: Generated<BigintColumn>;
+  session_count: Generated<number>;
+  session_time_s: Generated<BigintColumn>;
+  last_record_id: BigintColumn | null;
   created_at: GeneratedTimestamp;
   updated_at: GeneratedTimestamp;
 }
@@ -994,6 +1013,7 @@ export interface Database {
   session_enforcement: SessionEnforcementTable;
   accounting_anomalies: AccountingAnomaliesTable;
   usage_counters: UsageCountersTable;
+  usage_hourly: UsageHourlyTable;
   audit_logs: AuditLogsTable;
   outbox: OutboxTable;
   webhooks: WebhooksTable;
@@ -1038,3 +1058,4 @@ export type NewAuditLog = Insertable<AuditLogsTable>;
 export type OutboxEvent = Selectable<OutboxTable>;
 export type NewOutboxEvent = Insertable<OutboxTable>;
 export type UsageCounter = Selectable<UsageCountersTable>;
+export type UsageHourly = Selectable<UsageHourlyTable>;

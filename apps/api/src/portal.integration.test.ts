@@ -656,11 +656,14 @@ await describeIntegration('@ecloud/api captive portal broker (P6-A)', () => {
     expect(unknownUser.body).toEqual({ result: 'rejected' });
     const rows = await deps.dbPlatform
       .selectFrom('portal_login_attempts')
-      .select(['result', 'reason'])
+      .select(['result', 'reason', 'triggered_lockout'])
       .where('captive_portal_id', '=', f.portalId)
       .where('result', '=', 'reject')
+      .orderBy('id')
       .execute();
     expect(rows).toHaveLength(6);
+    // Migration 026 (P9-A): exactly the 5th failure activated the per-device lock.
+    expect(rows.map((r) => r.triggered_lockout)).toEqual([false, false, false, false, true, false]);
   });
 
   it('decision cache of a portal credential lasts the NAS retransmit horizon (30 s), then the single-use credential is gone', async () => {

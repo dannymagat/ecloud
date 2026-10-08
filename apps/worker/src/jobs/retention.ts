@@ -6,7 +6,9 @@
  * bound is at or before the cutoff (DATABASE_DESIGN.md §5: "dropping a partition is the
  * retention operation"); row DELETEs are blocked there by `forbid_mutation()`. Old rows that
  * landed in a `_default` partition are reported, never deleted. `radacct_raw` (plain table)
- * loses rows older than 7 days that the drain cursor has already passed.
+ * loses rows older than 7 days that the drain cursor has already passed. The `usage_hourly`
+ * rollup (plain table, migration 026) follows the accounting retention: hours older than the
+ * accounting cutoff are deleted (the dashboard reads at most 31 days of hours).
  *
  * The pure plan lives in `@ecloud/db` (P8-A) so the API's platform dry-run report computes the
  * exact same plan; it is re-exported here unchanged.
@@ -64,6 +66,8 @@ export interface RetentionReport {
   dropPartitions: string[];
   rawRowsEligible: number;
   rawRowsDeleted: number;
+  usageHourlyRowsEligible: number;
+  usageHourlyRowsDeleted: number;
   defaultPartitionRowsPastCutoff: Record<string, number>;
 }
 
@@ -78,6 +82,11 @@ export async function pruneRetention(deps: RetentionDeps): Promise<RetentionRepo
     .where('received_at', '<', plan.cutoffs.raw)
     .where('radacctid', '<=', cursor)
     .executeTakeFirstOrThrow();
+  const hourlyEligible = await deps.db
+    .selectFrom('usage_hourly')
+    .select((eb) => eb.fn.countAll<number>().as('n'))
+    .where('hour_start', '<', plan.cutoffs.accounting_records)
+    .executeTakeFirstOrThrow();
 
   const report: RetentionReport = {
     applied: deps.apply,
@@ -89,6 +98,8 @@ export async function pruneRetention(deps: RetentionDeps): Promise<RetentionRepo
     dropPartitions: plan.dropPartitions.map((p) => p.partition),
     rawRowsEligible: eligible.n,
     rawRowsDeleted: 0,
+    usageHourlyRowsEligible: Number(hourlyEligible.n),
+    usageHourlyRowsDeleted: 0,
     defaultPartitionRowsPastCutoff: await defaultPartitionRowsPastCutoff(deps.db, plan.cutoffs),
   };
   if (!deps.apply) return report;
@@ -107,6 +118,11 @@ export async function pruneRetention(deps: RetentionDeps): Promise<RetentionRepo
       .where('radacctid', '<=', cursor)
       .executeTakeFirst();
     report.rawRowsDeleted = Number(deleted.numDeletedRows);
+    const hourlyDeleted = await trx
+      .deleteFrom('usage_hourly')
+      .where('hour_start', '<', plan.cutoffs.accounting_records)
+      .executeTakeFirst();
+    report.usageHourlyRowsDeleted = Number(hourlyDeleted.numDeletedRows);
   });
   return report;
 }

@@ -1937,6 +1937,146 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/api/v1/orgs/{orgId}/dashboard': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Organization or site dashboard (sessions, usage, auth outcomes, observed NAS activity)
+     * @description Permission: `report:read`
+     */
+    get: operations['get_api_v1_orgs_orgId_dashboard'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/orgs/{orgId}/dashboard/series/auth': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Authentication outcomes per hour / day (zero-filled, site timezone)
+     * @description Permission: `report:read`
+     */
+    get: operations['get_api_v1_orgs_orgId_dashboard_series_auth'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/orgs/{orgId}/dashboard/series/usage': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Usage per hour / day (zero-filled, site timezone, with freshness)
+     * @description Permission: `report:read`
+     */
+    get: operations['get_api_v1_orgs_orgId_dashboard_series_usage'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/platform/dashboard': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Per-organization operational counts for platform administrators (no subscriber data)
+     * @description Permission: `platform:health:read`
+     */
+    get: operations['get_api_v1_platform_dashboard'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/orgs/{orgId}/reports': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Available report definitions (parameters and columns)
+     * @description Permission: `report:read`
+     */
+    get: operations['get_api_v1_orgs_orgId_reports'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/orgs/{orgId}/reports/{key}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Run a report (JSON)
+     * @description Permission: `report:read`
+     */
+    get: operations['get_api_v1_orgs_orgId_reports_key'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/orgs/{orgId}/reports/{key}/export': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Export a report as CSV (report:export; refused while impersonating)
+     * @description Permission: `report:export`
+     */
+    post: operations['post_api_v1_orgs_orgId_reports_key_export'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/healthz': {
     parameters: {
       query?: never;
@@ -2053,6 +2193,42 @@ export interface components {
       measured_at: string;
       next_cursor: string | null;
     };
+    /** @description Zero-filled authentication outcomes per bucket. */
+    AuthSeries: {
+      buckets: {
+        bucket_end: string;
+        bucket_start: string;
+        label: string;
+        portal_accept: number;
+        portal_error: number;
+        portal_lockouts: number;
+        portal_reject: number;
+        radius_accept: number;
+        radius_challenge: number;
+        radius_error: number;
+        radius_reject: number;
+      }[];
+      from: string;
+      /** @enum {string} */
+      granularity: 'hour' | 'day';
+      label_basis: string;
+      measured_at: string;
+      /** @constant */
+      metric: 'auth_outcomes';
+      site_id: string | null;
+      timezone: string;
+      to: string;
+      totals: {
+        portal_accept: number;
+        portal_error: number;
+        portal_lockouts: number;
+        portal_reject: number;
+        radius_accept: number;
+        radius_challenge: number;
+        radius_error: number;
+        radius_reject: number;
+      };
+    };
     /** @description Registry row (plan §7.1). device_enforced is true only for LAB_VALIDATED / PRODUCTION_VALIDATED evidence with a device-test reference (V12). */
     CompatibilityEntry: {
       capabilities: ({
@@ -2112,6 +2288,179 @@ export interface components {
       triggers: string[];
       unevaluated: boolean;
     };
+    /** @description Observed RADIUS activity of one NAS (not a device state). */
+    NasActivity: {
+      /** @enum {string} */
+      activity: 'active' | 'quiet' | 'silent' | 'never';
+      adapter_type_key: string;
+      admin_status: string;
+      last_accounting_at: string | null;
+      last_activity_at: string | null;
+      last_auth_request_at: string | null;
+      name: string;
+      nas_client_id: string;
+      nas_ip: string;
+      open_sessions: number;
+      site_id: string;
+      site_name: string;
+    };
+    /** @description Organization / site dashboard (P9-A). */
+    OrgDashboard: {
+      anomalies: {
+        count: number;
+        estimated_lost_bytes: number;
+      };
+      auth: {
+        portal: {
+          accept: number;
+          by_method: {
+            accept: number;
+            error: number;
+            lockouts: number;
+            method: string;
+            reject: number;
+            total: number;
+          }[];
+          error: number;
+          lockouts: number;
+          reject: number;
+          total: number;
+        };
+        radius: {
+          accept: number;
+          by_method: {
+            accept: number;
+            challenge: number;
+            error: number;
+            method: string | null;
+            reject: number;
+            total: number;
+          }[];
+          challenge: number;
+          error: number;
+          reject: number;
+          total: number;
+        };
+        top_reject_reasons: {
+          count: number;
+          reason: string;
+          /** @enum {string} */
+          source: 'radius' | 'portal';
+        }[];
+      };
+      enforcement: {
+        oldest_pending_at: string | null;
+        overdue: number;
+        pending: number;
+      };
+      measured_at: string;
+      nas_activity: {
+        counts: {
+          active: number;
+          never: number;
+          quiet: number;
+          registered: number;
+          silent: number;
+        };
+        data: components['schemas']['NasActivity'][];
+        definition: string;
+        thresholds: {
+          active_within_s: number;
+          quiet_within_s: number;
+        };
+        truncated: boolean;
+      };
+      network_devices: {
+        note: string;
+        /** @constant */
+        online_status_known: 0;
+        registered: number;
+      };
+      organization_id: string;
+      sessions: {
+        active: number;
+        authorized: number;
+        open: number;
+        started_today: number;
+        started_today_basis: string;
+      };
+      site_id: string | null;
+      sites: {
+        id: string;
+        name: string;
+        timezone: string;
+      }[];
+      timezone: string;
+      usage: {
+        expected_lag_s: number;
+        freshness_s: number | null;
+        label_basis: string;
+        last_accounting_at: string | null;
+        measured_at: string;
+        month: {
+          bytes_in: number;
+          bytes_out: number;
+          bytes_total: number;
+          session_count: number;
+          session_time_s: number;
+        };
+        source: string;
+        today: {
+          bytes_in: number;
+          bytes_out: number;
+          bytes_total: number;
+          session_count: number;
+          session_time_s: number;
+        };
+      };
+      window: {
+        from: string;
+        /** @enum {string} */
+        key: '1h' | '24h' | '7d';
+        to: string;
+      };
+    };
+    /** @description Per-organization counts (no subscriber data). */
+    PlatformDashboard: {
+      data: {
+        anomalies_24h: number;
+        enforcement_pending: number;
+        name: string;
+        nas_activity: {
+          active: number;
+          never: number;
+          quiet: number;
+          silent: number;
+        };
+        nas_activity_truncated: boolean;
+        nas_registered: number;
+        network_devices_registered: number;
+        open_sessions: number;
+        organization_id: string;
+        portal_attempts_24h: number;
+        portal_lockouts_24h: number;
+        radius_accept_24h: number;
+        radius_reject_24h: number;
+        sessions_started_24h: number;
+        sites: number;
+        slug: string;
+        status: string;
+      }[];
+      definition: string;
+      measured_at: string;
+      next_cursor: string | null;
+      thresholds: {
+        active_within_s: number;
+        quiet_within_s: number;
+      };
+      unattributed: {
+        radius_requests_24h: number;
+      };
+      window: {
+        from: string;
+        to: string;
+      };
+    };
     /** @description Open sessions a proposed policy change would affect and how it would reach them (P7-A). Nothing is written. */
     PolicyImpactPreview: {
       affected_sessions: number;
@@ -2151,6 +2500,57 @@ export interface components {
       type: string;
     } & {
       [key: string]: unknown;
+    };
+    ReportDefinitions: {
+      data: {
+        columns: {
+          key: string;
+          label: string;
+          /** @enum {string} */
+          type: 'string' | 'number' | 'date' | 'datetime';
+          unit: string | null;
+        }[];
+        description: string;
+        /** @constant */
+        export_permission: 'report:export';
+        key: string;
+        params: {
+          default: string | null;
+          description: string;
+          name: string;
+          required: boolean;
+          type: string;
+        }[];
+        title: string;
+      }[];
+    };
+    ReportResult: {
+      columns: {
+        key: string;
+        label: string;
+        /** @enum {string} */
+        type: 'string' | 'number' | 'date' | 'datetime';
+        unit: string | null;
+      }[];
+      freshness: {
+        expected_lag_s: number;
+        freshness_s: number | null;
+        last_accounting_at: string | null;
+        measured_at: string;
+      } | null;
+      label_basis: string;
+      measured_at: string;
+      notes: string[];
+      params: {
+        [key: string]: unknown;
+      };
+      report: string;
+      row_count: number;
+      rows: {
+        [key: string]: unknown;
+      }[];
+      timezone: string;
+      title: string;
     };
     RetentionPlan: {
       checks: {
@@ -2431,6 +2831,42 @@ export interface components {
       subject_type: string;
       timezone: string;
       total: {
+        bytes_in: number;
+        bytes_out: number;
+        bytes_total: number;
+        session_count: number;
+        session_time_s: number;
+      };
+    };
+    /** @description Zero-filled usage per bucket. */
+    UsageSeries: {
+      buckets: {
+        bucket_end: string;
+        bucket_start: string;
+        bytes_in: number;
+        bytes_out: number;
+        bytes_total: number;
+        label: string;
+        session_count: number;
+        session_time_s: number;
+      }[];
+      data_since: string;
+      expected_lag_s: number;
+      freshness_s: number | null;
+      from: string;
+      /** @enum {string} */
+      granularity: 'hour' | 'day';
+      label_basis: string;
+      last_accounting_at: string | null;
+      measured_at: string;
+      /** @constant */
+      metric: 'usage';
+      site_id: string | null;
+      /** @enum {string} */
+      source: 'usage_hourly' | 'usage_counters';
+      timezone: string;
+      to: string;
+      totals: {
         bytes_in: number;
         bytes_out: number;
         bytes_total: number;
@@ -12046,6 +12482,473 @@ export interface operations {
       };
       /** @description Not found (also returned for objects of other tenants) */
       404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+    };
+  };
+  get_api_v1_orgs_orgId_dashboard: {
+    parameters: {
+      query?: {
+        site_id?: string;
+        window?: '1h' | '24h' | '7d';
+      };
+      header?: never;
+      path: {
+        orgId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Dashboard */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['OrgDashboard'];
+        };
+      };
+      /** @description Validation failed (application/problem+json) */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Authentication required */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Permission denied */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Not found (also returned for objects of other tenants) */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+    };
+  };
+  get_api_v1_orgs_orgId_dashboard_series_auth: {
+    parameters: {
+      query?: {
+        granularity?: 'hour' | 'day';
+        site_id?: string;
+        from?: string;
+        to?: string;
+      };
+      header?: never;
+      path: {
+        orgId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Auth series */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['AuthSeries'];
+        };
+      };
+      /** @description Validation failed (application/problem+json) */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Authentication required */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Permission denied */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Not found (also returned for objects of other tenants) */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+    };
+  };
+  get_api_v1_orgs_orgId_dashboard_series_usage: {
+    parameters: {
+      query?: {
+        granularity?: 'hour' | 'day';
+        site_id?: string;
+        from?: string;
+        to?: string;
+      };
+      header?: never;
+      path: {
+        orgId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Usage series */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['UsageSeries'];
+        };
+      };
+      /** @description Validation failed (application/problem+json) */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Authentication required */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Permission denied */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Not found (also returned for objects of other tenants) */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+    };
+  };
+  get_api_v1_platform_dashboard: {
+    parameters: {
+      query?: {
+        limit?: number;
+        cursor?: string;
+        status?: 'active' | 'suspended' | 'archived';
+        organization_id?: string;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Platform dashboard */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['PlatformDashboard'];
+        };
+      };
+      /** @description Validation failed (application/problem+json) */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Authentication required */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Permission denied */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Not found (also returned for objects of other tenants) */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+    };
+  };
+  get_api_v1_orgs_orgId_reports: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        orgId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Report definitions */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ReportDefinitions'];
+        };
+      };
+      /** @description Validation failed (application/problem+json) */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Authentication required */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Permission denied */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Not found (also returned for objects of other tenants) */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+    };
+  };
+  get_api_v1_orgs_orgId_reports_key: {
+    parameters: {
+      query?: {
+        site_id?: string;
+        from?: string;
+        to?: string;
+        period?: 'daily' | 'monthly';
+      };
+      header?: never;
+      path: {
+        orgId: string;
+        key: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Report rows */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ReportResult'];
+        };
+      };
+      /** @description Validation failed (application/problem+json) */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Authentication required */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Permission denied */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Not found (also returned for objects of other tenants) */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description More than 10000 rows: narrow or export */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+    };
+  };
+  post_api_v1_orgs_orgId_reports_key_export: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        orgId: string;
+        key: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: {
+      content: {
+        'application/json': {
+          from?: string;
+          /** @enum {string} */
+          period?: 'daily' | 'monthly';
+          /** Format: uuid */
+          site_id?: string;
+          to?: string;
+        };
+      };
+    };
+    responses: {
+      /** @description text/csv report rows */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'text/csv': string;
+        };
+      };
+      /** @description Validation failed (application/problem+json) */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Authentication required */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Permission denied */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Not found (also returned for objects of other tenants) */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description More than 50000 rows: narrow the range */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Export rate limit (10 per hour per principal, shared with P8 exports) */
+      429: {
         headers: {
           [name: string]: unknown;
         };

@@ -114,6 +114,12 @@ export function retentionRoutes(deps: AppDeps): AnyRouteSpec[] {
           .select((eb) => eb.fn.countAll<number>().as('n'))
           .where('received_at', '<', p.cutoffs.raw)
           .executeTakeFirstOrThrow();
+        // usage_hourly (migration 026): same rule as the worker's retention.prune
+        const hourly = await trx
+          .selectFrom('usage_hourly')
+          .select((eb) => eb.fn.countAll<number>().as('n'))
+          .where('hour_start', '<', p.cutoffs.accounting_records)
+          .executeTakeFirstOrThrow();
         const drop = new Set(p.dropPartitions.map((x) => x.partition));
         return {
           measured_at: at.toISOString(),
@@ -142,6 +148,9 @@ export function retentionRoutes(deps: AppDeps): AnyRouteSpec[] {
           raw_rows_older_than_cutoff: Number(raw.n),
           raw_note:
             'radius.radacct_raw rows are deleted only once the accounting drain cursor has passed them',
+          usage_hourly_rows_older_than_cutoff: Number(hourly.n),
+          usage_hourly_note:
+            'usage_hourly (plain table) rows older than the accounting cutoff are deleted by retention.prune when RETENTION_APPLY=true',
           checks: retentionChecks(partitions, [...drop], stranded, at),
         };
       });

@@ -35,6 +35,8 @@ import { accountingRoutes } from './routes/accounting.js';
 import { usageRoutes } from './routes/usage.js';
 import { retentionRoutes } from './routes/retention.js';
 import { voucherRoutes } from './routes/vouchers.js';
+import { dashboardRoutes } from './routes/dashboard.js';
+import { reportRoutes } from './routes/reports.js';
 
 export const API_VERSION = '0.1.0';
 export const PUBLIC_BODY_LIMIT = '1mb';
@@ -64,6 +66,8 @@ export function allRoutes(deps: AppDeps): AnyRouteSpec[] {
     ...retentionRoutes(deps),
     ...enforcementRoutes(deps),
     ...portalAdminRoutes(deps),
+    ...dashboardRoutes(deps),
+    ...reportRoutes(deps),
   ];
 }
 

@@ -19,6 +19,90 @@
         "required": ["data", "next_cursor", "measured_at"],
         "type": "object"
       },
+      "AuthSeries": {
+        "additionalProperties": false,
+        "description": "Zero-filled authentication outcomes per bucket.",
+        "properties": {
+          "buckets": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "bucket_end": { "type": "string" },
+                "bucket_start": { "type": "string" },
+                "label": { "type": "string" },
+                "portal_accept": { "type": "number" },
+                "portal_error": { "type": "number" },
+                "portal_lockouts": { "type": "number" },
+                "portal_reject": { "type": "number" },
+                "radius_accept": { "type": "number" },
+                "radius_challenge": { "type": "number" },
+                "radius_error": { "type": "number" },
+                "radius_reject": { "type": "number" }
+              },
+              "required": [
+                "radius_accept",
+                "radius_reject",
+                "radius_challenge",
+                "radius_error",
+                "portal_accept",
+                "portal_reject",
+                "portal_error",
+                "portal_lockouts",
+                "bucket_start",
+                "bucket_end",
+                "label"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "from": { "type": "string" },
+          "granularity": { "enum": ["hour", "day"], "type": "string" },
+          "label_basis": { "type": "string" },
+          "measured_at": { "type": "string" },
+          "metric": { "const": "auth_outcomes", "type": "string" },
+          "site_id": { "type": ["string", "null"] },
+          "timezone": { "type": "string" },
+          "to": { "type": "string" },
+          "totals": {
+            "additionalProperties": false,
+            "properties": {
+              "portal_accept": { "type": "number" },
+              "portal_error": { "type": "number" },
+              "portal_lockouts": { "type": "number" },
+              "portal_reject": { "type": "number" },
+              "radius_accept": { "type": "number" },
+              "radius_challenge": { "type": "number" },
+              "radius_error": { "type": "number" },
+              "radius_reject": { "type": "number" }
+            },
+            "required": [
+              "radius_accept",
+              "radius_reject",
+              "radius_challenge",
+              "radius_error",
+              "portal_accept",
+              "portal_reject",
+              "portal_error",
+              "portal_lockouts"
+            ],
+            "type": "object"
+          }
+        },
+        "required": [
+          "metric",
+          "granularity",
+          "timezone",
+          "site_id",
+          "from",
+          "to",
+          "label_basis",
+          "buckets",
+          "totals",
+          "measured_at"
+        ],
+        "type": "object"
+      },
       "CompatibilityEntry": {
         "additionalProperties": {},
         "description": "Registry row (plan §7.1). device_enforced is true only for LAB_VALIDATED / PRODUCTION_VALIDATED evidence with a device-test reference (V12).",
@@ -145,6 +229,389 @@
         ],
         "type": "object"
       },
+      "NasActivity": {
+        "additionalProperties": false,
+        "description": "Observed RADIUS activity of one NAS (not a device state).",
+        "properties": {
+          "activity": { "enum": ["active", "quiet", "silent", "never"], "type": "string" },
+          "adapter_type_key": { "type": "string" },
+          "admin_status": { "type": "string" },
+          "last_accounting_at": { "type": ["string", "null"] },
+          "last_activity_at": { "type": ["string", "null"] },
+          "last_auth_request_at": { "type": ["string", "null"] },
+          "name": { "type": "string" },
+          "nas_client_id": { "type": "string" },
+          "nas_ip": { "type": "string" },
+          "open_sessions": { "type": "number" },
+          "site_id": { "type": "string" },
+          "site_name": { "type": "string" }
+        },
+        "required": [
+          "nas_client_id",
+          "name",
+          "site_id",
+          "site_name",
+          "nas_ip",
+          "adapter_type_key",
+          "admin_status",
+          "activity",
+          "last_auth_request_at",
+          "last_accounting_at",
+          "last_activity_at",
+          "open_sessions"
+        ],
+        "type": "object"
+      },
+      "OrgDashboard": {
+        "additionalProperties": false,
+        "description": "Organization / site dashboard (P9-A).",
+        "properties": {
+          "anomalies": {
+            "additionalProperties": false,
+            "properties": {
+              "count": { "type": "number" },
+              "estimated_lost_bytes": { "type": "number" }
+            },
+            "required": ["count", "estimated_lost_bytes"],
+            "type": "object"
+          },
+          "auth": {
+            "additionalProperties": false,
+            "properties": {
+              "portal": {
+                "additionalProperties": false,
+                "properties": {
+                  "accept": { "type": "number" },
+                  "by_method": {
+                    "items": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "accept": { "type": "number" },
+                        "error": { "type": "number" },
+                        "lockouts": { "type": "number" },
+                        "method": { "type": "string" },
+                        "reject": { "type": "number" },
+                        "total": { "type": "number" }
+                      },
+                      "required": ["method", "total", "accept", "reject", "error", "lockouts"],
+                      "type": "object"
+                    },
+                    "type": "array"
+                  },
+                  "error": { "type": "number" },
+                  "lockouts": { "type": "number" },
+                  "reject": { "type": "number" },
+                  "total": { "type": "number" }
+                },
+                "required": ["total", "accept", "reject", "error", "lockouts", "by_method"],
+                "type": "object"
+              },
+              "radius": {
+                "additionalProperties": false,
+                "properties": {
+                  "accept": { "type": "number" },
+                  "by_method": {
+                    "items": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "accept": { "type": "number" },
+                        "challenge": { "type": "number" },
+                        "error": { "type": "number" },
+                        "method": { "type": ["string", "null"] },
+                        "reject": { "type": "number" },
+                        "total": { "type": "number" }
+                      },
+                      "required": ["method", "total", "accept", "reject", "error", "challenge"],
+                      "type": "object"
+                    },
+                    "type": "array"
+                  },
+                  "challenge": { "type": "number" },
+                  "error": { "type": "number" },
+                  "reject": { "type": "number" },
+                  "total": { "type": "number" }
+                },
+                "required": ["total", "accept", "reject", "error", "challenge", "by_method"],
+                "type": "object"
+              },
+              "top_reject_reasons": {
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "count": { "type": "number" },
+                    "reason": { "type": "string" },
+                    "source": { "enum": ["radius", "portal"], "type": "string" }
+                  },
+                  "required": ["source", "reason", "count"],
+                  "type": "object"
+                },
+                "type": "array"
+              }
+            },
+            "required": ["radius", "portal", "top_reject_reasons"],
+            "type": "object"
+          },
+          "enforcement": {
+            "additionalProperties": false,
+            "properties": {
+              "oldest_pending_at": { "type": ["string", "null"] },
+              "overdue": { "type": "number" },
+              "pending": { "type": "number" }
+            },
+            "required": ["pending", "overdue", "oldest_pending_at"],
+            "type": "object"
+          },
+          "measured_at": { "type": "string" },
+          "nas_activity": {
+            "additionalProperties": false,
+            "properties": {
+              "counts": {
+                "additionalProperties": false,
+                "properties": {
+                  "active": { "type": "number" },
+                  "never": { "type": "number" },
+                  "quiet": { "type": "number" },
+                  "registered": { "type": "number" },
+                  "silent": { "type": "number" }
+                },
+                "required": ["registered", "active", "quiet", "silent", "never"],
+                "type": "object"
+              },
+              "data": { "items": { "$ref": "#/components/schemas/NasActivity" }, "type": "array" },
+              "definition": { "type": "string" },
+              "thresholds": {
+                "additionalProperties": false,
+                "properties": {
+                  "active_within_s": { "type": "number" },
+                  "quiet_within_s": { "type": "number" }
+                },
+                "required": ["active_within_s", "quiet_within_s"],
+                "type": "object"
+              },
+              "truncated": { "type": "boolean" }
+            },
+            "required": ["thresholds", "definition", "counts", "data", "truncated"],
+            "type": "object"
+          },
+          "network_devices": {
+            "additionalProperties": false,
+            "properties": {
+              "note": { "type": "string" },
+              "online_status_known": { "const": 0, "type": "number" },
+              "registered": { "type": "number" }
+            },
+            "required": ["registered", "online_status_known", "note"],
+            "type": "object"
+          },
+          "organization_id": { "type": "string" },
+          "sessions": {
+            "additionalProperties": false,
+            "properties": {
+              "active": { "type": "number" },
+              "authorized": { "type": "number" },
+              "open": { "type": "number" },
+              "started_today": { "type": "number" },
+              "started_today_basis": { "type": "string" }
+            },
+            "required": ["open", "authorized", "active", "started_today", "started_today_basis"],
+            "type": "object"
+          },
+          "site_id": { "type": ["string", "null"] },
+          "sites": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "id": { "type": "string" },
+                "name": { "type": "string" },
+                "timezone": { "type": "string" }
+              },
+              "required": ["id", "name", "timezone"],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "timezone": { "type": "string" },
+          "usage": {
+            "additionalProperties": false,
+            "properties": {
+              "expected_lag_s": { "type": "number" },
+              "freshness_s": { "type": ["number", "null"] },
+              "label_basis": { "type": "string" },
+              "last_accounting_at": { "type": ["string", "null"] },
+              "measured_at": { "type": "string" },
+              "month": {
+                "additionalProperties": false,
+                "properties": {
+                  "bytes_in": { "type": "number" },
+                  "bytes_out": { "type": "number" },
+                  "bytes_total": { "type": "number" },
+                  "session_count": { "type": "number" },
+                  "session_time_s": { "type": "number" }
+                },
+                "required": [
+                  "bytes_in",
+                  "bytes_out",
+                  "bytes_total",
+                  "session_count",
+                  "session_time_s"
+                ],
+                "type": "object"
+              },
+              "source": { "type": "string" },
+              "today": {
+                "additionalProperties": false,
+                "properties": {
+                  "bytes_in": { "type": "number" },
+                  "bytes_out": { "type": "number" },
+                  "bytes_total": { "type": "number" },
+                  "session_count": { "type": "number" },
+                  "session_time_s": { "type": "number" }
+                },
+                "required": [
+                  "bytes_in",
+                  "bytes_out",
+                  "bytes_total",
+                  "session_count",
+                  "session_time_s"
+                ],
+                "type": "object"
+              }
+            },
+            "required": [
+              "today",
+              "month",
+              "label_basis",
+              "source",
+              "measured_at",
+              "last_accounting_at",
+              "freshness_s",
+              "expected_lag_s"
+            ],
+            "type": "object"
+          },
+          "window": {
+            "additionalProperties": false,
+            "properties": {
+              "from": { "type": "string" },
+              "key": { "enum": ["1h", "24h", "7d"], "type": "string" },
+              "to": { "type": "string" }
+            },
+            "required": ["key", "from", "to"],
+            "type": "object"
+          }
+        },
+        "required": [
+          "organization_id",
+          "site_id",
+          "sites",
+          "timezone",
+          "window",
+          "sessions",
+          "usage",
+          "auth",
+          "enforcement",
+          "anomalies",
+          "nas_activity",
+          "network_devices",
+          "measured_at"
+        ],
+        "type": "object"
+      },
+      "PlatformDashboard": {
+        "additionalProperties": false,
+        "description": "Per-organization counts (no subscriber data).",
+        "properties": {
+          "data": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "anomalies_24h": { "type": "number" },
+                "enforcement_pending": { "type": "number" },
+                "name": { "type": "string" },
+                "nas_activity": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "active": { "type": "number" },
+                    "never": { "type": "number" },
+                    "quiet": { "type": "number" },
+                    "silent": { "type": "number" }
+                  },
+                  "required": ["active", "quiet", "silent", "never"],
+                  "type": "object"
+                },
+                "nas_activity_truncated": { "type": "boolean" },
+                "nas_registered": { "type": "number" },
+                "network_devices_registered": { "type": "number" },
+                "open_sessions": { "type": "number" },
+                "organization_id": { "type": "string" },
+                "portal_attempts_24h": { "type": "number" },
+                "portal_lockouts_24h": { "type": "number" },
+                "radius_accept_24h": { "type": "number" },
+                "radius_reject_24h": { "type": "number" },
+                "sessions_started_24h": { "type": "number" },
+                "sites": { "type": "number" },
+                "slug": { "type": "string" },
+                "status": { "type": "string" }
+              },
+              "required": [
+                "organization_id",
+                "name",
+                "slug",
+                "status",
+                "sites",
+                "nas_registered",
+                "nas_activity",
+                "nas_activity_truncated",
+                "network_devices_registered",
+                "open_sessions",
+                "sessions_started_24h",
+                "radius_accept_24h",
+                "radius_reject_24h",
+                "portal_attempts_24h",
+                "portal_lockouts_24h",
+                "enforcement_pending",
+                "anomalies_24h"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "definition": { "type": "string" },
+          "measured_at": { "type": "string" },
+          "next_cursor": { "type": ["string", "null"] },
+          "thresholds": {
+            "additionalProperties": false,
+            "properties": {
+              "active_within_s": { "type": "number" },
+              "quiet_within_s": { "type": "number" }
+            },
+            "required": ["active_within_s", "quiet_within_s"],
+            "type": "object"
+          },
+          "unattributed": {
+            "additionalProperties": false,
+            "properties": { "radius_requests_24h": { "type": "number" } },
+            "required": ["radius_requests_24h"],
+            "type": "object"
+          },
+          "window": {
+            "additionalProperties": false,
+            "properties": { "from": { "type": "string" }, "to": { "type": "string" } },
+            "required": ["from", "to"],
+            "type": "object"
+          }
+        },
+        "required": [
+          "measured_at",
+          "window",
+          "thresholds",
+          "definition",
+          "unattributed",
+          "data",
+          "next_cursor"
+        ],
+        "type": "object"
+      },
       "PolicyImpactPreview": {
         "additionalProperties": false,
         "description": "Open sessions a proposed policy change would affect and how it would reach them (P7-A). Nothing is written.",
@@ -266,6 +733,128 @@
           "type": { "type": "string" }
         },
         "required": ["type", "title", "status"],
+        "type": "object"
+      },
+      "ReportDefinitions": {
+        "additionalProperties": false,
+        "properties": {
+          "data": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "columns": {
+                  "items": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "key": { "type": "string" },
+                      "label": { "type": "string" },
+                      "type": {
+                        "enum": ["string", "number", "date", "datetime"],
+                        "type": "string"
+                      },
+                      "unit": { "type": ["string", "null"] }
+                    },
+                    "required": ["key", "label", "type", "unit"],
+                    "type": "object"
+                  },
+                  "type": "array"
+                },
+                "description": { "type": "string" },
+                "export_permission": { "const": "report:export", "type": "string" },
+                "key": { "type": "string" },
+                "params": {
+                  "items": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "default": { "type": ["string", "null"] },
+                      "description": { "type": "string" },
+                      "name": { "type": "string" },
+                      "required": { "type": "boolean" },
+                      "type": { "type": "string" }
+                    },
+                    "required": ["name", "type", "required", "default", "description"],
+                    "type": "object"
+                  },
+                  "type": "array"
+                },
+                "title": { "type": "string" }
+              },
+              "required": ["key", "title", "description", "params", "columns", "export_permission"],
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "required": ["data"],
+        "type": "object"
+      },
+      "ReportResult": {
+        "additionalProperties": false,
+        "properties": {
+          "columns": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "key": { "type": "string" },
+                "label": { "type": "string" },
+                "type": { "enum": ["string", "number", "date", "datetime"], "type": "string" },
+                "unit": { "type": ["string", "null"] }
+              },
+              "required": ["key", "label", "type", "unit"],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "freshness": {
+            "anyOf": [
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "expected_lag_s": { "type": "number" },
+                  "freshness_s": { "type": ["number", "null"] },
+                  "last_accounting_at": { "type": ["string", "null"] },
+                  "measured_at": { "type": "string" }
+                },
+                "required": ["measured_at", "last_accounting_at", "freshness_s", "expected_lag_s"],
+                "type": "object"
+              },
+              { "type": "null" }
+            ]
+          },
+          "label_basis": { "type": "string" },
+          "measured_at": { "type": "string" },
+          "notes": { "items": { "type": "string" }, "type": "array" },
+          "params": {
+            "additionalProperties": {},
+            "propertyNames": { "type": "string" },
+            "type": "object"
+          },
+          "report": { "type": "string" },
+          "row_count": { "type": "number" },
+          "rows": {
+            "items": {
+              "additionalProperties": {},
+              "propertyNames": { "type": "string" },
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "timezone": { "type": "string" },
+          "title": { "type": "string" }
+        },
+        "required": [
+          "report",
+          "title",
+          "params",
+          "timezone",
+          "label_basis",
+          "columns",
+          "rows",
+          "row_count",
+          "measured_at",
+          "notes",
+          "freshness"
+        ],
         "type": "object"
       },
       "RetentionPlan": {
@@ -874,6 +1463,82 @@
           "current_unavailable_reason",
           "label_basis",
           "quota",
+          "measured_at",
+          "last_accounting_at",
+          "freshness_s",
+          "expected_lag_s"
+        ],
+        "type": "object"
+      },
+      "UsageSeries": {
+        "additionalProperties": false,
+        "description": "Zero-filled usage per bucket.",
+        "properties": {
+          "buckets": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "bucket_end": { "type": "string" },
+                "bucket_start": { "type": "string" },
+                "bytes_in": { "type": "number" },
+                "bytes_out": { "type": "number" },
+                "bytes_total": { "type": "number" },
+                "label": { "type": "string" },
+                "session_count": { "type": "number" },
+                "session_time_s": { "type": "number" }
+              },
+              "required": [
+                "bytes_in",
+                "bytes_out",
+                "bytes_total",
+                "session_count",
+                "session_time_s",
+                "bucket_start",
+                "bucket_end",
+                "label"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "data_since": { "type": "string" },
+          "expected_lag_s": { "type": "number" },
+          "freshness_s": { "type": ["number", "null"] },
+          "from": { "type": "string" },
+          "granularity": { "enum": ["hour", "day"], "type": "string" },
+          "label_basis": { "type": "string" },
+          "last_accounting_at": { "type": ["string", "null"] },
+          "measured_at": { "type": "string" },
+          "metric": { "const": "usage", "type": "string" },
+          "site_id": { "type": ["string", "null"] },
+          "source": { "enum": ["usage_hourly", "usage_counters"], "type": "string" },
+          "timezone": { "type": "string" },
+          "to": { "type": "string" },
+          "totals": {
+            "additionalProperties": false,
+            "properties": {
+              "bytes_in": { "type": "number" },
+              "bytes_out": { "type": "number" },
+              "bytes_total": { "type": "number" },
+              "session_count": { "type": "number" },
+              "session_time_s": { "type": "number" }
+            },
+            "required": ["bytes_in", "bytes_out", "bytes_total", "session_count", "session_time_s"],
+            "type": "object"
+          }
+        },
+        "required": [
+          "metric",
+          "granularity",
+          "timezone",
+          "site_id",
+          "from",
+          "to",
+          "label_basis",
+          "source",
+          "data_since",
+          "buckets",
+          "totals",
           "measured_at",
           "last_accounting_at",
           "freshness_s",
@@ -12941,6 +13606,497 @@
         },
         "summary": "Rendered designer preview (HTML, strict CSP sandbox; frame from the admin app)",
         "tags": ["captive-portal"]
+      }
+    },
+    "/api/v1/orgs/{orgId}/dashboard": {
+      "get": {
+        "description": "Permission: `report:read`",
+        "operationId": "get_api_v1_orgs_orgId_dashboard",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "orgId",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "site_id",
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "window",
+            "schema": { "default": "24h", "enum": ["1h", "24h", "7d"], "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/OrgDashboard" } }
+            },
+            "description": "Dashboard"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Validation failed (application/problem+json)"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Authentication required"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Permission denied"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Not found (also returned for objects of other tenants)"
+          }
+        },
+        "summary": "Organization or site dashboard (sessions, usage, auth outcomes, observed NAS activity)",
+        "tags": ["dashboard"]
+      }
+    },
+    "/api/v1/orgs/{orgId}/dashboard/series/auth": {
+      "get": {
+        "description": "Permission: `report:read`",
+        "operationId": "get_api_v1_orgs_orgId_dashboard_series_auth",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "orgId",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "granularity",
+            "schema": { "default": "hour", "enum": ["hour", "day"], "type": "string" }
+          },
+          {
+            "in": "query",
+            "name": "site_id",
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "type": "string"
+            }
+          },
+          { "in": "query", "name": "from", "schema": { "maxLength": 40, "type": "string" } },
+          { "in": "query", "name": "to", "schema": { "maxLength": 40, "type": "string" } }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/AuthSeries" } }
+            },
+            "description": "Auth series"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Validation failed (application/problem+json)"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Authentication required"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Permission denied"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Not found (also returned for objects of other tenants)"
+          }
+        },
+        "summary": "Authentication outcomes per hour / day (zero-filled, site timezone)",
+        "tags": ["dashboard"]
+      }
+    },
+    "/api/v1/orgs/{orgId}/dashboard/series/usage": {
+      "get": {
+        "description": "Permission: `report:read`",
+        "operationId": "get_api_v1_orgs_orgId_dashboard_series_usage",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "orgId",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "granularity",
+            "schema": { "default": "hour", "enum": ["hour", "day"], "type": "string" }
+          },
+          {
+            "in": "query",
+            "name": "site_id",
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "type": "string"
+            }
+          },
+          { "in": "query", "name": "from", "schema": { "maxLength": 40, "type": "string" } },
+          { "in": "query", "name": "to", "schema": { "maxLength": 40, "type": "string" } }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/UsageSeries" } }
+            },
+            "description": "Usage series"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Validation failed (application/problem+json)"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Authentication required"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Permission denied"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Not found (also returned for objects of other tenants)"
+          }
+        },
+        "summary": "Usage per hour / day (zero-filled, site timezone, with freshness)",
+        "tags": ["dashboard"]
+      }
+    },
+    "/api/v1/platform/dashboard": {
+      "get": {
+        "description": "Permission: `platform:health:read`",
+        "operationId": "get_api_v1_platform_dashboard",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "schema": { "default": 25, "maximum": 50, "minimum": 1, "type": "integer" }
+          },
+          { "in": "query", "name": "cursor", "schema": { "maxLength": 200, "type": "string" } },
+          {
+            "in": "query",
+            "name": "status",
+            "schema": { "enum": ["active", "suspended", "archived"], "type": "string" }
+          },
+          {
+            "in": "query",
+            "name": "organization_id",
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/PlatformDashboard" } }
+            },
+            "description": "Platform dashboard"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Validation failed (application/problem+json)"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Authentication required"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Permission denied"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Not found (also returned for objects of other tenants)"
+          }
+        },
+        "summary": "Per-organization operational counts for platform administrators (no subscriber data)",
+        "tags": ["dashboard"]
+      }
+    },
+    "/api/v1/orgs/{orgId}/reports": {
+      "get": {
+        "description": "Permission: `report:read`",
+        "operationId": "get_api_v1_orgs_orgId_reports",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "orgId",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ReportDefinitions" } }
+            },
+            "description": "Report definitions"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Validation failed (application/problem+json)"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Authentication required"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Permission denied"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Not found (also returned for objects of other tenants)"
+          }
+        },
+        "summary": "Available report definitions (parameters and columns)",
+        "tags": ["reports"]
+      }
+    },
+    "/api/v1/orgs/{orgId}/reports/{key}": {
+      "get": {
+        "description": "Permission: `report:read`",
+        "operationId": "get_api_v1_orgs_orgId_reports_key",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "orgId",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "key",
+            "required": true,
+            "schema": { "maxLength": 64, "minLength": 1, "type": "string" }
+          },
+          {
+            "in": "query",
+            "name": "site_id",
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "from",
+            "schema": { "pattern": "^\\d{4}-\\d{2}-\\d{2}$", "type": "string" }
+          },
+          {
+            "in": "query",
+            "name": "to",
+            "schema": { "pattern": "^\\d{4}-\\d{2}-\\d{2}$", "type": "string" }
+          },
+          {
+            "in": "query",
+            "name": "period",
+            "schema": { "enum": ["daily", "monthly"], "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ReportResult" } }
+            },
+            "description": "Report rows"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Validation failed (application/problem+json)"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Authentication required"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Permission denied"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Not found (also returned for objects of other tenants)"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "More than 10000 rows: narrow or export"
+          }
+        },
+        "summary": "Run a report (JSON)",
+        "tags": ["reports"]
+      }
+    },
+    "/api/v1/orgs/{orgId}/reports/{key}/export": {
+      "post": {
+        "description": "Permission: `report:export`",
+        "operationId": "post_api_v1_orgs_orgId_reports_key_export",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "orgId",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "key",
+            "required": true,
+            "schema": { "maxLength": 64, "minLength": 1, "type": "string" }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "from": { "pattern": "^\\d{4}-\\d{2}-\\d{2}$", "type": "string" },
+                  "period": { "enum": ["daily", "monthly"], "type": "string" },
+                  "site_id": {
+                    "format": "uuid",
+                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                    "type": "string"
+                  },
+                  "to": { "pattern": "^\\d{4}-\\d{2}-\\d{2}$", "type": "string" }
+                },
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": { "text/csv": { "schema": { "type": "string" } } },
+            "description": "text/csv report rows"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Validation failed (application/problem+json)"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Authentication required"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Permission denied"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Not found (also returned for objects of other tenants)"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "More than 50000 rows: narrow the range"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Export rate limit (10 per hour per principal, shared with P8 exports)"
+          }
+        },
+        "summary": "Export a report as CSV (report:export; refused while impersonating)",
+        "tags": ["reports"]
       }
     },
     "/healthz": {

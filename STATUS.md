@@ -175,6 +175,16 @@ Scope (IMPLEMENTATION_PLAN.md): active sessions, usage, historical records, supp
 | P8-B | Admin: active sessions (polling), session detail timeline, usage dashboards, accounting browser, export, gated session actions | **DONE 2026-10-08** — reviewed (PASS WITH FIXES); orchestrator fixed safe Content-Disposition filename decoding and stop-polling-on-error |
 - **Orchestrator verification 2026-10-08:** dev DB migrated to 025; build, lint, format:check, secrets scan OK; integration 1222 passed, 1 skipped (S3 contract) across 110 files; portal e2e 4/4. Disconnect/Reauthorize refuse with an evidence-based reason (D-006); lab mode never reports device enforcement. Site/org usage counters start at migration 024 (no backfill).
 
+## Phase 9 — Dashboard & Reports (LOCAL) — CODE COMPLETE 2026-10-08
+Scope: operational status, usage, authentication outcomes, site/device health where observable, reporting. Device health is only what ECLOUD observes (RADIUS/accounting activity per NAS: active/quiet/silent/never) — never AP online/offline, since EZECONTROL is off-limits.
+| Cycle | Scope | Status |
+|---|---|---|
+| P9-A | Dashboard aggregate (org/site), auth-outcome and usage time series, on-demand reports with CSV export, platform summary, bounded indexed aggregates | **DONE 2026-10-08** — reviewed (PASS WITH FIXES: free-text RADIUS reject reasons could echo subscriber identifiers → only clean reason codes shown; export budget checked before heavy queries; deleted sites excluded consistently; NAS IP reuse; site-bound tests); migration 026 additive |
+| P9-B | Admin dashboard (KPIs, charts, NAS activity), site dashboard, reports page, platform summary | **DONE 2026-10-08** — review PASS (low notes); orchestrator renamed "Online time" to "Session time", fixed duplicate report row keys, documented UTC window edges for mixed time zones; visual browser check done |
+- **Visual check (orchestrator, 2026-10-08):** dashboard rendered in headless Chrome against the local API with synthetic demo traffic, at 1400 px light and dark and 400 px: no horizontal overflow, no console errors, reject reasons shown as `module_message` (no leaked username), no online/offline wording. Fixed a y-axis title overlapping byte tick labels; added a note that chart totals use whole buckets while tiles use a rolling window.
+- **Dev DB note:** 600 synthetic `auth_events` rows (lab org, NAS 192.0.2.1) remain in the local dev database because the table is append-only by design; the synthetic `usage_hourly` rows were removed.
+- **Orchestrator verification 2026-10-08:** build, lint, format:check, secrets scan OK; integration 1283 passed, 1 skipped (S3 contract) across 116 files; portal e2e 4/4.
+
 ## Verified Environment Facts
 See REMOTE_ENVIRONMENT.md and PHASE2_VALIDATION.md. Ledger: 105 claims — 40 verified, 17 proposed, 1 unknown, 47 requires device test; 24 device tests (DT-01…DT-24). **DT-01 executed 2026-10-07 (PASS, identification only)** on lab AP EZE-AP1832, EZEAP 6 r32912, uCentral schema 4.2.0: uspot is the TIP fork; no WireGuard/unetd on the AP (topology B unsupported on this firmware); hostapd supports DAS and dynamic VLAN. DT-02…DT-24 not executed. No device configuration was changed.
 

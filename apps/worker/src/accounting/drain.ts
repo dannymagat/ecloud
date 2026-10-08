@@ -20,6 +20,7 @@ import { emitEvent } from '../events.js';
 import type { WorkerState } from '../infra/state.js';
 import {
   counterDelta,
+  localHourStart,
   maxCounters,
   normalizeAccounting,
   periodStarts,
@@ -810,6 +811,29 @@ export async function processRecord(
           .execute();
       }
     }
+    // Hourly site rollup (migration 026, P9-A): the hourly usage chart of the dashboard.
+    await trx
+      .insertInto('usage_hourly')
+      .values({
+        organization_id: session.organization_id,
+        site_id: session.site_id,
+        hour_start: localHourStart(rec.effectiveTime, session.timezone),
+        bytes_in: delta.inputOctets,
+        bytes_out: delta.outputOctets,
+        session_count: countSession ? 1 : 0,
+        session_time_s: delta.sessionTimeS,
+        last_record_id: recordId,
+      })
+      .onConflict((oc) =>
+        oc.columns(['organization_id', 'site_id', 'hour_start']).doUpdateSet({
+          bytes_in: sql<number>`usage_hourly.bytes_in + excluded.bytes_in`,
+          bytes_out: sql<number>`usage_hourly.bytes_out + excluded.bytes_out`,
+          session_count: sql<number>`usage_hourly.session_count + excluded.session_count`,
+          session_time_s: sql<number>`usage_hourly.session_time_s + excluded.session_time_s`,
+          last_record_id: sql<number>`GREATEST(usage_hourly.last_record_id, excluded.last_record_id)`,
+        }),
+      )
+      .execute();
   }
 
   const data = sessionEventData(session, rec, status, counters, terminateCause);

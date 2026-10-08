@@ -8,7 +8,7 @@
  * unchanged and keeps only the period bucketing in the site timezone, which needs the policy
  * engine's calendar helpers.
  */
-import { localDateKey, toLocal } from '@ecloud/policy-engine';
+import { localDateKey, offsetMs, toLocal } from '@ecloud/policy-engine';
 
 export {
   EVENT_TIME_TOLERANCE_MS,
@@ -41,4 +41,17 @@ export function periodStarts(at: Date, timeZone: string): PeriodStarts {
     monthly: `${String(local.year)}-${String(local.month).padStart(2, '0')}-01`,
     total: TOTAL_PERIOD_START,
   };
+}
+
+const HOUR_MS = 3_600_000;
+
+/**
+ * `usage_hourly.hour_start` for `at` (migration 026, P9-A): the instant the site-local hour
+ * containing `at` began. Subtracting the local minutes / seconds keeps it exact for :30 / :45
+ * offsets and gives a repeated (DST fall-back) local hour its own bucket.
+ */
+export function localHourStart(at: Date, timeZone: string): Date {
+  const ms = at.getTime();
+  const local = ms + offsetMs(ms, timeZone);
+  return new Date(ms - (((local % HOUR_MS) + HOUR_MS) % HOUR_MS));
 }

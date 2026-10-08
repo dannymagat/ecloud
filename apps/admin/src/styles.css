@@ -49,3 +49,22 @@ body {
     color: black;
   }
 }
+
+/*
+ * Chart tokens (dataviz reference palette, categorical slots 1–2, validated with the skill's
+ * validator against these surfaces: light #ffffff, dark #161a22 — all checks pass).
+ * Text never wears a series colour; marks do.
+ */
+:root {
+  --viz-1: #2a78d6;
+  --viz-2: #eb6834;
+  --viz-grid: #e6e8ec;
+  --viz-axis: #c3c7cf;
+}
+
+.dark {
+  --viz-1: #3987e5;
+  --viz-2: #d95926;
+  --viz-grid: #2a303c;
+  --viz-axis: #3b4352;
+}
