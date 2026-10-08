@@ -292,8 +292,11 @@ function Screen() {
       <PageHeader
         title="Session enforcement"
         description={
-          <Link to={`/orgs/${orgId}/sessions`} className="text-primary hover:underline">
-            ← All sessions
+          <Link
+            to={`/orgs/${orgId}/sessions/${sessionId}`}
+            className="text-primary hover:underline"
+          >
+            ← Session detail
           </Link>
         }
       />

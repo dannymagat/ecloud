@@ -167,6 +167,14 @@ Exit criterion (measured traffic matches policy on a real device) is REQUIRES_DE
 - Strategy today is always `next_reauth`; CoA/Disconnect stay REQUIRES_DEVICE_TEST (D-006). `applied` means the session ended and the next login uses the current policy — not device confirmation.
 - Known limits: an upper-half counter reset is indistinguishable from a 32-bit wrap (over-count up to 2^31 bytes per event, visible in `accounting_anomalies`); schedule-window false positives in the affected count; re-resolution runs inside the policy mutation transaction (bounded by `ENFORCEMENT_MAX_SESSIONS`, unevaluated sessions still get a pending marker).
 
+## Phase 8 — Sessions & Accounting (LOCAL) — CODE COMPLETE 2026-10-08
+Scope (IMPLEMENTATION_PLAN.md): active sessions, usage, historical records, supported disconnect/change operations. Disconnect/reauthorize endpoints exist but refuse unless the adapter capability is lab-validated (D-006, V12); lab mode only behind ECLOUD_COA_ENABLED.
+| Cycle | Scope | Status |
+|---|---|---|
+| P8-A | Sessions list/detail with accounting timeline, usage per user/device/site/org (site TZ, freshness), accounting record query + CSV export (read_only excluded, Q75), gated disconnect/reauthorize, retention dry-run report, indexes | **DONE 2026-10-08** — reviewed (PASS WITH FIXES: site-local period labels, export audit completion, budget order, username index, refusal rate limit); migrations 024–025 additive; reauthorize uses `session:coa` |
+| P8-B | Admin: active sessions (polling), session detail timeline, usage dashboards, accounting browser, export, gated session actions | **DONE 2026-10-08** — reviewed (PASS WITH FIXES); orchestrator fixed safe Content-Disposition filename decoding and stop-polling-on-error |
+- **Orchestrator verification 2026-10-08:** dev DB migrated to 025; build, lint, format:check, secrets scan OK; integration 1222 passed, 1 skipped (S3 contract) across 110 files; portal e2e 4/4. Disconnect/Reauthorize refuse with an evidence-based reason (D-006); lab mode never reports device enforcement. Site/org usage counters start at migration 024 (no backfill).
+
 ## Verified Environment Facts
 See REMOTE_ENVIRONMENT.md and PHASE2_VALIDATION.md. Ledger: 105 claims — 40 verified, 17 proposed, 1 unknown, 47 requires device test; 24 device tests (DT-01…DT-24). **DT-01 executed 2026-10-07 (PASS, identification only)** on lab AP EZE-AP1832, EZEAP 6 r32912, uCentral schema 4.2.0: uspot is the TIP fork; no WireGuard/unetd on the AP (topology B unsupported on this firmware); hostapd supports DAS and dynamic VLAN. DT-02…DT-24 not executed. No device configuration was changed.
 

@@ -9,6 +9,7 @@ import { Redis } from 'ioredis';
 import { sql } from 'kysely';
 import { drainOnce } from './accounting/drain.js';
 import { dispatchSessionAction } from './coa/dispatcher.js';
+import { sweepPendingSessionActions } from './coa/sweep.js';
 import type { RadclientRunner } from './coa/radclient.js';
 import type { WorkerConfig } from './config.js';
 import { createHealthServer, listen } from './health.js';
@@ -74,13 +75,19 @@ export async function startWorker(options: StartOptions): Promise<RunningWorker>
     return q;
   };
 
-  const enqueueDisconnect = async (sessionActionId: string): Promise<void> => {
-    await queue(QUEUES.coaDisconnect).add(
-      QUEUES.coaDisconnect,
+  const enqueueSessionAction = async (
+    action: 'disconnect' | 'coa_update',
+    sessionActionId: string,
+  ): Promise<void> => {
+    const name = action === 'disconnect' ? QUEUES.coaDisconnect : QUEUES.coaChange;
+    await queue(name).add(
+      name,
       { sessionActionId },
       { ...COA_JOB_OPTIONS, jobId: coaJobId(sessionActionId) },
     );
   };
+  const enqueueDisconnect = (sessionActionId: string): Promise<void> =>
+    enqueueSessionAction('disconnect', sessionActionId);
 
   const lockTtl = (name: QueueName): number =>
     SCHEDULES.find((s) => s.queue === name)?.lockTtlMs ?? 60_000;
@@ -141,8 +148,8 @@ export async function startWorker(options: StartOptions): Promise<RunningWorker>
       logger.info({ report }, report.applied ? 'retention applied' : 'retention dry-run plan');
       return report;
     }),
-    [QUEUES.outboxPublish]: singleFlight(QUEUES.outboxPublish, () =>
-      publishOutbox({
+    [QUEUES.outboxPublish]: singleFlight(QUEUES.outboxPublish, async () => {
+      const published = await publishOutbox({
         db,
         enqueueWebhook: async (jobId, job) => {
           await queue(QUEUES.webhooksDeliver).add(QUEUES.webhooksDeliver, job, {
@@ -150,8 +157,14 @@ export async function startWorker(options: StartOptions): Promise<RunningWorker>
             jobId,
           });
         },
-      }),
-    ),
+      });
+      // P8-A: admin Disconnect / Reauthorize rows committed by the API → dispatcher queues.
+      const sessionActions = await sweepPendingSessionActions({
+        db,
+        enqueue: enqueueSessionAction,
+      });
+      return { ...published, sessionActions };
+    }),
     [QUEUES.webhooksDeliver]: (job: Job<WebhookJob>) =>
       deliverWebhook(
         { db, resolveSecret, ...(options.fetch ? { fetch: options.fetch } : {}) },

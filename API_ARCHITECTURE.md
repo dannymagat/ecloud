@@ -662,11 +662,12 @@ Added in Phase 4 (P4 backend, 2026-10-07): `me/sessions` (GET), `me/sessions/{id
 
 ### Not implemented yet (deliberately)
 
-Reports, accounting endpoints, webhooks, WireGuard peers, identity providers (captive portals,
+`/reports/*` (P8-A ships `usage`, `usage/top`, `usage/export`, `accounting/records`,
+`accounting/export` instead, see "P8-A" below), webhooks, WireGuard peers, identity providers (captive portals,
 portal themes/assets: implemented in P6-B, see below), users export, `users/{id}/reset-password` and `effective-policy`
 (covered by PATCH `password` with `user:password:reset` and by `policies/simulate`),
 `policies/{id}/preview`, voucher print and code reveal (hash-only default: there is nothing to
-reveal), session disconnect/reauthorize (worker CoA path), `/platform/settings`,
+reveal), `/platform/settings`,
 `POST /platform/administrators` (platform invitations), `PATCH /platform/role-templates`
 (templates are owned by `ecloud-db seed`; editing them in the DB would be reverted on the next
 seed), self-service MFA disable (D-038: not provided), async import/export jobs (`/jobs`),
@@ -910,3 +911,205 @@ re-resolution (`detail.unevaluated = true`, counted in `unevaluated_sessions`, `
 outbox events are inserted in batches of 500; re-resolution still happens inside the mutation's
 transaction, so a change touching many sessions makes that request slower.
 `AAA_SESSION_TIMEOUT_CAP_S` accepts 0 (off) or 300–86400 (Q45 floor).
+
+### Implementation notes (P8-A, sessions & accounting, 2026-10-08)
+
+Binding sources: API_ARCHITECTURE.md §3.2 (runtime & reporting rows), DATABASE_DESIGN.md
+(`sessions`, `accounting_records`, `usage_counters`, `accounting_anomalies`,
+`session_enforcement`), AAA_ARCHITECTURE.md §6 / §14, POLICY_ENGINE.md §5, MULTITENANCY.md
+(Q75: Read Only may not export), DECISIONS.md D-006, D-021, D-025, D-027, D-028 (V12), D-036,
+Q65 (periods in site TZ), Q73 (polling, no SSE). Migrations **024** (`024_sessions_accounting_read.sql`)
+and **025** (`025_sessions_username_index.sql`, review fix) are additive: `usage_counters.subject_type`
+gains `site`, plus read indexes (see "Performance").
+
+**Site and organization usage start at migration 024: there is no backfill.** The drainer
+writes `site` counters only for accounting it processes after 024 is applied; usage from before
+that exists only in the user / client-device / voucher counters, so site, organization and
+top-N-site figures under-report any period that began before 024.
+
+#### Sessions & accounting API contract (consumed by P8-B admin views)
+
+All `/orgs/{orgId}/…` responses are tenant-scoped (`withTenant`, RLS) and site-filtered by the
+caller's bindings (`permittedSites`); objects of other tenants / unreadable sites are 404. No new
+permission keys. Every usage / session read carries the **freshness** fields (spec §6: accounting
+arrives at the NAS interim interval, so usage always lags):
+`measured_at` (server time of the read), `last_accounting_at` (newest accounting the figures
+include, null when none), `freshness_s` (`measured_at − last_accounting_at`, seconds, null when
+none) and `expected_lag_s` (`AAA_INTERIM_INTERVAL_S`, or 600 s when unset — the worker's
+`WORKER_INTERIM_INTERVAL_S` default — plus 5 s drain cadence: the normal lag). For usage,
+`last_accounting_at` is the newest `usage_counters.updated_at` of the rows shown (the time the
+drainer applied the newest accounting delta). The
+UI polls (Q73, 30 s suggested); there is no SSE.
+
+1. `GET /api/v1/orgs/{orgId}/sessions` — `session:read` (any-site). Query: `limit` (1–200, 50),
+   `cursor`, `status` (comma list of `authorized|active|stopped|stale|expired`), `open`
+   (`true` = `authorized,active`), `site_id`, `nas_client_id`, `user_id`, `client_device_id`,
+   `voucher_id`, `mac` (any common notation), `username` (exact), `from` / `to` (ISO date-time,
+   bounds on `started_at`, `from` inclusive, `to` exclusive). Order `started_at DESC, id DESC`
+   (keyset cursor). Response `{ data: SessionSummary[], next_cursor, measured_at }`:
+   ```
+   SessionSummary = { …all sessions columns (id, organization_id, site_id, nas_client_id, user_id,
+     client_device_id, voucher_id, policy_id, policy_version, acct_session_id, acct_unique_id,
+     username_raw, mac, framed_ip, called_station_id, calling_station_id, started_at,
+     last_interim_at, stopped_at, input_octets, output_octets, session_time_s, status,
+     terminate_cause, created_at, updated_at, …),
+     nas_name, adapter_key|null, coa_supported|null, policy_name|null, site_name,
+     bytes_total, last_accounting_at|null, freshness_s|null }
+   ```
+   `last_accounting_at` per session = `COALESCE(last_interim_at, stopped_at, started_at)` for
+   sessions that have accounting (`active|stopped|stale`), null for `authorized|expired`.
+2. `GET /api/v1/orgs/{orgId}/sessions/{id}` — `session:read` (site check). Response = the
+   SessionSummary fields plus
+   ```
+   { session_actions: SessionAction[],          // oldest first (unchanged)
+     nas: { id, name, nas_ip, adapter_key|null, coa_supported|null },
+     freshness: { measured_at, last_accounting_at|null, freshness_s|null, expected_lag_s },
+     timeline: AccountingRecord[],              // oldest first, max 500
+     timeline_truncated: boolean,
+     anomalies: [{ id, kind, counter, previous, observed, estimated_lost_bytes, applied, reason,
+                   created_at }],                // newest first, max 100
+     enforcement: [{ id, change_id, trigger, strategy, state, reason, policy_id|null,
+                     expected_apply_by|null, created_at, resolved_at|null, detail }], // newest first, max 50
+     operations: { disconnect: OperationAvailability, reauthorize: OperationAvailability } }
+   AccountingRecord = { id, received_at, event_time|null, status_type, acct_session_id,
+     acct_unique_id, nas_ip, nas_identifier|null, username|null, calling_station_id|null,
+     called_station_id|null, framed_ip|null, input_octets|null, output_octets|null,
+     session_time_s|null, terminate_cause|null, session_id|null, raw,
+     delta_input_octets|null, delta_output_octets|null }  // deltas: timeline only, vs previous record, ≥ 0
+   OperationAvailability = {
+     operation: 'disconnect'|'reauthorize', permission: 'session:disconnect'|'session:coa',
+     permitted: boolean,          // caller holds the permission on the session's site
+     available: boolean,          // the API would accept POST now (ignores `permitted`)
+     mode: 'validated'|'lab'|null,// lab = ECLOUD_COA_ENABLED without LAB/PRODUCTION evidence
+     device_enforced: boolean,    // V12: true only with lab-validated registry evidence (never today)
+     code: null|'coa_unsupported'|'no_adapter'|'nas_coa_disabled'|'dispatcher_disabled'|'session_not_open',
+     reason: string,              // neutral wording for the disabled button (registry evidence)
+     evidence: { status|null, evidence_level|null, device_enforced: boolean, declaration|null },
+     dispatcher_enabled: boolean }
+   ```
+3. `POST /api/v1/orgs/{orgId}/sessions/{id}/disconnect` — `session:disconnect`;
+   `POST /api/v1/orgs/{orgId}/sessions/{id}/reauthorize` — `session:coa` (CoA change carrying the
+   **re-resolved** policy; API §3.2 row; the P8 task text names `session:disconnect` for both —
+   the catalogue's dedicated `session:coa` key is used for reauthorize). Body `{ reason?: string
+   (≤ 500) }`; `Idempotency-Key` optional. Gate (D-006 / D-028 V12, from the adapter declaration
+   + registry evidence, `@ecloud/adapters dynamicAuthorizationEvidence`):
+   session must be open (`authorized|active`) → else 409 `session_not_open`; NAS must have an
+   engine adapter (`no_adapter`), the adapter must not declare the mechanism `UNSUPPORTED` /
+   `ECLOUD_SIDE_ONLY` / target `none` (`coa_unsupported`), the NAS must not be `coa_supported =
+   false` (`nas_coa_disabled`), and `ECLOUD_COA_ENABLED` must be true (`dispatcher_disabled`).
+   **Today every request is refused with `dispatcher_disabled`** (default) — or, in lab mode, is
+   accepted with `mode: 'lab'`, `device_enforced: false`. Refusal: **409**
+   `application/problem+json`, `type …/session-operation-unavailable`, extensions
+   `{ operation, code, reason, evidence, dispatcher_enabled }`; the refusal is audited
+   (`session:disconnect_refused` / `session:reauthorize_refused`), at most **30 refused attempts
+   per minute per principal** (beyond that 429 and no audit row, so refusals cannot flood the
+   audit log). Acceptance: **202**
+   `{ session_action: SessionAction, deduplicated: boolean, mode, device_enforced, message }`;
+   a `session_actions` row `pending` (`disconnect` / `coa_update`, payload `{reason, mode,
+   requested_via:'api', plan?}`) + outbox `session.disconnect_requested` /
+   `session.coa_requested` + audit `session:disconnect` / `session:reauthorize`, one transaction.
+   Idempotent: while an action of the same kind is `pending|sent` for the session, the same row
+   is returned (`deduplicated: true`, 202, no new audit row other than the request's). The worker
+   picks up pending rows (outbox tick, ≤ 2 s) and enqueues the existing `coa.disconnect` /
+   `coa.change` dispatcher (deterministic job id `coa-<id>`). Reauthorize also returns 409
+   `policy_rejects` when the re-resolved policy rejects the session (use disconnect).
+   Not refused while impersonating (D-027 lists API keys, secrets, privileged bindings only); the
+   audit row carries `impersonator_id`.
+4. `GET /api/v1/orgs/{orgId}/session-actions/{id}` — `session:read` (site of the session).
+   `SessionAction = { id, session_id, action: 'disconnect'|'coa_update', status:
+   'pending'|'sent'|'ack'|'nak'|'timeout'|'unsupported', error|null, payload (plan omitted),
+   requested_by|null, request_id|null, created_at, completed_at|null }`. Poll until terminal.
+5. `GET /api/v1/orgs/{orgId}/usage` — `accounting:read`. Query `subject_type`
+   (`user|client_device|voucher|site|organization`), `subject_id` (required except
+   `organization`), `period` (`daily|monthly|total`, default `daily`), `from` / `to` (`YYYY-MM-DD`,
+   inclusive period starts; defaults: daily = last 31 days, monthly = last 13 months; max 366
+   daily / 60 monthly buckets). Site check: `site` → that site; `user` → the user's site when it
+   has one, else organization-level; `client_device` / `voucher` (batch site) likewise;
+   `organization` → organization-level grant. Response:
+   ```
+   UsageReport = { subject_type, subject_id|null, label|null, period, timezone,
+     series: [{ period_start, period_end, bytes_in, bytes_out, bytes_total, session_count,
+                session_time_s }],            // ascending, only buckets with data;
+                                             // period_end = exclusive end label YYYY-MM-DD (null for total)
+     total: { bytes_in, bytes_out, bytes_total, session_count, session_time_s },  // sum of series
+     current: { period_start, period_end, …same counters } | null,  // current period (site TZ);
+                                             // period_end = ISO instant of the local reset
+     current_unavailable_reason: string | null, // set when current is null because sites span timezones
+     label_basis: string,                     // how period_start labels are to be read (site-local dates)
+     quota: QuotaPosition | null,             // user / client_device / voucher only
+     measured_at, last_accounting_at|null, freshness_s|null, expected_lag_s }
+   QuotaPosition = { policy_id, policy_name, policy_source: 'open_session'|'last_session',
+     periods: [{ period: 'daily'|'monthly'|'total', limit_bytes, used_bytes, remaining_bytes,
+                 exceeded: boolean, period_start, period_end|null }] }   // only periods with a limit
+   ```
+   Periods are site-local calendar days/months (Q65, `sites.timezone`): user / device / voucher
+   counters are bucketed in the TZ of the site of the session that produced the bytes; `timezone`
+   is the subject's site TZ (`user.site_id`, voucher batch site, else the site of its newest
+   session, else `UTC`) and is used for `period_end` / the current period. `organization` sums the
+   `site` rows by period label (each site in its own TZ; `timezone` = `mixed` when sites
+   differ; then `current` is null with `current_unavailable_reason`, because each site counts
+   its own local day / month and no single current bucket exists — only `total` is common). The quota position uses the policy bound to the subject's newest open session (else
+   its newest session) — the same policy row the worker's quota job evaluates; `period_end`
+   is the next local midnight / month start (null for `total`). `site` counters exist only from
+   migration 024 on (drain writes them for new accounting; no backfill — older usage appears
+   under users/devices/vouchers only).
+6. `GET /api/v1/orgs/{orgId}/usage/top` — `accounting:read`. Query `subject_type`
+   (`user|client_device|site`, default `user`), `period` (`daily|monthly|total`, default
+   `monthly`), `period_start` (`YYYY-MM-DD`; default the current period in UTC; monthly is
+   normalised to day 01; ignored for total), `limit` (1–100, 10). Users / devices need an
+   organization-level grant (their counters carry no site); `site` is filtered to the caller's
+   sites. Labels are **site-local dates** (Q65). An explicit `period_start` is matched as a label
+   for every row. Without one (review fix 1): `site` uses **each site's own current local
+   day / month** (an Auckland site past local midnight already reports tomorrow's label);
+   `user` / `client_device` use the organization's single site timezone and answer **400
+   (`period_start` required)** when the sites span several timezones. Response `{ subject_type,
+   period, period_start|null (null when the per-site labels differ), label_basis, data: [{ rank,
+   subject_id, label, period_start, bytes_in, bytes_out, bytes_total, session_count,
+   session_time_s, last_accounting_at }], measured_at, last_accounting_at|null, freshness_s|null,
+   expected_lag_s }`.
+7. `GET /api/v1/orgs/{orgId}/accounting/records` — `accounting:read`. Query `from`, `to`
+   (**required** ISO date-time, `to − from ≤ 31 days`, partition pruning on `received_at`),
+   `limit` (1–200, 50), `cursor`, `session_id`, `site_id`, `username`, `acct_session_id`,
+   `status_type` (`start|interim|stop|accounting_on|accounting_off`), `nas_ip`,
+   `calling_station_id`. Order `received_at DESC, id DESC`. Records without a resolved session /
+   tenant site are visible to organization-level grants only. Response `{ data:
+   AccountingRecord[] (no delta fields), next_cursor, measured_at }`.
+8. `POST /api/v1/orgs/{orgId}/accounting/export` — `accounting:export` (Read Only lacks it, Q75).
+   Body = the filters of (7) without `limit`/`cursor` (`from`/`to` required, ≤ 31 days).
+   **Streamed** `text/csv; charset=utf-8` (keyset batches of 1000 in short transactions, never one
+   long cursor), `Content-Disposition: attachment`, formula-injection neutralised, ascending
+   `received_at`. More than 100 000 matching rows → 422 (narrow the range). **Refused while
+   impersonating** (403 `impersonation-forbidden`, D-027 default for bulk tenant data
+   egress). Audited twice: `accounting:export` before streaming (filters, `rows_at_start`) and
+   `accounting:export_completed` when the stream ends (`rows_emitted`, `outcome:
+   finished|aborted` — aborted = client gone or a batch failed). Rate limit 10 exports / hour /
+   principal (shared with other exports, 429), consumed only **after** every check that can
+   refuse (impersonation, scope, window, row cap), so refused attempts cost nothing.
+9. `POST /api/v1/orgs/{orgId}/usage/export` — `report:export` (Read Only lacks it). Body
+   `{ subject_type: user|client_device|site, period: daily|monthly|total, from?, to? }` (same
+   bounds as (5)). CSV `subject_type, subject_id, label, period, period_start, bytes_in,
+   bytes_out, bytes_total, session_count, session_time_s, updated_at`; max 50 000 rows (422).
+   Refused while impersonating; audited (`report:export`); same rate limit, consumed only after
+   the scope / range / row-cap checks pass.
+10. `GET /api/v1/platform/retention/plan` — `platform:health:read` (platform binding). Dry run
+    only (nothing is deleted; the worker's `retention.prune` applies only with
+    `RETENTION_APPLY=true`). Response `{ measured_at, policy: { raw_days: 7,
+    accounting_months: 13, audit_months: 24 } (D-025 pilot defaults), cutoffs: { raw,
+    accounting_records, audit_logs }, partitions: [{ table, partition, from|null, to|null,
+    action: 'drop'|'keep', estimated_rows }], drop_partitions: string[],
+    default_partition_rows_past_cutoff: { accounting_records, audit_logs },
+    raw_rows_older_than_cutoff, checks: [{ name, ok, detail }] }`. Checks: partitions exist
+    for the current and next month, no row older than the cutoff sits in a DEFAULT partition
+    (it would never be dropped), every drop candidate matches the `<table>_yYYYYmMM` naming the
+    job requires. The plan is computed by the same pure `planRetention` the worker runs
+    (moved to `@ecloud/db`).
+
+**Performance** (migration 024): `idx_sessions_org_site_started (organization_id, site_id,
+started_at DESC)`, `idx_sessions_org_user_started`, `idx_sessions_org_device_started`,
+`idx_sessions_org_mac_started` (partial on non-null), `idx_sessions_org_username_started
+(organization_id, username_raw, started_at DESC)` (migration 025, partial on non-null), `idx_accounting_session_received
+(session_id, received_at)` on the partitioned `accounting_records` (partial, non-null session),
+`idx_usage_counters_org_subject_period (organization_id, subject_type, period_type,
+period_start)`, `idx_session_actions_open (session_id, action) WHERE status IN
+('pending','sent')`. The session detail loads the timeline, anomalies, enforcement rows and
+actions with one bounded query each (no N+1); list queries are keyset-paged with `limit ≤ 200`.

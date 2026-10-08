@@ -25,6 +25,9 @@ import { PortalDesignerPage } from './features/portals/PortalDesignerPage';
 import { PortalsPage } from './features/portals/PortalsPage';
 import { PolicyEditorPage } from './features/policies/PolicyEditorPage';
 import { RateLimitExportPage } from './features/policies/RateLimitExportPage';
+import { AccountingRecordsPage } from './features/accounting/AccountingRecordsPage';
+import { SessionDetailPage } from './features/sessions/SessionDetailPage';
+import { UsagePage } from './features/usage/UsagePage';
 import { SessionEnforcementPage } from './features/sessions/SessionEnforcementPage';
 import { SessionsPage } from './features/sessions/SessionsPage';
 import { VouchersPage } from './features/vouchers/VouchersPage';
@@ -81,7 +84,13 @@ export const routes: RouteObject[] = [
                   { path: 'portals', element: <PortalsPage /> },
                   { path: 'portals/:portalId', element: <PortalDesignerPage /> },
                   { path: 'sessions', element: <SessionsPage /> },
-                  { path: 'sessions/:sessionId', element: <SessionEnforcementPage /> },
+                  { path: 'sessions/:sessionId', element: <SessionDetailPage /> },
+                  {
+                    path: 'sessions/:sessionId/enforcement',
+                    element: <SessionEnforcementPage />,
+                  },
+                  { path: 'usage', element: <UsagePage /> },
+                  { path: 'accounting', element: <AccountingRecordsPage /> },
                   { path: 'audit-log', element: <AuditLogPage /> },
                   { path: 'administrators', element: <AdministratorsPage /> },
                   { path: 'api-keys', element: <ApiKeysPage /> },

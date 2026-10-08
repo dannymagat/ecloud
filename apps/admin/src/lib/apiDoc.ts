@@ -9,7 +9,13 @@ import { request } from '../api/client';
 interface OpenApiDoc {
   paths: Record<
     string,
-    Record<string, { requestBody?: { content?: Record<string, { schema?: unknown }> } }>
+    Record<
+      string,
+      {
+        parameters?: { name?: string; in?: string; schema?: { enum?: string[] } }[];
+        requestBody?: { content?: Record<string, { schema?: unknown }> };
+      }
+    >
   >;
 }
 
@@ -24,6 +30,17 @@ export function useApiDocument() {
 
 export function hasOperation(doc: OpenApiDoc | undefined, method: string, path: string): boolean {
   return doc?.paths[path]?.[method] !== undefined;
+}
+
+/** True when the operation declares query parameter `name` (filters the API may not have yet). */
+export function hasParameter(
+  doc: OpenApiDoc | undefined,
+  method: string,
+  path: string,
+  name: string,
+): boolean {
+  const params = doc?.paths[path]?.[method]?.parameters ?? [];
+  return params.some((p) => p.name === name && (p.in === undefined || p.in === 'query'));
 }
 
 export function bodyProperties(

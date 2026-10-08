@@ -1,6 +1,24 @@
 {
   "components": {
     "schemas": {
+      "AccountingRecordPage": {
+        "additionalProperties": false,
+        "properties": {
+          "data": {
+            "items": {
+              "additionalProperties": {},
+              "properties": { "id": { "type": "number" }, "received_at": { "type": "string" } },
+              "required": ["id", "received_at"],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "measured_at": { "type": "string" },
+          "next_cursor": { "type": ["string", "null"] }
+        },
+        "required": ["data", "next_cursor", "measured_at"],
+        "type": "object"
+      },
       "CompatibilityEntry": {
         "additionalProperties": {},
         "description": "Registry row (plan §7.1). device_enforced is true only for LAB_VALIDATED / PRODUCTION_VALIDATED evidence with a device-test reference (V12).",
@@ -250,6 +268,230 @@
         "required": ["type", "title", "status"],
         "type": "object"
       },
+      "RetentionPlan": {
+        "additionalProperties": {},
+        "properties": {
+          "checks": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "detail": { "type": "string" },
+                "name": { "type": "string" },
+                "ok": { "type": "boolean" }
+              },
+              "required": ["name", "ok", "detail"],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "drop_partitions": { "items": { "type": "string" }, "type": "array" },
+          "measured_at": { "type": "string" },
+          "mode": { "const": "dry_run", "type": "string" }
+        },
+        "required": ["measured_at", "mode", "drop_partitions", "checks"],
+        "type": "object"
+      },
+      "SessionAction": {
+        "additionalProperties": false,
+        "properties": {
+          "action": { "enum": ["disconnect", "coa_update"], "type": "string" },
+          "completed_at": { "type": ["string", "null"] },
+          "created_at": { "type": "string" },
+          "error": { "type": ["string", "null"] },
+          "id": { "type": "string" },
+          "payload": { "additionalProperties": {}, "properties": {}, "type": "object" },
+          "request_id": { "type": ["string", "null"] },
+          "requested_by": { "type": ["string", "null"] },
+          "session_id": { "type": "string" },
+          "status": {
+            "enum": ["pending", "sent", "ack", "nak", "timeout", "unsupported"],
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "session_id",
+          "action",
+          "status",
+          "error",
+          "payload",
+          "requested_by",
+          "request_id",
+          "created_at",
+          "completed_at"
+        ],
+        "type": "object"
+      },
+      "SessionDetail": {
+        "additionalProperties": {},
+        "description": "Session with accounting timeline, anomalies, enforcement rows and operation availability (P8-A).",
+        "properties": {
+          "adapter_key": { "type": ["string", "null"] },
+          "anomalies": {
+            "items": {
+              "additionalProperties": {},
+              "properties": {
+                "applied": { "type": "boolean" },
+                "id": { "type": "string" },
+                "kind": { "type": "string" }
+              },
+              "required": ["id", "kind", "applied"],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "bytes_total": { "type": "number" },
+          "coa_supported": { "type": ["boolean", "null"] },
+          "enforcement": {
+            "items": {
+              "additionalProperties": {},
+              "properties": {
+                "id": { "type": "string" },
+                "state": { "type": "string" },
+                "strategy": { "type": "string" },
+                "trigger": { "type": "string" }
+              },
+              "required": ["id", "trigger", "strategy", "state"],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "freshness": {
+            "additionalProperties": false,
+            "properties": {
+              "expected_lag_s": { "type": "number" },
+              "freshness_s": { "type": ["number", "null"] },
+              "last_accounting_at": { "type": ["string", "null"] },
+              "measured_at": { "type": "string" }
+            },
+            "required": ["measured_at", "last_accounting_at", "freshness_s", "expected_lag_s"],
+            "type": "object"
+          },
+          "freshness_s": { "type": ["number", "null"] },
+          "id": { "type": "string" },
+          "input_octets": { "type": "number" },
+          "last_accounting_at": { "type": ["string", "null"] },
+          "last_interim_at": { "type": ["string", "null"] },
+          "mac": { "type": ["string", "null"] },
+          "nas": {
+            "additionalProperties": false,
+            "properties": {
+              "adapter_key": { "type": ["string", "null"] },
+              "coa_supported": { "type": ["boolean", "null"] },
+              "id": { "type": "string" },
+              "name": { "type": "string" },
+              "nas_ip": { "type": "string" }
+            },
+            "required": ["id", "name", "nas_ip", "adapter_key", "coa_supported"],
+            "type": "object"
+          },
+          "nas_client_id": { "type": "string" },
+          "nas_name": { "type": "string" },
+          "operations": {
+            "additionalProperties": false,
+            "properties": {
+              "disconnect": { "$ref": "#/components/schemas/SessionOperationAvailability" },
+              "reauthorize": { "$ref": "#/components/schemas/SessionOperationAvailability" }
+            },
+            "required": ["disconnect", "reauthorize"],
+            "type": "object"
+          },
+          "output_octets": { "type": "number" },
+          "policy_name": { "type": ["string", "null"] },
+          "session_actions": {
+            "items": { "$ref": "#/components/schemas/SessionAction" },
+            "type": "array"
+          },
+          "session_time_s": { "type": "number" },
+          "site_id": { "type": "string" },
+          "site_name": { "type": "string" },
+          "started_at": { "type": "string" },
+          "status": {
+            "enum": ["authorized", "active", "stopped", "stale", "expired"],
+            "type": "string"
+          },
+          "stopped_at": { "type": ["string", "null"] },
+          "timeline": {
+            "items": {
+              "additionalProperties": {},
+              "properties": {
+                "acct_session_id": { "type": "string" },
+                "acct_unique_id": { "type": "string" },
+                "calling_station_id": { "type": ["string", "null"] },
+                "delta_input_octets": { "type": ["number", "null"] },
+                "delta_output_octets": { "type": ["number", "null"] },
+                "event_time": { "type": ["string", "null"] },
+                "id": { "type": "number" },
+                "input_octets": { "type": ["number", "null"] },
+                "nas_ip": { "type": "string" },
+                "output_octets": { "type": ["number", "null"] },
+                "received_at": { "type": "string" },
+                "session_id": { "type": ["string", "null"] },
+                "session_time_s": { "type": ["number", "null"] },
+                "status_type": {
+                  "enum": ["start", "interim", "stop", "accounting_on", "accounting_off"],
+                  "type": "string"
+                },
+                "terminate_cause": { "type": ["string", "null"] },
+                "username": { "type": ["string", "null"] }
+              },
+              "required": [
+                "id",
+                "received_at",
+                "event_time",
+                "status_type",
+                "acct_session_id",
+                "acct_unique_id",
+                "nas_ip",
+                "username",
+                "calling_station_id",
+                "input_octets",
+                "output_octets",
+                "session_time_s",
+                "terminate_cause",
+                "session_id",
+                "delta_input_octets",
+                "delta_output_octets"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "timeline_truncated": { "type": "boolean" },
+          "username_raw": { "type": ["string", "null"] }
+        },
+        "required": [
+          "id",
+          "status",
+          "site_id",
+          "site_name",
+          "nas_client_id",
+          "nas_name",
+          "adapter_key",
+          "coa_supported",
+          "policy_name",
+          "username_raw",
+          "mac",
+          "started_at",
+          "last_interim_at",
+          "stopped_at",
+          "input_octets",
+          "output_octets",
+          "bytes_total",
+          "session_time_s",
+          "last_accounting_at",
+          "freshness_s",
+          "session_actions",
+          "nas",
+          "freshness",
+          "timeline",
+          "timeline_truncated",
+          "anomalies",
+          "enforcement",
+          "operations"
+        ],
+        "type": "object"
+      },
       "SessionEnforcementView": {
         "additionalProperties": {},
         "description": "Effective policy snapshot, attributes sent, per-field evidence and the pending change strategy of one session (P7-A).",
@@ -368,6 +610,330 @@
           "pending_change",
           "history",
           "counter_anomalies"
+        ],
+        "type": "object"
+      },
+      "SessionOperationAccepted": {
+        "additionalProperties": false,
+        "properties": {
+          "deduplicated": { "type": "boolean" },
+          "device_enforced": { "type": "boolean" },
+          "message": { "type": "string" },
+          "mode": { "enum": ["validated", "lab"], "type": "string" },
+          "session_action": { "$ref": "#/components/schemas/SessionAction" }
+        },
+        "required": ["session_action", "deduplicated", "mode", "device_enforced", "message"],
+        "type": "object"
+      },
+      "SessionOperationAvailability": {
+        "additionalProperties": false,
+        "description": "Whether Disconnect / Reauthorize would be accepted now, with the registry-evidence reason (D-006, V12).",
+        "properties": {
+          "available": { "type": "boolean" },
+          "code": {
+            "anyOf": [
+              {
+                "enum": [
+                  "session_not_open",
+                  "no_adapter",
+                  "coa_unsupported",
+                  "nas_coa_disabled",
+                  "dispatcher_disabled"
+                ],
+                "type": "string"
+              },
+              { "type": "null" }
+            ]
+          },
+          "device_enforced": { "type": "boolean" },
+          "dispatcher_enabled": { "type": "boolean" },
+          "evidence": {
+            "additionalProperties": false,
+            "properties": {
+              "declaration": { "type": ["string", "null"] },
+              "device_enforced": { "type": "boolean" },
+              "evidence_level": { "type": ["string", "null"] },
+              "status": { "type": ["string", "null"] }
+            },
+            "required": ["status", "evidence_level", "device_enforced", "declaration"],
+            "type": "object"
+          },
+          "mode": {
+            "anyOf": [{ "enum": ["validated", "lab"], "type": "string" }, { "type": "null" }]
+          },
+          "operation": { "enum": ["disconnect", "reauthorize"], "type": "string" },
+          "permission": { "enum": ["session:disconnect", "session:coa"], "type": "string" },
+          "permitted": { "type": "boolean" },
+          "reason": { "type": "string" }
+        },
+        "required": [
+          "operation",
+          "permission",
+          "permitted",
+          "available",
+          "mode",
+          "device_enforced",
+          "code",
+          "reason",
+          "evidence",
+          "dispatcher_enabled"
+        ],
+        "type": "object"
+      },
+      "SessionPage": {
+        "additionalProperties": false,
+        "properties": {
+          "data": { "items": { "$ref": "#/components/schemas/SessionSummary" }, "type": "array" },
+          "measured_at": { "type": "string" },
+          "next_cursor": { "type": ["string", "null"] }
+        },
+        "required": ["data", "next_cursor", "measured_at"],
+        "type": "object"
+      },
+      "SessionSummary": {
+        "additionalProperties": {},
+        "description": "A session row with NAS / policy / site names and its accounting freshness (P8-A).",
+        "properties": {
+          "adapter_key": { "type": ["string", "null"] },
+          "bytes_total": { "type": "number" },
+          "coa_supported": { "type": ["boolean", "null"] },
+          "freshness_s": { "type": ["number", "null"] },
+          "id": { "type": "string" },
+          "input_octets": { "type": "number" },
+          "last_accounting_at": { "type": ["string", "null"] },
+          "last_interim_at": { "type": ["string", "null"] },
+          "mac": { "type": ["string", "null"] },
+          "nas_client_id": { "type": "string" },
+          "nas_name": { "type": "string" },
+          "output_octets": { "type": "number" },
+          "policy_name": { "type": ["string", "null"] },
+          "session_time_s": { "type": "number" },
+          "site_id": { "type": "string" },
+          "site_name": { "type": "string" },
+          "started_at": { "type": "string" },
+          "status": {
+            "enum": ["authorized", "active", "stopped", "stale", "expired"],
+            "type": "string"
+          },
+          "stopped_at": { "type": ["string", "null"] },
+          "username_raw": { "type": ["string", "null"] }
+        },
+        "required": [
+          "id",
+          "status",
+          "site_id",
+          "site_name",
+          "nas_client_id",
+          "nas_name",
+          "adapter_key",
+          "coa_supported",
+          "policy_name",
+          "username_raw",
+          "mac",
+          "started_at",
+          "last_interim_at",
+          "stopped_at",
+          "input_octets",
+          "output_octets",
+          "bytes_total",
+          "session_time_s",
+          "last_accounting_at",
+          "freshness_s"
+        ],
+        "type": "object"
+      },
+      "UsageReport": {
+        "additionalProperties": false,
+        "description": "Usage of one subject over site-local periods with quota position and freshness (P8-A).",
+        "properties": {
+          "current": {
+            "anyOf": [
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "bytes_in": { "type": "number" },
+                  "bytes_out": { "type": "number" },
+                  "bytes_total": { "type": "number" },
+                  "period_end": { "type": ["string", "null"] },
+                  "period_start": { "type": "string" },
+                  "session_count": { "type": "number" },
+                  "session_time_s": { "type": "number" }
+                },
+                "required": [
+                  "bytes_in",
+                  "bytes_out",
+                  "bytes_total",
+                  "session_count",
+                  "session_time_s",
+                  "period_start",
+                  "period_end"
+                ],
+                "type": "object"
+              },
+              { "type": "null" }
+            ]
+          },
+          "current_unavailable_reason": { "type": ["string", "null"] },
+          "expected_lag_s": { "type": "number" },
+          "freshness_s": { "type": ["number", "null"] },
+          "label": { "type": ["string", "null"] },
+          "label_basis": { "type": "string" },
+          "last_accounting_at": { "type": ["string", "null"] },
+          "measured_at": { "type": "string" },
+          "period": { "enum": ["daily", "monthly", "total"], "type": "string" },
+          "quota": {
+            "anyOf": [
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "periods": {
+                    "items": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "exceeded": { "type": "boolean" },
+                        "limit_bytes": { "type": "number" },
+                        "period": { "enum": ["daily", "monthly", "total"], "type": "string" },
+                        "period_end": { "type": ["string", "null"] },
+                        "period_start": { "type": "string" },
+                        "remaining_bytes": { "type": "number" },
+                        "used_bytes": { "type": "number" }
+                      },
+                      "required": [
+                        "period",
+                        "limit_bytes",
+                        "used_bytes",
+                        "remaining_bytes",
+                        "exceeded",
+                        "period_start",
+                        "period_end"
+                      ],
+                      "type": "object"
+                    },
+                    "type": "array"
+                  },
+                  "policy_id": { "type": "string" },
+                  "policy_name": { "type": "string" },
+                  "policy_source": { "enum": ["open_session", "last_session"], "type": "string" }
+                },
+                "required": ["policy_id", "policy_name", "policy_source", "periods"],
+                "type": "object"
+              },
+              { "type": "null" }
+            ]
+          },
+          "series": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "bytes_in": { "type": "number" },
+                "bytes_out": { "type": "number" },
+                "bytes_total": { "type": "number" },
+                "period_end": { "type": ["string", "null"] },
+                "period_start": { "type": "string" },
+                "session_count": { "type": "number" },
+                "session_time_s": { "type": "number" }
+              },
+              "required": [
+                "bytes_in",
+                "bytes_out",
+                "bytes_total",
+                "session_count",
+                "session_time_s",
+                "period_start",
+                "period_end"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "subject_id": { "type": ["string", "null"] },
+          "subject_type": { "type": "string" },
+          "timezone": { "type": "string" },
+          "total": {
+            "additionalProperties": false,
+            "properties": {
+              "bytes_in": { "type": "number" },
+              "bytes_out": { "type": "number" },
+              "bytes_total": { "type": "number" },
+              "session_count": { "type": "number" },
+              "session_time_s": { "type": "number" }
+            },
+            "required": ["bytes_in", "bytes_out", "bytes_total", "session_count", "session_time_s"],
+            "type": "object"
+          }
+        },
+        "required": [
+          "subject_type",
+          "subject_id",
+          "label",
+          "period",
+          "timezone",
+          "series",
+          "total",
+          "current",
+          "current_unavailable_reason",
+          "label_basis",
+          "quota",
+          "measured_at",
+          "last_accounting_at",
+          "freshness_s",
+          "expected_lag_s"
+        ],
+        "type": "object"
+      },
+      "UsageTop": {
+        "additionalProperties": false,
+        "properties": {
+          "data": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "bytes_in": { "type": "number" },
+                "bytes_out": { "type": "number" },
+                "bytes_total": { "type": "number" },
+                "label": { "type": ["string", "null"] },
+                "last_accounting_at": { "type": ["string", "null"] },
+                "period_start": { "type": "string" },
+                "rank": { "type": "number" },
+                "session_count": { "type": "number" },
+                "session_time_s": { "type": "number" },
+                "subject_id": { "type": "string" }
+              },
+              "required": [
+                "bytes_in",
+                "bytes_out",
+                "bytes_total",
+                "session_count",
+                "session_time_s",
+                "rank",
+                "subject_id",
+                "label",
+                "period_start",
+                "last_accounting_at"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "expected_lag_s": { "type": "number" },
+          "freshness_s": { "type": ["number", "null"] },
+          "label_basis": { "type": "string" },
+          "last_accounting_at": { "type": ["string", "null"] },
+          "measured_at": { "type": "string" },
+          "period": { "enum": ["daily", "monthly", "total"], "type": "string" },
+          "period_start": { "type": ["string", "null"] },
+          "subject_type": { "enum": ["user", "client_device", "site"], "type": "string" }
+        },
+        "required": [
+          "subject_type",
+          "period",
+          "period_start",
+          "label_basis",
+          "data",
+          "measured_at",
+          "last_accounting_at",
+          "freshness_s",
+          "expected_lag_s"
         ],
         "type": "object"
       },
@@ -9171,181 +9737,6 @@
         "tags": ["vouchers"]
       }
     },
-    "/api/v1/orgs/{orgId}/sessions": {
-      "get": {
-        "description": "Permission: `session:read`",
-        "operationId": "get_api_v1_orgs_orgId_sessions",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "orgId",
-            "required": true,
-            "schema": {
-              "format": "uuid",
-              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
-              "type": "string"
-            }
-          },
-          {
-            "in": "query",
-            "name": "limit",
-            "schema": { "default": 50, "maximum": 200, "minimum": 1, "type": "integer" }
-          },
-          { "in": "query", "name": "cursor", "schema": { "maxLength": 200, "type": "string" } },
-          {
-            "in": "query",
-            "name": "status",
-            "schema": {
-              "enum": ["authorized", "active", "stopped", "stale", "expired"],
-              "type": "string"
-            }
-          },
-          {
-            "in": "query",
-            "name": "site_id",
-            "schema": {
-              "format": "uuid",
-              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
-              "type": "string"
-            }
-          },
-          {
-            "in": "query",
-            "name": "user_id",
-            "schema": {
-              "format": "uuid",
-              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
-              "type": "string"
-            }
-          },
-          {
-            "in": "query",
-            "name": "nas_client_id",
-            "schema": {
-              "format": "uuid",
-              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "additionalProperties": false,
-                  "properties": {
-                    "data": {
-                      "items": { "additionalProperties": {}, "properties": {}, "type": "object" },
-                      "type": "array"
-                    },
-                    "next_cursor": { "type": ["string", "null"] }
-                  },
-                  "required": ["data", "next_cursor"],
-                  "type": "object"
-                }
-              }
-            },
-            "description": "Sessions"
-          },
-          "400": {
-            "content": {
-              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
-            },
-            "description": "Validation failed (application/problem+json)"
-          },
-          "401": {
-            "content": {
-              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
-            },
-            "description": "Authentication required"
-          },
-          "403": {
-            "content": {
-              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
-            },
-            "description": "Permission denied"
-          },
-          "404": {
-            "content": {
-              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
-            },
-            "description": "Not found (also returned for objects of other tenants)"
-          }
-        },
-        "summary": "List sessions (newest first)",
-        "tags": ["sessions"]
-      }
-    },
-    "/api/v1/orgs/{orgId}/sessions/{id}": {
-      "get": {
-        "description": "Permission: `session:read`",
-        "operationId": "get_api_v1_orgs_orgId_sessions_id",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "orgId",
-            "required": true,
-            "schema": {
-              "format": "uuid",
-              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
-              "type": "string"
-            }
-          },
-          {
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "format": "uuid",
-              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "additionalProperties": {},
-                  "properties": { "id": { "type": "string" } },
-                  "required": ["id"],
-                  "type": "object"
-                }
-              }
-            },
-            "description": "Session"
-          },
-          "400": {
-            "content": {
-              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
-            },
-            "description": "Validation failed (application/problem+json)"
-          },
-          "401": {
-            "content": {
-              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
-            },
-            "description": "Authentication required"
-          },
-          "403": {
-            "content": {
-              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
-            },
-            "description": "Permission denied"
-          },
-          "404": {
-            "content": {
-              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
-            },
-            "description": "Not found (also returned for objects of other tenants)"
-          }
-        },
-        "summary": "Get a session with its actions",
-        "tags": ["sessions"]
-      }
-    },
     "/api/v1/orgs/{orgId}/audit-log": {
       "get": {
         "description": "Permission: `audit_log:read`",
@@ -9452,6 +9843,999 @@
         },
         "summary": "Organization audit log (includes impersonation rows)",
         "tags": ["audit"]
+      }
+    },
+    "/api/v1/orgs/{orgId}/sessions": {
+      "get": {
+        "description": "Permission: `session:read`",
+        "operationId": "get_api_v1_orgs_orgId_sessions",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "orgId",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "schema": { "default": 50, "maximum": 200, "minimum": 1, "type": "integer" }
+          },
+          { "in": "query", "name": "cursor", "schema": { "maxLength": 300, "type": "string" } },
+          { "in": "query", "name": "status", "schema": { "maxLength": 100, "type": "string" } },
+          {
+            "in": "query",
+            "name": "open",
+            "schema": { "enum": ["true", "false"], "type": "string" }
+          },
+          {
+            "in": "query",
+            "name": "site_id",
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "nas_client_id",
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "user_id",
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "client_device_id",
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "voucher_id",
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "type": "string"
+            }
+          },
+          { "in": "query", "name": "mac", "schema": { "maxLength": 32, "type": "string" } },
+          {
+            "in": "query",
+            "name": "username",
+            "schema": { "maxLength": 253, "minLength": 1, "type": "string" }
+          },
+          {
+            "in": "query",
+            "name": "from",
+            "schema": {
+              "format": "date-time",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "to",
+            "schema": {
+              "format": "date-time",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/SessionPage" } }
+            },
+            "description": "Sessions"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Validation failed (application/problem+json)"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Authentication required"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Permission denied"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Not found (also returned for objects of other tenants)"
+          }
+        },
+        "summary": "List sessions (filters, newest first, keyset cursor, freshness)",
+        "tags": ["sessions"]
+      }
+    },
+    "/api/v1/orgs/{orgId}/sessions/{id}": {
+      "get": {
+        "description": "Permission: `session:read`",
+        "operationId": "get_api_v1_orgs_orgId_sessions_id",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "orgId",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/SessionDetail" } }
+            },
+            "description": "SessionDetail"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Validation failed (application/problem+json)"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Authentication required"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Permission denied"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Not found (also returned for objects of other tenants)"
+          }
+        },
+        "summary": "Session detail: accounting timeline, anomalies, enforcement, operation availability",
+        "tags": ["sessions"]
+      }
+    },
+    "/api/v1/orgs/{orgId}/sessions/{id}/disconnect": {
+      "post": {
+        "description": "Permission: `session:disconnect`",
+        "operationId": "post_api_v1_orgs_orgId_sessions_id_disconnect",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "orgId",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": { "reason": { "maxLength": 500, "minLength": 1, "type": "string" } },
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/SessionOperationAccepted" }
+              }
+            },
+            "description": "Action queued (or the open one returned)"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Validation failed (application/problem+json)"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Authentication required"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Permission denied"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Not found (also returned for objects of other tenants)"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "session-operation-unavailable: refused with `code` and the registry-evidence `reason`"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "More than 30 refused attempts per minute by this principal"
+          }
+        },
+        "summary": "Request a RADIUS Disconnect of a session (refused unless the dispatcher is enabled; D-006)",
+        "tags": ["sessions"]
+      }
+    },
+    "/api/v1/orgs/{orgId}/sessions/{id}/reauthorize": {
+      "post": {
+        "description": "Permission: `session:coa`",
+        "operationId": "post_api_v1_orgs_orgId_sessions_id_reauthorize",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "orgId",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": { "reason": { "maxLength": 500, "minLength": 1, "type": "string" } },
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/SessionOperationAccepted" }
+              }
+            },
+            "description": "Action queued (or the open one returned)"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Validation failed (application/problem+json)"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Authentication required"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Permission denied"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Not found (also returned for objects of other tenants)"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "session-operation-unavailable: refused with `code` and the registry-evidence `reason`"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "More than 30 refused attempts per minute by this principal"
+          }
+        },
+        "summary": "Request a CoA carrying the re-resolved policy (refused unless the dispatcher is enabled; D-006)",
+        "tags": ["sessions"]
+      }
+    },
+    "/api/v1/orgs/{orgId}/session-actions/{id}": {
+      "get": {
+        "description": "Permission: `session:read`",
+        "operationId": "get_api_v1_orgs_orgId_session_actions_id",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "orgId",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/SessionAction" } }
+            },
+            "description": "SessionAction"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Validation failed (application/problem+json)"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Authentication required"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Permission denied"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Not found (also returned for objects of other tenants)"
+          }
+        },
+        "summary": "Poll a Disconnect / CoA action",
+        "tags": ["sessions"]
+      }
+    },
+    "/api/v1/orgs/{orgId}/usage": {
+      "get": {
+        "description": "Permission: `accounting:read`",
+        "operationId": "get_api_v1_orgs_orgId_usage",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "orgId",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "subject_type",
+            "required": true,
+            "schema": {
+              "enum": ["user", "client_device", "voucher", "site", "organization"],
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "subject_id",
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "period",
+            "schema": {
+              "default": "daily",
+              "enum": ["daily", "monthly", "total"],
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "from",
+            "schema": { "pattern": "^\\d{4}-\\d{2}-\\d{2}$", "type": "string" }
+          },
+          {
+            "in": "query",
+            "name": "to",
+            "schema": { "pattern": "^\\d{4}-\\d{2}-\\d{2}$", "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/UsageReport" } }
+            },
+            "description": "UsageReport"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Validation failed (application/problem+json)"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Authentication required"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Permission denied"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Not found (also returned for objects of other tenants)"
+          }
+        },
+        "summary": "Usage of a user / client device / voucher / site / organization (site-local periods, quota, freshness)",
+        "tags": ["usage"]
+      }
+    },
+    "/api/v1/orgs/{orgId}/usage/top": {
+      "get": {
+        "description": "Permission: `accounting:read`",
+        "operationId": "get_api_v1_orgs_orgId_usage_top",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "orgId",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "subject_type",
+            "schema": {
+              "default": "user",
+              "enum": ["user", "client_device", "site"],
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "period",
+            "schema": {
+              "default": "monthly",
+              "enum": ["daily", "monthly", "total"],
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "period_start",
+            "schema": { "pattern": "^\\d{4}-\\d{2}-\\d{2}$", "type": "string" }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "schema": { "default": 10, "maximum": 100, "minimum": 1, "type": "integer" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/UsageTop" } }
+            },
+            "description": "UsageTop"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Validation failed (application/problem+json)"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Authentication required"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Permission denied"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Not found (also returned for objects of other tenants)"
+          }
+        },
+        "summary": "Top-N users / client devices / sites by bytes for one period",
+        "tags": ["usage"]
+      }
+    },
+    "/api/v1/orgs/{orgId}/usage/export": {
+      "post": {
+        "description": "Permission: `report:export`",
+        "operationId": "post_api_v1_orgs_orgId_usage_export",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "orgId",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "from": { "pattern": "^\\d{4}-\\d{2}-\\d{2}$", "type": "string" },
+                  "period": {
+                    "default": "daily",
+                    "enum": ["daily", "monthly", "total"],
+                    "type": "string"
+                  },
+                  "subject_type": { "enum": ["user", "client_device", "site"], "type": "string" },
+                  "to": { "pattern": "^\\d{4}-\\d{2}-\\d{2}$", "type": "string" }
+                },
+                "required": ["subject_type"],
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": { "text/csv": { "schema": { "type": "string" } } },
+            "description": "text/csv usage rows"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Validation failed (application/problem+json)"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Authentication required"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Permission denied"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Not found (also returned for objects of other tenants)"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "More than 50000 rows: narrow the range"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Export rate limit (10 per hour per principal)"
+          }
+        },
+        "summary": "Export usage counters as CSV (report:export; refused while impersonating)",
+        "tags": ["usage"]
+      }
+    },
+    "/api/v1/orgs/{orgId}/accounting/records": {
+      "get": {
+        "description": "Permission: `accounting:read`",
+        "operationId": "get_api_v1_orgs_orgId_accounting_records",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "orgId",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "from",
+            "required": true,
+            "schema": {
+              "format": "date-time",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "to",
+            "required": true,
+            "schema": {
+              "format": "date-time",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "session_id",
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "site_id",
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "username",
+            "schema": { "maxLength": 253, "minLength": 1, "type": "string" }
+          },
+          {
+            "in": "query",
+            "name": "acct_session_id",
+            "schema": { "maxLength": 253, "minLength": 1, "type": "string" }
+          },
+          {
+            "in": "query",
+            "name": "status_type",
+            "schema": {
+              "enum": ["start", "interim", "stop", "accounting_on", "accounting_off"],
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "nas_ip",
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "ipv4",
+                  "pattern": "^(?:(?:25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])\\.){3}(?:25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])$",
+                  "type": "string"
+                },
+                {
+                  "format": "ipv6",
+                  "pattern": "^(([0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,7}:|([0-9a-fA-F]{1,4}:){1,6}:[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,5}(:[0-9a-fA-F]{1,4}){1,2}|([0-9a-fA-F]{1,4}:){1,4}(:[0-9a-fA-F]{1,4}){1,3}|([0-9a-fA-F]{1,4}:){1,3}(:[0-9a-fA-F]{1,4}){1,4}|([0-9a-fA-F]{1,4}:){1,2}(:[0-9a-fA-F]{1,4}){1,5}|[0-9a-fA-F]{1,4}:((:[0-9a-fA-F]{1,4}){1,6})|:((:[0-9a-fA-F]{1,4}){1,7}|:))$",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          {
+            "in": "query",
+            "name": "calling_station_id",
+            "schema": { "maxLength": 64, "minLength": 1, "type": "string" }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "schema": { "default": 50, "maximum": 200, "minimum": 1, "type": "integer" }
+          },
+          { "in": "query", "name": "cursor", "schema": { "maxLength": 300, "type": "string" } }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/AccountingRecordPage" }
+              }
+            },
+            "description": "AccountingRecord page"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Validation failed (application/problem+json)"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Authentication required"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Permission denied"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Not found (also returned for objects of other tenants)"
+          }
+        },
+        "summary": "Normalised accounting records in a required time window (≤ 31 days, newest first)",
+        "tags": ["accounting"]
+      }
+    },
+    "/api/v1/orgs/{orgId}/accounting/export": {
+      "post": {
+        "description": "Permission: `accounting:export`",
+        "operationId": "post_api_v1_orgs_orgId_accounting_export",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "orgId",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "acct_session_id": { "maxLength": 253, "minLength": 1, "type": "string" },
+                  "calling_station_id": { "maxLength": 64, "minLength": 1, "type": "string" },
+                  "from": {
+                    "format": "date-time",
+                    "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$",
+                    "type": "string"
+                  },
+                  "nas_ip": {
+                    "anyOf": [
+                      {
+                        "format": "ipv4",
+                        "pattern": "^(?:(?:25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])\\.){3}(?:25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])$",
+                        "type": "string"
+                      },
+                      {
+                        "format": "ipv6",
+                        "pattern": "^(([0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,7}:|([0-9a-fA-F]{1,4}:){1,6}:[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,5}(:[0-9a-fA-F]{1,4}){1,2}|([0-9a-fA-F]{1,4}:){1,4}(:[0-9a-fA-F]{1,4}){1,3}|([0-9a-fA-F]{1,4}:){1,3}(:[0-9a-fA-F]{1,4}){1,4}|([0-9a-fA-F]{1,4}:){1,2}(:[0-9a-fA-F]{1,4}){1,5}|[0-9a-fA-F]{1,4}:((:[0-9a-fA-F]{1,4}){1,6})|:((:[0-9a-fA-F]{1,4}){1,7}|:))$",
+                        "type": "string"
+                      }
+                    ]
+                  },
+                  "session_id": {
+                    "format": "uuid",
+                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                    "type": "string"
+                  },
+                  "site_id": {
+                    "format": "uuid",
+                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                    "type": "string"
+                  },
+                  "status_type": {
+                    "enum": ["start", "interim", "stop", "accounting_on", "accounting_off"],
+                    "type": "string"
+                  },
+                  "to": {
+                    "format": "date-time",
+                    "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$",
+                    "type": "string"
+                  },
+                  "username": { "maxLength": 253, "minLength": 1, "type": "string" }
+                },
+                "required": ["from", "to"],
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": { "text/csv": { "schema": { "type": "string" } } },
+            "description": "text/csv (streamed, ascending received_at): id, received_at, event_time, status_type, session_id, acct_session_id, acct_unique_id, nas_ip, nas_identifier, username, calling_station_id, called_station_id, framed_ip, input_octets, output_octets, session_time_s, terminate_cause"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Validation failed (application/problem+json)"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Authentication required"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Permission denied"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Not found (also returned for objects of other tenants)"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "More than 100000 rows: narrow the range"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Export rate limit (10 per hour per principal)"
+          }
+        },
+        "summary": "Stream accounting records as CSV (accounting:export; refused while impersonating)",
+        "tags": ["accounting"]
+      }
+    },
+    "/api/v1/platform/retention/plan": {
+      "get": {
+        "description": "Permission: `platform:health:read`",
+        "operationId": "get_api_v1_platform_retention_plan",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/RetentionPlan" } }
+            },
+            "description": "RetentionPlan"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Validation failed (application/problem+json)"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Authentication required"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Permission denied"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Not found (also returned for objects of other tenants)"
+          }
+        },
+        "summary": "D-025 retention dry run: what retention.prune would drop now (nothing is deleted)",
+        "tags": ["platform"]
       }
     },
     "/api/v1/orgs/{orgId}/session-enforcement": {

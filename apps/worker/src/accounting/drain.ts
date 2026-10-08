@@ -770,10 +770,12 @@ export async function processRecord(
   const hasDelta = delta.inputOctets > 0 || delta.outputOctets > 0 || delta.sessionTimeS > 0;
   if (hasDelta || countSession) {
     const periods = periodStarts(rec.effectiveTime, session.timezone);
+    // `site` (migration 024, P8-A): per-site / per-organization usage and top-N sites.
     const subjects = [
       ['user', session.user_id],
       ['client_device', session.client_device_id],
       ['voucher', session.voucher_id],
+      ['site', session.site_id],
     ] as const;
     for (const [subjectType, subjectId] of subjects) {
       if (subjectId === null) continue;

@@ -1,119 +1,263 @@
-import { useQuery } from '@tanstack/react-query';
-import { useId, useState } from 'react';
+/**
+ * Sessions (P8-B): live list polled every 30 s (Q73), state chips, filters (site, NAS, user,
+ * client MAC, time range — each sent only when the connected API declares it), per-row
+ * accounting freshness, and Disconnect / Re-authorize buttons gated on registry evidence
+ * (D-006, V12).
+ */
+import { useState } from 'react';
 import { Link } from 'react-router';
-import { api, buildUrl, request } from '../../api/client';
-import type { Page, Row } from '../../api/types';
+import { buildUrl, request } from '../../api/client';
+import type { Page } from '../../api/types';
 import { DataTable } from '../../components/DataTable';
-import { Badge, Button, Card, PageHeader, SelectField } from '../../components/ui';
+import { FRESHNESS_EXPLAINER, FreshnessBadge } from '../../components/Freshness';
+import { Badge, Card, cx, PageHeader, SelectField, TextField } from '../../components/ui';
 import { RequireOrgPermission } from '../../layout/guards';
-import { hasOperation, useApiDocument } from '../../lib/apiDoc';
+import {
+  isOpenSession,
+  POLL_INTERVAL_MS,
+  SESSION_STATE_HINT,
+  SESSION_STATE_LABEL,
+  SESSION_STATES,
+  SESSIONS_PATH,
+  sessionFreshness,
+  sessionStateLabel,
+  sessionStateTone,
+  type SessionRow,
+  type SessionState,
+} from '../../lib/accounting';
+import { hasParameter, useApiDocument } from '../../lib/apiDoc';
 import { useAuth } from '../../lib/auth';
-import { disconnectGate, type DisconnectGate } from '../../lib/disconnect';
-import { display, formatBytes, formatDateTime, formatDuration, str } from '../../lib/format';
+import {
+  display,
+  formatBytes,
+  formatDateTime,
+  formatDuration,
+  localInputToIso,
+} from '../../lib/format';
 import { useOrgId } from '../../lib/org';
-import { can, canPlatform } from '../../lib/permissions';
+import { can } from '../../lib/permissions';
 import { useCursorList } from '../../lib/queries';
+import { useOptions } from '../resource/useOptions';
+import { OperationButton } from './SessionOperations';
+import { useOperationGates } from './useOperationGates';
 
-const DISCONNECT_PATH = '/api/v1/orgs/{orgId}/sessions/{id}/disconnect';
+type StateFilter = SessionState | 'all' | 'open';
 
-export function DisconnectButton({ gate }: { gate: DisconnectGate }) {
-  const id = useId();
+export function StateChips({
+  value,
+  onChange,
+  available,
+}: {
+  value: StateFilter;
+  onChange: (v: StateFilter) => void;
+  available: (s: StateFilter) => boolean;
+}) {
+  const chips: { key: StateFilter; label: string; hint?: string }[] = [
+    { key: 'open', label: 'Open', hint: 'Authorized or active: sessions that may be online now' },
+    { key: 'all', label: 'All' },
+    ...SESSION_STATES.map((s) => ({
+      key: s,
+      label: SESSION_STATE_LABEL[s],
+      hint: SESSION_STATE_HINT[s],
+    })),
+  ];
   return (
-    <span className="inline-flex items-center gap-1" title={gate.reason}>
-      <Button size="sm" variant="danger" disabled={!gate.enabled} aria-describedby={id}>
-        Disconnect
-      </Button>
-      <span id={id} role="tooltip" className="sr-only">
-        {gate.reason}
-      </span>
-    </span>
+    <div role="radiogroup" aria-label="Session state" className="flex flex-wrap gap-2">
+      {chips.map((c) => {
+        const enabled = c.key === 'all' || available(c.key);
+        return (
+          <button
+            key={c.key}
+            type="button"
+            role="radio"
+            aria-checked={value === c.key}
+            disabled={!enabled}
+            title={c.hint}
+            onClick={() => onChange(c.key)}
+            className={cx(
+              'rounded-full border px-3 py-1 text-xs font-medium',
+              'focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary',
+              'disabled:cursor-not-allowed disabled:opacity-50',
+              value === c.key
+                ? 'border-primary bg-primary text-primary-fg'
+                : 'border-border bg-surface hover:bg-muted',
+            )}
+          >
+            {c.label}
+          </button>
+        );
+      })}
+    </div>
   );
 }
+
+const MAC_RE = /^[0-9a-fA-F]{2}([:-]?[0-9a-fA-F]{2}){5}$/;
 
 function SessionsScreen() {
   const orgId = useOrgId();
   const { me } = useAuth();
-  const [status, setStatus] = useState('active');
   const doc = useApiDocument();
-  const list = useCursorList<Row>(['org', orgId, 'sessions', status], (cursor, signal) =>
-    request<Page<Row>>(
-      'get',
-      buildUrl('/api/v1/orgs/{orgId}/sessions', { orgId }, { limit: 50, cursor, status }),
-      { signal },
-    ),
-  );
-  // Adapter of each NAS (D-035) and the adapters' disconnect status (platform catalogue).
-  const nas = useQuery({
-    queryKey: ['org', orgId, 'nas-adapters'],
-    enabled: can(me, 'nas:read', { organizationId: orgId, anySite: true }),
-    queryFn: ({ signal }) =>
-      api('get', '/api/v1/orgs/{orgId}/nas', { params: { orgId }, query: { limit: 200 }, signal }),
-  });
-  const catalogue = useQuery({
-    queryKey: ['platform', 'adapters'],
-    enabled: canPlatform(me, 'platform:health:read'),
-    queryFn: ({ signal }) => api('get', '/api/v1/platform/adapters', { signal }),
-  });
-  const adapterOfNas = new Map<string, string>();
-  for (const n of (nas.data?.data ?? []) as Row[]) {
-    const key = n.adapter_key ?? n.adapter_type_key;
-    if (typeof key === 'string') adapterOfNas.set(n.id, key);
-  }
-  const disconnectCap = new Map<string, { status?: unknown; evidence_level?: unknown }>();
-  for (const a of (catalogue.data?.adapters ?? []) as unknown as Row[]) {
-    const d = a.disconnect as { status?: unknown; evidence_level?: unknown } | undefined;
-    disconnectCap.set(str(a.key), d ?? {});
-  }
-  const endpointAvailable = hasOperation(doc.data, 'post', DISCONNECT_PATH);
+  const [state, setState] = useState<StateFilter>('open');
+  const [siteId, setSiteId] = useState('');
+  const [nasId, setNasId] = useState('');
+  const [user, setUser] = useState('');
+  const [mac, setMac] = useState('');
+  const [from, setFrom] = useState('');
+  const [to, setTo] = useState('');
 
-  const gateFor = (row: Row): DisconnectGate => {
-    const adapterKey =
-      typeof row.nas_client_id === 'string' ? (adapterOfNas.get(row.nas_client_id) ?? null) : null;
-    return disconnectGate({
-      status: adapterKey ? disconnectCap.get(adapterKey)?.status : undefined,
-      evidenceLevel: adapterKey ? disconnectCap.get(adapterKey)?.evidence_level : undefined,
-      adapterKey,
-      hasPermission: can(me, 'session:disconnect', {
-        organizationId: orgId,
-        siteId: (row.site_id as string) ?? null,
-      }),
-      endpointAvailable,
-    });
+  const supports = (name: string) => hasParameter(doc.data, 'get', SESSIONS_PATH, name);
+  const statusEnum = doc.data?.paths[SESSIONS_PATH]?.get?.parameters?.find(
+    (p) => p.name === 'status',
+  )?.schema?.enum;
+  const userParam = supports('username') ? 'username' : supports('user') ? 'user' : null;
+  const macValid = mac.trim() === '' || MAC_RE.test(mac.trim());
+
+  const filters: Record<string, string | undefined> = {
+    // `open=true` (authorized + active); an API without it gets the active sessions.
+    open: state === 'open' && supports('open') ? 'true' : undefined,
+    status:
+      state === 'all' || state === 'open'
+        ? state === 'open' && !supports('open')
+          ? 'active'
+          : undefined
+        : state,
+    site_id: supports('site_id') && siteId ? siteId : undefined,
+    nas_client_id: supports('nas_client_id') && nasId ? nasId : undefined,
+    mac: supports('mac') && macValid && mac.trim() ? mac.trim() : undefined,
+    from: supports('from') ? (localInputToIso(from) ?? undefined) : undefined,
+    to: supports('to') ? (localInputToIso(to) ?? undefined) : undefined,
   };
+  if (userParam && user.trim()) filters[userParam] = user.trim();
+
+  const list = useCursorList<SessionRow>(
+    ['org', orgId, 'sessions', 'list', filters],
+    (cursor, signal) =>
+      request<Page<SessionRow>>(
+        'get',
+        buildUrl(SESSIONS_PATH, { orgId }, { limit: 50, cursor, ...filters }),
+        { signal, pathTemplate: SESSIONS_PATH },
+      ),
+    !doc.isPending,
+    { refetchInterval: POLL_INTERVAL_MS },
+  );
+  const anySite = { organizationId: orgId, anySite: true };
+  const sites = useOptions(
+    orgId,
+    can(me, 'site:read', anySite)
+      ? { path: '/api/v1/orgs/{orgId}/sites', label: (r) => String(r.name ?? r.id) }
+      : undefined,
+  );
+  const nas = useOptions(
+    orgId,
+    can(me, 'nas:read', anySite)
+      ? { path: '/api/v1/orgs/{orgId}/nas', label: (r) => String(r.name ?? r.id) }
+      : undefined,
+  );
+  const gateFor = useOperationGates(orgId);
+  const notSupported = 'Not supported by this API version';
 
   return (
     <div>
       <PageHeader
         title="Sessions"
-        description="RADIUS sessions reported by NAS accounting. Disconnect is offered only for adapters whose disconnect support is lab validated on a recorded device test."
+        description="RADIUS sessions reported by NAS accounting, refreshed every 30 seconds. Disconnect and Re-authorize are offered only where the NAS adapter's support is lab-validated on a recorded device test."
       />
       <Card>
-        <div className="mb-3 w-48">
-          <SelectField
-            label="Status"
-            value={status}
-            onChange={(e) => setStatus(e.target.value)}
-            options={[
-              { value: 'active', label: 'Active' },
-              { value: 'stopped', label: 'Stopped' },
-              { value: 'stale', label: 'Stale' },
-            ]}
+        <div className="mb-4 space-y-3">
+          <StateChips
+            value={state}
+            onChange={setState}
+            available={(s) =>
+              s === 'all' ||
+              (s === 'open' ? true : statusEnum === undefined || statusEnum.includes(s))
+            }
           />
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+            <SelectField
+              label="Site"
+              value={siteId}
+              disabled={!supports('site_id')}
+              onChange={(e) => setSiteId(e.target.value)}
+              options={[{ value: '', label: 'All sites' }, ...(sites.data ?? [])]}
+            />
+            <SelectField
+              label="NAS"
+              value={nasId}
+              disabled={!supports('nas_client_id')}
+              onChange={(e) => setNasId(e.target.value)}
+              options={[{ value: '', label: 'All NAS' }, ...(nas.data ?? [])]}
+            />
+            <TextField
+              label="User"
+              value={user}
+              disabled={userParam === null}
+              hint={userParam === null ? notSupported : undefined}
+              onChange={(e) => setUser(e.target.value)}
+            />
+            <TextField
+              label="Client MAC"
+              value={mac}
+              placeholder="aa:bb:cc:dd:ee:ff"
+              disabled={!supports('mac')}
+              hint={!supports('mac') ? notSupported : undefined}
+              error={macValid ? undefined : 'Enter a MAC address'}
+              onChange={(e) => setMac(e.target.value)}
+            />
+            <TextField
+              label="Started from"
+              type="datetime-local"
+              value={from}
+              disabled={!supports('from')}
+              hint={!supports('from') ? notSupported : undefined}
+              onChange={(e) => setFrom(e.target.value)}
+            />
+            <TextField
+              label="Started to"
+              type="datetime-local"
+              value={to}
+              disabled={!supports('to')}
+              hint={!supports('to') ? notSupported : undefined}
+              onChange={(e) => setTo(e.target.value)}
+            />
+          </div>
+          <p className="text-xs text-subtle" aria-live="polite">
+            {list.dataUpdatedAt > 0
+              ? `Updated ${new Date(list.dataUpdatedAt).toLocaleTimeString()} · auto-refresh every ${POLL_INTERVAL_MS / 1000} s`
+              : null}
+            {list.isFetching && !list.isPending ? ' · refreshing…' : null}
+            <span className="block">{FRESHNESS_EXPLAINER}</span>
+          </p>
         </div>
         <DataTable
           caption="Sessions"
           rows={list.rows}
           rowKey={(r) => r.id}
-          loading={list.isPending}
+          loading={doc.isPending || list.isPending}
           error={list.error}
-          emptyTitle={`No ${status} sessions`}
+          emptyTitle={
+            state === 'all'
+              ? 'No sessions match these filters'
+              : `No ${state === 'open' ? 'open' : sessionStateLabel(state).toLowerCase()} sessions match these filters`
+          }
           hasMore={list.hasNextPage}
           loadingMore={list.isFetchingNextPage}
           onLoadMore={() => void list.fetchNextPage()}
           columns={[
-            { key: 'username_raw', header: 'User' },
+            {
+              key: 'user',
+              header: 'User',
+              render: (r) => (
+                <Link
+                  to={`/orgs/${orgId}/sessions/${r.id}`}
+                  className="text-primary hover:underline"
+                >
+                  {display(r.username_raw)}
+                </Link>
+              ),
+            },
             { key: 'mac', header: 'MAC' },
             { key: 'framed_ip', header: 'IP' },
+            { key: 'site', header: 'Site', render: (r) => display(r.site_name ?? r.site_id) },
             { key: 'nas_name', header: 'NAS' },
             { key: 'policy_name', header: 'Policy' },
             { key: 'started_at', header: 'Started', render: (r) => formatDateTime(r.started_at) },
@@ -126,27 +270,41 @@ function SessionsScreen() {
             { key: 'output_octets', header: 'Out', render: (r) => formatBytes(r.output_octets) },
             {
               key: 'status',
-              header: 'Status',
+              header: 'State',
               render: (r) => (
-                <Badge tone={r.status === 'active' ? 'success' : 'neutral'}>
-                  {display(r.status)}
-                </Badge>
+                <Badge tone={sessionStateTone(r.status)}>{sessionStateLabel(r.status)}</Badge>
               ),
+            },
+            {
+              key: 'freshness',
+              header: 'Accounting',
+              render: (r) =>
+                isOpenSession(r.status) ? (
+                  <FreshnessBadge freshness={sessionFreshness(r)} />
+                ) : (
+                  <span className="text-subtle">{formatDateTime(r.stopped_at)}</span>
+                ),
             },
             {
               key: 'actions',
               header: 'Actions',
-              render: (r) => (
-                <span className="inline-flex items-center gap-2">
-                  <Link
-                    to={`/orgs/${orgId}/sessions/${r.id}`}
-                    className="text-xs text-primary hover:underline"
-                  >
-                    Enforcement
-                  </Link>
-                  <DisconnectButton gate={gateFor(r)} />
-                </span>
-              ),
+              render: (r) =>
+                !isOpenSession(r.status) ? (
+                  <span className="text-subtle">—</span>
+                ) : (
+                  <span className="inline-flex items-center gap-2">
+                    {(['disconnect', 'reauthorize'] as const).map((op) => (
+                      <OperationButton
+                        key={op}
+                        operation={op}
+                        gate={gateFor(r, op)}
+                        orgId={orgId}
+                        sessionId={r.id}
+                        label={display(r.username_raw ?? r.mac)}
+                      />
+                    ))}
+                  </span>
+                ),
             },
           ]}
         />

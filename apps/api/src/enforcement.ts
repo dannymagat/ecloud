@@ -776,3 +776,70 @@ export async function propagateChange(
   });
   return propagateImpact(trx, ctx, impact, opts);
 }
+
+/**
+ * P8-A reauthorize: re-resolves ONE open session now, exactly as `computeImpact` does for a
+ * candidate (stored subject facts, current policies). Null when the session is not open or its
+ * subject can no longer be determined.
+ */
+export async function resolveOpenSessionNow(
+  trx: DbTransaction,
+  organizationId: string,
+  sessionId: string,
+  now: Date,
+): Promise<{
+  session: OpenSession;
+  resolution: ReturnType<typeof resolveEffectivePolicy>;
+  previousHash: string | null;
+} | null> {
+  const s = (await trx
+    .selectFrom('sessions as s')
+    .innerJoin('nas_clients as n', 'n.id', 's.nas_client_id')
+    .innerJoin('sites as st', 'st.id', 's.site_id')
+    .leftJoin('users as u', 'u.id', 's.user_id')
+    .leftJoin('vouchers as v', 'v.id', 's.voucher_id')
+    .select([
+      's.id',
+      's.site_id',
+      's.nas_client_id',
+      's.user_id',
+      's.client_device_id',
+      's.voucher_id',
+      's.mac',
+      's.started_at',
+      's.status',
+      's.policy_id',
+      'n.adapter_key',
+      'st.timezone',
+      'u.user_group_id',
+      'v.batch_id as voucher_batch_id',
+    ])
+    .where('s.id', '=', sessionId)
+    .where('s.status', 'in', ['authorized', 'active'])
+    .executeTakeFirst()) as OpenSession | undefined;
+  if (s === undefined) return null;
+  const snap = (await loadAuthorizeSnapshots(trx, [s.id])).get(s.id);
+  const subject = await subjectOf(trx, s, snap?.facts ?? null);
+  if (subject === null) return null;
+  const input = await loadResolutionInput(trx, {
+    organizationId,
+    siteId: s.site_id,
+    timeZone: s.timezone,
+    now,
+    subject,
+    clientDeviceId: s.client_device_id,
+    mac: s.mac,
+    groupIds: s.user_group_id === null ? [] : [s.user_group_id],
+    voucherBatchId: s.voucher_batch_id,
+  });
+  // The session being re-authorized is not a concurrent session of itself: it must neither
+  // reserve its own remaining quota (§5.1 estimate) nor count towards its concurrency limit.
+  const others = (input.active_sessions ?? []).filter((a) => a.id !== s.id);
+  const resolution = resolveEffectivePolicy({
+    ...input,
+    active_sessions: others,
+    mac: s.mac,
+    trigger: 'coa',
+  });
+  return { session: s, resolution, previousHash: snap?.hash ?? null };
+}

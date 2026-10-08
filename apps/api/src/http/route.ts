@@ -5,6 +5,8 @@
  */
 import { UnauthorizedError, ForbiddenError, type PermissionKey } from '@ecloud/shared';
 import express, { type Request, type RequestHandler, type Response, type Router } from 'express';
+import { Readable } from 'node:stream';
+import { pipeline } from 'node:stream/promises';
 import { type z } from 'zod';
 import { assertPermissionKey, evaluate, type AuthzTarget } from '../auth/authorize.js';
 import type { AppDeps, RequestContext } from '../context.js';
@@ -19,6 +21,13 @@ export interface HandlerResult {
   headers?: Record<string, string>;
   /** Non-JSON body (e.g. `text/csv`): `body` must then be a string or Buffer, sent verbatim. */
   contentType?: string;
+  /**
+   * Streamed body (P8-A CSV exports): chunks are written with back-pressure as they are produced.
+   * The handler must finish every check (authorization, validation, audit) before returning; an
+   * error while streaming can no longer become a problem+json, so the connection is aborted and
+   * the error logged (a truncated download fails visibly instead of looking complete).
+   */
+  stream?: AsyncIterable<string>;
 }
 
 export interface HandlerInput<P, Q, B> {
@@ -179,6 +188,20 @@ export function mountRoute(router: Router, deps: AppDeps, spec: AnyRouteSpec): v
       req.log.error({ route: `${spec.method.toUpperCase()} ${spec.path}` }, 'mutation not audited');
     }
     for (const [name, value] of Object.entries(result.headers ?? {})) res.setHeader(name, value);
+    if (result.stream !== undefined) {
+      res.status(result.status);
+      if (result.contentType !== undefined) res.type(result.contentType);
+      try {
+        await pipeline(Readable.from(result.stream), res);
+      } catch (err) {
+        req.log.error(
+          { err, route: `${spec.method.toUpperCase()} ${spec.path}` },
+          'stream aborted',
+        );
+        if (!res.destroyed) res.destroy(err instanceof Error ? err : undefined);
+      }
+      return;
+    }
     if (result.body === undefined) {
       res.status(result.status).end();
     } else if (

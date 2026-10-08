@@ -4,7 +4,9 @@
  */
 import {
   Activity,
+  BarChart3,
   Building,
+  Database,
   Cpu,
   FileStack,
   KeyRound,
@@ -80,6 +82,13 @@ export const ORG_NAV: readonly NavItem[] = [
     anyOf: ['captive_portal:read'],
   },
   { path: 'sessions', label: 'Sessions', icon: Activity, anyOf: ['session:read'] },
+  { path: 'usage', label: 'Usage', icon: BarChart3, anyOf: ['accounting:read'] },
+  {
+    path: 'accounting',
+    label: 'Accounting records',
+    icon: Database,
+    anyOf: ['accounting:read'],
+  },
   { path: 'audit-log', label: 'Audit log', icon: ScrollText, anyOf: ['audit_log:read'] },
   { path: 'administrators', label: 'Administrators', icon: UserCog, anyOf: ['administrator:read'] },
   { path: 'api-keys', label: 'API keys', icon: KeyRound, anyOf: ['api_key:read'] },

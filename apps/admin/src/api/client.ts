@@ -206,3 +206,82 @@ export async function uploadFile<T>(
   }
   return parsed as T;
 }
+
+/**
+ * File download (CSV exports): same CSRF / idempotency headers as `request`; the response body
+ * is returned as a Blob with the server's file name (Content-Disposition) when present.
+ * Non-2xx responses throw `ApiError` holding the problem document.
+ */
+export async function downloadFile(
+  method: 'get' | 'post',
+  url: string,
+  init: { body?: unknown; idempotencyKey?: string; signal?: AbortSignal } = {},
+): Promise<{ blob: Blob; filename: string | null }> {
+  const headers: Record<string, string> = {
+    Accept: 'text/csv, application/problem+json',
+    'X-Requested-With': 'XMLHttpRequest',
+  };
+  if (init.body !== undefined) headers['Content-Type'] = 'application/json';
+  if (method === 'post') headers['Idempotency-Key'] = init.idempotencyKey ?? newIdempotencyKey();
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      method: method.toUpperCase(),
+      headers,
+      credentials: 'same-origin',
+      body: init.body === undefined ? undefined : JSON.stringify(init.body),
+      signal: init.signal,
+    });
+  } catch (error) {
+    if (error instanceof DOMException && error.name === 'AbortError') throw error;
+    throw new ApiError({
+      type: 'about:blank',
+      title: 'Network error',
+      status: 0,
+      detail: 'The ECLOUD API could not be reached. Check your connection and try again.',
+    });
+  }
+  if (!res.ok) {
+    const text = await res.text();
+    let parsed: unknown = undefined;
+    try {
+      parsed = text ? JSON.parse(text) : undefined;
+    } catch {
+      parsed = undefined;
+    }
+    if (res.status === 401) for (const listener of sessionExpiredListeners) listener();
+    throw new ApiError(toProblem(res.status, parsed, res.statusText || `HTTP ${res.status}`));
+  }
+  const disposition = res.headers.get('Content-Disposition') ?? '';
+  const match = /filename\*?=(?:UTF-8'')?"?([^";]+)"?/i.exec(disposition);
+  return { blob: await res.blob(), filename: safeFilename(match?.[1]) };
+}
+
+/** Decode a Content-Disposition filename defensively: malformed escapes fall back to the caller's
+ * default name; path separators and control characters are stripped; length is capped. */
+export function safeFilename(raw: string | undefined): string | null {
+  if (!raw) return null;
+  let name: string;
+  try {
+    name = decodeURIComponent(raw);
+  } catch {
+    return null;
+  }
+  // Path separators and C0/DEL control characters become '_' (no-control-regex: intended here).
+  // eslint-disable-next-line no-control-regex
+  const unsafe = /[\\/\u0000-\u001f\u007f]/g;
+  name = name.replace(unsafe, '_').trim().slice(0, 200);
+  return name === '' ? null : name;
+}
+
+/** Saves a Blob through a temporary object URL (browser only). */
+export function saveBlob(blob: Blob, filename: string): void {
+  const href = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = href;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(href), 0);
+}

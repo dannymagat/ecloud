@@ -66,6 +66,22 @@ export class ImpersonationForbiddenError extends AppError {
   }
 }
 
+/**
+ * P8-A: a session Disconnect / Reauthorize the API will not dispatch (D-006, D-028 V12). The
+ * extensions carry the machine `code`, the registry-evidence `reason` and the evidence itself so
+ * the admin UI can show the same neutral wording as the disabled button.
+ */
+export class SessionOperationUnavailableError extends AppError {
+  constructor(
+    extensions: { operation: string; code: string; reason: string } & Record<string, unknown>,
+  ) {
+    super(409, 'session-operation-unavailable', 'Session Operation Unavailable', {
+      detail: extensions.reason,
+      extensions,
+    });
+  }
+}
+
 export class ServiceUnavailableError extends AppError {
   constructor(detail = 'A backing service is unavailable.') {
     super(503, 'unavailable', 'Service Unavailable', { detail });

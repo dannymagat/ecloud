@@ -30,6 +30,10 @@ import { policyRoutes } from './routes/policies.js';
 import { registryRoutes } from './routes/registry.js';
 import { resourceRoutes } from './routes/resources.js';
 import { runtimeRoutes } from './routes/runtime.js';
+import { sessionRoutes } from './routes/sessions.js';
+import { accountingRoutes } from './routes/accounting.js';
+import { usageRoutes } from './routes/usage.js';
+import { retentionRoutes } from './routes/retention.js';
 import { voucherRoutes } from './routes/vouchers.js';
 
 export const API_VERSION = '0.1.0';
@@ -54,6 +58,10 @@ export function allRoutes(deps: AppDeps): AnyRouteSpec[] {
     ...registryRoutes(deps),
     ...voucherRoutes(deps),
     ...runtimeRoutes(deps),
+    ...sessionRoutes(deps),
+    ...usageRoutes(deps),
+    ...accountingRoutes(deps),
+    ...retentionRoutes(deps),
     ...enforcementRoutes(deps),
     ...portalAdminRoutes(deps),
   ];
