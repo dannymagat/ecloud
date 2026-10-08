@@ -366,3 +366,100 @@ flowchart TB
 | D4 | `radclient status` (Status-Server) against the FreeRADIUS container from the worker container — healthcheck viability | Healthchecks (§2.1) |
 | D5 | End-to-end latency budget: portal login → RADIUS → policy applied on AP, measured with limits from §2.2 under load (e.g. 50 concurrent logins) | Resource sizing (§2.2) |
 | D6 | Site gateway/AP reaching `api.ecloud.ezelink.ai` (if device-side integrations are needed) over public vs tunnel | API path (§2.1, WIREGUARD §6) |
+
+---
+
+## Implementation notes (M9) — container images, LOCAL only (2026-10-08)
+
+Status: images built and run **on the developer workstation only** (Docker Desktop, engine
+29.4.0, linux/amd64 host). Nothing was pushed to a registry and nothing was done on `vps`
+(D-031 gate unchanged). Commands: docs/DEVELOPMENT.md "Container images".
+
+**What exists**
+
+- `infra/docker/Dockerfile` — one multi-target file (`api`, `worker`, `portal`, `admin`),
+  build context = repo root, root `.dockerignore`. Node targets: `node:22.23.3-bookworm-slim`,
+  `npm ci -w <workspace>` against the root lockfile, `tsc -b <app>/tsconfig.build.json`,
+  separate `--omit=dev` runtime tree, npm/corepack removed, `USER node`, `tini`, files owned by
+  root, OCI labels (`source`, `revision` from `VCS_REF`), `HEALTHCHECK` via Node `fetch` on
+  `/healthz` (no curl in the image), `EXPOSE` of the app port only.
+- `admin` target: Vite build, `*.map` deleted, served by `nginxinc/nginx-unprivileged:1.28.2-alpine`
+  (uid 101) — **local testing only**; production keeps native Caddy serving `apps/admin/dist`
+  (D-030, §3). nginx hardening present in `infra/docker/admin-nginx.conf`: `server_tokens off`;
+  `Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self'; img-src
+  'self' data:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'self';
+  form-action 'self'; frame-ancestors 'none'` (data: only for the locally rendered MFA QR code);
+  `X-Content-Type-Options: nosniff`; `X-Frame-Options: DENY`; `Referrer-Policy: same-origin`;
+  dotfile paths (`~ /\.`) answer 404; SPA fallback only outside `/assets/` (missing assets are
+  404); `/api/` proxy overwrites `X-Forwarded-For` with `$remote_addr` (client values are not
+  forwarded); image entrypoint scripts bypassed so the root FS can be read-only. The same
+  headers must be reproduced in the production Caddy site block (§3.2).
+- Runtime trees are pruned (`infra/docker/prune-runtime.sh`): unbuilt workspace manifests,
+  dangling `@ecloud/*` links (e.g. dev-only `@ecloud/testing`) and third-party `*.map` files
+  are removed.
+- `infra/compose/docker-compose.dev.yml`: services `api`, `worker`, `portal`, `admin` under
+  profile `app`, `migrate` (one-shot, `node packages/db/dist/cli.js migrate`) under profile
+  `migrate`; `read_only`, `tmpfs /tmp`, `cap_drop: [ALL]`, `no-new-privileges`, §2.2 memory /
+  cpu limits and `pids: 128`; all publishes on `127.0.0.1`.
+
+**Measured (local build, linux/amd64)**
+
+| Image | Disk (uncompressed) | Content (compressed) |
+|---|---|---|
+| `node:22.23.3-bookworm-slim` (base, for reference) | 329 MB | 79.8 MB |
+| `ecloud-api:local` | 361 MB | 84.2 MB |
+| `ecloud-worker:local` (includes `freeradius-utils`) | 389 MB | 90.1 MB |
+| `ecloud-portal:local` | 355 MB | 83.3 MB |
+| `ecloud-admin:local` | 82.6 MB | 23.4 MB |
+
+Verified: all five `/healthz` endpoints (api public + internal, portal, worker, admin) return
+200 under Compose; api `/readyz` reports database + redis ok; admin `/` and deep SPA routes
+return `index.html`, `/api/v1/openapi.json` is proxied to the api; `id` in each container is
+uid 1000 (`node`) or 101 (`nginx`); `/app` is not writable (read-only rootfs); PID 1 is
+`tini`; api and worker drain and exit 0 on `docker compose stop`; standalone
+`docker run --read-only --cap-drop ALL` works for api (memory KV), portal and admin; a Node
+image started with the default `NODE_ENV=production` and no configuration refuses to start
+(`ConfigError: … dev default is not allowed when NODE_ENV=production`).
+
+**Deviations from §2.1 / §4.3 (to resolve before the VPS change list)**
+
+1. Ports: the code uses `API_PORT` 3000, `INTERNAL_PORT` 3001 (api internal listener) and
+   `PORTAL_PORT` 3002; §2.1 shows the portal on 3001. The pilot Compose file must follow the
+   code (portal 3002) and must **not** publish the internal listener at all (FreeRADIUS reaches
+   it on the private network). **DEV ONLY, never copy into a production Compose file:** the
+   dev file sets `INTERNAL_BIND_HOST=0.0.0.0` inside the container network and publishes the
+   internal listener on host `127.0.0.1:3001`, purely for the host-side dev freeradius wiring
+   (`host.docker.internal:3001`).
+2. Worker: separate image target (not "same image as api") because it adds `freeradius-utils`
+   (Debian bookworm `radclient` **3.2.1**, while the server image is 3.2.10 — CoA stays
+   REQUIRES_DEVICE_TEST, D-006). Its `/healthz` binds 127.0.0.1 inside the container by default;
+   the dev file sets `WORKER_HEALTH_HOST=0.0.0.0` only to publish the probe on host loopback.
+3. `migrate` uses the api image with `node packages/db/dist/cli.js migrate` (npm is removed
+   from runtime images, so `command: npm run migrate` from §2.1 does not apply).
+4. Base images are pinned **by tag only**; pinning by digest is a VPS change-list item (below).
+   Digests at build time were
+   `node@sha256:c3de60bf2f9dd0ac6370e6117950ff62d6e339527e7472301c9c78a017978392` and
+   `nginxinc/nginx-unprivileged@sha256:7377697a821c131a924a7105fafbe7414db4e9fcc77a6f08f776f33f141ec3f8`
+   (multi-arch index digests as resolved locally). apt packages (`tini`, `freeradius-utils`)
+   are **unpinned** (whatever Debian bookworm serves at build time).
+5. Fixed in the M9 review loop: the portal now drains and exits 0 on SIGTERM/SIGINT like the
+   api (it exited 143 before).
+
+**Still needed for the VPS change list (NOT performed; requires D-031 owner approval)**
+
+- Build in CI for `linux/amd64` (VPS is x86_64, REMOTE_ENVIRONMENT.md), push to the chosen
+  registry (Q "registry"), tag `:<git-sha>` + `:<semver>`, pin base images **by digest** and
+  pin/record apt package versions, SBOM + image scan.
+- A pilot Compose file (`/opt/ecloud/compose.yaml`) derived from the dev services: production
+  env/secrets via `*_FILE` + Compose `secrets:`, `NODE_ENV=production`, real
+  `PUBLIC_*_ORIGIN`s, `SESSION_COOKIE_SECURE=true`, `__Host-` cookie name, `TRUST_PROXY_HOPS=1`
+  behind Caddy, `ecloud_internal` network (§2.1, Q16), no admin container (Caddy serves the SPA),
+  `migrate` gating api/worker via `service_completed_successfully`.
+- Storage (D-026): the images default to `NODE_ENV=production`, where `packages/shared` config
+  rejects `STORAGE_DRIVER=local` unless `STORAGE_LOCAL_ALLOW_PRODUCTION=true` (pilot,
+  non-critical assets only) and rejects a non-`https` `S3_ENDPOINT`. The pilot Compose file must
+  set one of the two explicitly (the opt-in is intentionally not an image default); with the
+  local driver it needs a volume for `STORAGE_LOCAL_PATH` (`/var/lib/ecloud/storage`) and a
+  backup of it.
+- Caddy site blocks (§3.2) and the procedure of D-030; DNS (D-029); firewall/`DOCKER-USER`
+  rules; Docker log rotation (§2.3) — all unchanged and unapplied.

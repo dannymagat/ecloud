@@ -686,3 +686,20 @@ seed), self-service MFA disable (D-038: not provided), async import/export jobs 
    without `adapter_key` until an operator sets it; `GET /platform/health` reports their count
    (`nas.without_adapter_key`). The lab AP EZE-AP1832 is TIP-fork uspot (DT-01), i.e.
    `openwifi-uspot-uam` — the operator chooses; nothing is guessed in SQL.
+
+### Implementation notes (M10)
+
+- **Object storage (D-026).** `@ecloud/storage` (`packages/storage`) provides the `ObjectStorage`
+  interface, tenant-scoped keys `org/{organizationId}/{purpose}/{id}` (lower-case ids),
+  per-purpose content-type allow-list + magic-byte check + size limit (`branding`: PNG/JPEG/WebP
+  ≤ 5 MiB; SVG rejected), and two drivers behind `createStorage(config.storage)`: `local`
+  (STORAGE_LOCAL_PATH, pilot/dev, non-critical assets only; refused in production unless
+  `STORAGE_LOCAL_ALLOW_PRODUCTION=true`) and `s3` (S3-compatible endpoint from `S3_*`, `https://`
+  required in production). Verified: the shared contract passes against the local driver in
+  `npm test`, and against RustFS only (throwaway container, 2026-10-08); AWS S3/R2/B2/Wasabi are
+  untested. This supersedes the "MinIO on pilot" wording under "File storage" above: no MinIO on
+  the VPS. **Not wired into `apps/api`**: no implemented endpoint stores files yet (`{o}/assets` /
+  portal themes are listed under "Not implemented yet"), so `/readyz` is unchanged. When the asset
+  endpoint lands it must use `forTenant(storage, orgId)`, add `storage.checkHealth()` to
+  readiness, cap the request body itself, and serve bytes with `Content-Type` from stored
+  metadata plus `X-Content-Type-Options: nosniff` (see `packages/storage/README.md`).

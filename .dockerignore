@@ -1,0 +1,42 @@
+# Build context = repository root (infra/docker/Dockerfile). Keep it small and secret-free:
+# the image build only needs manifests, the lockfile, tsconfig files and workspace sources.
+
+# dependencies / build output (rebuilt inside the image)
+**/node_modules
+**/dist
+**/coverage
+**/*.tsbuildinfo
+
+# environment and secrets (D-033) - nothing env-like ever enters the context
+**/.env
+**/.env.*
+**/secrets
+**/*.pem
+**/*.key
+
+# VCS, editor, OS and agent noise
+.git
+.github
+.remember
+**/.DS_Store
+**/*.swp
+**/*.log
+var
+
+# documentation (not needed at build time or runtime)
+*.md
+docs
+
+# tests and fixtures (unit tests run in CI, not in the image)
+**/*.test.ts
+**/*.test.tsx
+**/test-support
+test
+tests/**
+!tests/package.json
+infra/freeradius/test
+
+# other build contexts and dev-only infrastructure
+infra/compose
+infra/freeradius
+scripts

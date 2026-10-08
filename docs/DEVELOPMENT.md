@@ -246,6 +246,102 @@ banner with reason, countdown and Stop (D-027).
 (`try_files {path} /index.html`) and reverse-proxies `/api/*` to the API (same origin). Source
 maps are emitted but not referenced (`sourcemap: 'hidden'`); do not publish `*.map`.
 
+## Container images (M9, LOCAL only)
+
+One multi-target Dockerfile builds every app image; the build context is the repository root
+(filtered by the root `.dockerignore`: `node_modules`, `dist`, `coverage`, `.env*`, `.git`,
+`*.md`/`docs`, `*.test.ts(x)`, `test-support`, the root `test/` fixtures and the `tests/`
+suites are excluded — except `tests/package.json`, which is kept on purpose because `npm ci`
+needs every workspace manifest listed in the root lockfile).
+
+| Image (local tag)     | Target   | Base (pinned tag)                           | Port (EXPOSE) | Health probe                         |
+| --------------------- | -------- | ------------------------------------------- | ------------- | ------------------------------------ |
+| `ecloud-api:local`    | `api`    | `node:22.23.3-bookworm-slim`                | 3000          | `GET /healthz` on `API_PORT`         |
+| `ecloud-worker:local` | `worker` | `node:22.23.3-bookworm-slim` + `radclient`  | 3003          | `GET /healthz` on `WORKER_HEALTH_PORT` |
+| `ecloud-portal:local` | `portal` | `node:22.23.3-bookworm-slim`                | 3002          | `GET /healthz` on `PORTAL_PORT`      |
+| `ecloud-admin:local`  | `admin`  | `nginxinc/nginx-unprivileged:1.28.2-alpine` | 8080          | `GET /healthz` (served by nginx)     |
+
+Files: `infra/docker/Dockerfile` (all targets), `infra/docker/assemble.sh` (collects `dist/` +
+`packages/db/migrations` for the runtime stage), `infra/docker/prune-runtime.sh` (drops unbuilt
+workspace manifests, dangling `@ecloud/*` links and third-party `*.map` files from the runtime
+tree), `infra/docker/admin-nginx.conf` (LOCAL ONLY: SPA fallback, CSP and security headers,
+dotfiles denied, `/api/` proxied to the `api` service). The api internal listener (`INTERNAL_PORT` 3001) is not
+`EXPOSE`d; Compose publishes it to `127.0.0.1` only (see below).
+
+What the Node images do: `npm ci -w <workspace> --include-workspace-root` against the root
+lockfile → `tsc -b apps/<app>/tsconfig.build.json` → a separate `npm ci -w <workspace>
+--omit=dev` tree for runtime (no dev dependencies, no npm/corepack in the final image) → user
+`node` (uid 1000), `tini` as PID 1, application files owned by root (not writable by the
+process). Writable paths needed at run time: `/tmp` and, for the api, `STORAGE_LOCAL_PATH`
+(`/var/lib/ecloud/storage`, owned by `node`). The images default to `NODE_ENV=production`, so a
+container started without real configuration **refuses to start** (dev defaults are rejected).
+A production run must also choose storage explicitly (D-026, `packages/shared` config): either
+`STORAGE_LOCAL_ALLOW_PRODUCTION=true` with `STORAGE_DRIVER=local` (pilot, non-critical assets
+only) or `STORAGE_DRIVER=s3` with an `https://` `S3_ENDPOINT`. The images deliberately do not
+set that opt-in; the dev Compose services (`NODE_ENV=development`) are unaffected.
+The admin image deletes Vite's hidden `*.map` files and is for local testing only — production
+serves the static build from native Caddy (D-030).
+
+### Build
+
+```bash
+REF=$(git rev-parse --short HEAD)
+for t in api worker portal admin; do
+  docker build -f infra/docker/Dockerfile --target "$t" --build-arg VCS_REF="$REF" -t "ecloud-${t}:local" .
+done
+docker image ls 'ecloud-*'
+```
+
+(zsh: keep the braces in `ecloud-${t}:local` — `$t:l` is a zsh modifier.) On Apple Silicon add
+`--platform linux/amd64` to each `docker build` so the images match the amd64 target host
+(otherwise you get arm64 images; QEMU emulation makes the build slower). `VCS_REF` only fills
+the `org.opencontainers.image.revision` label; never pass secrets as build args.
+
+### Run with the dev stack (Compose profile `app`)
+
+The four services live in `infra/compose/docker-compose.dev.yml` under `profiles: ["app"]`
+(plus a one-shot `migrate` service under profile `migrate`), so `npm run dev:stack` is
+unchanged. They reach `postgres`/`redis` by service name with the dev-only credentials from
+`.env` (defaults `ecloud_dev_password`), run with `NODE_ENV=development`, `read_only: true`,
+`tmpfs: /tmp`, `cap_drop: [ALL]`, `no-new-privileges` and the memory/cpu/pids limits of
+DEPLOYMENT_ARCHITECTURE.md §2.2.
+
+```bash
+C="docker compose --project-directory . -f infra/compose/docker-compose.dev.yml"
+VCS_REF=$(git rev-parse --short HEAD) $C --profile app up -d --build --wait api worker portal admin
+curl -s http://127.0.0.1:3000/healthz    # api (public listener)
+curl -s http://127.0.0.1:3000/readyz     # api readiness (database + redis)
+curl -s http://127.0.0.1:3001/healthz    # api internal listener (127.0.0.1 only)
+curl -s http://127.0.0.1:3002/healthz    # portal
+curl -s http://127.0.0.1:3003/healthz    # worker (database + redis checks, queue names)
+curl -s http://127.0.0.1:8080/healthz    # admin static server
+open http://localhost:8080/              # admin SPA; /api/ is proxied to the api container
+docker exec ecloud-dev-api id            # uid=1000(node)
+$C --profile migrate run --rm --no-deps migrate status   # migration status (read-only)
+$C --profile migrate run --rm --no-deps migrate          # apply pending migrations
+$C --profile app stop api worker portal admin            # stop only the app containers
+$C --profile app rm -f api worker portal admin           # remove them (volumes untouched)
+```
+
+Naming the four services starts them plus their `depends_on` (postgres, redis) and leaves
+`freeradius` untouched; a plain `$C --profile app up -d --wait` also reconciles every other
+dev-stack service (it would recreate freeradius if its config drifted). `VCS_REF` only sets
+the revision label (default `dev`). Host ports (all `127.0.0.1`): `APP_API_PORT` 3000, `APP_INTERNAL_PORT` 3001,
+`APP_PORTAL_PORT` 3002, `APP_WORKER_HEALTH_PORT` 3003, `APP_ADMIN_PORT` 8080 — set them in
+`.env` to run the containers next to host-run `npm run dev` processes. The admin origin passed
+to the api container is `http://localhost:${APP_ADMIN_PORT}` (CSRF Origin check), so open the
+SPA via `localhost`, not `127.0.0.1`. The dev freeradius container already targets
+`host.docker.internal:3001`, i.e. the api container's internal listener when it is up.
+
+### Standalone read-only smoke test
+
+```bash
+docker run --rm -d --name smoke-api --read-only --tmpfs /tmp --cap-drop ALL \
+  --security-opt no-new-privileges:true -e NODE_ENV=development -e KV_DRIVER=memory \
+  -p 127.0.0.1:13000:3000 ecloud-api:local
+curl -s http://127.0.0.1:13000/healthz && docker stop smoke-api
+```
+
 ## Tests
 
 ```bash
@@ -349,3 +445,27 @@ OAuth passwords, API tokens or SSH keys. `.env.example` holds names and placehol
 (`ecloud_dev_password`). Production receives secrets through environment injection or
 `*_FILE` secret references. If you need a new secret, add its **name** to
 `packages/shared/src/config.ts` and `.env.example`, and mark it as a secret in `redactConfig()`.
+
+## Storage (D-026)
+
+Object storage goes through `@ecloud/storage` (`packages/storage/README.md`). Business code calls
+`createStorage(loadConfig().storage)` and, per request, `forTenant(storage, orgId)`; drivers are
+never imported directly. Keys are `org/{organizationId}/{purpose}/{id}`; uploads are checked
+against the purpose's content-type allow-list, magic bytes and size limit (`branding`:
+PNG/JPEG/WebP ≤ 5 MiB, SVG rejected).
+
+- **Dev / pilot:** `STORAGE_DRIVER=local`, files under `STORAGE_LOCAL_PATH` (default
+  `./var/storage`, gitignored via `var/`). Only non-critical assets (branding, dev files) may live
+  there, and it must never be the only copy of anything that has to survive the VPS. The directory
+  must be owned exclusively by the service user (0700). With `NODE_ENV=production` the local driver
+  is refused unless `STORAGE_LOCAL_ALLOW_PRODUCTION=true` is set explicitly.
+- **Production:** `STORAGE_DRIVER=s3` with an external S3-compatible bucket (`S3_ENDPOINT`, which
+  must be `https://` in production, `S3_REGION`, `S3_BUCKET`, `S3_ACCESS_KEY_ID`,
+  `S3_SECRET_ACCESS_KEY` injected from secrets, `S3_FORCE_PATH_STYLE=true` for most non-AWS
+  services). No MinIO on the VPS and none in the dev compose file.
+- **Tests:** `npm test` runs the shared driver contract against the local driver only. The S3
+  contract runs only when `ECLOUD_TEST_S3_ENDPOINT` (plus `ECLOUD_TEST_S3_ACCESS_KEY_ID`,
+  `ECLOUD_TEST_S3_SECRET_ACCESS_KEY`, optional `ECLOUD_TEST_S3_BUCKET` default `ecloud-test`) is
+  set; otherwise it is skipped. So far it has been run only against a throwaway RustFS container
+  on 127.0.0.1 (2026-10-08); AWS S3, R2, B2 and Wasabi are untested. Use credentials generated for
+  the run only and never write them to a file.

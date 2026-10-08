@@ -1,0 +1,29 @@
+{
+  "name": "@ecloud/storage",
+  "version": "0.1.0",
+  "private": true,
+  "description": "ECLOUD object storage abstraction (D-026): tenant-scoped keys, local filesystem and S3-compatible drivers",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -b tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "clean": "rm -rf dist",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.1147.0",
+    "@aws-sdk/s3-request-presigner": "^3.1147.0",
+    "@ecloud/shared": "*"
+  }
+}

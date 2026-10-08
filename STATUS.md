@@ -59,6 +59,45 @@ Owner accepted recommendations D-035 … D-038 (NAS adapter key, authorized sess
 
 Reconciliation: orchestrator removed placeholder credentials from URLs in `apps/admin/scripts/generate-api.mjs` (secrets-scan finding; values were inert, now no user/password in URL); OpenAPI output unchanged.
 
+## Continuous Engineering Loop (adopted 2026-10-08)
+Workflow for every authorized Phase 3 task = ECLOUD_MULTI_VENDOR_HOTSPOT.md §11 (plan → implement → automated tests → independent QA/security review → fix → retest; stop after 3 failed cycles on one issue or at any gate; promote only evidenced results). Routine local changes proceed without per-change approval; VPS, device, DNS, Caddy, EZECONTROL, security and architecture gates still apply.
+
+### Audit 2026-10-08 — implementation vs approved architecture
+| Phase 3 scope item (owner authorization) | Evidence | State |
+|---|---|---|
+| Repository structure, TypeScript project, lint/test/CI | 9 workspaces, CI jobs check/integration/radius-contract/secrets | DONE |
+| Database schema/migrations, RLS, tenant isolation | 18 migrations, FORCE RLS, isolation + security suites | DONE |
+| Policy engine, adapter interfaces | 5 first-party adapters, golden tests | DONE (no evidence levels; multi-vendor contract absent) |
+| API foundation, RBAC | 61 paths, resource:action catalogue (99) | DONE |
+| Unit tests, integration-test framework | 639/639 incl. FreeRADIUS contract | DONE |
+| **Docker development definitions** | compose has postgres/redis/freeradius only; **no Dockerfiles for api/worker/portal/admin** | **INCOMPLETE → M9** |
+| Application architecture: storage abstraction (D-026) | config variable only, no interface/drivers | **INCOMPLETE → M10** |
+| Multi-vendor foundation (hotspot spec §9: registry, vendor-neutral contract, evidence levels, simulators, data structures) | none | **INCOMPLETE → M11** (sub-tasks L1–L4) |
+| Documentation | architecture + DEVELOPMENT/TESTING docs | DONE (updated per cycle) |
+Out of Phase 3 scope: portal UI beyond skeleton (Phase 6), backups (Phase 10), any VPS/device/DNS/Caddy action (gated).
+
+| Cycle | Milestone | Status |
+|---|---|---|
+| 1 | M9 Reproducible container images for api/worker/portal/admin (local build + compose `app` profile; no deployment) | **DONE 2026-10-08** — see cycle log |
+| 2 | M10 Storage abstraction (D-026): interface, local + S3-compatible drivers, contract tests | **DONE 2026-10-08** — see cycle log |
+| 3+ | M11 Multi-vendor foundation L1–L4 | NEXT |
+
+### Cycle log
+**Cycle 1 — M9 container images — DONE 2026-10-08**
+- Implemented: `infra/docker/Dockerfile` (multi-target api/worker/portal/admin, Node 22.23.3 bookworm-slim, workspace-scoped `npm ci`, no dev deps at runtime, tini, non-root, HEALTHCHECK), `prune-runtime.sh`, `.dockerignore`, admin served by unprivileged nginx (LOCAL testing only; production stays native Caddy, D-030) with CSP, nosniff, frame deny and hidden-path 404; compose `app` and `migrate` profiles (127.0.0.1 only, read-only root, cap_drop ALL, no-new-privileges, memory/pids limits); portal graceful shutdown.
+- Review: independent security review → PASS WITH FIXES (low/info only: nginx CSP + hidden paths, XFF, runtime tidy, doc precision). Fixed in one round.
+- Tests: four amd64 images built; all `/healthz` 200; SPA loads in a headless browser with 0 CSP violations; portal stops with exit 0; images refuse to start in production mode with dev defaults or local storage without opt-in.
+- Not done (VPS change-list items, gated by D-031): digest pinning, apt pinning, registry push, multi-arch CI. radclient 3.2.1 in the worker image vs FreeRADIUS 3.2.10 server.
+
+**Orchestrator verification after cycles 1–2 (2026-10-08):** build, lint, format:check, secrets scan OK; integration 743 passed, 1 skipped (S3 contract without endpoint) across 63 files.
+
+**Cycle 2 — M10 storage abstraction (D-026) — DONE 2026-10-08**
+- Implemented `@ecloud/storage`: `ObjectStorage` interface, tenant-scoped keys `org/{org}/{purpose}/{id}` (traversal, absolute, null-byte, uppercase and cross-tenant keys rejected), branding purpose (PNG/JPEG/WebP ≤ 5 MiB, magic-byte check, SVG rejected), local driver (versioned content + metadata commit, 0700/0600, symlink protection, stale tmp sweep), S3 driver (AWS SDK v3, path-style, signed URLs pin stored content type), `forTenant()` scoping. Production guard: local driver refused in production without `STORAGE_LOCAL_ALLOW_PRODUCTION=true`; non-https S3 endpoint refused.
+- Review: independent security review → PASS WITH FIXES (1 medium: bucket-missing reported as object-missing; 8 low). All fixed in one fix round; orchestrator spot-checked the medium fix.
+- Tests: `npm test` 498 passed; integration 735 passed; S3 contract 14/14 against a throwaway RustFS container (2026-10-08, digest recorded by agent); secrets scan OK.
+- Evidence limits: S3 driver tested against RustFS only (AWS/R2/B2/Wasabi untested). Not wired into the API yet (no asset endpoint exists).
+
+
 ## Verified Environment Facts
 See REMOTE_ENVIRONMENT.md and PHASE2_VALIDATION.md. Ledger: 105 claims — 40 verified, 17 proposed, 1 unknown, 47 requires device test; 24 device tests (DT-01…DT-24). **DT-01 executed 2026-10-07 (PASS, identification only)** on lab AP EZE-AP1832, EZEAP 6 r32912, uCentral schema 4.2.0: uspot is the TIP fork; no WireGuard/unetd on the AP (topology B unsupported on this firmware); hostapd supports DAS and dynamic VLAN. DT-02…DT-24 not executed. No device configuration was changed.
 

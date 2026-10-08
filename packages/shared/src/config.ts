@@ -68,6 +68,8 @@ export const envSchema = z.object({
 
   STORAGE_DRIVER: z.enum(['local', 's3']).default('local'),
   STORAGE_LOCAL_PATH: z.string().trim().min(1).default('./var/storage'),
+  /** Explicit opt-in for the local driver in production (D-026: non-critical assets only). */
+  STORAGE_LOCAL_ALLOW_PRODUCTION: boolString(),
   S3_ENDPOINT: optionalString(),
   S3_REGION: optionalString(),
   S3_BUCKET: optionalString(),
@@ -157,6 +159,21 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     }
     if (raw.INTERNAL_API_TOKEN.length < 32) {
       problems.push('INTERNAL_API_TOKEN: must be at least 32 characters when NODE_ENV=production');
+    }
+  }
+
+  if (isProduction) {
+    if (raw.STORAGE_DRIVER === 'local' && raw.STORAGE_LOCAL_ALLOW_PRODUCTION !== true) {
+      problems.push(
+        'STORAGE_DRIVER: local is not allowed when NODE_ENV=production unless STORAGE_LOCAL_ALLOW_PRODUCTION=true (D-026: non-critical assets only)',
+      );
+    }
+    if (
+      raw.STORAGE_DRIVER === 's3' &&
+      raw.S3_ENDPOINT !== undefined &&
+      !raw.S3_ENDPOINT.toLowerCase().startsWith('https://')
+    ) {
+      problems.push('S3_ENDPOINT: must use https:// when NODE_ENV=production');
     }
   }
 

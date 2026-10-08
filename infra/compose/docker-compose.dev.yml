@@ -9,8 +9,45 @@
 #
 #  Start:  npm run dev:stack        Stop: npm run dev:stack:down
 #  Reset:  npm run dev:stack:reset  (drops the postgres volume)
+#
+#  App containers (M9, opt-in profile `app`; docs/DEVELOPMENT.md "Container images"):
+#    docker compose --project-directory . -f infra/compose/docker-compose.dev.yml \
+#      --profile app up -d --build --wait api worker portal admin
+#  The default `npm run dev:stack` does NOT start them.
 # ============================================================================
 name: ecloud-dev
+
+# Shared settings of the app-profile containers (SECURITY_ARCHITECTURE.md §6.10):
+# read-only root FS, /tmp as tmpfs, no capabilities, no privilege escalation
+# (memory/cpu/pids limits per service under deploy.resources, DEPLOYMENT_ARCHITECTURE §2.2).
+x-app-hardening: &app-hardening
+  read_only: true
+  tmpfs:
+    - /tmp:size=16m,mode=1777
+  cap_drop: ['ALL']
+  security_opt: ['no-new-privileges:true']
+  restart: unless-stopped
+
+# DEV ONLY environment for the node apps, reaching postgres/redis by service name on the
+# Compose network. Every credential is an obviously-fake dev default overridable from
+# `.env`; NODE_ENV=development is required because production mode rejects dev defaults.
+# Note: DATABASE_URL / REDIS_URL from `.env` (127.0.0.1, host processes) are NOT used here.
+x-app-env: &app-env
+  NODE_ENV: development
+  LOG_LEVEL: ${APP_LOG_LEVEL:-info}
+  DATABASE_URL: postgres://ecloud_app:${ECLOUD_APP_PASSWORD:-ecloud_dev_password}@postgres:5432/${POSTGRES_DB:-ecloud}
+  DATABASE_URL_PLATFORM: postgres://ecloud_platform:${ECLOUD_PLATFORM_PASSWORD:-ecloud_dev_password}@postgres:5432/${POSTGRES_DB:-ecloud}
+  REDIS_URL: redis://redis:6379
+  INTERNAL_API_TOKEN: ${INTERNAL_API_TOKEN:-ecloud_dev_internal_token_change_me}
+  PUBLIC_ADMIN_ORIGIN: http://localhost:${APP_ADMIN_PORT:-8080}
+  PUBLIC_API_ORIGIN: http://localhost:${APP_API_PORT:-3000}
+  PUBLIC_PORTAL_ORIGIN: http://localhost:${APP_PORTAL_PORT:-3002}
+
+x-app-depends: &app-depends
+  postgres:
+    condition: service_healthy
+  redis:
+    condition: service_healthy
 
 services:
   postgres:
@@ -93,5 +130,132 @@ services:
       start_period: 10s
     restart: unless-stopped
 
+  # ---------------------------------------------------------------------------
+  #  App containers (profile `app`, M9). Images: infra/docker/Dockerfile targets.
+  #  Host publishes are 127.0.0.1 only. Host ports default to the same numbers as the
+  #  host-run dev processes (API_PORT etc.); override APP_*_PORT in `.env` to run both.
+  # ---------------------------------------------------------------------------
+  api:
+    <<: *app-hardening
+    profiles: ['app']
+    build:
+      context: .
+      dockerfile: infra/docker/Dockerfile
+      target: api
+      args:
+        VCS_REF: ${VCS_REF:-dev}
+    image: ecloud-api:local
+    container_name: ecloud-dev-api
+    depends_on: *app-depends
+    environment:
+      <<: *app-env
+      API_PORT: '3000'
+      INTERNAL_PORT: '3001'
+      # The internal listener (FreeRADIUS rlm_rest -> core) must accept connections from
+      # other containers, so it binds 0.0.0.0 INSIDE the container. On the host it is
+      # published to 127.0.0.1 only, where the dev freeradius container already looks for
+      # it (ECLOUD_INTERNAL_URL=http://host.docker.internal:3001).
+      INTERNAL_BIND_HOST: 0.0.0.0
+      SESSION_COOKIE_SECURE: 'false'
+      NODE_OPTIONS: --max-old-space-size=256
+    ports:
+      - '127.0.0.1:${APP_API_PORT:-3000}:3000'
+      - '127.0.0.1:${APP_INTERNAL_PORT:-3001}:3001'
+    volumes:
+      # D-026 local storage driver; the only writable app path besides /tmp.
+      - ecloud_dev_storage:/var/lib/ecloud/storage
+    deploy:
+      resources:
+        limits: { memory: 384M, cpus: '0.75', pids: 128 }
+
+  worker:
+    <<: *app-hardening
+    profiles: ['app']
+    build:
+      context: .
+      dockerfile: infra/docker/Dockerfile
+      target: worker
+      args:
+        VCS_REF: ${VCS_REF:-dev}
+    image: ecloud-worker:local
+    container_name: ecloud-dev-worker
+    depends_on: *app-depends
+    environment:
+      <<: *app-env
+      # Bind the /healthz probe on all container interfaces so it can be published to
+      # 127.0.0.1 on the host (the image default is 127.0.0.1 inside the container).
+      WORKER_HEALTH_HOST: 0.0.0.0
+      WORKER_HEALTH_PORT: '3003'
+      ECLOUD_COA_ENABLED: 'false'
+      RETENTION_APPLY: 'false'
+      NODE_OPTIONS: --max-old-space-size=224
+    ports:
+      - '127.0.0.1:${APP_WORKER_HEALTH_PORT:-3003}:3003'
+    deploy:
+      resources:
+        limits: { memory: 320M, cpus: '0.5', pids: 128 }
+
+  portal:
+    <<: *app-hardening
+    profiles: ['app']
+    build:
+      context: .
+      dockerfile: infra/docker/Dockerfile
+      target: portal
+      args:
+        VCS_REF: ${VCS_REF:-dev}
+    image: ecloud-portal:local
+    container_name: ecloud-dev-portal
+    depends_on: *app-depends
+    environment:
+      <<: *app-env
+      PORTAL_PORT: '3002'
+      NODE_OPTIONS: --max-old-space-size=160
+    ports:
+      - '127.0.0.1:${APP_PORTAL_PORT:-3002}:3002'
+    deploy:
+      resources:
+        limits: { memory: 256M, cpus: '0.5', pids: 128 }
+
+  # Admin SPA static files for LOCAL testing only (production: native Caddy, D-030).
+  # Proxies same-origin /api/ to the api service (infra/docker/admin-nginx.conf).
+  admin:
+    <<: *app-hardening
+    profiles: ['app']
+    build:
+      context: .
+      dockerfile: infra/docker/Dockerfile
+      target: admin
+      args:
+        VCS_REF: ${VCS_REF:-dev}
+    image: ecloud-admin:local
+    container_name: ecloud-dev-admin
+    depends_on:
+      api:
+        condition: service_healthy
+    ports:
+      - '127.0.0.1:${APP_ADMIN_PORT:-8080}:8080'
+    deploy:
+      resources:
+        limits: { memory: 64M, cpus: '0.25', pids: 128 }
+
+  # One-shot migration runner (opt-in profile `migrate`, never started by `app`):
+  #   docker compose ... --profile migrate run --rm migrate          # apply
+  #   docker compose ... --profile migrate run --rm migrate status   # read-only status
+  migrate:
+    <<: *app-hardening
+    profiles: ['migrate']
+    image: ecloud-api:local
+    container_name: ecloud-dev-migrate
+    restart: 'no'
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      <<: *app-env
+    entrypoint: ['/usr/bin/tini', '--', 'node', 'packages/db/dist/cli.js']
+    command: ['migrate']
+
 volumes:
   ecloud_dev_pgdata:
+  ecloud_dev_storage:

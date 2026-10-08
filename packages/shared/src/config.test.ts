@@ -60,8 +60,52 @@ describe('loadConfig', () => {
       DATABASE_URL_PLATFORM: 'postgres://platform:pw@db.internal:5432/ecloud',
       REDIS_URL: 'redis://cache.internal:6379',
       INTERNAL_API_TOKEN: 'x'.repeat(32),
+      STORAGE_LOCAL_ALLOW_PRODUCTION: 'true',
     });
     expect(config.isProduction).toBe(true);
+  });
+
+  describe('storage in production (D-026)', () => {
+    const prodBase = {
+      NODE_ENV: 'production',
+      DATABASE_URL: 'postgres://app:pw@db.internal:5432/ecloud',
+      DATABASE_URL_PLATFORM: 'postgres://platform:pw@db.internal:5432/ecloud',
+      REDIS_URL: 'redis://cache.internal:6379',
+      INTERNAL_API_TOKEN: 'x'.repeat(32),
+    };
+    const s3 = {
+      STORAGE_DRIVER: 's3',
+      S3_BUCKET: 'assets',
+      S3_ACCESS_KEY_ID: 'placeholder_key_id',
+      S3_SECRET_ACCESS_KEY: 'placeholder_secret',
+    };
+
+    it('rejects the local driver without the explicit opt-in', () => {
+      expect(() => loadConfig(prodBase)).toThrow(/STORAGE_LOCAL_ALLOW_PRODUCTION/);
+      expect(() => loadConfig({ ...prodBase, STORAGE_LOCAL_ALLOW_PRODUCTION: 'false' })).toThrow(
+        /STORAGE_DRIVER: local/,
+      );
+      expect(
+        loadConfig({ ...prodBase, STORAGE_LOCAL_ALLOW_PRODUCTION: 'true' }).storage.driver,
+      ).toBe('local');
+    });
+
+    it('allows the local driver outside production without the opt-in', () => {
+      expect(loadConfig({ NODE_ENV: 'development' }).storage.driver).toBe('local');
+    });
+
+    it('requires an https S3 endpoint', () => {
+      expect(() =>
+        loadConfig({ ...prodBase, ...s3, S3_ENDPOINT: 'http://s3.example.com' }),
+      ).toThrow(/S3_ENDPOINT: must use https/);
+      expect(
+        loadConfig({ ...prodBase, ...s3, S3_ENDPOINT: 'https://s3.example.com' }).storage.driver,
+      ).toBe('s3');
+      // AWS (no endpoint, region only) uses the SDK's https default.
+      expect(loadConfig({ ...prodBase, ...s3, S3_REGION: 'eu-west-1' }).storage.driver).toBe('s3');
+      // Non-https endpoints stay allowed in development (throwaway local test servers).
+      expect(loadConfig({ ...s3, S3_ENDPOINT: 'http://127.0.0.1:9000' }).storage.driver).toBe('s3');
+    });
   });
 
   it('requires S3 settings when STORAGE_DRIVER=s3', () => {

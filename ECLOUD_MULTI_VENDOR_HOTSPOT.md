@@ -131,6 +131,23 @@ Finish with implemented behavior, tests run/results, device evidence, remaining 
 
 Start by reconciling this specification against the approved ECLOUD governance artifacts. Produce a MULTI_VENDOR_INTEGRATION_PLAN.md and update the compatibility registry. Then proceed only with Phase 3 foundation work already authorized. Third-party device-facing implementation and validation must preserve all existing device-test evidence states and approval gates.
 
+### 11. Controlled agentic implementation loop (mandatory)
+
+The Lead Orchestrator must run a **bounded plan → implement → test → review → fix → retest loop** for each independently deliverable work item. This is a development-quality loop, **not** permission to deploy, modify the VPS, change DNS, alter EZEAP/EZECONTROL, or run real-device tests without the relevant approval and lab access.
+
+1. **Select one scoped task.** Read CLAUDE.md, approved decisions, current STATUS.md, compatibility matrix, and relevant tests. State acceptance criteria, affected files, evidence level, dependencies, and permitted environment (MacBook/local by default).
+2. **Plan and delegate.** The Lead Orchestrator assigns the smallest useful change to specialist agents. Identify protocol unknowns as `REQUIRES_CLARIFICATION` or `REQUIRES_DEVICE_TEST`; never fabricate vendor behavior or credentials.
+3. **Implement a small increment.** Prefer additive migrations, adapter interfaces, feature flags and reversible changes. Preserve existing first-party EZEAP/TIP OpenWiFi, uSpot, CoovaChilli and EZECONTROL behavior.
+4. **Verify automatically.** Run applicable lint/typecheck/unit/integration/contract/security tests and simulator scenarios, including cross-tenant access denial, redirect validation, replay, accounting idempotency and unsupported-policy handling. Capture commands, results and failures.
+5. **Independent review.** A QA/security agent compares implementation to acceptance criteria, approved policy precedence and `resource:action` RBAC; inspect diff for regressions, leaked secrets, unsafe defaults and claims exceeding evidence.
+6. **Fix and retest.** If checks fail, diagnose root cause, make the smallest justified correction, and repeat steps 4–5. Do not mark the task complete merely because an agent reports success.
+7. **Stop rules.** After **three unsuccessful fix/retest cycles on the same issue**, or immediately upon an unresolved owner decision, missing device capability, unsafe operation, destructive migration, unexpected production impact or deployment gate, STOP that task; record blocker and request owner input. Continue other independent authorized tasks if safe.
+8. **Promote only evidenced results.** A simulator pass means `SIMULATOR_TESTED`, not `LAB_VALIDATED`; a source-code finding means `VERIFIED_FROM_SOURCE`, not real-device success. Mark `LAB_VALIDATED` only after documented model/firmware-specific hardware testing. Never mark D-006 confirmed from mocks.
+9. **Checkpoint.** Update STATUS.md, test results, integration plan and capability registry with changed files, decisions, evidence, failures, outstanding risks and next step. Commit only when the repository's normal workflow permits; never commit secrets.
+10. **Repeat** for the next scoped task until the approved Phase 3 milestone is satisfied. Then provide a concise completion report and await approval for any gated deployment or device-facing action.
+
+**Definition of done for each task:** acceptance criteria met; required automated checks passing (or explicitly documented as blocked); independent review completed; tenant isolation and security preserved; capability status truthful; governance and test evidence updated. Never silently bypass a failed check to keep the loop moving.
+
 ## Research references (checked 7 October 2026)
 
 - Social WiFi live hardware integrations: https://socialwifi.com/hardware-integrations/
