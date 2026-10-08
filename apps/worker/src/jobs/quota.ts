@@ -11,7 +11,7 @@ import type { DisconnectDescription } from '@ecloud/adapters';
 import { withPlatform, type Db, type UsagePeriodType } from '@ecloud/db';
 import type { Logger } from '@ecloud/shared';
 import { periodStarts } from '../accounting/normalize.js';
-import { resolveAdapter } from '../adapter-keys.js';
+import { resolveAdapter } from '../nas-adapter.js';
 import { emitEvent } from '../events.js';
 import type { WorkerState } from '../infra/state.js';
 
@@ -78,7 +78,7 @@ export function decideEnforcement(input: {
   return { action: 'disconnect' };
 }
 
-export function describeAdapterDisconnect(adapterKey: string): DisconnectDescription | null {
+export function describeAdapterDisconnect(adapterKey: string | null): DisconnectDescription | null {
   return resolveAdapter(adapterKey)?.describeDisconnect() ?? null;
 }
 
@@ -112,7 +112,7 @@ interface CandidateRow {
   quota_monthly_bytes: number | null;
   quota_total_bytes: number | null;
   timezone: string;
-  adapter_type_key: string;
+  adapter_key: string | null;
   coa_supported: boolean | null;
 }
 
@@ -164,7 +164,7 @@ export async function enforceQuotas(
           'p.quota_monthly_bytes',
           'p.quota_total_bytes',
           'st.timezone',
-          'n.adapter_type_key',
+          'n.adapter_key',
           'n.coa_supported',
         ])
         .where('se.status', '=', 'active')
@@ -218,7 +218,7 @@ export async function enforceQuotas(
     const first = fresh[0] as QuotaBreach;
     const decision = decideEnforcement({
       coaEnabled: deps.coaEnabled,
-      disconnect: describeAdapterDisconnect(row.adapter_type_key),
+      disconnect: describeAdapterDisconnect(row.adapter_key),
       nasCoaSupported: row.coa_supported,
     });
     const breachData = {

@@ -164,7 +164,7 @@ npm run dev --workspace @ecloud/worker          # tsx watch
 | --- | --- | --- |
 | `accounting.drain` | every 5 s, single-flight Redis lock | `radius.radacct_raw` past the Redis cursor (`ecloud:worker:cursor:radacct_raw`) → `accounting_records`, `sessions`, `usage_counters` (daily/monthly in the site timezone + total), outbox `session.*`; then quota check of touched sessions |
 | `policy.enforce` | every 30 s | quota re-evaluation of active policy-bound sessions; breach → `quota.exceeded` + Disconnect only when allowed (below) |
-| `sessions.reap` | every 60 s | no accounting for > 2 × `WORKER_INTERIM_INTERVAL_S` + `WORKER_REAP_GRACE_S` → `stopped` / `lost_interim` |
+| `sessions.reap` | every 60 s | no accounting for > 2 × `WORKER_INTERIM_INTERVAL_S` + `WORKER_REAP_GRACE_S` → `stopped` / `lost_interim`; `authorized` sessions (D-036) without accounting for > `WORKER_AUTHORIZATION_TTL_S` → `expired` / `authorization_expired` |
 | `outbox.publish` | every 2 s | outbox → `webhooks.deliver` jobs (HMAC `X-ECLOUD-Signature`, 8 attempts, DLQ `dead.webhooks`) |
 | `partitions.ensure` | daily 00:10 UTC | monthly partitions 2 months ahead |
 | `retention.prune` | daily 03:30 UTC | D-025: raw 7 d, accounting 13 mo, audit 24 mo — **dry-run** unless `RETENTION_APPLY=true` |
@@ -179,6 +179,7 @@ Worker-only environment (read by `apps/worker/src/config.ts`, not yet in the sha
 | `RADCLIENT_PATH`, `RADCLIENT_TIMEOUT_S`, `RADCLIENT_RETRIES` | `radclient`, `2`, `3` | the secret is passed with `-S <0600 temp file>`, never on argv |
 | `RETENTION_APPLY` | `false` | drop old partitions / raw rows instead of logging the plan |
 | `WORKER_INTERIM_INTERVAL_S`, `WORKER_REAP_GRACE_S` | `600`, `120` | reaper threshold |
+| `WORKER_AUTHORIZATION_TTL_S` | `300` | D-036: unpromoted authorization expiry (30–86400) |
 | `WORKER_DRAIN_BATCH` | `500` | raw rows per drain tick |
 
 NAS / webhook secrets are resolved at use time from `secret_ref` values `env:<VAR>` or
@@ -195,6 +196,55 @@ the Redis case also `ECLOUD_TEST_REDIS_URL`):
 ```bash
 ECLOUD_TEST_REQUIRE_INTEGRATION=1 npx vitest run --project worker
 ```
+
+## Admin app (`@ecloud/admin`)
+
+Single-build React SPA (Vite + React 19 + TypeScript strict + Tailwind 3 + TanStack Query +
+React Router; ADMIN_UI_ARCHITECTURE.md §1). It calls the same-origin `/api/v1` with the
+HttpOnly session cookie (D-029); every request sends `X-Requested-With`, every POST an
+`Idempotency-Key`. Fonts (Inter, `@fontsource-variable`) and icons (`lucide-react`) are bundled;
+nothing loads from a CDN.
+
+```bash
+# terminal 1: API (PUBLIC_ADMIN_ORIGIN must equal the Vite origin for the CSRF Origin check)
+PUBLIC_ADMIN_ORIGIN=http://localhost:5173 npm run dev -w @ecloud/api
+# terminal 2: Vite dev server on http://localhost:5173, proxies /api and /healthz to API_PORT
+npm run dev:admin                       # = npm run dev -w @ecloud/admin
+# (ADMIN_DEV_API_TARGET=http://host:port overrides the proxy target)
+
+npm run build -w @ecloud/admin          # tsc --noEmit + vite build -> apps/admin/dist (static)
+npm test -- --project admin             # Vitest + Testing Library (jsdom)
+```
+
+A first platform administrator: `printf '%s\n' "$PW" | node packages/db/dist/cli.js
+create-platform-admin --email you@example.com --password-stdin` (never put the password in a
+file). Platform-bound accounts must enrol TOTP at first sign-in (the app shows the QR code,
+rendered locally with `qrcode`, then the recovery codes once).
+
+**Typed client.** `apps/admin/src/api/schema.d.ts` (openapi-typescript) and
+`src/api/openapi.json` are generated and committed:
+
+```bash
+npm run build                                   # the generator reads apps/api/dist
+npm run generate:api -w @ecloud/admin           # or: ... -- --url http://127.0.0.1:3000/api/v1/openapi.json
+```
+
+Regenerate after every API change; `tsc` then flags screens whose paths or bodies no longer
+match. List rows are open objects in the API schema, so screens narrow them in `src/api/types.ts`.
+
+**Rules the UI enforces.** Navigation and actions are permission-driven (`can(me, 'nas:create',
+{ organizationId })`, mirroring apps/api `evaluate`); no role names are consulted. Adapter field
+statuses render through `StatusBadge`, which shows "Verified" only for the exact value
+`VERIFIED_SUPPORTED` (D-028). Session Disconnect stays disabled (with the reason as tooltip)
+unless the NAS adapter's disconnect status is `VERIFIED_SUPPORTED`, the operator holds
+`session:disconnect` and the API exposes a disconnect endpoint. Secrets (NAS secret, API key,
+invitation token, recovery codes, voucher codes) are shown once by `SecretOnce` /
+`VoucherCodes` and dropped from memory on acknowledgement. Impersonation shows a persistent
+banner with reason, countdown and Stop (D-027).
+
+**Production.** Caddy serves `apps/admin/dist` for `ecloud.ezelink.ai` with an SPA fallback
+(`try_files {path} /index.html`) and reverse-proxies `/api/*` to the API (same origin). Source
+maps are emitted but not referenced (`sourcemap: 'hidden'`); do not publish `*.map`.
 
 ## Tests
 
@@ -254,6 +304,7 @@ vitest.workspace.ts       enumerates the workspaces as Vitest projects
 apps/api                  Express 5 REST API (/api/v1) + internal listener
 apps/worker               BullMQ workers and schedulers
 apps/portal               captive portal server (skeleton in Phase 3)
+apps/admin                admin SPA (Vite + React; static build served by Caddy)
 packages/shared           config, errors (RFC 9457), ids (uuidv7), logger (pino), permission
                           catalogue + role templates, AdapterFieldStatus, tenancy types
 packages/db               SQL migrations, runner CLI, Kysely types, RLS helpers

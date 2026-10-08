@@ -28,7 +28,7 @@ function action(overrides: Partial<ActionContext> = {}): ActionContext {
     nas_identifier: 'nas-1',
     coa_port: null,
     secret_ref: 'env:TEST_NAS_SECRET',
-    adapter_type_key: 'coovachilli-uam',
+    adapter_key: 'coovachilli-uam',
     ...overrides,
   };
 }
@@ -89,7 +89,7 @@ describe('performDispatch', () => {
 
   it('ACK on TIP uspot (no Acct-Stop after kick) closes the ECLOUD session', async () => {
     const d = await performDispatch(
-      action({ adapter_type_key: 'openwifi-uspot-uam', coa_port: 3800 }),
+      action({ adapter_key: 'openwifi-uspot-uam', coa_port: 3800 }),
       deps(reply('Received Disconnect-ACK Id 2')),
       { attempt: 1, maxAttempts: 3 },
       NOW,
@@ -136,12 +136,7 @@ describe('performDispatch', () => {
     const runner = reply('Received Disconnect-ACK');
     const one = { attempt: 1, maxAttempts: 3 };
     expect(
-      await performDispatch(
-        action({ adapter_type_key: 'openwifi-config' }),
-        deps(runner),
-        one,
-        NOW,
-      ),
+      await performDispatch(action({ adapter_key: 'openwifi-config' }), deps(runner), one, NOW),
     ).toMatchObject({ status: 'unsupported' });
     expect(
       await performDispatch(action({ username_raw: null }), deps(runner), one, NOW),
@@ -159,7 +154,7 @@ describe('performDispatch', () => {
       error: 'payload.plan (EnforcementPlan) missing',
     });
     expect(
-      await performDispatch(action({ adapter_type_key: 'acme' }), deps(runner), one, NOW),
+      await performDispatch(action({ adapter_key: 'acme' }), deps(runner), one, NOW),
     ).toMatchObject({ status: 'unsupported' });
     expect(runner).not.toHaveBeenCalled();
   });

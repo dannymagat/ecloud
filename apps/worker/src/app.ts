@@ -17,7 +17,7 @@ import { RedisWorkerState, type WorkerState } from './infra/state.js';
 import { deliverWebhook, publishOutbox, type FetchLike, type WebhookJob } from './jobs/outbox.js';
 import { ensurePartitions } from './jobs/partitions.js';
 import { enforceQuotas } from './jobs/quota.js';
-import { reapSessions } from './jobs/reap.js';
+import { expireAuthorizations, reapSessions } from './jobs/reap.js';
 import { pruneRetention } from './jobs/retention.js';
 import {
   COA_JOB_OPTIONS,
@@ -108,6 +108,10 @@ export async function startWorker(options: StartOptions): Promise<RunningWorker>
         db,
         interimIntervalS: config.sessions.interimIntervalS,
         graceS: config.sessions.reapGraceS,
+      }),
+      expiredAuthorizations: await expireAuthorizations({
+        db,
+        ttlS: config.sessions.authorizationTtlS,
       }),
     })),
     [QUEUES.partitionsEnsure]: singleFlight(QUEUES.partitionsEnsure, async () => {

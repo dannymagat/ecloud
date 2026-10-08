@@ -46,7 +46,7 @@ export function buildOpenApiDocument(routes: readonly AnyRouteSpec[], version: s
       responses[status] = {
         description: spec.description,
         ...(spec.schema !== undefined
-          ? { content: { 'application/json': { schema: spec.schema } } }
+          ? { content: { [spec.contentType ?? 'application/json']: { schema: spec.schema } } }
           : isError
             ? { content: { 'application/problem+json': { schema: ProblemSchema } } }
             : {}),

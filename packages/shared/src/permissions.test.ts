@@ -60,7 +60,7 @@ describe('PERMISSION_CATALOGUE', () => {
       network_device: 5,
       nas: 5,
       wireguard_peer: 5,
-      administrator: 6,
+      administrator: 7, // + mfa_reset (D-038)
       role: 4,
       user: 7,
       user_group: 4,
@@ -93,6 +93,18 @@ describe('PERMISSION_CATALOGUE', () => {
       platformOnly: false,
     });
     expect(getPermission('site:create')?.minScope).toBe('organization');
+    // D-038: MFA reset is platform-only, held by platform_super_admin, never by tenant roles.
+    expect(getPermission('administrator:mfa_reset')).toMatchObject({
+      minScope: 'platform',
+      platformOnly: true,
+    });
+    expect(getRoleTemplate('platform_super_admin').permissions).toContain(
+      'administrator:mfa_reset',
+    );
+    expect(getRoleTemplate('org_admin').permissions).not.toContain('administrator:mfa_reset');
+    expect(getRoleTemplate('platform_support').permissions).not.toContain(
+      'administrator:mfa_reset',
+    );
     expect(getPermission('site:read')?.minScope).toBe('site');
     for (const p of PERMISSION_CATALOGUE.filter((x) => x.platformOnly)) {
       expect(p.minScope).toBe('platform');

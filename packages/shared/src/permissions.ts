@@ -60,6 +60,7 @@ const ACTION_DESCRIPTIONS: Readonly<Record<string, string>> = {
   disable: 'Disable {label}',
   'binding:create': 'Grant role bindings to {label}',
   'binding:delete': 'Revoke role bindings from {label}',
+  mfa_reset: 'Reset the MFA factor of {label} (lost device, D-038)',
   'password:reset': 'Reset the password of {label}',
   export: 'Export {label}',
   block: 'Block {label}',
@@ -114,7 +115,18 @@ const RESOURCES: readonly ResourceSpec[] = [
     resource: 'administrator',
     label: 'administrators',
     minScope: 'organization',
-    actions: ['read', 'invite', 'update', 'disable', 'binding:create', 'binding:delete'],
+    actions: [
+      'read',
+      'invite',
+      'update',
+      'disable',
+      'binding:create',
+      'binding:delete',
+      'mfa_reset',
+    ],
+    // D-038: only a platform super admin may reset another administrator's MFA.
+    scopeOverrides: { mfa_reset: 'platform' },
+    platformOnly: ['mfa_reset'],
   },
   {
     resource: 'role',

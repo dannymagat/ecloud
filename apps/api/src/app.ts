@@ -15,7 +15,11 @@ import { mountRoute, type AnyRouteSpec } from './http/route.js';
 import { authorizeHandler, internalTokenGuard, postAuthHandler } from './internal/aaa.js';
 import { OPENAPI_PATH, buildOpenApiDocument } from './openapi.js';
 import { accessRoutes } from './routes/access.js';
+import { administratorRoutes } from './routes/administrators.js';
 import { authRoutes } from './routes/auth.js';
+import { importRoutes } from './routes/imports.js';
+import { meRoutes } from './routes/me.js';
+import { platformOpsRoutes } from './routes/platform-ops.js';
 import { platformRoutes } from './routes/platform.js';
 import { policyRoutes } from './routes/policies.js';
 import { resourceRoutes } from './routes/resources.js';
@@ -31,9 +35,13 @@ const REQUEST_ID_RE = /^[A-Za-z0-9._-]{8,128}$/;
 export function allRoutes(deps: AppDeps): AnyRouteSpec[] {
   return [
     ...authRoutes(deps),
+    ...meRoutes(deps),
     ...platformRoutes(deps),
+    ...platformOpsRoutes(deps),
+    ...administratorRoutes(deps),
     ...accessRoutes(deps),
     ...policyRoutes(deps),
+    ...importRoutes(deps),
     ...resourceRoutes(deps),
     ...voucherRoutes(deps),
     ...runtimeRoutes(deps),

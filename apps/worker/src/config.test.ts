@@ -7,7 +7,7 @@ describe('loadWorkerConfig', () => {
     expect(c.coa).toEqual({ enabled: false, radclientPath: 'radclient', timeoutS: 2, retries: 3 });
     expect(c.retention.apply).toBe(false);
     expect(c.health).toEqual({ port: 3003, host: '127.0.0.1' });
-    expect(c.sessions).toEqual({ interimIntervalS: 600, reapGraceS: 120 });
+    expect(c.sessions).toEqual({ interimIntervalS: 600, reapGraceS: 120, authorizationTtlS: 300 });
     expect(c.drain.batchSize).toBe(500);
   });
   it('parses flags and overrides', () => {

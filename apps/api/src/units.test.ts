@@ -4,7 +4,8 @@ import express from 'express';
 import request from 'supertest';
 import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
-import { engineAdapterFor } from './adapter-map.js';
+import { ADAPTER_KEYS } from '@ecloud/policy-engine';
+import { NAS_ADAPTER_KEYS, isNasAdapterKey, nasAdapter } from './nas-adapter.js';
 import { auditSnapshot } from './audit.js';
 import { MfaCodec, newRecoveryCodes } from './auth/mfa.js';
 import { API_KEY_RE } from './auth/principal.js';
@@ -132,13 +133,17 @@ describe('RADIUS encoding (docs/contracts/aaa-authorize.md)', () => {
   });
 });
 
-describe('adapter map', () => {
-  it('maps DB adapter types conservatively', () => {
-    expect(engineAdapterFor('coovachilli')).toBe('coovachilli-uam');
-    expect(engineAdapterFor('uspot')).toBe('uspot-upstream-uam');
-    expect(engineAdapterFor('openwifi_ucentral')).toBeNull();
-    expect(engineAdapterFor('generic_radius')).toBeNull();
-    expect(engineAdapterFor('openwifi_uspot_uam')).toBe('openwifi-uspot-uam');
+describe('NAS adapter (D-035)', () => {
+  it('resolves only the four NAS-facing engine keys, never aliases', () => {
+    for (const key of NAS_ADAPTER_KEYS) {
+      expect(ADAPTER_KEYS).toContain(key);
+      expect(nasAdapter(key)?.key).toBe(key);
+    }
+    expect(isNasAdapterKey('openwifi-config')).toBe(false);
+    expect(nasAdapter('openwifi-config')).toBeNull();
+    expect(nasAdapter('coovachilli')).toBeNull();
+    expect(nasAdapter('openwifi_ucentral')).toBeNull();
+    expect(nasAdapter(null)).toBeNull();
   });
 });
 

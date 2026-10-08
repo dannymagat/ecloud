@@ -135,6 +135,7 @@ export async function resolveSession(
         'a.status',
         'a.deleted_at',
         'a.mfa_enforced',
+        'a.mfa_reenrol_required',
       ])
       .where('s.token_hash', '=', tokenHash)
       .where('s.revoked_at', 'is', null)
@@ -184,8 +185,10 @@ export async function resolveSession(
     // SECURITY_ARCHITECTURE.md §6.2: MFA is mandatory for platform bindings and for accounts
     // with mfa_enforced. Impersonation is only startable from a platform binding, so it always
     // requires it. Without a proved factor the session keeps no permissions at all.
+    // D-038: after an MFA reset the administrator must enrol a new factor before any permission.
     const mfaRequired =
       row.mfa_enforced ||
+      row.mfa_reenrol_required ||
       impersonation !== null ||
       (await hasPlatformBinding(trx, row.administrator_id, now));
     const mfaPending = mfaRequired && row.mfa_verified_at === null;

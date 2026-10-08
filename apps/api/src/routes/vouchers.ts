@@ -8,6 +8,7 @@ import { NotFoundError, newId } from '@ecloud/shared';
 import { z } from 'zod';
 import { writeAudit } from '../audit.js';
 import { permittedSites } from '../auth/authorize.js';
+import { EXPORT_LIMIT, hitLimitFailOpen } from '../auth/rate-limit.js';
 import type { AppDeps } from '../context.js';
 import { hmacSha256Hex, normalizeVoucherCode, randomVoucherCode } from '../crypto.js';
 import {
@@ -20,6 +21,7 @@ import {
   problemResponses,
   toPage,
 } from '../http/common.js';
+import { toCsv } from '../http/csv.js';
 import { defineRoute, type AnyRouteSpec } from '../http/route.js';
 import { assertRef, inTenant, requireOnSite } from '../tenant.js';
 
@@ -38,13 +40,30 @@ const BatchCreate = z
     valid_from: instant.nullable().optional(),
     valid_until: instant.nullable().optional(),
     duration_s: z.number().int().positive().nullable().optional(),
-    max_uses: z.number().int().positive().max(1000).optional(),
+    /**
+     * D-037: count limit (number of logins). Default: none when `duration_s` is set (re-login
+     * until the voucher expires), 1 otherwise. With both set, both limits apply.
+     */
+    max_uses: z.number().int().positive().max(1000).nullable().optional(),
     max_devices: z.number().int().positive().max(100).optional(),
   })
   .refine(
     (b) => !b.valid_from || !b.valid_until || new Date(b.valid_until) > new Date(b.valid_from),
     { message: 'valid_until must be after valid_from', path: ['valid_until'] },
-  );
+  )
+  .refine((b) => !(b.max_uses === null && (b.duration_s ?? null) === null), {
+    message: 'a voucher needs duration_s or max_uses (or both)',
+    path: ['max_uses'],
+  });
+
+/** D-037 default: count limit 1 unless the voucher is time-limited. */
+export function effectiveMaxUses(
+  durationS: number | null | undefined,
+  maxUses: number | null | undefined,
+): number | null {
+  if (maxUses !== undefined) return maxUses;
+  return durationS === null || durationS === undefined ? 1 : null;
+}
 
 export function voucherHash(pepper: string, code: string): string {
   return hmacSha256Hex(pepper, normalizeVoucherCode(code));
@@ -123,7 +142,7 @@ export function voucherRoutes(deps: AppDeps): AnyRouteSpec[] {
             valid_from: body.valid_from ?? null,
             valid_until: body.valid_until ?? null,
             duration_s: body.duration_s ?? null,
-            max_uses: body.max_uses ?? 1,
+            max_uses: effectiveMaxUses(body.duration_s, body.max_uses),
             max_devices: body.max_devices ?? 1,
             created_by:
               ctx.principal?.kind === 'admin' && ctx.principal.impersonation === null
@@ -309,5 +328,112 @@ export function voucherRoutes(deps: AppDeps): AnyRouteSpec[] {
     },
   });
 
-  return [list, create, get, vouchers, revoke];
+  const exportBatch = defineRoute({
+    method: 'post',
+    path: '/api/v1/orgs/:orgId/voucher-batches/:id/export',
+    summary: 'Export a voucher batch as CSV (metadata only: codes are never stored in clear)',
+    tags: ['vouchers'],
+    auth: 'principal',
+    permission: 'voucher:export',
+    scope: 'any-site',
+    params: OrgIdParams,
+    responses: {
+      200: {
+        description:
+          'text/csv: voucher_id, code_hint, status, use_count, activated_at, expires_at, ' +
+          'batch limits. Plaintext codes exist only in the batch creation response ' +
+          '(DATABASE_DESIGN Q4 hash-only default: code_enc is NULL).',
+        schema: z.string(),
+        contentType: 'text/csv',
+      },
+      429: { description: 'Export rate limit (10 per hour per principal)' },
+      ...problemResponses,
+    },
+    handler: async ({ params, ctx }) => {
+      const principalId =
+        ctx.principal?.kind === 'admin'
+          ? ctx.principal.administratorId
+          : ctx.principal?.kind === 'api_key'
+            ? ctx.principal.apiKeyId
+            : 'anonymous';
+      await hitLimitFailOpen(
+        deps,
+        `export:${principalId}`,
+        EXPORT_LIMIT.perHour,
+        EXPORT_LIMIT.windowSeconds,
+      );
+      const { batch, rows } = await inTenant(deps, params.orgId, async (trx) => {
+        const b = await trx
+          .selectFrom('voucher_batches')
+          .selectAll()
+          .where('id', '=', params.id)
+          .executeTakeFirst();
+        if (b === undefined) throw new NotFoundError('voucher_batch', params.id);
+        requireOnSite(
+          ctx,
+          'voucher:export',
+          params.orgId,
+          b.site_id,
+          'voucher_batch',
+          'voucher:read',
+        );
+        const vs = await trx
+          .selectFrom('vouchers')
+          .select(['id', 'code_hint', 'status', 'use_count', 'activated_at', 'expires_at'])
+          .where('batch_id', '=', params.id)
+          .where('deleted_at', 'is', null)
+          .orderBy('id')
+          .execute();
+        await writeAudit(trx, ctx, {
+          organizationId: params.orgId,
+          action: 'voucher:export',
+          targetType: 'voucher_batch',
+          targetId: params.id,
+          after: { format: 'csv', rows: vs.length, includes_codes: false },
+        });
+        return { batch: b, rows: vs };
+      });
+      const csv = toCsv(
+        [
+          'voucher_id',
+          'batch_id',
+          'batch_name',
+          'code_hint',
+          'status',
+          'use_count',
+          'max_uses',
+          'duration_s',
+          'activated_at',
+          'expires_at',
+          'valid_from',
+          'valid_until',
+        ],
+        rows.map((v) => [
+          v.id,
+          batch.id,
+          batch.name,
+          v.code_hint,
+          v.status,
+          v.use_count,
+          batch.max_uses,
+          batch.duration_s,
+          v.activated_at,
+          v.expires_at,
+          batch.valid_from,
+          batch.valid_until,
+        ]),
+      );
+      return {
+        status: 200,
+        body: csv,
+        contentType: 'text/csv; charset=utf-8',
+        headers: {
+          'Content-Disposition': `attachment; filename="voucher-batch-${batch.id}.csv"`,
+          'Cache-Control': 'no-store',
+        },
+      };
+    },
+  });
+
+  return [list, create, get, vouchers, revoke, exportBatch];
 }

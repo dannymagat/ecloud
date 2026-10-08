@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { isLost, lastSeen, reapCutoff } from './reap.js';
+import { authorizationCutoff, isLost, lastSeen, reapCutoff } from './reap.js';
 
 describe('session reaper rule', () => {
   const now = new Date('2026-01-01T12:00:00Z');
@@ -38,5 +38,12 @@ describe('session reaper rule', () => {
         120,
       ),
     ).toBe(false);
+  });
+});
+
+describe('authorization expiry (D-036)', () => {
+  it('cutoff = now − TTL', () => {
+    const now = new Date('2026-01-01T12:00:00Z');
+    expect(authorizationCutoff(now, 300)).toEqual(new Date('2026-01-01T11:55:00Z'));
   });
 });

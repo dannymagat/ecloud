@@ -14,7 +14,7 @@
     "tests"
   ],
   "scripts": {
-    "build": "tsc -b",
+    "build": "tsc -b && npm run build -w @ecloud/admin",
     "typecheck": "tsc -b && npm run typecheck --workspaces --if-present",
     "clean": "npm run clean --workspaces --if-present",
     "lint": "eslint .",
@@ -30,7 +30,8 @@
     "dev:stack": "docker compose --project-directory . -f infra/compose/docker-compose.dev.yml up -d --wait",
     "dev:stack:down": "docker compose --project-directory . -f infra/compose/docker-compose.dev.yml down",
     "dev:stack:reset": "docker compose --project-directory . -f infra/compose/docker-compose.dev.yml down -v",
-    "db:migrate": "npm run migrate --workspace @ecloud/db --"
+    "db:migrate": "npm run migrate --workspace @ecloud/db --",
+    "dev:admin": "npm run dev -w @ecloud/admin"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.5",
@@ -40,6 +41,7 @@
     "@vitest/coverage-v8": "^5.0.3",
     "eslint": "^9.39.5",
     "eslint-config-prettier": "^10.1.8",
+    "eslint-plugin-react-hooks": "^7.1.1",
     "prettier": "^3.9.9",
     "supertest": "^7.3.1",
     "tsx": "^4.23.15",

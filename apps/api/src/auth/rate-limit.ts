@@ -65,3 +65,29 @@ export async function clearFailures(deps: AppDeps, email: string): Promise<void>
   if (deps.config.rateLimitDisabled) return;
   await guard(() => deps.kv.del(`fail:${accountKey(email)}`));
 }
+
+/** API_ARCHITECTURE.md §3.1: export endpoints 10 per hour per principal. */
+export const EXPORT_LIMIT = Object.freeze({ perHour: 10, windowSeconds: 3600 });
+
+/**
+ * Like `hitLimit` but FAIL OPEN when the store is unavailable (§3.1: only authentication fails
+ * closed); a 429 is still raised when the store answers and the limit is exceeded.
+ */
+export async function hitLimitFailOpen(
+  deps: AppDeps,
+  key: string,
+  limit: number,
+  windowSeconds: number,
+): Promise<void> {
+  if (deps.config.rateLimitDisabled) return;
+  let count: number;
+  try {
+    count = await deps.kv.incr(`rl:${key}`, windowSeconds);
+  } catch {
+    return;
+  }
+  if (count > limit) {
+    const ttl = await deps.kv.ttl(`rl:${key}`).catch(() => windowSeconds);
+    throw new TooManyRequestsError(ttl || windowSeconds);
+  }
+}

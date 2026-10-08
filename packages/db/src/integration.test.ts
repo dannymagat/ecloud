@@ -157,7 +157,7 @@ await describeIntegration('@ecloud/db schema', () => {
 
   it('seeds the shared permission catalogue and the six role templates exactly', async () => {
     const permissions = await platform.selectFrom('permissions').selectAll().execute();
-    expect(permissions).toHaveLength(98);
+    expect(permissions).toHaveLength(99); // + administrator:mfa_reset (D-038)
     expect(permissions.map((p) => p.key).sort()).toEqual(
       PERMISSION_CATALOGUE.map((p) => p.key).sort(),
     );
@@ -198,7 +198,7 @@ await describeIntegration('@ecloud/db schema', () => {
       .select(({ fn }) => fn.countAll<number>().as('n'))
       .where('role_id', '=', superAdmin?.id ?? '')
       .executeTakeFirst();
-    expect(Number(count?.n)).toBe(98);
+    expect(Number(count?.n)).toBe(99);
   });
 
   it('hides cross-tenant rows from ecloud_app and shows everything to the platform role', async () => {
@@ -520,10 +520,49 @@ await describeIntegration('@ecloud/db schema', () => {
       await sqlState(
         platform
           .insertInto('nas_clients')
-          .values(makeNasClient(orgA.id, siteA.id, { adapter_type_key: 'made_up' }))
+          .values(
+            makeNasClient(orgA.id, siteA.id, { adapter_type_key: 'made_up', adapter_key: null }),
+          )
           .execute(),
       ),
     ).toBe('23503');
+    // D-035 (migration 015): adapter_key is one of the four NAS-facing engine keys …
+    expect(
+      await sqlState(
+        platform
+          .insertInto('nas_clients')
+          .values(
+            makeNasClient(orgA.id, siteA.id, {
+              adapter_type_key: 'openwifi-config',
+              adapter_key: 'openwifi-config',
+            }),
+          )
+          .execute(),
+      ),
+    ).toBe('23514');
+    // … and agrees with the catalogue reference
+    expect(
+      await sqlState(
+        platform
+          .insertInto('nas_clients')
+          .values(
+            makeNasClient(orgA.id, siteA.id, {
+              adapter_type_key: 'openwifi-uspot-uam',
+              adapter_key: 'coovachilli-uam',
+            }),
+          )
+          .execute(),
+      ),
+    ).toBe('23514');
+    // the reconciled catalogue holds exactly the five engine keys on a fresh database
+    const keys = await platform.selectFrom('adapter_types').select('key').orderBy('key').execute();
+    expect(keys.map((k) => k.key)).toEqual([
+      'coovachilli-uam',
+      'openwifi-config',
+      'openwifi-hostapd-radius',
+      'openwifi-uspot-uam',
+      'uspot-upstream-uam',
+    ]);
   });
 
   it('keeps the radius schema away from ecloud_app and insert-only for ecloud_radius', async () => {
@@ -634,7 +673,7 @@ await describeIntegration('@ecloud/db schema', () => {
       .selectFrom('permissions')
       .select(({ fn }) => fn.countAll<number>().as('n'))
       .executeTakeFirst();
-    expect(Number(perms?.n)).toBe(98);
+    expect(Number(perms?.n)).toBe(99);
     const templates = await platform
       .selectFrom('roles')
       .select(({ fn }) => fn.countAll<number>().as('n'))

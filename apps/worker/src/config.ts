@@ -30,6 +30,8 @@ export const workerEnvSchema = z.object({
   /** Expected Acct-Interim-Interval (uCentral default 600 s overrides ECLOUD's 300, AAA §5.3). */
   WORKER_INTERIM_INTERVAL_S: positiveInt(600, 86_400),
   WORKER_REAP_GRACE_S: z.coerce.number().int().min(0).max(86_400).default(120),
+  /** D-036: an `authorized` session without accounting for this long becomes `expired`. */
+  WORKER_AUTHORIZATION_TTL_S: z.coerce.number().int().min(30).max(86_400).default(300),
   WORKER_DRAIN_BATCH: positiveInt(500, 10_000),
 });
 
@@ -38,7 +40,7 @@ export interface WorkerConfig {
   health: { port: number; host: string };
   coa: { enabled: boolean; radclientPath: string; timeoutS: number; retries: number };
   retention: { apply: boolean };
-  sessions: { interimIntervalS: number; reapGraceS: number };
+  sessions: { interimIntervalS: number; reapGraceS: number; authorizationTtlS: number };
   drain: { batchSize: number };
 }
 
@@ -66,6 +68,7 @@ export function loadWorkerConfig(
     sessions: {
       interimIntervalS: raw.WORKER_INTERIM_INTERVAL_S,
       reapGraceS: raw.WORKER_REAP_GRACE_S,
+      authorizationTtlS: raw.WORKER_AUTHORIZATION_TTL_S,
     },
     drain: { batchSize: raw.WORKER_DRAIN_BATCH },
   };

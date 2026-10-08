@@ -2,6 +2,7 @@
 import js from '@eslint/js';
 import { defineConfig } from 'eslint/config';
 import prettier from 'eslint-config-prettier';
+import reactHooks from 'eslint-plugin-react-hooks';
 import tseslint from 'typescript-eslint';
 
 export default defineConfig(
@@ -45,6 +46,15 @@ export default defineConfig(
       '@typescript-eslint/explicit-module-boundary-types': 'error',
       'no-console': ['error', { allow: ['error'] }],
       eqeqeq: ['error', 'always'],
+    },
+  },
+  {
+    // Admin SPA (apps/admin): React hooks rules; components' JSX return types are inferred.
+    files: ['apps/admin/**/*.{ts,tsx}'],
+    plugins: { 'react-hooks': reactHooks },
+    rules: {
+      ...reactHooks.configs.recommended.rules,
+      '@typescript-eslint/explicit-module-boundary-types': 'off',
     },
   },
   {

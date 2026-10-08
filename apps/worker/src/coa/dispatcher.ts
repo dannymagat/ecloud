@@ -23,7 +23,7 @@ import {
 } from '@ecloud/db';
 import type { EnforcementPlan } from '@ecloud/policy-engine';
 import type { Logger } from '@ecloud/shared';
-import { resolveAdapter } from '../adapter-keys.js';
+import { resolveAdapter } from '../nas-adapter.js';
 import { emitEvent } from '../events.js';
 import type { SecretResolver } from '../infra/secrets.js';
 import {
@@ -118,7 +118,7 @@ export interface ActionContext {
   nas_identifier: string | null;
   coa_port: number | null;
   secret_ref: string;
-  adapter_type_key: string;
+  adapter_key: string | null;
 }
 
 export type DispatchDecision =
@@ -162,9 +162,9 @@ export async function performDispatch(
   if (!deps.coaEnabled) {
     return final('unsupported', SKIPPED_DISABLED, { status: 'skipped_disabled' });
   }
-  const adapter = resolveAdapter(row.adapter_type_key);
+  const adapter = resolveAdapter(row.adapter_key);
   if (adapter === null) {
-    const reason = `no NAS adapter for adapter type ${row.adapter_type_key}`;
+    const reason = `no NAS adapter for adapter_key ${row.adapter_key ?? 'NULL'}`;
     return final('unsupported', reason, { status: 'unsupported', reason });
   }
   const sessionRef: SessionRef = {
@@ -270,7 +270,7 @@ export async function dispatchSessionAction(
       'n.nas_identifier',
       'n.coa_port',
       'n.secret_ref',
-      'n.adapter_type_key',
+      'n.adapter_key',
     ])
     .where('a.id', '=', sessionActionId)
     .executeTakeFirst()) as ActionContext | undefined;

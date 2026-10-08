@@ -114,6 +114,8 @@ Permissions are keys from `MULTITENANCY.md §4.2` exactly. `—` = authenticated
 | `/platform/organizations/{id}/impersonate` | POST | `tenant:impersonate` | body `{reason}`; sets `impersonating_organization_id`, TTL ≤ 60 min; audit `tenant:impersonate` |
 | `/platform/impersonation` | DELETE | — | end early; audit `tenant:impersonate:end` |
 | `/platform/administrators` | GET/POST | `administrator:read` / `administrator:invite` | platform-scope bindings |
+| `/platform/administrators/{id}` | GET/PATCH | `administrator:read` / `administrator:update` (`administrator:disable` for status) | disabling revokes the target's sessions |
+| `/platform/administrators/{id}/mfa/reset` | POST | `administrator:mfa_reset` | D-038: body `{reason}`; deletes MFA credentials, revokes sessions, forces re-enrolment; refused while impersonating / on oneself |
 | `/platform/settings` | GET/PATCH | `platform:health:read` / `platform:settings:update` | defaults, password policy, retention |
 | `/platform/role-templates` | GET/PATCH | `role:read` / `platform:role_template:manage` | bumps `template_version` |
 | `/platform/adapters` | GET | `platform:health:read` | `adapter_types` with capability flags + `verification_status` (A7 "capability matrix") |
@@ -131,7 +133,7 @@ Permissions are keys from `MULTITENANCY.md §4.2` exactly. `—` = authenticated
 | `{o}/network-devices` | GET/POST | `network_device:read` / `network_device:create` | `?filter[site_id]`; serial unique |
 | `{o}/network-devices/{id}` | GET/PATCH/DELETE | `network_device:*` | `reported_capabilities`, `mode` |
 | `{o}/network-devices/{id}/config-push` | POST | `network_device:config:push` | Option A only (§6); returns `policy_translations` id; 501 `adapter_unsupported` under Option C |
-| `{o}/nas` | GET/POST | `nas:read` / `nas:create` | secret generated server-side, returned **once**, stored via `secret_ref` |
+| `{o}/nas` | GET/POST | `nas:read` / `nas:create` | secret generated server-side, returned **once**, stored via `secret_ref`; body requires `adapter_key` (engine adapter, D-035) |
 | `{o}/nas/{id}` | GET/PATCH/DELETE | `nas:*` | `coa_supported` mirrors adapter flag unless overridden with evidence |
 | `{o}/nas/{id}/rotate-secret` | POST | `nas:secret:rotate` | idempotency key; FreeRADIUS clients reload job |
 | `{o}/wireguard-peers` | GET/POST | `wireguard_peer:read` / `wireguard_peer:create` | allocates `tunnel_ip`; returns one-time bundle (`WIREGUARD_ARCHITECTURE.md §8`) |
@@ -442,7 +444,7 @@ not VERIFIED DEVICE CAPABILITY: everything device-facing below inherits the adap
 | `src/app.ts` | `createApp(deps)` → `{ publicApp, internalApp, routes, openapi }`; request id (`X-Request-Id`, echoed when well-formed, else UUID v7), pino-http (method + path only — no bodies, no query strings), helmet (CSP `default-src 'none'`), JSON body limit 1 MB public / 64 kB internal, RFC 9457 404 + error handler, `/healthz`, `/readyz` (DB `SELECT 1` + Redis `PING`, 2 s timeout) |
 | `src/index.ts` / `main.ts` | two listeners (`API_PORT`/`API_BIND_HOST`, `INTERNAL_PORT`/`INTERNAL_BIND_HOST` default `127.0.0.1`); SIGTERM/SIGINT drain (`SHUTDOWN_GRACE_MS`), then pools + Redis closed |
 | `src/http/route.ts` | `defineRoute()` — one declaration per endpoint (zod params/query/body, permission, scope resolver, idempotency, responses). The same list mounts Express and generates OpenAPI, so an undocumented public route cannot exist; unknown permission keys throw at boot |
-| `src/openapi.ts` | OpenAPI **3.1** via `zod-openapi`; served at `GET /api/v1/openapi.json` (50 paths / 87 operations at the time of writing). `app.test.ts` walks the Express router stack and fails if any mounted route is missing from the document |
+| `src/openapi.ts` | OpenAPI **3.1** via `zod-openapi`; served at `GET /api/v1/openapi.json` (61 paths / 100 operations after Phase 4 P4-backend). `app.test.ts` walks the Express router stack and fails if any mounted route is missing from the document |
 | `src/auth/*` | principal resolution, `evaluate()` (MULTITENANCY §4.4), sessions, TOTP, CSRF, rate limits |
 | `src/routes/*` | auth, platform, access (roles/bindings/API keys/admins/invitations), policies (+ assignments, simulate), generic tenant CRUD, vouchers, runtime (sessions, audit log) |
 | `src/internal/*` | `/internal/aaa/authorize`, `/internal/aaa/post-auth` per `docs/contracts/aaa-authorize.md` |
@@ -521,13 +523,67 @@ not VERIFIED DEVICE CAPABILITY: everything device-facing below inherits the adap
 - **Vouchers.** Codes from the 32-symbol alphabet (no 0/O/1/I), length 8–16 (default 10),
   `code_hash = HMAC-SHA-256(VOUCHER_PEPPER, upper(code))`, `code_hint` = last 3 characters,
   `code_enc` NULL (A6 Q4 default hash-only: no re-print). Synchronous generation capped at 1000.
+  **D-037** (migration 017): `duration_s` allows re-login until `expires_at` (first use +
+  duration), `max_uses` allows that many logins, both apply when both are set. `max_uses` is
+  nullable: the API default is `null` when `duration_s` is given and `1` otherwise; a batch with
+  neither limit is a 400. `POST …/voucher-batches/{id}/export` (`voucher:export`, 10/h per
+  principal, fail-open limiter) returns `text/csv` with metadata only (id, `code_hint`, status,
+  use count, activation/expiry, batch limits) — plaintext codes exist only in the creation
+  response; cells starting with `= + - @` are neutralised against CSV injection; audited.
 - **Policies.** `validatePolicy` with the stored context (existing default, assignments, previous
   version); a change of an enforcement field bumps `version` (rule 11); response carries
   `warnings`. `GET /orgs/{orgId}/policies/simulate?user_id|client_device_id&site_id&at&adapter`
   runs `simulate()` over the loaded candidates (permission `policy:preview`).
 - **Adapters.** `GET /platform/adapters` returns, per engine adapter, every policy field with its
   four-state status + evidence, Disconnect/CoA/MAC-auth flags, attribute statuses, plus the
-  `adapter_types` rows and their engine mapping.
+  `adapter_types` rows (`engine_adapter` = the key itself after migration 015; `legacy: true` for
+  a pre-015 key still referenced by an unmapped row).
+- **NAS adapter (D-035).** `POST /orgs/{orgId}/nas` requires `adapter_key` ∈
+  {`openwifi-hostapd-radius`, `openwifi-uspot-uam`, `uspot-upstream-uam`, `coovachilli-uam`}
+  (`openwifi-config` is SSID configuration, not a RADIUS client); `adapter_type_key` is derived
+  from it and is no longer accepted in the body. PATCH may change `adapter_key`.
+- **Administrators.** `GET /platform/administrators` (+ `?status`, `?q` email prefix),
+  `GET/PATCH /platform/administrators/{id}`, `GET/PATCH /orgs/{orgId}/administrators/{id}`
+  (`src/routes/administrators.ts`). PATCH `{display_name?, status?: active|disabled,
+  mfa_enforced? (platform only)}`; a status change needs `administrator:disable`, is refused on
+  oneself and for `invited` accounts, and disabling revokes every session of the target. The
+  caller must hold every permission of every target binding in its scope (escalation guard). The
+  organization route only changes administrators whose bindings all belong to that organization
+  (others → 403, "ask a platform administrator"); administrators without a binding there → 404.
+  Refused while impersonating. All on the platform connection (audited `platform:access`), with
+  `administrator:update` / `administrator:disable` audit rows (organization id on the tenant
+  route).
+- **MFA reset (D-038).** `POST /platform/administrators/{id}/mfa/reset {reason}` — permission
+  `administrator:mfa_reset` (platform-only, minimum scope platform, held by
+  `platform_super_admin` only; seeded by `ecloud-db seed`), admin *session* only, refused while
+  impersonating and on oneself (422). In one transaction: deletes the target's
+  `mfa_credentials`, sets `administrators.mfa_reenrol_required` (migration 018), revokes all of
+  the target's `admin_sessions`, writes `administrator:mfa_reset` with the reason. While the
+  flag is set every session of the target holds no permissions (same gate as `mfa_enforced`);
+  login answers `mfa_enrolment_required: true`, `/auth/me` reports `mfa.reenrol_required`;
+  `/auth/mfa/confirm` clears it. No self-service MFA disable exists.
+- **Platform operations** (`src/routes/platform-ops.ts`). `GET /platform/role-templates`
+  (`role:read`, read-only: templates are owned by the seed), `GET /platform/audit-log`
+  (`audit_log:read` on a platform binding; filters `organization_id`, `platform_only`, `action`,
+  `actor_id`, `target_id`, `from`, `to`; newest first), `GET /platform/health`
+  (`platform:health:read`; always 200 with `status: ok|degraded`: DB + Redis probes (2 s),
+  BullMQ depths per queue from Redis (`null` with the in-memory KV), latest migration, open
+  session counts incl. oldest `authorized`, partition horizon per partitioned table, NAS rows
+  without `adapter_key`; FreeRADIUS Status-Server and WireGuard handshakes are reported
+  `not_checked` — they are host/infra probes, not API-process facts).
+- **Self sessions.** `GET /me/sessions` (own live sessions, `current` flag, no token material),
+  `DELETE /me/sessions/{id}` (own only, else 404; revoking the current one clears the cookie;
+  audited `auth:session:revoke`).
+- **Users import.** `POST /orgs/{orgId}/users/import` (`user:create`, `Idempotency-Key`
+  required) with JSON `{csv, dry_run?}` (or `?dry_run=true`); ≤ 500 rows, header row with known
+  columns only (`username` required, `password`, `display_name`, `email`, `phone`, `site_id`,
+  `user_group_id`, `status`, `valid_from`, `valid_until`, `max_devices`, `auth_methods`
+  `;`-separated). Every row is validated with the `POST /users` schema, duplicate usernames and
+  references (`site_id`, `user_group_id`, re-checked in the tenant) fail the whole import with
+  400 `errors[].path = body.csv.rows[<line>].<column>`; per-row site authorization. Existing
+  usernames are skipped (idempotent re-run); one `user:create` audit row (`target_type =
+  user_import`) per committed import; a dry run writes nothing. JSON instead of multipart keeps
+  the 1 MB body limit and avoids a multipart dependency.
 
 ### AAA (`docs/contracts/aaa-authorize.md`)
 
@@ -552,24 +608,31 @@ not VERIFIED DEVICE CAPABILITY: everything device-facing below inherits the adap
   `reply:Class = ai:<32 hex of the session UUID>`; never `User-Password`, `Cleartext-Password` or
   any other control item. Rejects → `401` + `reply:Reply-Message` (generic text; the internal
   reason goes to logs/auth_events only). Any backend error → `503` (FreeRADIUS `fail` → reject).
-- Adapter mapping (`src/adapter-map.ts`): DB `coovachilli` → `coovachilli-uam`, `uspot` →
-  `uspot-upstream-uam`; `openwifi_ucentral` (ambiguous between hostapd-RADIUS and the TIP uspot
-  adapter) and `generic_radius` map to **no adapter**: the reply then carries only Auth-Type and
-  Class, and `policy_translations.unsupported` records why. A future DB key spelled like an engine
-  key with `_` maps directly. **Owner/A3 decision needed** (see open questions).
-- Session row: inserted at authorize with `status = 'active'` (the `sessions.status` CHECK has no
-  `authorized` value), `acct_unique_id = <Class>` as placeholder until accounting arrives (the
-  worker correlates by Class), `policy_id/version`, MAC, NAS, voucher/user/device. A
-  `policy_translations` row (`trigger = 'authorize'`) records the snapshot, emitted attributes and
-  unsupported fields. Vouchers are consumed in the same transaction (first use sets
-  `activated_at` / `expires_at = now + duration_s`; count-limited vouchers become `exhausted`).
+- Adapter (D-035, `src/nas-adapter.ts`): the engine adapter is `nas_clients.adapter_key`; there
+  is no alias map any more (`src/adapter-map.ts` and the worker's `adapter-keys.ts` were
+  removed). A legacy row without `adapter_key` (pre-015 `openwifi_ucentral` / `generic_radius`)
+  gets **no adapter**: the reply carries only Auth-Type and Class and
+  `policy_translations.unsupported` records why. `policy_translations.adapter_type_key` records
+  the engine key.
+- Session row (D-036): inserted at authorize with `status = 'authorized'`, `acct_unique_id =
+  <Class>` as placeholder until accounting arrives (the worker correlates by Class),
+  `policy_id/version`, MAC, NAS, voucher/user/device; the worker drain promotes it to `active` on
+  the first Accounting-Start (or Interim), and the `sessions.reap` job expires authorizations
+  without accounting after `WORKER_AUTHORIZATION_TTL_S` (default 300 s) as `expired` /
+  `authorization_expired` (a late Start revives it). Concurrency (`loadResolutionInput`) counts
+  `authorized` + `active`. A `policy_translations` row (`trigger = 'authorize'`) records the
+  snapshot, emitted attributes and unsupported fields. Vouchers are consumed in the same
+  transaction (first use sets `activated_at` / `expires_at = now + duration_s`; a voucher whose
+  `use_count` reaches `max_uses` becomes `exhausted`; an elapsed `expires_at` is rejected with
+  `Voucher expired`, D-037).
 - Retransmits: decision cached 10 s in Redis under SHA-256(src IP, Acct-Session-Id,
   Calling-Station-Id, User-Name, SHA-256(User-Password)); a retransmit gets the identical answer
   (same Class, no second voucher use, one session row); a different password does not hit the
   cache. The password is never logged, persisted or used as a cache key in clear.
 - `post-auth` writes `auth_events` (`organization_id` NULL for unknown NAS, via the platform
   connection) and, on a final reject (e.g. local PAP mismatch), marks the provisional session
-  `stopped` with `terminate_cause = 'auth-rejected'`. It always answers 204. On a decision-cache
+  `stopped` with `terminate_cause = 'auth-rejected'` (from `authorized` or `active`). It always
+  answers 204. On a decision-cache
   miss the `ECLOUD-Reply-Class` session is used only when it belongs to the NAS that sent the
   packet; a Class replayed from another NAS attributes nothing and closes nothing.
 
@@ -587,25 +650,39 @@ GET list/POST, GET/PATCH/DELETE by id), `policies` (CRUD + `policies/simulate`),
 `vouchers/{id}/revoke`, `sessions` (GET, GET by id), `audit-log` (GET). Internal:
 `/internal/aaa/authorize`, `/internal/aaa/post-auth`.
 
-### Not implemented in Phase 3 (deliberately)
+Added in Phase 4 (P4 backend, 2026-10-07): `me/sessions` (GET), `me/sessions/{id}` (DELETE);
+`platform/administrators` (GET), `platform/administrators/{id}` (GET/PATCH),
+`platform/administrators/{id}/mfa/reset` (POST), `platform/role-templates` (GET),
+`platform/audit-log` (GET), `platform/health` (GET); under `orgs/{orgId}`:
+`administrators/{id}` (GET/PATCH), `users/import` (POST), `voucher-batches/{id}/export` (POST,
+`text/csv`).
+
+### Not implemented yet (deliberately)
 
 Reports, accounting endpoints, webhooks, WireGuard peers, identity providers, captive portals,
-portal themes/assets, users import/export, `users/{id}/reset-password` and `effective-policy`
+portal themes/assets, users export, `users/{id}/reset-password` and `effective-policy`
 (covered by PATCH `password` with `user:password:reset` and by `policies/simulate`),
-`policies/{id}/preview`, voucher print/export, session disconnect/reauthorize (worker CoA path),
-`/platform/settings`, `/platform/health`, `/platform/administrators`, `/platform/role-templates`,
-`/platform/audit-log`, `/me/sessions`, MFA disable, administrator PATCH/disable,
-`/internal/aaa/accounting`, `/internal/aaa/clients`, `/internal/portal/*`, `/jobs`, SSE.
+`policies/{id}/preview`, voucher print and code reveal (hash-only default: there is nothing to
+reveal), session disconnect/reauthorize (worker CoA path), `/platform/settings`,
+`POST /platform/administrators` (platform invitations), `PATCH /platform/role-templates`
+(templates are owned by `ecloud-db seed`; editing them in the DB would be reverted on the next
+seed), self-service MFA disable (D-038: not provided), async import/export jobs (`/jobs`),
+`/internal/aaa/accounting`, `/internal/aaa/clients`, `/internal/portal/*`, SSE.
 
 ### Open questions raised by the implementation
 
-1. `adapter_types` keys (`openwifi_ucentral`, `uspot`, `coovachilli`, `generic_radius`) vs the five
-   engine adapters: should `nas_clients` (or `adapter_types`) carry the engine adapter key so an
-   OpenWiFi NAS can be told apart (hostapd-RADIUS vs TIP uspot)?
-2. `sessions.status` has no `authorized` state; authorize inserts `active`. A migration adding
-   `authorized` (promoted to `active` by Accounting-Start) would keep concurrency counts exact.
-3. Voucher semantics of `max_uses` with `duration_s` (currently: time-limited vouchers allow
-   re-login until expiry, count-limited ones allow `max_uses` logins).
+1. ~~`adapter_types` keys vs the five engine adapters.~~ **Resolved by D-035** (migration 015,
+   `nas_clients.adapter_key`; see "NAS adapter" and AAA "Adapter" above).
+2. ~~`sessions.status` has no `authorized` state.~~ **Resolved by D-036** (migration 016,
+   `authorized` → `active` on Accounting-Start, `expired` after the worker TTL; concurrency
+   counts both open states).
+3. ~~Voucher semantics of `max_uses` with `duration_s`.~~ **Resolved by D-037** (migration 017:
+   both limits apply when both are set; `max_uses` NULL = no count limit).
 4. ~~MFA enforcement for platform bindings is reported, not blocking.~~ Resolved in M8 per
-   SECURITY_ARCHITECTURE §6.2: blocking (see "MFA" above). MFA reset / disable flow for a lost
-   device is still not implemented (platform super admin path needed).
+   SECURITY_ARCHITECTURE §6.2: blocking (see "MFA" above). ~~MFA reset for a lost device.~~
+   **Resolved by D-038** (`POST /platform/administrators/{id}/mfa/reset`, migration 018; see
+   "MFA reset" above). Self-service MFA disable is deliberately not provided.
+5. Legacy NAS rows that migration 015 could not map (`openwifi_ucentral`, `generic_radius`) stay
+   without `adapter_key` until an operator sets it; `GET /platform/health` reports their count
+   (`nas.without_adapter_key`). The lab AP EZE-AP1832 is TIP-fork uspot (DT-01), i.e.
+   `openwifi-uspot-uam` — the operator chooses; nothing is guessed in SQL.

@@ -45,8 +45,22 @@ Not authorised: EZEAP changes, EZE controller changes, public RADIUS, public DNS
   - `format:check` failed on three `tsconfig.build.json` files (CI `check` job) → formatted.
 - Not done in M8 (needs owner input or later phase): `openwifi_ucentral` adapter ambiguity (API_ARCHITECTURE open question 1); MFA reset/disable for a lost device; `sessions.status = authorized` (open question 2).
 
+## Phase 4 — Core Administration (LOCAL) — progress 2026-10-08
+Owner accepted recommendations D-035 … D-038 (NAS adapter key, authorized session state, voucher limits, MFA reset by platform super admin).
+
+| Item | Status |
+|---|---|
+| Backend for D-035 … D-038 (migrations 015–018) | DONE — applied to local dev DB; 99-permission catalogue (`administrator:mfa_reset` added) |
+| API gaps: administrator edit/disable, platform administrators/role templates/audit log/health, `/me/sessions`, users CSV import, voucher batch export (metadata only) | DONE — 61 paths / 100 operations in OpenAPI |
+| Admin web app `apps/admin` (React + TypeScript + Tailwind SPA) | DONE (first cut) — login + MFA, org switcher, permission-driven nav, impersonation banner, org and platform screens, policy editor with per-adapter four-state preview, Disconnect disabled (no adapter VERIFIED); 40 component tests; browser smoke against local API |
+| Verification (orchestrator, 2026-10-08) | build, lint, format:check, secrets scan OK; **639/639 integration tests** incl. FreeRADIUS contract |
+| Not yet built | Admin: My sessions page, voucher CSV export button, administrator edit UI, custom role editor, schedules CRUD, reports, portal designer, i18n/RTL, committed Playwright E2E. API: session Disconnect endpoint (gated by D-006), org-scoped adapter catalogue, draft-policy preview without a subject, dashboard counts endpoint, platform admin invitations |
+| Dependency audit | 0 production vulnerabilities; 7 dev-only (Tailwind 3 toolchain: braces/micromatch/postcss) |
+
+Reconciliation: orchestrator removed placeholder credentials from URLs in `apps/admin/scripts/generate-api.mjs` (secrets-scan finding; values were inert, now no user/password in URL); OpenAPI output unchanged.
+
 ## Verified Environment Facts
-See REMOTE_ENVIRONMENT.md and PHASE2_VALIDATION.md. Ledger: 105 claims — 40 verified, 17 proposed, 1 unknown, 47 requires device test; 24 device tests (DT-01…DT-24), none executed yet.
+See REMOTE_ENVIRONMENT.md and PHASE2_VALIDATION.md. Ledger: 105 claims — 40 verified, 17 proposed, 1 unknown, 47 requires device test; 24 device tests (DT-01…DT-24). **DT-01 executed 2026-10-07 (PASS, identification only)** on lab AP EZE-AP1832, EZEAP 6 r32912, uCentral schema 4.2.0: uspot is the TIP fork; no WireGuard/unetd on the AP (topology B unsupported on this firmware); hostapd supports DAS and dynamic VLAN. DT-02…DT-24 not executed. No device configuration was changed.
 
 ## Open Items Needing Owner Input
 - VPS deployment gate (D-031): exact change list to be presented before first deployment; Q16/Q17/Q18/Q19/Q20/Q21 decided then.

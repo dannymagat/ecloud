@@ -50,7 +50,7 @@ export type PolicyTargetType = 'user' | 'user_group' | 'site' | 'client_device' 
 export type TranslationTrigger = 'authorize' | 'coa' | 'preview' | 'config_push';
 export type VoucherStatus = 'unused' | 'active' | 'exhausted' | 'expired' | 'revoked';
 export type PortalType = 'uspot' | 'coovachilli' | 'external';
-export type SessionStatus = 'active' | 'stopped' | 'stale';
+export type SessionStatus = 'authorized' | 'active' | 'stopped' | 'stale' | 'expired';
 export type AccountingStatusType =
   'start' | 'interim' | 'stop' | 'accounting_on' | 'accounting_off';
 export type AuthResult = 'accept' | 'reject' | 'challenge' | 'error';
@@ -110,6 +110,8 @@ export interface AdministratorsTable {
   password_hash: string | null;
   status: Generated<AdministratorStatus>;
   mfa_enforced: Generated<boolean>;
+  /** Migration 018 (D-038): set by an MFA reset, cleared by the next confirmed enrolment. */
+  mfa_reenrol_required: Generated<boolean>;
   last_login_at: NullableTimestamp;
   created_at: GeneratedTimestamp;
   updated_at: GeneratedTimestamp;
@@ -282,6 +284,8 @@ export interface NasClientsTable {
   nas_identifier: string | null;
   nas_ip: Inet;
   adapter_type_key: string;
+  /** Migration 015 (D-035): @ecloud/adapters key; NULL only for legacy rows without a mapping. */
+  adapter_key: string | null;
   secret_ref: string;
   coa_port: number | null;
   coa_supported: boolean | null;
@@ -460,7 +464,8 @@ export interface VoucherBatchesTable {
   valid_from: NullableTimestamp;
   valid_until: NullableTimestamp;
   duration_s: number | null;
-  max_uses: Generated<number>;
+  /** Migration 017 (D-037): NULL = no count limit (duration-only voucher); DEFAULT 1. */
+  max_uses: ColumnType<number | null, number | null | undefined, number | null>;
   max_devices: Generated<number>;
   created_by: Uuid | null;
   exported_at: NullableTimestamp;

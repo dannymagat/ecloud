@@ -17,6 +17,8 @@ export interface HandlerResult {
   status: number;
   body?: unknown;
   headers?: Record<string, string>;
+  /** Non-JSON body (e.g. `text/csv`): `body` must then be a string and is sent verbatim. */
+  contentType?: string;
 }
 
 export interface HandlerInput<P, Q, B> {
@@ -39,6 +41,8 @@ export type ScopeResolver =
 export interface ResponseSpec {
   description: string;
   schema?: z.ZodType;
+  /** Media type of `schema` (default `application/json`). */
+  contentType?: string;
 }
 
 export interface RouteSpec<
@@ -149,6 +153,8 @@ export function mountRoute(router: Router, deps: AppDeps, spec: AnyRouteSpec): v
     for (const [name, value] of Object.entries(result.headers ?? {})) res.setHeader(name, value);
     if (result.body === undefined) {
       res.status(result.status).end();
+    } else if (result.contentType !== undefined && typeof result.body === 'string') {
+      res.status(result.status).type(result.contentType).send(result.body);
     } else {
       res.status(result.status).json(result.body);
     }

@@ -14,6 +14,7 @@ import { OrgIdParams, ResourceSchema, problemResponses } from '../http/common.js
 import { ImpersonationForbiddenError } from '../http/errors.js';
 import { defineRoute, type AnyRouteSpec } from '../http/route.js';
 import { assertRef, inTenant, requireOnSite } from '../tenant.js';
+import { NAS_ADAPTER_KEYS } from '../nas-adapter.js';
 import { crudRoutes, loose, type Row } from './crud.js';
 
 const MAC_RE = /^([0-9A-Fa-f]{2}[:-]?){5}[0-9A-Fa-f]{2}$/;
@@ -65,7 +66,7 @@ const NetworkDeviceCreate = z.strictObject({
   mode: z.enum(['bridge', 'routed', 'unknown']).optional(),
   adapter_type_key: z
     .string()
-    .regex(/^[a-z][a-z0-9_]{1,63}$/)
+    .regex(/^[a-z][a-z0-9_-]{1,63}$/)
     .nullable()
     .optional(),
 });
@@ -76,7 +77,8 @@ const NasCreate = z.strictObject({
   name,
   nas_ip: z.union([z.ipv4(), z.ipv6()]),
   nas_identifier: z.string().trim().min(1).max(253).nullable().optional(),
-  adapter_type_key: z.string().regex(/^[a-z][a-z0-9_]{1,63}$/),
+  /** D-035: the @ecloud/adapters key; `adapter_type_key` is derived from it. */
+  adapter_key: z.enum(NAS_ADAPTER_KEYS),
   network_device_id: z.uuid().nullable().optional(),
   coa_port: z.number().int().min(1).max(65535).nullable().optional(),
   coa_supported: z.boolean().nullable().optional(),
@@ -85,7 +87,7 @@ const NasCreate = z.strictObject({
 const NasUpdate = NasCreate.partial().extend({ status: z.enum(['active', 'disabled']).optional() });
 
 const AUTH_METHODS = ['password', 'mac', 'voucher', 'idp'] as const;
-const UserCreate = z.strictObject({
+export const UserCreate = z.strictObject({
   username: z.string().trim().min(1).max(253).regex(/^\S+$/, 'no whitespace'),
   password: z.string().min(8).max(256).optional(),
   site_id: z.uuid().nullable().optional(),
@@ -209,7 +211,11 @@ export function resourceRoutes(deps: AppDeps): AnyRouteSpec[] {
       // 32 random bytes → 43 base64url chars; RADIUS shared secrets ≤ 128 octets.
       const secret = randomToken(32);
       hook.scratch.secret = secret;
-      return { ...body, secret_ref: sealSecretRef(dataEnvelope, secret) };
+      return {
+        ...body,
+        adapter_type_key: body.adapter_key,
+        secret_ref: sealSecretRef(dataEnvelope, secret),
+      };
     },
     afterCreate: (row, hook) => Promise.resolve({ ...row, secret: hook.scratch.secret }),
     preparePatch: async (body, _before, { trx }) => {
@@ -217,7 +223,9 @@ export function resourceRoutes(deps: AppDeps): AnyRouteSpec[] {
       if (typeof body.network_device_id === 'string') {
         await assertRef(trx, 'network_devices', body.network_device_id, 'network_device');
       }
-      return body;
+      return typeof body.adapter_key === 'string'
+        ? { ...body, adapter_type_key: body.adapter_key }
+        : body;
     },
   });
 

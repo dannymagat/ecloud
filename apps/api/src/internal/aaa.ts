@@ -6,8 +6,8 @@
  * NAS-Identifier is NAS-supplied and never selects a tenant, SECURITY_ARCHITECTURE.md §3.2)
  * → subject (subscriber
  * `users` with Argon2id password, `vouchers` by HMAC, or MAC-auth `client_devices`) →
- * resolveEffectivePolicy + adapter translation → `sessions` row → 200 with
- * `control:Auth-Type = Accept`, reply attributes and `reply:Class = ai:<32hex>`; otherwise
+ * resolveEffectivePolicy + adapter translation → `sessions` row (status `authorized`, D-036) →
+ * 200 with `control:Auth-Type = Accept`, reply attributes and `reply:Class = ai:<32hex>`; otherwise
  * 401 + Reply-Message. Any backend error is 503 (FreeRADIUS `fail` → reject): never fail open.
  * User-Password is never logged nor persisted.
  *
@@ -19,13 +19,12 @@
  * answer (same Class, no second voucher use) and a different password does not.
  */
 import { verifyPassword, withPlatform, withTenant, type DbTransaction } from '@ecloud/db';
-import { getAdapter } from '@ecloud/adapters';
 import { resolveEffectivePolicy, toJsonValue, type Subject } from '@ecloud/policy-engine';
 import { isUuid, newId } from '@ecloud/shared';
 import type { Request, RequestHandler, Response } from 'express';
-import { engineAdapterFor } from '../adapter-map.js';
 import type { AppDeps } from '../context.js';
 import { normalizeVoucherCode, safeEqual, sha256Hex } from '../crypto.js';
+import { nasAdapter } from '../nas-adapter.js';
 import { AUTHN_ACCESS } from '../auth/principal.js';
 import { loadResolutionInput } from '../policy-data.js';
 import { voucherHash } from '../routes/vouchers.js';
@@ -50,6 +49,7 @@ interface NasRow {
   site_id: string;
   nas_identifier: string | null;
   adapter_type_key: string;
+  adapter_key: string | null;
   network_device_id: string | null;
 }
 
@@ -131,6 +131,7 @@ export async function resolveNas(deps: AppDeps, body: RadiusRequestBody): Promis
           'site_id',
           'nas_identifier',
           'adapter_type_key',
+          'adapter_key',
           'network_device_id',
         ])
         .where('status', '=', 'active')
@@ -279,10 +280,16 @@ async function identify(
   if (voucher.site_id !== null && voucher.site_id !== nas.site_id) {
     throw new Reject('site_mismatch', 'Access denied', { auth_method: 'voucher' });
   }
-  // Count-limited vouchers (no duration) allow `max_uses` logins; time-limited vouchers allow
-  // re-login until `expires_at` (checked by the resolver, POLICY_ENGINE.md voucher layer).
-  if (voucher.duration_s === null && voucher.use_count >= voucher.max_uses) {
+  // D-037: `duration_s` allows re-login until `expires_at` (first use + duration); `max_uses`
+  // allows that many logins; both apply when both are set. Expiry is also enforced by the
+  // resolver (POLICY_ENGINE.md voucher layer); it is checked here so the reason is exact.
+  if (voucher.max_uses !== null && voucher.use_count >= voucher.max_uses) {
     throw new Reject('voucher_exhausted', 'Voucher is no longer valid', { auth_method: 'voucher' });
+  }
+  if (voucher.expires_at !== null && voucher.expires_at.getTime() <= now.getTime()) {
+    throw new Reject('voucher_expired', REPLY_MESSAGES.voucher_expired ?? 'Voucher expired', {
+      auth_method: 'voucher',
+    });
   }
   return {
     subject: {
@@ -317,7 +324,7 @@ async function consumeVoucher(trx: DbTransaction, voucherId: string, now: Date):
   await trx
     .updateTable('vouchers')
     .set({
-      status: v.duration_s === null && uses >= v.max_uses ? 'exhausted' : 'active',
+      status: v.max_uses !== null && uses >= v.max_uses ? 'exhausted' : 'active',
       use_count: uses,
       ...(first
         ? {
@@ -429,12 +436,11 @@ async function decide(deps: AppDeps, body: RadiusRequestBody, now: Date): Promis
       const sessionId = newId();
       const classValue = classForSession(sessionId);
       const builder = new PolicyBuilder().set('control', 'Auth-Type', 'Accept');
-      const engineKey = engineAdapterFor(nas.adapter_type_key);
+      const adapter = nasAdapter(nas.adapter_key);
       let emitted: unknown = [];
       let unsupported: unknown = [];
       let adapterVersion: string | null = null;
-      if (engineKey !== null) {
-        const adapter = getAdapter(engineKey);
+      if (adapter !== null) {
         adapterVersion = adapter.version;
         const plan = adapter.translate(resolution.effective, {
           clip: resolution.clip,
@@ -455,7 +461,9 @@ async function decide(deps: AppDeps, body: RadiusRequestBody, now: Date): Promis
         emitted = attributes;
         unsupported = plan.unenforceable;
       } else {
-        unsupported = [{ field: '*', reason: `no engine adapter for ${nas.adapter_type_key}` }];
+        unsupported = [
+          { field: '*', reason: `NAS has no engine adapter_key (type ${nas.adapter_type_key})` },
+        ];
       }
       builder.set('reply', 'Class', classValue);
 
@@ -484,7 +492,9 @@ async function decide(deps: AppDeps, body: RadiusRequestBody, now: Date): Promis
           called_station_id: attr(body, 'Called-Station-Id') ?? null,
           calling_station_id: attr(body, 'Calling-Station-Id') ?? null,
           started_at: now,
-          status: 'active',
+          // D-036: Access-Accept only; the worker promotes it to 'active' on Accounting-Start
+          // and expires it when no accounting arrives within the authorization TTL.
+          status: 'authorized',
         })
         .execute();
       await trx
@@ -493,7 +503,7 @@ async function decide(deps: AppDeps, body: RadiusRequestBody, now: Date): Promis
           organization_id: nas.organization_id,
           policy_id: resolution.snapshot.policy_id,
           policy_version: resolution.snapshot.policy_version ?? 0,
-          adapter_type_key: nas.adapter_type_key,
+          adapter_type_key: nas.adapter_key ?? nas.adapter_type_key,
           adapter_version: adapterVersion,
           nas_client_id: nas.id,
           session_id: sessionId,
@@ -669,7 +679,7 @@ export function postAuthHandler(deps: AppDeps): RequestHandler {
               .updateTable('sessions')
               .set({ status: 'stopped', stopped_at: now(), terminate_cause: 'auth-rejected' })
               .where('id', '=', sessionId)
-              .where('status', '=', 'active')
+              .where('status', 'in', ['authorized', 'active'])
               .where('input_octets', '=', 0)
               .execute();
           }

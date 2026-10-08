@@ -55,10 +55,11 @@ describe('decideEnforcement (D-006)', () => {
     expect(
       decideEnforcement({
         coaEnabled: true,
+        // D-035: openwifi-config is SSID configuration, never a NAS adapter
         disconnect: describeAdapterDisconnect('openwifi-config'),
         nasCoaSupported: null,
       }),
-    ).toEqual({ action: 'pending', reason: 'disconnect_unsupported' });
+    ).toEqual({ action: 'pending', reason: 'unknown_adapter' });
     expect(
       decideEnforcement({ coaEnabled: true, disconnect: chilli, nasCoaSupported: false }),
     ).toEqual({
@@ -82,11 +83,13 @@ describe('decideEnforcement (D-006)', () => {
   });
 });
 
-describe('adapter key aliases (migration 011 keys)', () => {
-  it('maps unambiguous DB keys and leaves uspot / generic_radius unmapped', () => {
-    expect(describeAdapterDisconnect('coovachilli')?.target).toBe('coaport');
-    expect(describeAdapterDisconnect('openwifi_ucentral')?.target).toBe('hostapd-das');
-    expect(describeAdapterDisconnect('uspot')).toBeNull();
-    expect(describeAdapterDisconnect('generic_radius')).toBeNull();
+describe('NAS adapter_key (D-035, no aliases)', () => {
+  it('resolves engine keys only; legacy keys, openwifi-config and NULL have no Disconnect', () => {
+    expect(describeAdapterDisconnect('coovachilli-uam')?.target).toBe('coaport');
+    expect(describeAdapterDisconnect('openwifi-hostapd-radius')?.target).toBe('hostapd-das');
+    expect(describeAdapterDisconnect('coovachilli')).toBeNull();
+    expect(describeAdapterDisconnect('openwifi_ucentral')).toBeNull();
+    expect(describeAdapterDisconnect('openwifi-config')).toBeNull();
+    expect(describeAdapterDisconnect(null)).toBeNull();
   });
 });

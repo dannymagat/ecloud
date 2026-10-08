@@ -229,7 +229,8 @@ export async function loadResolutionInput(
         'last_interim_at',
         'nas_client_id',
       ])
-      .where('status', '=', 'active')
+      // D-036: an authorized session (Accept sent, accounting not yet seen) occupies a slot.
+      .where('status', 'in', ['authorized', 'active'])
       .where((eb) => {
         const ors = [];
         if (userId !== null) ors.push(eb('user_id', '=', userId));

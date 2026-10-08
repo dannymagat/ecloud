@@ -548,7 +548,8 @@ await describeIntegration('@ecloud/api against ecloud_test', () => {
         site_id: a.siteId,
         name: 'n',
         nas_ip: randomIp(),
-        adapter_type_key: 'coovachilli',
+        adapter_type_key: 'coovachilli-uam',
+        adapter_key: 'coovachilli-uam',
         secret_ref: 'enc:placeholder',
       })
       .returning('id')
@@ -627,7 +628,7 @@ await describeIntegration('@ecloud/api against ecloud_test', () => {
     const nas = await agent
       .post(`/api/v1/orgs/${orgId}/nas`)
       .set(BROWSER)
-      .send({ site_id: siteId, name: 'chilli', nas_ip: nasIp, adapter_type_key: 'coovachilli' });
+      .send({ site_id: siteId, name: 'chilli', nas_ip: nasIp, adapter_key: 'coovachilli-uam' });
     expect(nas.status).toBe(201);
     expect(nas.body.secret).toMatch(/^[A-Za-z0-9_-]{43}$/);
     expect(nas.body.secret_ref).toBeUndefined();
@@ -803,7 +804,7 @@ await describeIntegration('@ecloud/api against ecloud_test', () => {
       .select(['status', 'organization_id'])
       .where('acct_unique_id', '=', cls)
       .executeTakeFirstOrThrow();
-    expect(session).toEqual({ status: 'active', organization_id: a.orgId });
+    expect(session).toEqual({ status: 'authorized', organization_id: a.orgId });
     const leaked = await deps.dbPlatform
       .selectFrom('auth_events')
       .select('organization_id')

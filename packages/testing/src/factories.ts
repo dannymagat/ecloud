@@ -45,6 +45,7 @@ export interface NasClientFixture {
   name: string;
   nas_ip: string;
   adapter_type_key: string;
+  adapter_key?: string | null;
   secret_ref: string;
 }
 
@@ -133,7 +134,8 @@ export function makeNasClient(
     site_id: siteId,
     name: `NAS ${String(n)}`,
     nas_ip: `192.0.2.${String(1 + (n % 250))}`,
-    adapter_type_key: 'generic_radius',
+    adapter_type_key: 'coovachilli-uam',
+    adapter_key: 'coovachilli-uam',
     secret_ref: `secret://test/nas-${String(n)}`,
     ...overrides,
   };

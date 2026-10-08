@@ -17,6 +17,18 @@ export interface KvStore {
   del(key: string): Promise<void>;
   ping(): Promise<void>;
   close(): Promise<void>;
+  /**
+   * Read-only BullMQ depth of one queue (`<prefix>:<queue>:wait|active|delayed|failed`), for
+   * `GET /platform/health`. Optional: the in-memory store has no queues.
+   */
+  queueCounts?(prefix: string, queue: string): Promise<QueueCounts>;
+}
+
+export interface QueueCounts {
+  waiting: number;
+  active: number;
+  delayed: number;
+  failed: number;
 }
 
 export class MemoryKv implements KvStore {
@@ -131,5 +143,22 @@ export class RedisKv implements KvStore {
 
   async close(): Promise<void> {
     await this.redis.quit().catch(() => this.redis.disconnect());
+  }
+
+  async queueCounts(prefix: string, queue: string): Promise<QueueCounts> {
+    const base = `${prefix}:${queue}`;
+    const results = await this.redis
+      .multi()
+      .llen(`${base}:wait`)
+      .zcard(`${base}:prioritized`)
+      .llen(`${base}:active`)
+      .zcard(`${base}:delayed`)
+      .zcard(`${base}:failed`)
+      .exec();
+    const n = (i: number): number => {
+      const value = results?.[i]?.[1];
+      return typeof value === 'number' ? value : 0;
+    };
+    return { waiting: n(0) + n(1), active: n(2), delayed: n(3), failed: n(4) };
   }
 }

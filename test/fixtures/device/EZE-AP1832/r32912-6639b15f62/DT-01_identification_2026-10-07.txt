@@ -1,0 +1,112 @@
+=== IDENTITY ===
+DISTRIB_ID='EZEAP'
+DISTRIB_RELEASE='6'
+DISTRIB_REVISION='r32912-6639b15f62'
+DISTRIB_TARGET='ipq50xx/generic'
+DISTRIB_ARCH='aarch64_cortex-a53_neon-vfpv4'
+DISTRIB_DESCRIPTION='EZEAP 6 r32912-6639b15f62'
+DISTRIB_TAINTS='no-all override'
+DISTRIB_TIP='EZEAP v6 de7aaa37'
+DISTRIB_TIP_VERSION='devel'
+DISTRIB_UCENTRAL_SCHEMA_REVISION='818569f'
+EZE-AP1832
+ezelink,ap1832
+Linux d82d9ba1a1aa 5.4.164 #0 SMP PREEMPT Mon May 4 22:30:45 2026 aarch64 GNU/Linux
+ 13:57:46 up 10 min,  load average: 0.02, 0.22, 0.21
+=== UCENTRAL ===
+{
+	"major": 4,
+	"minor": 2,
+	"patch": 0
+}
+
+capabilities.json
+country
+examples
+gateway.flash
+gateway.json
+operational.ca
+operational.crt
+schema.json
+schema.vendor.json
+ucentral.active
+ucentral.cfg.0000000001
+ucentral.cfg.1791242142
+ucentral.cfg.1791245846
+ucentral.cfg.1791284355
+
+=== CAPABILITIES ===
+{ "secure-rtty": true, "default-config": true, "country": "US", "compatible": "ezelink_ap1832", "model": "EZE-AP1832", "version": { "ap": { "major": 4, "minor": 2, "patch": 0 }, "schema": { "major": 4, "minor": 2, "patch": 0, "vendor": { "ezelink": { "intrusion": { "config": 1, "state": 1, "lists": 1 } } } } }, "platform": "ap", "switch": [ { "name": "switch0", "enable": false, "reset": false } ], "switch_ports": { }, "network": { "wan": [ "eth0" ], "lan": [ "eth1" ] }, "macaddr": { "wan": "d8:2d:9b:a1:a1:aa", "lan": "d8:2d:9b:a1:a1:ab" }, "label_macaddr": "d8:2d:9b:a1:a1:aa", "wifi": { "platform/soc/c000000.wifi": { "is_morse_phy": false, "tx_ant": 3, "rx_ant": 3, "tx_ant_avail": 3, "rx_ant_avail": 3, "frequencies": [ 2412, 2417, 2422, 2427, 2432, 2437, 2442, 2447, 2452, 2457, 2462 ], "channels": [ 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11 ], "htmode": [ "HT20", "HT40", "VHT20", "VHT40", "VHT80", "HE20", "HE40" ], "band": [ "2G" ], "ht_capa": 6631, "vht_capa": 864123282, "he_phy_capa": [ 2, 96, 12, 136, 29, 193, 131, 140, 17, 12, 0 ], "he_mac_capa": [ 12, 0, 8, 154, 64, 0 ] }, "platform/soc/soc:wifi1@c000000": { "is_morse_phy": false, "tx_ant": 3, "rx_ant": 3, "tx_ant_avail": 3, "rx_ant_avail": 3, "frequencies": [ 5180, 5200, 5220, 5240, 5260, 5280, 5300, 5320, 5500, 5520, 5540, 5560, 5580, 5600, 5620, 5640, 5660, 5680, 5700, 5720, 5745, 5765, 5785, 5805, 5825 ], "channels": [ 36, 40, 44, 48, 52, 56, 60, 64, 100, 104, 108, 112, 116, 120, 124, 128, 132, 136, 140, 144, 149, 153, 157, 
+=== PACKAGES ===
+atfpolicy-1 aarch64_cortex-a53_neon-vfpv4 {/home/danny/ezelink-wlan-ap/wlan-ap/feeds/ucentral/atfpolicy} (GPL-2.0) [installed]
+bridger-2024.04.22~40b1c5b6 aarch64_cortex-a53_neon-vfpv4 {/home/danny/ezelink-wlan-ap/wlan-ap/feeds/ucentral/bridger} (GPL-2.0) [installed]
+dnsmasq-full-2.91-r2 aarch64_cortex-a53_neon-vfpv4 {feeds/base/network/services/dnsmasq} (GPL-2.0) [installed]
+ezelink-ucentral-defaults-1.0-r3 aarch64_cortex-a53_neon-vfpv4 {/home/danny/ezelink-wlan-ap/wlan-ap/feeds/ezelink/ezelink-ucentral-defaults} (BSD-3-Clause) [installed]
+hostapd-common-2021.02.20~59e9794c-r1 aarch64_cortex-a53_neon-vfpv4 {/home/danny/ezelink-wlan-ap/wlan-ap/feeds/qca-wifi-6/hostapd} (BSD-3-Clause) [installed]
+hostapd-utils-2021.02.20~59e9794c-r1 aarch64_cortex-a53_neon-vfpv4 {/home/danny/ezelink-wlan-ap/wlan-ap/feeds/qca-wifi-6/hostapd} (BSD-3-Clause) [installed]
+ieee8021x-1 aarch64_cortex-a53_neon-vfpv4 {/home/danny/ezelink-wlan-ap/wlan-ap/feeds/ucentral/ieee8021x} (GPL-2.0) [installed]
+libwebsockets-openssl-4.1.4-r1 aarch64_cortex-a53_neon-vfpv4 {/home/danny/ezelink-wlan-ap/wlan-ap/feeds/ucentral/libwebsockets} (LGPL-2.1+exception) [installed]
+lldpd-1.0.5-r1 aarch64_cortex-a53_neon-vfpv4 {/home/danny/ezelink-wlan-ap/wlan-ap/feeds/ucentral/lldpd} (ISC) [installed]
+luci-mod-ucentral-26.072.36197~9fd4bd7 noarch {/home/danny/ezelink-wlan-ap/wlan-ap/feeds/tip/luci/luci-mod-ucentral} (Apache-2.0) [installed]
+luci-theme-ucentral-26.230.24892~11076a8 noarch {/home/danny/ezelink-wlan-ap/wlan-ap/feeds/tip/luci/luci-theme-ucentral} () [installed]
+qosify-2024.09.20~1501e093-r1 aarch64_cortex-a53_neon-vfpv4 {feeds/base/network/config/qosify} (GPL-2.0) [installed]
+radius-gw-proxy-1 aarch64_cortex-a53_neon-vfpv4 {/home/danny/ezelink-wlan-ap/wlan-ap/feeds/ucentral/radius-gw-proxy} (BSD-3-Clause) [installed]
+ratelimit-1 aarch64_cortex-a53_neon-vfpv4 {/home/danny/ezelink-wlan-ap/wlan-ap/feeds/ucentral/ratelimit} () [installed]
+rrmd-1 aarch64_cortex-a53_neon-vfpv4 {/home/danny/ezelink-wlan-ap/wlan-ap/feeds/ucentral/rrmd} (ISC) [installed]
+rtty-openssl-9.1.0-r1 aarch64_cortex-a53_neon-vfpv4 {/home/danny/ezelink-wlan-ap/wlan-ap/feeds/ucentral/rtty} (MIT) [installed]
+spotfilter-1 aarch64_cortex-a53_neon-vfpv4 {/home/danny/ezelink-wlan-ap/wlan-ap/feeds/ucentral/spotfilter} (GPL-2.0) [installed]
+switch-fabric-1 aarch64_cortex-a53_neon-vfpv4 {/home/danny/ezelink-wlan-ap/wlan-ap/feeds/ucentral/switch-fabric} (BSD-3-Clause) [installed]
+ucentral-client-2026.03.03~d322773d-r1 aarch64_cortex-a53_neon-vfpv4 {/home/danny/ezelink-wlan-ap/wlan-ap/feeds/ucentral/ucentral-client} (BSD-3-Clause) [installed]
+ucentral-dataplane-1 aarch64_cortex-a53_neon-vfpv4 {/home/danny/ezelink-wlan-ap/wlan-ap/feeds/ucentral/ucentral-dataplane} () [installed]
+ucentral-event-1 aarch64_cortex-a53_neon-vfpv4 {/home/danny/ezelink-wlan-ap/wlan-ap/feeds/ucentral/ucentral-event} (BSD-3-Clause) [installed]
+ucentral-schema-2026.07.25~818569f4-r2 aarch64_cortex-a53_neon-vfpv4 {/home/danny/ezelink-wlan-ap/wlan-ap/feeds/ucentral/ucentral-schema} (BSD-3-Clause) [installed]
+ucentral-state-1 aarch64_cortex-a53_neon-vfpv4 {/home/danny/ezelink-wlan-ap/wlan-ap/feeds/ucentral/ucentral-state} (BSD-3-Clause) [installed]
+ucentral-tools-1 aarch64_cortex-a53_neon-vfpv4 {/home/danny/ezelink-wlan-ap/wlan-ap/feeds/ucentral/ucentral-tools} (BSD-3-Clause) [installed]
+ucrun-2022.02.19~5be6abeb-r1 aarch64_cortex-a53_neon-vfpv4 {/home/danny/ezelink-wlan-ap/wlan-ap/feeds/ucentral/ucrun} (GPL-2.0-only) [installed]
+udevstats-1 aarch64_cortex-a53_neon-vfpv4 {/home/danny/ezelink-wlan-ap/wlan-ap/feeds/ucentral/udevstats} (GPL-2.0) [installed]
+udhcpinject-1.0-r1 aarch64_cortex-a53_neon-vfpv4 {/home/danny/ezelink-wlan-ap/wlan-ap/feeds/ucentral/udhcpinject} () [installed]
+udhcprelay-1 aarch64_cortex-a53_neon-vfpv4 {/home/danny/ezelink-wlan-ap/wlan-ap/feeds/ucentral/udhcprelay} (GPL-2.0) [installed]
+udhcpsnoop-1 aarch64_cortex-a53_neon-vfpv4 {/home/danny/ezelink-wlan-ap/wlan-ap/feeds/ucentral/udhcpsnoop} (GPL-2.0) [installed]
+udnssnoop-1 aarch64_cortex-a53_neon-vfpv4 {/home/danny/ezelink-wlan-ap/wlan-ap/feeds/ucentral/udnssnoop} (GPL-2.0) [installed]
+ufp-1 aarch64_cortex-a53_neon-vfpv4 {/home/danny/ezelink-wlan-ap/wlan-ap/feeds/ucentral/ufp} (GPL-2.0) [installed]
+uspot-1 aarch64_cortex-a53_neon-vfpv4 {/home/danny/ezelink-wlan-ap/wlan-ap/feeds/ucentral/uspot} (GPL-2.0) [installed]
+usteer-2021.04.19~f42bf296-r1 aarch64_cortex-a53_neon-vfpv4 {/home/danny/ezelink-wlan-ap/wlan-ap/feeds/ucentral/usteer} () [installed]
+wpad-openssl-2021.02.20~59e9794c-r1 aarch64_cortex-a53_neon-vfpv4 {/home/danny/ezelink-wlan-ap/wlan-ap/feeds/qca-wifi-6/hostapd} (BSD-3-Clause) [installed]
+=== USPOT FILES ===
+cpd.uc
+dump-env.uc
+error.uc
+firewall.ipt
+firewall.nft
+handler-cpd.uc
+handler-env.uc
+handler-uam.uc
+handler.uc
+logoff.uc
+ratelimit
+ucentral_apply
+=== UBUS ===
+hostapd
+hostapd-auth
+hostapd.wlan0
+hostapd.wlan1
+ratelimit
+ucentral
+=== KMODS ===
+cls_u32
+ifb
+sch_htb
+=== NETWORK ===
+default via 10.254.0.1 dev up0v0  src 10.254.244.4  metric 5 
+10.254.0.0/16 dev up0v0 scope link  metric 5 
+=== WIRELESS ===
+wlan0     ESSID: "AP1832-TESTING"
+          Mode: Master  Channel: 11 (2.462 GHz)  HT Mode: HE20
+          Center Channel 1: 11 2: unknown
+          Encryption: none
+          Type: nl80211  HW Mode(s): 802.11ax/b/g/n
+wlan1     ESSID: "AP1832-TESTING"
+          Mode: Master  Channel: 132 (5.660 GHz)  HT Mode: HE80
+          Center Channel 1: 138 2: unknown
+          Encryption: none
+          Type: nl80211  HW Mode(s): 802.11ac/ax/n

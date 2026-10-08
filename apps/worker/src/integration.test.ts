@@ -27,6 +27,7 @@ import { MemoryWorkerState, RedisWorkerState } from './infra/state.js';
 import { deliverWebhook, publishOutbox, type FetchLike, type WebhookJob } from './jobs/outbox.js';
 import { ensurePartitions } from './jobs/partitions.js';
 import { enforceQuotas } from './jobs/quota.js';
+import { AUTHORIZATION_EXPIRED_CAUSE, expireAuthorizations } from './jobs/reap.js';
 import { pruneRetention } from './jobs/retention.js';
 
 const logger = createLogger({ name: 'worker-it', level: 'silent' });
@@ -106,7 +107,8 @@ await describeIntegration('@ecloud/worker against PostgreSQL', () => {
         name: `NAS ${RUN}`,
         nas_identifier: `nas-${RUN}`,
         nas_ip: NAS_IP,
-        adapter_type_key: 'coovachilli',
+        adapter_type_key: 'coovachilli-uam',
+        adapter_key: 'coovachilli-uam',
         secret_ref: 'env:ECLOUD_WORKER_IT_NAS_SECRET',
       })
       .execute();
@@ -730,5 +732,79 @@ await describeIntegration('@ecloud/worker against PostgreSQL', () => {
     } finally {
       await redis.quit();
     }
+  });
+  it('D-036: Start promotes an authorization; unpromoted ones expire after the TTL and revive', async () => {
+    const promoted = newId();
+    const stuck = newId();
+    const recent = newId();
+    const base = {
+      organization_id: org.id,
+      site_id: site.id,
+      nas_client_id: nasId,
+      user_id: user3.id,
+      acct_session_id: '',
+      username_raw: user3.username,
+      status: 'authorized' as const,
+    };
+    await db
+      .insertInto('sessions')
+      .values([
+        { ...base, id: promoted, acct_unique_id: `ai-p-${RUN}`, started_at: at(100) },
+        { ...base, id: stuck, acct_unique_id: `ai-s-${RUN}`, started_at: at(100) },
+        { ...base, id: recent, acct_unique_id: `ai-r-${RUN}`, started_at: new Date() },
+      ])
+      .execute();
+
+    const ids = await insertRaw([
+      {
+        acctuniqueid: `auth-p-${RUN}`,
+        acctsessionid: `P-${RUN}`,
+        acctstatustype: 'Start',
+        username: user3.username,
+        class: classFor(promoted),
+        received_at: at(101),
+      },
+    ]);
+    await drainOnce({ db, state: await freshState(ids[0] ?? 0), logger, batchSize: 500, lagMs: 0 });
+    const status = async (id: string) =>
+      await db
+        .selectFrom('sessions')
+        .select(['status', 'terminate_cause', 'acct_unique_id'])
+        .where('id', '=', id)
+        .executeTakeFirstOrThrow();
+    expect(await status(promoted)).toMatchObject({
+      status: 'active',
+      acct_unique_id: `auth-p-${RUN}`,
+    });
+
+    // TTL 300 s: the 2-hour-old authorization expires, the fresh one and the promoted one stay
+    const expired = await expireAuthorizations({ db, ttlS: 300 });
+    expect(expired).toBeGreaterThanOrEqual(1);
+    expect(await status(stuck)).toMatchObject({
+      status: 'expired',
+      terminate_cause: AUTHORIZATION_EXPIRED_CAUSE,
+    });
+    expect((await status(recent)).status).toBe('authorized');
+    expect((await status(promoted)).status).toBe('active');
+
+    // a late Start (slow client) revives the expired authorization
+    const late = await insertRaw([
+      {
+        acctuniqueid: `auth-s-${RUN}`,
+        acctsessionid: `S-${RUN}`,
+        acctstatustype: 'Start',
+        username: user3.username,
+        class: classFor(stuck),
+        received_at: at(110),
+      },
+    ]);
+    await drainOnce({
+      db,
+      state: await freshState(late[0] ?? 0),
+      logger,
+      batchSize: 500,
+      lagMs: 0,
+    });
+    expect(await status(stuck)).toMatchObject({ status: 'active', terminate_cause: null });
   });
 });

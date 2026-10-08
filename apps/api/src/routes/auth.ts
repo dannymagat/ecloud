@@ -118,6 +118,7 @@ export function authRoutes(deps: AppDeps): AnyRouteSpec[] {
             'a.status',
             'a.password_hash',
             'a.mfa_enforced',
+            'a.mfa_reenrol_required',
             'm.id as mfa_id',
             eb
               .exists(
@@ -199,7 +200,8 @@ export function authRoutes(deps: AppDeps): AnyRouteSpec[] {
           mfa_required: false,
           administrator: adminView(admin),
           // Until enrolment is confirmed the session holds no permissions (auth/principal.ts).
-          mfa_enrolment_required: admin.mfa_enforced || admin.platform_bound,
+          mfa_enrolment_required:
+            admin.mfa_enforced || admin.mfa_reenrol_required || admin.platform_bound,
         },
       };
     },
@@ -415,6 +417,13 @@ export function authRoutes(deps: AppDeps): AnyRouteSpec[] {
           .set({ mfa_verified_at: at })
           .where('id', '=', principal.sessionId)
           .execute();
+        // D-038: a confirmed new factor completes the re-enrolment forced by an MFA reset.
+        await trx
+          .updateTable('administrators')
+          .set({ mfa_reenrol_required: false })
+          .where('id', '=', principal.administratorId)
+          .where('mfa_reenrol_required', '=', true)
+          .execute();
         await writeAudit(trx, ctx, {
           organizationId: null,
           action: 'auth:mfa:confirm',
@@ -480,7 +489,15 @@ export function authRoutes(deps: AppDeps): AnyRouteSpec[] {
       const row = await withPlatform(deps.dbPlatform, AUTHN_ACCESS, async (trx) => {
         const admin = await trx
           .selectFrom('administrators')
-          .select(['id', 'email', 'display_name', 'status', 'mfa_enforced', 'last_login_at'])
+          .select([
+            'id',
+            'email',
+            'display_name',
+            'status',
+            'mfa_enforced',
+            'mfa_reenrol_required',
+            'last_login_at',
+          ])
           .where('id', '=', principal.administratorId)
           .executeTakeFirstOrThrow();
         const cred = await trx
@@ -517,7 +534,10 @@ export function authRoutes(deps: AppDeps): AnyRouteSpec[] {
           mfa: {
             enrolled: row.enrolled,
             // SECURITY_ARCHITECTURE.md §6.2: mandatory for platform bindings.
-            required: row.admin.mfa_enforced || hasPlatformBinding,
+            required:
+              row.admin.mfa_enforced || row.admin.mfa_reenrol_required || hasPlatformBinding,
+            // D-038: set by an MFA reset until a new factor is confirmed.
+            reenrol_required: row.admin.mfa_reenrol_required,
             // true: this session holds no permissions until TOTP is confirmed / used at login.
             pending: principal.mfaPending,
           },

@@ -391,7 +391,7 @@ Implemented in `packages/db/migrations/001…011` and `packages/db/src`. Deviati
 
 | Topic | Design said | Implemented | Why |
 |---|---|---|---|
-| Permission catalogue size | §4.2 of MULTITENANCY.md "~60 keys" | **98 keys**, generated from `@ecloud/shared` `PERMISSION_CATALOGUE` (one source of truth, D-021) | the Phase 3 shared package enumerates every `resource:action`; the "~60" estimate is superseded. Seeded at runtime by `ecloud-db seed`, not by a generated SQL file, so the catalogue cannot drift from code |
+| Permission catalogue size | §4.2 of MULTITENANCY.md "~60 keys" | **99 keys** (98 in Phase 3 + `administrator:mfa_reset`, D-038), generated from `@ecloud/shared` `PERMISSION_CATALOGUE` (one source of truth, D-021) | the Phase 3 shared package enumerates every `resource:action`; the "~60" estimate is superseded. Seeded at runtime by `ecloud-db seed`, not by a generated SQL file, so the catalogue cannot drift from code |
 | Role template flag | `roles.is_system bool` | `roles.is_template bool` + `template_key` (copy-on-write origin) + `template_version` | matches the Phase 3 brief wording; `CHECK (NOT is_template OR organization_id IS NULL)` |
 | `citext` for emails | `administrators.email citext`, `users.email citext`, `invitations.email citext` | `text` + `lower()` unique indexes, no extensions at all | the migration role has no `CREATE` on the dev database; `gen_random_uuid()` is core PG13+ so no extension is needed anywhere |
 | Platform access GUC | §8 policy `… OR current_setting('app.platform_access') = 'on'` | policy is `organization_id = NULLIF(current_setting('app.current_org', true), '')::uuid` only; platform access = separate BYPASSRLS connection (`DATABASE_URL_PLATFORM`, `withPlatform()`) | a GUC the app role can set is not a security boundary; `NULLIF` makes an unset GUC fail closed instead of erroring |
@@ -412,3 +412,16 @@ Implemented in `packages/db/migrations/001…011` and `packages/db/src`. Deviati
 | Dev database privilege | — | `ecloud_platform` needs `CREATE` on the database for `CREATE SCHEMA radius` (init script grants it only on `ecloud_test`) | open item for infra: add `GRANT CREATE ON DATABASE :"DBNAME" TO ecloud_platform;` to `01_roles.sql` |
 
 Counts after `migrate` + `seed` on a fresh PG16: 37 tables in `public` (+ `schema_migrations`), 3 tables + 1 view in `radius`, 31 tables with FORCE RLS, 6 partitioned tables × (default + 3 monthly partitions), 98 permissions, 6 templates (platform_super_admin 98, org_admin 89, site_admin 39, platform_support 28, read_only 22, operator 16).
+After Phase 4 (migrations 012–018 + `seed`): 99 permissions; platform_super_admin 99, other templates unchanged (`administrator:mfa_reset` is platform-only).
+
+### 14.1 Phase 4 additions (P4 backend, 2026-10-07)
+
+Forward-only; 001–014 are untouched (checksums immutable).
+
+| Migration | Decision | Change | Notes |
+|---|---|---|---|
+| `015_nas_adapter_key` | D-035 | `adapter_types.key` CHECK widened to `^[a-z][a-z0-9_-]{1,63}$`; the five `@ecloud/adapters` keys inserted (`openwifi-hostapd-radius`, `openwifi-uspot-uam`, `uspot-upstream-uam`, `coovachilli-uam`, `openwifi-config`); `nas_clients.adapter_key text NULL` with FK → `adapter_types` and CHECK ∈ the four NAS-facing keys; CHECK `adapter_key IS NULL OR adapter_type_key = adapter_key` | backfill only where the Phase 3 AAA path already mapped: `coovachilli` → `coovachilli-uam`, `uspot` → `uspot-upstream-uam` (also on `network_devices`). `openwifi_ucentral` / `generic_radius` rows keep `adapter_key NULL` (no adapter, no Disconnect) until an operator chooses; unreferenced legacy keys are deleted, so a fresh database holds exactly the five engine keys. The API requires `adapter_key` on create. NULL is allowed at the DB level only for those legacy rows |
+| `016_session_authorized_state` | D-036 | `ck_sessions_status` ∈ `authorized, active, stopped, stale, expired`; partial indexes `idx_sessions_open_user`, `idx_sessions_open_device` (`WHERE status IN ('authorized','active')`) and `idx_sessions_authorized_started` | authorize inserts `authorized`; drain promotes to `active`; `sessions.reap` sets `expired` / `terminate_cause = 'authorization_expired'` after `WORKER_AUTHORIZATION_TTL_S` (default 300); Accounting-On marks open sessions (incl. authorized) `stale`; a late Start/Interim revives `expired`/`stale` |
+| `017_voucher_limits` | D-037 | `voucher_batches.max_uses` nullable (DEFAULT 1 kept); CHECK requires `duration_s` or `max_uses`; both enforced when both set | backfill `max_uses = NULL` where `duration_s` is set (it was ignored for those before), so existing vouchers keep their behaviour |
+| `018_admin_mfa_reset` | D-038 | `administrators.mfa_reenrol_required boolean NOT NULL DEFAULT false` | set by the MFA reset endpoint (credentials deleted, sessions revoked), cleared by the next confirmed TOTP enrolment; while true the API grants no permissions |
+

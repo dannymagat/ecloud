@@ -78,3 +78,50 @@ export async function reapSessions(deps: ReapDeps): Promise<number> {
     return reaped.length;
   });
 }
+
+// ------------------------------------------------------------------------------------------
+// D-036: authorizations that never received accounting
+// ------------------------------------------------------------------------------------------
+
+export const AUTHORIZATION_EXPIRED_CAUSE = 'authorization_expired';
+
+export function authorizationCutoff(now: Date, ttlS: number): Date {
+  return new Date(now.getTime() - ttlS * 1000);
+}
+
+export interface ExpireAuthorizationsDeps {
+  db: Db;
+  /** WORKER_AUTHORIZATION_TTL_S: how long an Access-Accept may wait for Accounting-Start. */
+  ttlS: number;
+  now?: () => Date;
+}
+
+/**
+ * `authorized` sessions (Access-Accept sent by /internal/aaa/authorize) older than the TTL
+ * become `expired`: the client never came up (or the NAS sends no accounting), so the slot must
+ * not keep counting towards concurrency. A late Start/Interim revives the row (drain.ts).
+ */
+export async function expireAuthorizations(deps: ExpireAuthorizationsDeps): Promise<number> {
+  const now = (deps.now ?? (() => new Date()))();
+  const cutoff = authorizationCutoff(now, deps.ttlS);
+  return withPlatform(deps.db, { reason: REAP_REASON, audit: false }, async (trx) => {
+    const expired = await trx
+      .updateTable('sessions')
+      .set({ status: 'expired', terminate_cause: AUTHORIZATION_EXPIRED_CAUSE, stopped_at: now })
+      .where('status', '=', 'authorized')
+      .where('started_at', '<', cutoff)
+      .returning(['id', 'organization_id', 'site_id', 'nas_client_id', 'user_id'])
+      .execute();
+    for (const s of expired) {
+      await emitEvent(trx, 'session.stopped', s.organization_id, s.site_id, {
+        session_id: s.id,
+        nas_client_id: s.nas_client_id,
+        user_id: s.user_id,
+        status: 'expired',
+        terminate_cause: AUTHORIZATION_EXPIRED_CAUSE,
+        stopped_at: now.toISOString(),
+      });
+    }
+    return expired.length;
+  });
+}

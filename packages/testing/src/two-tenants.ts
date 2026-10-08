@@ -241,8 +241,8 @@ export async function seedTenantGraph(
   const nasIp = randomIp(172);
   const nasClientId = await insertReturning<string>(
     db,
-    `INSERT INTO nas_clients (organization_id, site_id, name, nas_ip, adapter_type_key, secret_ref)
-     VALUES ($1, $2, $3, $4, 'generic_radius', $5) RETURNING id`,
+    `INSERT INTO nas_clients (organization_id, site_id, name, nas_ip, adapter_type_key, adapter_key, secret_ref)
+     VALUES ($1, $2, $3, $4, 'coovachilli-uam', 'coovachilli-uam', $5) RETURNING id`,
     [organizationId, siteId, `NAS ${slug}`, nasIp, `secret://test/${slug}`],
   );
   ref('nas_clients', nasClientId);
@@ -318,7 +318,7 @@ export async function seedTenantGraph(
   const translationId = await insertReturning<number>(
     db,
     `INSERT INTO policy_translations (organization_id, policy_id, policy_version, adapter_type_key, trigger)
-     VALUES ($1, $2, 1, 'generic_radius', 'preview') RETURNING id`,
+     VALUES ($1, $2, 1, 'coovachilli-uam', 'preview') RETURNING id`,
     [organizationId, policyId],
   );
   ref('policy_translations', translationId);

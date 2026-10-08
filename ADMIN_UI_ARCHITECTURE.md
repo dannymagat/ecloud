@@ -18,6 +18,19 @@ Status legend: **VERIFIED FROM EXISTING CODE** (local path cited) · **PROPOSED*
 
 Lessons for ECLOUD (**PROPOSED**): keep Tailwind + React/TS + self-hosted vendor + permission-catalogue pattern; **do not** repeat the 1.27 MB vanilla `bundle.js` + per-island React duplication (React is re-bundled into each of 15 islands) + localStorage JWT.
 
+> **Implementation note (Phase 4, 2026-10-07).** The admin app is implemented in `apps/admin`
+> (`@ecloud/admin`): Vite + React 19 + TypeScript strict + Tailwind 3 + TanStack Query + React
+> Router (TanStack Table/Router not used; plain tables and React Router suffice). It calls
+> same-origin `/api/v1` with the session cookie (D-029) through a client typed from the
+> generated OpenAPI document (`npm run generate:api -w @ecloud/admin`). Permission names follow
+> D-021 `resource:action`, superseding the dotted names in §2. Enforceability badges use the
+> four D-028 states and show "Verified" only for `VERIFIED_SUPPORTED`; the preview panel uses
+> `GET /policies/simulate` (needs a subject user) or, for platform operators, the
+> `GET /platform/adapters` catalogue. Session Disconnect is disabled unless the adapter's
+> disconnect status is `VERIFIED_SUPPORTED` (none today). Not yet built: portal designer,
+> reports, i18n/RTL, idle-timeout warning modal, "my sessions" screen. See docs/DEVELOPMENT.md
+> "Admin app".
+
 ## 1. UI surfaces and hosting (**PROPOSED**; domains pending A5/A8 and owner Q13)
 
 | Surface | Host | Audience | Rendering |

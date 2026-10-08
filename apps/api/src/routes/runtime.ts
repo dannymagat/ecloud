@@ -29,7 +29,7 @@ export function runtimeRoutes(deps: AppDeps): AnyRouteSpec[] {
     scope: 'any-site',
     params: OrgParams,
     query: PaginationQuery.extend({
-      status: z.enum(['active', 'stopped', 'stale']).optional(),
+      status: z.enum(['authorized', 'active', 'stopped', 'stale', 'expired']).optional(),
       site_id: z.uuid().optional(),
       user_id: z.uuid().optional(),
       nas_client_id: z.uuid().optional(),

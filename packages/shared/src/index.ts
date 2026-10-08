@@ -5,3 +5,4 @@ export * from './ids.js';
 export * from './logger.js';
 export * from './permissions.js';
 export * from './tenancy.js';
+export * from './queues.js';

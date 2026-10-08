@@ -236,7 +236,7 @@ async function findSession(
   const byNas = await sessionQuery(trx)
     .where('se.nas_client_id', '=', nas.id)
     .where('se.acct_session_id', '=', rec.acctSessionId)
-    .where('se.status', 'in', ['active', 'stale'])
+    .where('se.status', 'in', ['authorized', 'active', 'stale'])
     .orderBy('se.started_at', 'desc')
     .executeTakeFirst();
   return byNas ?? null;
@@ -391,11 +391,12 @@ export async function processRecord(
     await insertAccountingRecord(trx, rec, nas?.organization_id ?? null, null);
     if (nas === null) return { outcome: 'unresolved', touchedSessionId: null };
     // NAS reboot / accounting restart: its open sessions are no longer reliable (AAA §5.3 (3)).
+    // Authorizations that never started (D-036) are marked stale too; a later Start revives them.
     const staled = await trx
       .updateTable('sessions')
       .set({ status: 'stale' })
       .where('nas_client_id', '=', nas.id)
-      .where('status', '=', 'active')
+      .where('status', 'in', ['authorized', 'active'])
       .where('started_at', '<=', rec.effectiveTime)
       .returning(['id', 'site_id'])
       .execute();
@@ -450,9 +451,18 @@ export async function processRecord(
           ? session.last_interim_at
           : rec.receivedAt;
     }
-    if (status === 'stale' || (status === 'stopped' && terminateCause === 'lost_interim')) {
-      // The NAS is still reporting this session: undo a stale mark or a lost-interim reap.
-      revived = status === 'stopped';
+    if (status === 'authorized') {
+      // D-036: the first Accounting-Start (or an Interim, if the Start was lost) promotes the
+      // authorization to an active session.
+      status = 'active';
+    } else if (
+      status === 'stale' ||
+      status === 'expired' ||
+      (status === 'stopped' && terminateCause === 'lost_interim')
+    ) {
+      // The NAS is still reporting this session: undo a stale mark, an authorization expiry
+      // or a lost-interim reap.
+      revived = status !== 'stale';
       status = 'active';
       terminateCause = null;
       stoppedAt = null;

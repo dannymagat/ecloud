@@ -60,16 +60,27 @@ export const crossPackageProject: TestProjectConfiguration = {
   },
 };
 
+/**
+ * Workspaces with their own Vitest project file (browser code: jsdom + React plugin). They are
+ * referenced by path instead of the generic node project below.
+ */
+export const OWN_CONFIG_WORKSPACES: Readonly<Record<string, string>> = {
+  '@ecloud/admin': resolve(ROOT_DIR, 'apps/admin/vitest.config.ts'),
+};
+
 export const workspaceProjects: TestProjectConfiguration[] = [
-  ...listWorkspaces().map((ws) => ({
-    extends: true as const,
-    root: ws.dir,
-    test: {
-      name: ws.name.replace('@ecloud/', ''),
-      include: ['src/**/*.test.ts'],
-      sequence: { groupOrder: DATABASE_RESET_WORKSPACES.includes(ws.name) ? 0 : 1 },
-    },
-  })),
+  ...Object.values(OWN_CONFIG_WORKSPACES),
+  ...listWorkspaces()
+    .filter((ws) => !(ws.name in OWN_CONFIG_WORKSPACES))
+    .map((ws) => ({
+      extends: true as const,
+      root: ws.dir,
+      test: {
+        name: ws.name.replace('@ecloud/', ''),
+        include: ['src/**/*.test.ts'],
+        sequence: { groupOrder: DATABASE_RESET_WORKSPACES.includes(ws.name) ? 0 : 1 },
+      },
+    })),
   crossPackageProject,
 ];
 

@@ -3,11 +3,10 @@
  * matrix, support impersonation (D-027 / MULTITENANCY.md §4.5). All run on the platform
  * connection via `withPlatform(reason)`, which writes the `platform:access` audit row.
  */
-import { listAdapters } from '@ecloud/adapters';
+import { isAdapterKey, listAdapters } from '@ecloud/adapters';
 import { withPlatform } from '@ecloud/db';
 import { ForbiddenError, NotFoundError, POLICY_FIELDS, newId } from '@ecloud/shared';
 import { z } from 'zod';
-import { DB_ADAPTER_TYPE_MAP } from '../adapter-map.js';
 import { writeAudit } from '../audit.js';
 import { evaluate } from '../auth/authorize.js';
 import {
@@ -389,7 +388,10 @@ export function platformRoutes(deps: AppDeps): AnyRouteSpec[] {
         }),
         adapter_types: adapterTypes.map((t) => ({
           ...t,
-          engine_adapter: DB_ADAPTER_TYPE_MAP[t.key] ?? null,
+          // D-035 / migration 015: catalogue keys are the engine keys; anything else is a
+          // legacy key still referenced by an unmapped NAS / device row.
+          engine_adapter: isAdapterKey(t.key) ? t.key : null,
+          legacy: !isAdapterKey(t.key),
         })),
       };
       return { status: 200, body };
