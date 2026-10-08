@@ -1,0 +1,430 @@
+{
+  "format": "ecloud-simulator-results/v1",
+  "scope": "Simulator evidence: ECLOUD code behaviour against a simulated NAS (fixtures derived from documented parameter lists). It is NOT hardware compatibility evidence, never LAB_VALIDATED, and never applies to an enforcement capability or to Disconnect/CoA (D-006).",
+  "generatedAt": "2026-10-08T08:09:33.362Z",
+  "run": {
+    "runId": "dafbef1e73f3be7aa4304183317ef009",
+    "outcomesHash": "9a2793a3b0f17aad4fa086b9fa14c62208bb9f9a28f1ad0b26730c937153ffbb",
+    "command": "vitest run --project tests tests/simulators --exclude **/results.test.ts --reporter=json",
+    "integration": true,
+    "passed": 55,
+    "failed": 0,
+    "skipped": 0,
+    "todo": 0
+  },
+  "scenarios": [
+    {
+      "id": "SIM-01",
+      "title": "valid UAM redirect res=notyet with correct md",
+      "group": "pure",
+      "results": {
+        "openwifi-uspot-uam": "PASS",
+        "coovachilli-uam": "PASS"
+      },
+      "tests": 2,
+      "findings": []
+    },
+    {
+      "id": "SIM-02",
+      "title": "forged redirect: md wrong / missing",
+      "group": "pure",
+      "results": {
+        "openwifi-uspot-uam": "PASS",
+        "coovachilli-uam": "PASS"
+      },
+      "tests": 2,
+      "findings": []
+    },
+    {
+      "id": "SIM-03",
+      "title": "tampered parameter after signing (mac, nasid, uamip)",
+      "group": "pure",
+      "results": {
+        "openwifi-uspot-uam": "PASS",
+        "coovachilli-uam": "PASS"
+      },
+      "tests": 2,
+      "findings": []
+    },
+    {
+      "id": "SIM-04",
+      "title": "unknown nasid / unregistered NAS",
+      "group": "pure",
+      "results": {
+        "openwifi-uspot-uam": "PASS",
+        "coovachilli-uam": "PASS"
+      },
+      "tests": 2,
+      "findings": []
+    },
+    {
+      "id": "SIM-05",
+      "title": "cross-tenant NAS / credential",
+      "group": "db",
+      "results": {
+        "openwifi-uspot-uam": "PASS",
+        "coovachilli-uam": "PASS"
+      },
+      "tests": 6,
+      "findings": []
+    },
+    {
+      "id": "SIM-06",
+      "title": "replay after consumption; credential reused after TTL",
+      "group": "db",
+      "results": {
+        "openwifi-uspot-uam": "PASS",
+        "coovachilli-uam": "PASS"
+      },
+      "tests": 4,
+      "findings": []
+    },
+    {
+      "id": "SIM-07",
+      "title": "public uamip; userurl open-redirect payloads",
+      "group": "pure",
+      "results": {
+        "openwifi-uspot-uam": "PASS",
+        "coovachilli-uam": "PASS"
+      },
+      "tests": 4,
+      "findings": []
+    },
+    {
+      "id": "SIM-08",
+      "title": "opaque value preservation (byte-for-byte raw query)",
+      "group": "pure",
+      "results": {
+        "openwifi-uspot-uam": "PASS",
+        "coovachilli-uam": "PASS"
+      },
+      "tests": 4,
+      "findings": []
+    },
+    {
+      "id": "SIM-09",
+      "title": "hand-off: PAP XOR encoding and CHAP reference vectors",
+      "group": "pure",
+      "results": {
+        "openwifi-uspot-uam": "PASS",
+        "coovachilli-uam": "PASS"
+      },
+      "tests": 8,
+      "findings": []
+    },
+    {
+      "id": "SIM-10",
+      "title": "accounting retransmit (identical Interim twice)",
+      "group": "pure",
+      "results": {
+        "openwifi-uspot-uam": "PASS",
+        "coovachilli-uam": "PASS"
+      },
+      "tests": 2,
+      "findings": []
+    },
+    {
+      "id": "SIM-11",
+      "title": "out-of-order Interim",
+      "group": "pure",
+      "results": {
+        "openwifi-uspot-uam": "PASS",
+        "coovachilli-uam": "PASS"
+      },
+      "tests": 2,
+      "findings": []
+    },
+    {
+      "id": "SIM-12",
+      "title": "missing Stop: reaper closes, no double count",
+      "group": "db",
+      "results": {
+        "openwifi-uspot-uam": "PASS",
+        "coovachilli-uam": "PASS"
+      },
+      "tests": 2,
+      "findings": []
+    },
+    {
+      "id": "SIM-13",
+      "title": "Gigawords rollover (64-bit total)",
+      "group": "pure",
+      "results": {
+        "coovachilli-uam": "PASS"
+      },
+      "tests": 1,
+      "findings": []
+    },
+    {
+      "id": "SIM-14",
+      "title": "32-bit wrap without Gigawords (uspot TIP)",
+      "group": "pure",
+      "results": {
+        "openwifi-uspot-uam": "PASS"
+      },
+      "tests": 2,
+      "findings": []
+    },
+    {
+      "id": "SIM-15",
+      "title": "unsupported policy: VLAN, burst, quota > 4 GiB on TIP",
+      "group": "pure",
+      "results": {
+        "openwifi-uspot-uam": "PASS",
+        "coovachilli-uam": "PASS"
+      },
+      "tests": 6,
+      "findings": []
+    },
+    {
+      "id": "SIM-16",
+      "title": "Disconnect without mandatory identification attribute",
+      "group": "pure",
+      "results": {
+        "openwifi-uspot-uam": "PASS",
+        "coovachilli-uam": "PASS"
+      },
+      "tests": 2,
+      "findings": []
+    },
+    {
+      "id": "SIM-17",
+      "title": "NAS reboot: Accounting-On / Accounting-Off",
+      "group": "db",
+      "results": {
+        "openwifi-uspot-uam": "PASS",
+        "coovachilli-uam": "PASS"
+      },
+      "tests": 1,
+      "findings": []
+    },
+    {
+      "id": "SIM-18",
+      "title": "multi-NAS roaming; no double count; no cross-tenant merge",
+      "group": "db",
+      "results": {
+        "openwifi-uspot-uam": "PASS",
+        "coovachilli-uam": "PASS"
+      },
+      "tests": 3,
+      "findings": []
+    }
+  ],
+  "claims": [
+    {
+      "adapterKey": "openwifi-uspot-uam",
+      "capability": "redirectParse",
+      "evidenceLevel": "SIMULATOR_TESTED",
+      "proposedStatus": "ECLOUD_SIDE_ONLY",
+      "scenarios": ["SIM-01", "SIM-02", "SIM-03", "SIM-04", "SIM-05", "SIM-06", "SIM-07", "SIM-08"],
+      "evidenceRefs": [
+        {
+          "kind": "simulator",
+          "ref": "SIM-01 (tests/simulators/SIMULATOR_RESULTS.json)"
+        },
+        {
+          "kind": "simulator",
+          "ref": "SIM-02 (tests/simulators/SIMULATOR_RESULTS.json)"
+        },
+        {
+          "kind": "simulator",
+          "ref": "SIM-03 (tests/simulators/SIMULATOR_RESULTS.json)"
+        },
+        {
+          "kind": "simulator",
+          "ref": "SIM-04 (tests/simulators/SIMULATOR_RESULTS.json)"
+        },
+        {
+          "kind": "simulator",
+          "ref": "SIM-05 (tests/simulators/SIMULATOR_RESULTS.json)"
+        },
+        {
+          "kind": "simulator",
+          "ref": "SIM-06 (tests/simulators/SIMULATOR_RESULTS.json)"
+        },
+        {
+          "kind": "simulator",
+          "ref": "SIM-07 (tests/simulators/SIMULATOR_RESULTS.json)"
+        },
+        {
+          "kind": "simulator",
+          "ref": "SIM-08 (tests/simulators/SIMULATOR_RESULTS.json)"
+        }
+      ]
+    },
+    {
+      "adapterKey": "openwifi-uspot-uam",
+      "capability": "authorizationHandoff",
+      "evidenceLevel": "SIMULATOR_TESTED",
+      "proposedStatus": "ECLOUD_SIDE_ONLY",
+      "scenarios": ["SIM-05", "SIM-06", "SIM-07", "SIM-08", "SIM-09", "SIM-15"],
+      "evidenceRefs": [
+        {
+          "kind": "simulator",
+          "ref": "SIM-05 (tests/simulators/SIMULATOR_RESULTS.json)"
+        },
+        {
+          "kind": "simulator",
+          "ref": "SIM-06 (tests/simulators/SIMULATOR_RESULTS.json)"
+        },
+        {
+          "kind": "simulator",
+          "ref": "SIM-07 (tests/simulators/SIMULATOR_RESULTS.json)"
+        },
+        {
+          "kind": "simulator",
+          "ref": "SIM-08 (tests/simulators/SIMULATOR_RESULTS.json)"
+        },
+        {
+          "kind": "simulator",
+          "ref": "SIM-09 (tests/simulators/SIMULATOR_RESULTS.json)"
+        },
+        {
+          "kind": "simulator",
+          "ref": "SIM-15 (tests/simulators/SIMULATOR_RESULTS.json)"
+        }
+      ]
+    },
+    {
+      "adapterKey": "openwifi-uspot-uam",
+      "capability": "accountingNormalize",
+      "evidenceLevel": "SIMULATOR_TESTED",
+      "proposedStatus": "ECLOUD_SIDE_ONLY",
+      "scenarios": ["SIM-10", "SIM-11", "SIM-12", "SIM-14", "SIM-17", "SIM-18"],
+      "evidenceRefs": [
+        {
+          "kind": "simulator",
+          "ref": "SIM-10 (tests/simulators/SIMULATOR_RESULTS.json)"
+        },
+        {
+          "kind": "simulator",
+          "ref": "SIM-11 (tests/simulators/SIMULATOR_RESULTS.json)"
+        },
+        {
+          "kind": "simulator",
+          "ref": "SIM-12 (tests/simulators/SIMULATOR_RESULTS.json)"
+        },
+        {
+          "kind": "simulator",
+          "ref": "SIM-14 (tests/simulators/SIMULATOR_RESULTS.json)"
+        },
+        {
+          "kind": "simulator",
+          "ref": "SIM-17 (tests/simulators/SIMULATOR_RESULTS.json)"
+        },
+        {
+          "kind": "simulator",
+          "ref": "SIM-18 (tests/simulators/SIMULATOR_RESULTS.json)"
+        }
+      ]
+    },
+    {
+      "adapterKey": "coovachilli-uam",
+      "capability": "redirectParse",
+      "evidenceLevel": "SIMULATOR_TESTED",
+      "proposedStatus": "ECLOUD_SIDE_ONLY",
+      "scenarios": ["SIM-01", "SIM-02", "SIM-03", "SIM-04", "SIM-05", "SIM-06", "SIM-07", "SIM-08"],
+      "evidenceRefs": [
+        {
+          "kind": "simulator",
+          "ref": "SIM-01 (tests/simulators/SIMULATOR_RESULTS.json)"
+        },
+        {
+          "kind": "simulator",
+          "ref": "SIM-02 (tests/simulators/SIMULATOR_RESULTS.json)"
+        },
+        {
+          "kind": "simulator",
+          "ref": "SIM-03 (tests/simulators/SIMULATOR_RESULTS.json)"
+        },
+        {
+          "kind": "simulator",
+          "ref": "SIM-04 (tests/simulators/SIMULATOR_RESULTS.json)"
+        },
+        {
+          "kind": "simulator",
+          "ref": "SIM-05 (tests/simulators/SIMULATOR_RESULTS.json)"
+        },
+        {
+          "kind": "simulator",
+          "ref": "SIM-06 (tests/simulators/SIMULATOR_RESULTS.json)"
+        },
+        {
+          "kind": "simulator",
+          "ref": "SIM-07 (tests/simulators/SIMULATOR_RESULTS.json)"
+        },
+        {
+          "kind": "simulator",
+          "ref": "SIM-08 (tests/simulators/SIMULATOR_RESULTS.json)"
+        }
+      ]
+    },
+    {
+      "adapterKey": "coovachilli-uam",
+      "capability": "authorizationHandoff",
+      "evidenceLevel": "SIMULATOR_TESTED",
+      "proposedStatus": "ECLOUD_SIDE_ONLY",
+      "scenarios": ["SIM-05", "SIM-06", "SIM-07", "SIM-08", "SIM-09", "SIM-15"],
+      "evidenceRefs": [
+        {
+          "kind": "simulator",
+          "ref": "SIM-05 (tests/simulators/SIMULATOR_RESULTS.json)"
+        },
+        {
+          "kind": "simulator",
+          "ref": "SIM-06 (tests/simulators/SIMULATOR_RESULTS.json)"
+        },
+        {
+          "kind": "simulator",
+          "ref": "SIM-07 (tests/simulators/SIMULATOR_RESULTS.json)"
+        },
+        {
+          "kind": "simulator",
+          "ref": "SIM-08 (tests/simulators/SIMULATOR_RESULTS.json)"
+        },
+        {
+          "kind": "simulator",
+          "ref": "SIM-09 (tests/simulators/SIMULATOR_RESULTS.json)"
+        },
+        {
+          "kind": "simulator",
+          "ref": "SIM-15 (tests/simulators/SIMULATOR_RESULTS.json)"
+        }
+      ]
+    },
+    {
+      "adapterKey": "coovachilli-uam",
+      "capability": "accountingNormalize",
+      "evidenceLevel": "SIMULATOR_TESTED",
+      "proposedStatus": "ECLOUD_SIDE_ONLY",
+      "scenarios": ["SIM-10", "SIM-11", "SIM-12", "SIM-13", "SIM-17", "SIM-18"],
+      "evidenceRefs": [
+        {
+          "kind": "simulator",
+          "ref": "SIM-10 (tests/simulators/SIMULATOR_RESULTS.json)"
+        },
+        {
+          "kind": "simulator",
+          "ref": "SIM-11 (tests/simulators/SIMULATOR_RESULTS.json)"
+        },
+        {
+          "kind": "simulator",
+          "ref": "SIM-12 (tests/simulators/SIMULATOR_RESULTS.json)"
+        },
+        {
+          "kind": "simulator",
+          "ref": "SIM-13 (tests/simulators/SIMULATOR_RESULTS.json)"
+        },
+        {
+          "kind": "simulator",
+          "ref": "SIM-17 (tests/simulators/SIMULATOR_RESULTS.json)"
+        },
+        {
+          "kind": "simulator",
+          "ref": "SIM-18 (tests/simulators/SIMULATOR_RESULTS.json)"
+        }
+      ]
+    }
+  ],
+  "withheld": []
+}

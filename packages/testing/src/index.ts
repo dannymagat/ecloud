@@ -6,3 +6,4 @@ export * from './aaa-stub.js';
 export * from './db-urls.js';
 export * from './probes.js';
 export * from './two-tenants.js';
+export * from './simulators/index.js';

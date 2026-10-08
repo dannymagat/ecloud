@@ -144,6 +144,35 @@ describe('OpenAPI', () => {
       expect(doc.paths[toOpenApiPath(route.path)]?.[route.method]).toBeDefined();
     }
   });
+
+  it('documents the multi-vendor endpoints with their permission (plan §8.2)', () => {
+    const doc = openapi as {
+      paths: Record<string, Record<string, { description?: string } | undefined>>;
+    };
+    const expected: [string, string, string][] = [
+      ['/api/v1/compatibility', 'get', 'compatibility:read'],
+      ['/api/v1/compatibility/{key}', 'get', 'compatibility:read'],
+      ['/api/v1/vendors', 'get', 'compatibility:read'],
+      ['/api/v1/orgs/{orgId}/controllers', 'get', 'controller:read'],
+      ['/api/v1/orgs/{orgId}/controllers', 'post', 'controller:create'],
+      ['/api/v1/orgs/{orgId}/controllers/{id}', 'get', 'controller:read'],
+      ['/api/v1/orgs/{orgId}/controllers/{id}', 'patch', 'controller:update'],
+      ['/api/v1/orgs/{orgId}/controllers/{id}', 'delete', 'controller:delete'],
+      [
+        '/api/v1/orgs/{orgId}/controllers/{id}/rotate-credential',
+        'post',
+        'controller:secret:rotate',
+      ],
+    ];
+    for (const [path, method, permission] of expected) {
+      expect(doc.paths[path]?.[method]?.description, `${method} ${path}`).toBe(
+        `Permission: \`${permission}\``,
+      );
+    }
+    // the credential is write-only: no response schema mentions it
+    const text = JSON.stringify(doc.paths['/api/v1/orgs/{orgId}/controllers/{id}']);
+    expect(text).not.toContain('credential_secret_ref');
+  });
 });
 
 describe('internal listener', () => {

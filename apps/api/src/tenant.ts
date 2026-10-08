@@ -71,6 +71,7 @@ type RefTable =
   | 'voucher_batches'
   | 'network_devices'
   | 'nas_clients'
+  | 'controllers'
   | 'identity_providers';
 
 const SOFT_DELETE: ReadonlySet<RefTable> = new Set([
@@ -80,6 +81,7 @@ const SOFT_DELETE: ReadonlySet<RefTable> = new Set([
   'policies',
   'network_devices',
   'nas_clients',
+  'controllers',
 ]);
 
 /**

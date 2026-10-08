@@ -27,7 +27,7 @@ describe('table catalogue', () => {
     const created = [...sql.matchAll(/^CREATE TABLE (?!radius\.)([a-z_]+) \(/gm)].map((m) => m[1]);
     expect([...created].sort()).toEqual([...ALL_TABLES].sort());
     expect(new Set(ALL_TABLES).size).toBe(ALL_TABLES.length);
-    expect(ALL_TABLES).toHaveLength(37);
+    expect(ALL_TABLES).toHaveLength(42); // + 019: 4 registry-mirror tables, controllers
   });
 
   it('lists every radius table', () => {
@@ -64,6 +64,10 @@ describe('table catalogue', () => {
         'mfa_credentials',
         'permissions',
         'adapter_types',
+        'vendors',
+        'hardware_models',
+        'firmware_versions',
+        'compatibility_entries',
       ].sort(),
     );
   });

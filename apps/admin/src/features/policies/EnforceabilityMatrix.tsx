@@ -1,6 +1,7 @@
 /**
- * Per-adapter, per-field enforceability (D-028). Cells are four-state badges; a field is
- * only ever shown as device-enforced when its status is exactly VERIFIED_SUPPORTED.
+ * Per-adapter, per-field enforceability (D-028 × MULTI_VENDOR_INTEGRATION_PLAN.md §4.4). A field
+ * is shown as device-enforced only when it is VERIFIED_SUPPORTED with lab/production evidence
+ * and a device-test reference (V12); source-verified cells read as expected, not device-tested.
  */
 import { StatusBadge, StatusLegend } from '../../components/StatusBadge';
 import { fieldLabel } from '../../lib/adapterStatus';
@@ -9,6 +10,9 @@ export interface AdapterFieldCell {
   field: string;
   status: unknown;
   evidence?: string;
+  /** Evidence level from the API (`evidence_level`); absent ⇒ weakest presentation. */
+  evidenceLevel?: string;
+  dtRefs?: string[];
   set?: boolean;
 }
 
@@ -21,11 +25,14 @@ export function EnforceabilityMatrix({
   adapters,
   fields,
   caption = 'Enforceability by adapter',
+  mode = 'catalogue',
 }: {
   adapters: AdapterColumn[];
   /** Fields to show (rows), in order. */
   fields: readonly string[];
   caption?: string;
+  /** `preview` = policy editor wording ("Expected (source-verified, not device-tested)"). */
+  mode?: 'catalogue' | 'preview';
 }) {
   if (fields.length === 0) {
     return (
@@ -69,11 +76,18 @@ export function EnforceabilityMatrix({
                   return (
                     <td key={a.adapter} className="whitespace-nowrap px-3 py-2">
                       {cell ? (
-                        <StatusBadge status={cell.status} evidence={cell.evidence} />
+                        <StatusBadge
+                          status={cell.status}
+                          evidence={cell.evidence}
+                          evidenceLevel={cell.evidenceLevel}
+                          dtRefs={cell.dtRefs}
+                          mode={mode}
+                        />
                       ) : (
                         <StatusBadge
                           status="UNDECLARED"
                           evidence="The adapter declares no status for this field."
+                          mode={mode}
                         />
                       )}
                     </td>
@@ -84,9 +98,22 @@ export function EnforceabilityMatrix({
           </tbody>
         </table>
       </div>
-      <StatusLegend />
+      <StatusLegend mode={mode} />
     </div>
   );
+}
+
+function stringField(r: Record<string, unknown>, ...keys: string[]): string | undefined {
+  for (const k of keys) if (typeof r[k] === 'string') return r[k];
+  return undefined;
+}
+
+function stringList(r: Record<string, unknown>, ...keys: string[]): string[] | undefined {
+  for (const k of keys) {
+    const v = r[k];
+    if (Array.isArray(v)) return v.filter((x): x is string => typeof x === 'string');
+  }
+  return undefined;
 }
 
 /** Normalises `per_adapter[].field_table` (simulate) or `adapters[].fields` (platform catalogue). */
@@ -115,6 +142,8 @@ export function toAdapterColumns(input: unknown): AdapterColumn[] {
               field: r.field,
               status: r.status,
               evidence: typeof r.evidence === 'string' ? r.evidence : undefined,
+              evidenceLevel: stringField(r, 'evidence_level', 'evidenceLevel'),
+              dtRefs: stringList(r, 'dt_refs', 'dtRefs'),
               set: typeof r.set === 'boolean' ? r.set : undefined,
             },
           ];

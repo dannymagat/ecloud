@@ -222,3 +222,72 @@ verifies FreeRADIUS ↔ ECLOUD wiring only and resolves no DT.
 | `check` | `npm ci`, build, `typecheck` of `tests/`, lint, `format:check`, unit tests |
 | `integration` | postgres:16 + redis:7 services; roles via `infra/compose/postgres-init/01_roles.sql` (`docker exec … psql`), `db:migrate`, `seed`, `npm run test:integration -- --coverage`, coverage artifact |
 | `radius-contract` | builds and starts postgres + freeradius from the dev compose file (stub URL `host.docker.internal:3901`), migrates + seeds the `ecloud` DB, `npm run test:aaa-contract` with `ECLOUD_TEST_REQUIRE_INTEGRATION=1`; logs on failure; tears the ephemeral stack down |
+
+## 10. L4 simulators (`tests/simulators/`, M11)
+
+Design source: `MULTI_VENDOR_INTEGRATION_PLAN.md` §8.3 (SIM-01…SIM-18), §4 (evidence model).
+
+> **Simulator evidence proves ECLOUD code behaviour, not hardware compatibility.** The simulated
+> NAS is written from documented parameter lists (CAPTIVE_PORTAL_ARCHITECTURE.md §3.2/§3.3/§4/§7.3,
+> PHASE2_VALIDATION V-054/V-070/V-071) and the FreeRADIUS accounting fixtures; it is not a device
+> capture. A passing scenario may back `SIMULATOR_TESTED` only on the operation capabilities
+> `redirectParse`, `authorizationHandoff`, `accountingNormalize` of `openwifi-uspot-uam` and
+> `coovachilli-uam` — never an enforcement capability, never `LAB_VALIDATED`, never
+> Disconnect/CoA (D-006).
+
+| File | Scenarios | Runs in |
+|---|---|---|
+| `uam-redirect.test.ts` | SIM-01 valid signed redirect, SIM-02 forged/missing `md`, SIM-03 tampering, SIM-04 unknown NAS, SIM-07 public `uamip` + hostile `userurl`, SIM-08 byte-for-byte raw query | `npm test` |
+| `handoff.test.ts` | SIM-09 PAP XOR (+ device-side decode, T and U/Coova) and CHAP reference vectors (computed externally with Python `hashlib`), SIM-15 VLAN / burst / quota > 4 GiB per degradation mode, SIM-16 Disconnect without mandatory attribute | `npm test` |
+| `accounting.test.ts` | SIM-10 retransmit, SIM-11 out-of-order, SIM-13 Gigawords rollover, SIM-14 32-bit wrap (no negative/huge delta; anomaly `counter_wrap_32bit` with estimated lost bytes flagged by the report-only vendor quirks hook `VendorAdapter.accountingQuirks`, uspot TIP only) | `npm test` |
+| `db.integration.test.ts` | SIM-05 cross-tenant, SIM-06 replay / TTL (NAS from real `nas_clients`, `SimBroker` stand-in for the Phase 6 broker), SIM-12 missing Stop + reaper, SIM-17 Accounting-On/Off, SIM-18 roaming + cross-tenant (real `drainOnce` / `reapSessions`) | `describeIntegration` (dev stack) |
+| `results.test.ts` | registry check of `SIMULATOR_RESULTS.json` (claims ⊆ operation capabilities × the two adapters, each backed by PASS; promotion keeps validator V1–V12 green; V2/V1 negatives) | `npm test` |
+
+Builders live in `@ecloud/testing` (`packages/testing/src/simulators/`: `buildUamRedirect`,
+`referenceUamMd`, `referencePapEncode`, `deviceDecodePapTip`/`Upstream`, `referenceChapResponse`,
+`SimAccountingSession`, `wireCounter`/`freeradiusFold`, scenario catalogue, results format).
+They do not import `@ecloud/adapters`, so the simulator is a second implementation of the
+documented formulas. Fixtures use only the fake secret `uam-test-secret-fake`.
+
+Test-title convention: `SIM-NN [adapter-key] …`; `[DEFECT]` marks an `it.fails` pin of a code
+defect the scenario exposed (turn into `it` when fixed); `it.todo` marks a BLOCKED check.
+
+Recording the results file (after `npm run build`, dev stack up so the DB group runs):
+
+```bash
+ECLOUD_TEST_DATABASE_URL=postgres://ecloud_platform:ecloud_dev_password@127.0.0.1:5432/ecloud_test \
+ECLOUD_TEST_REDIS_URL=redis://127.0.0.1:6379/1 ECLOUD_TEST_REQUIRE_INTEGRATION=1 \
+  npx tsx tests/simulators/record-results.ts
+```
+
+Current recording (2026-10-08, run id `dafbef1e73f3be7aa4304183317ef009`): 55 passed, 0 failed,
+0 todo; SIM-01…SIM-18 PASS for every adapter in scope; 6 claims (`redirectParse`,
+`authorizationHandoff`, `accountingNormalize` × `openwifi-uspot-uam`, `coovachilli-uam`), none
+withheld.
+
+It runs the suite with the JSON reporter (excluding `results.test.ts`, which checks the previous
+file) and writes `tests/simulators/SIMULATOR_RESULTS.json` (format `ecloud-simulator-results/v1`):
+per-scenario result per adapter (`PASS | FAIL | DEFECT | BLOCKED | NOT_RUN`), the derived `claims`
+(each with `proposedStatus: ECLOUD_SIDE_ONLY`, since V1 forbids `VERIFIED_SUPPORTED` with
+`SIMULATOR_TESTED`) and the `withheld` claims with their blocking scenarios. The file is bound to
+its run: `run.runId` (random) and `run.outcomesHash` = SHA-256 over the run id and the canonical
+scenario outcomes; `checkSimulatorResults` rejects a file whose results were edited after recording
+or copied from another run. It never edits the registry; the promotion is a separate orchestrator
+step.
+
+**`authorizationHandoff` evidence is PAP only.** ECLOUD's hand-off emits the PAP `password` (XOR)
+form; the CHAP vectors in `handoff.test.ts` check the simulator's reference implementation only,
+not ECLOUD code.
+
+The DB group drives `drainOnce` with an in-memory cursor and no lock (production serialises the
+drainer with `state.withLock`). Run it alone against `ecloud_test`: another process draining the
+same database at the same time (e.g. a concurrent worker integration run) can process the same
+`radacct_raw` rows twice and make SIM-12/17/18 flaky. Inside one `npm run test:integration` the
+group ordering (worker in group 1, `tests/` in group 2) prevents the overlap.
+
+Defects found by the simulators (all fixed; the tests are plain `it` now):
+
+| Scenario / test | Defect | Fix |
+|---|---|---|
+| SIM-18 "colliding Acct-Unique-Session-Id from another tenant's NAS is never merged" (`db.integration`) | an authenticated org-B NAS that sends org A's `Acct-Unique-Session-Id` (NAS-controlled: `md5(Class, Acct-Session-Id)`) was merged into org A's session: counters overwritten, A's session stopped, records attributed to A (`drain.ts createSession`: `ON CONFLICT (acct_unique_id) DO NOTHING` then re-read without an organization check) | L3: `drain.ts` scopes session lookups to the NAS's organization (`ownedBy()`) and records the collision (`recordCollision()`) |
+| SIM-07 hostile `userurl` (`uam-redirect`) | `safeUserUrl` accepted backslash forms that WHATWG URL normalises to a public host: `http:\\evil.example` → `http://evil.example/`, `https:/\evil.example/` → `https://evil.example/`, `http://evil\@x` → `http://evil/@x` | orchestrator: `packages/adapters/src/vendor/uam.ts safeUserUrl` refuses any raw value containing `\`; the three payloads are in SIM-07's `hostile` list |

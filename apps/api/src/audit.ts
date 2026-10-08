@@ -14,6 +14,8 @@ const SECRET_KEYS = new Set([
   'key_hash',
   'token_hash',
   'secret_ref',
+  'credential_secret_ref',
+  'credential',
   'secret_enc',
   'code_hash',
   'code_enc',

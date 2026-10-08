@@ -9,3 +9,4 @@ export * from './seed.js';
 export * from './sql.js';
 export * from './tables.js';
 export * from './tenancy.js';
+export * from './registry-seed.js';

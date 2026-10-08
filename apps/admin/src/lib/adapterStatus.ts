@@ -1,7 +1,11 @@
 /**
- * Four-state adapter field status (D-028). Only `VERIFIED_SUPPORTED` may be presented as
- * device-enforced; every other value (and anything unrecognised) is shown as NOT enforced.
- * Kept in sync with packages/shared `ADAPTER_FIELD_STATUSES` / `POLICY_FIELDS` (drift test).
+ * Four-state adapter field status (D-028) plus the evidence level of
+ * MULTI_VENDOR_INTEGRATION_PLAN.md §4.4. A cell is presented as device-enforced ONLY when its
+ * status is VERIFIED_SUPPORTED **and** its evidence is LAB_VALIDATED / PRODUCTION_VALIDATED with
+ * a recorded device-test reference (rule V12, R-39). Source-verified cells read "Verified
+ * (source)" / "Expected (source-verified, not device-tested)". Anything unrecognised falls back
+ * to the weakest presentation. Kept in sync with packages/shared `ADAPTER_FIELD_STATUSES`,
+ * `EVIDENCE_LEVELS`, `POLICY_FIELDS` and `isDeviceEnforced` (drift tests).
  */
 export const ADAPTER_FIELD_STATUSES = [
   'VERIFIED_SUPPORTED',
@@ -11,6 +15,20 @@ export const ADAPTER_FIELD_STATUSES = [
 ] as const;
 
 export type AdapterFieldStatus = (typeof ADAPTER_FIELD_STATUSES)[number];
+
+export const EVIDENCE_LEVELS = [
+  'DOCUMENTED',
+  'VERIFIED_FROM_SOURCE',
+  'SIMULATOR_TESTED',
+  'LAB_VALIDATED',
+  'PRODUCTION_VALIDATED',
+] as const;
+
+export type EvidenceLevel = (typeof EVIDENCE_LEVELS)[number];
+
+export function isEvidenceLevel(value: unknown): value is EvidenceLevel {
+  return typeof value === 'string' && (EVIDENCE_LEVELS as readonly string[]).includes(value);
+}
 
 export const POLICY_FIELDS = [
   'download_rate_kbps',
@@ -45,36 +63,61 @@ export const ADAPTER_KEYS = [
 export interface StatusPresentation {
   /** Normalised status; unknown inputs fall back to REQUIRES_DEVICE_TEST (never VERIFIED). */
   status: AdapterFieldStatus;
+  /** Normalised evidence level; null when absent or unrecognised. */
+  evidenceLevel: EvidenceLevel | null;
   label: string;
+  /** Policy-preview cell text (plan §4.4). */
+  previewLabel: string;
   description: string;
   tone: 'success' | 'warning' | 'danger' | 'info';
-  /** True only for VERIFIED_SUPPORTED. */
+  /** Outlined = expected from source; solid = proven on a device. */
+  variant: 'solid' | 'outline';
+  /** V12: true only for VERIFIED_SUPPORTED + LAB/PRODUCTION evidence with a device-test ref. */
   deviceEnforced: boolean;
 }
 
-const PRESENTATION: Record<AdapterFieldStatus, Omit<StatusPresentation, 'status'>> = {
-  VERIFIED_SUPPORTED: {
-    label: 'Verified',
-    description: 'Enforced by the device; verified by a recorded device test.',
-    tone: 'success',
-    deviceEnforced: true,
-  },
-  REQUIRES_DEVICE_TEST: {
-    label: 'Needs device test',
-    description: 'Sent to the device but NOT verified; do not rely on it being enforced.',
-    tone: 'warning',
-    deviceEnforced: false,
-  },
+export interface PresentOptions {
+  /** Device-test / record references (e.g. `DT-04`); required for "Lab validated". */
+  dtRefs?: readonly string[];
+}
+
+const EVIDENCE_LABEL: Record<EvidenceLevel, string> = {
+  DOCUMENTED: 'Documented',
+  VERIFIED_FROM_SOURCE: 'Verified (source)',
+  SIMULATOR_TESTED: 'Simulator tested',
+  LAB_VALIDATED: 'Lab validated',
+  PRODUCTION_VALIDATED: 'Production validated',
+};
+
+export const SOURCE_VERIFIED_DESCRIPTION =
+  'Mechanism confirmed in vendor/firmware source for this adapter. Not yet proven on a lab device.';
+
+type Base = Omit<StatusPresentation, 'status' | 'evidenceLevel'>;
+
+const NEEDS_TEST: Base = {
+  label: 'Needs device test',
+  previewLabel: 'Needs device test',
+  description: 'Sent to the device but NOT verified; do not rely on it being enforced.',
+  tone: 'warning',
+  variant: 'outline',
+  deviceEnforced: false,
+};
+
+const OTHER: Record<'UNSUPPORTED' | 'ECLOUD_SIDE_ONLY', Base> = {
   UNSUPPORTED: {
     label: 'Unsupported',
+    previewLabel: 'Unsupported',
     description: 'This adapter cannot enforce the field.',
     tone: 'danger',
+    variant: 'solid',
     deviceEnforced: false,
   },
   ECLOUD_SIDE_ONLY: {
     label: 'ECLOUD side',
+    previewLabel: 'ECLOUD side',
     description: 'Tracked and enforced by ECLOUD (e.g. at authorization), not by the device.',
     tone: 'info',
+    variant: 'solid',
     deviceEnforced: false,
   },
 };
@@ -83,16 +126,76 @@ export function isAdapterFieldStatus(value: unknown): value is AdapterFieldStatu
   return typeof value === 'string' && (ADAPTER_FIELD_STATUSES as readonly string[]).includes(value);
 }
 
-export function presentStatus(value: unknown): StatusPresentation {
-  const status: AdapterFieldStatus = isAdapterFieldStatus(value) ? value : 'REQUIRES_DEVICE_TEST';
-  const base = PRESENTATION[status];
+function verifiedPresentation(level: EvidenceLevel | null, refs: readonly string[]): Base {
+  if ((level === 'LAB_VALIDATED' || level === 'PRODUCTION_VALIDATED') && refs.length > 0) {
+    return {
+      label: EVIDENCE_LABEL[level],
+      previewLabel: EVIDENCE_LABEL[level],
+      description: `${level === 'LAB_VALIDATED' ? 'Proven on a lab device' : 'Observed in production'} (${refs.join(', ')}).`,
+      tone: 'success',
+      variant: 'solid',
+      deviceEnforced: true,
+    };
+  }
+  if (level === 'DOCUMENTED' || level === 'SIMULATOR_TESTED') {
+    // Forbidden combination (validator V1/V2): weakest presentation.
+    return {
+      ...NEEDS_TEST,
+      description: `Claimed supported with only ${EVIDENCE_LABEL[level].toLowerCase()} evidence: treated as not verified.`,
+    };
+  }
+  if (level === null) {
+    // Today's API payload carries no evidence level: say so instead of implying source evidence.
+    return {
+      label: 'Verified (evidence level not reported)',
+      previewLabel: 'Expected (evidence level not reported, not device-tested)',
+      description:
+        'Declared supported by the adapter; the evidence level was not reported. Not proven on a lab device.',
+      tone: 'success',
+      variant: 'outline',
+      deviceEnforced: false,
+    };
+  }
+  // VERIFIED_FROM_SOURCE, or lab/production evidence without a DT reference.
   return {
-    status,
-    ...base,
-    description: isAdapterFieldStatus(value)
-      ? base.description
-      : `Unknown status "${String(value)}": treated as not verified.`,
+    label: 'Verified (source)',
+    previewLabel: 'Expected (source-verified, not device-tested)',
+    description:
+      level === 'LAB_VALIDATED' || level === 'PRODUCTION_VALIDATED'
+        ? `${SOURCE_VERIFIED_DESCRIPTION} (No device-test reference recorded.)`
+        : SOURCE_VERIFIED_DESCRIPTION,
+    tone: 'success',
+    variant: 'outline',
+    deviceEnforced: false,
   };
+}
+
+export function presentStatus(
+  value: unknown,
+  evidenceLevel?: unknown,
+  options: PresentOptions = {},
+): StatusPresentation {
+  const level = isEvidenceLevel(evidenceLevel) ? evidenceLevel : null;
+  const refs = (options.dtRefs ?? []).filter((r) => typeof r === 'string' && r.trim() !== '');
+  if (!isAdapterFieldStatus(value)) {
+    return {
+      status: 'REQUIRES_DEVICE_TEST',
+      evidenceLevel: level,
+      ...NEEDS_TEST,
+      description: `Unknown status "${String(value)}": treated as not verified.`,
+    };
+  }
+  let base: Base;
+  if (value === 'VERIFIED_SUPPORTED') base = verifiedPresentation(level, refs);
+  else if (value === 'REQUIRES_DEVICE_TEST')
+    base = level
+      ? {
+          ...NEEDS_TEST,
+          description: `${NEEDS_TEST.description} Evidence: ${EVIDENCE_LABEL[level]}.`,
+        }
+      : NEEDS_TEST;
+  else base = OTHER[value];
+  return { status: value, evidenceLevel: level, ...base };
 }
 
 export const FIELD_LABELS: Record<PolicyField, string> = {

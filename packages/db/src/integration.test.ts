@@ -4,6 +4,7 @@
  * `getTestAppDatabaseUrl()` for the RLS assertions. This is the ONLY suite allowed to pass
  * `reset: true` to migrateTestDatabase().
  */
+import { COMPATIBILITY_ROWS, VENDORS, registrySnapshotHash } from '@ecloud/adapters';
 import { PERMISSION_CATALOGUE, ROLE_TEMPLATES, newId } from '@ecloud/shared';
 import {
   DATA_TABLES,
@@ -34,7 +35,9 @@ import {
   ensureMonthPartitions,
   migrationStatus,
   pgExecutor,
+  seedRegistry,
   verifyPassword,
+  verifyRegistryMirror,
   withPlatform,
   withSite,
   withTenant,
@@ -64,9 +67,41 @@ await describeIntegration('@ecloud/db schema', () => {
   let platform: Db;
   let app: Db;
   let databaseUrl: string;
+  /** deployment_mode of NAS rows inserted at schema 018, read after 019 ran (upgrade path). */
+  let backfilled: Record<string, string> = {};
 
   beforeAll(async () => {
-    const result = await migrateTestDatabase({ reset: true });
+    const legacyOrg = newId();
+    const result = await migrateTestDatabase({
+      reset: true,
+      // 019 upgrade path: rows that exist before the migration are backfilled
+      atVersion: {
+        version: '018',
+        run: async (client) => {
+          const site = newId();
+          await client.query('INSERT INTO organizations (id, slug, name) VALUES ($1, $2, $3)', [
+            legacyOrg,
+            `legacy-${legacyOrg.slice(-8)}`,
+            'Legacy 018',
+          ]);
+          await client.query(
+            "INSERT INTO sites (id, organization_id, slug, name, timezone) VALUES ($1, $2, 's', 'S', 'UTC')",
+            [site, legacyOrg],
+          );
+          for (const [name, ip, key] of [
+            ['chilli', '10.250.0.1', 'coovachilli-uam'],
+            ['uspot', '10.250.0.2', 'openwifi-uspot-uam'],
+          ] as const) {
+            await client.query(
+              `INSERT INTO nas_clients (organization_id, site_id, name, nas_ip, adapter_type_key, adapter_key, secret_ref)
+               VALUES ($1, $2, $3, $4, $5, $5, 'enc:placeholder')`,
+              [legacyOrg, site, name, ip, key],
+            );
+          }
+        },
+      },
+    });
+
     databaseUrl = result.databaseUrl;
     expect(result.applied).toBe(discoverMigrations().length);
     const appUrl = getTestAppDatabaseUrl();
@@ -75,6 +110,10 @@ await describeIntegration('@ecloud/db schema', () => {
     appPool = createPool(appUrl, { max: 4, applicationName: 'ecloud-db-test-app' });
     platform = createDb(platformPool);
     app = createDb(appPool);
+    const legacy = await sql<{ name: string; deployment_mode: string }>`
+      SELECT name, deployment_mode FROM nas_clients WHERE organization_id = ${legacyOrg}
+    `.execute(platform);
+    backfilled = Object.fromEntries(legacy.rows.map((r) => [r.name, r.deployment_mode]));
     await truncateAll(platformPool, DATA_TABLES);
   }, 120_000);
 
@@ -112,7 +151,7 @@ await describeIntegration('@ecloud/db schema', () => {
       .sort();
     expect(publicTables).toEqual([...ALL_TABLES].sort());
     expect(radiusTables).toEqual([...RADIUS_TABLES].sort());
-    expect(publicTables).toHaveLength(37);
+    expect(publicTables).toHaveLength(42);
 
     const view = await sql<{ count: number }>`
       SELECT count(*)::int AS count FROM pg_views WHERE schemaname = 'radius' AND viewname = 'nas_v'
@@ -157,7 +196,7 @@ await describeIntegration('@ecloud/db schema', () => {
 
   it('seeds the shared permission catalogue and the six role templates exactly', async () => {
     const permissions = await platform.selectFrom('permissions').selectAll().execute();
-    expect(permissions).toHaveLength(99); // + administrator:mfa_reset (D-038)
+    expect(permissions).toHaveLength(105); // + administrator:mfa_reset (D-038); + controller:* (5), compatibility:read (019)
     expect(permissions.map((p) => p.key).sort()).toEqual(
       PERMISSION_CATALOGUE.map((p) => p.key).sort(),
     );
@@ -198,7 +237,7 @@ await describeIntegration('@ecloud/db schema', () => {
       .select(({ fn }) => fn.countAll<number>().as('n'))
       .where('role_id', '=', superAdmin?.id ?? '')
       .executeTakeFirst();
-    expect(Number(count?.n)).toBe(99);
+    expect(Number(count?.n)).toBe(105);
   });
 
   it('hides cross-tenant rows from ecloud_app and shows everything to the platform role', async () => {
@@ -673,12 +712,94 @@ await describeIntegration('@ecloud/db schema', () => {
       .selectFrom('permissions')
       .select(({ fn }) => fn.countAll<number>().as('n'))
       .executeTakeFirst();
-    expect(Number(perms?.n)).toBe(99);
+    expect(Number(perms?.n)).toBe(105);
     const templates = await platform
       .selectFrom('roles')
       .select(({ fn }) => fn.countAll<number>().as('n'))
       .where('is_template', '=', true)
       .executeTakeFirst();
     expect(Number(templates?.n)).toBe(6);
+  });
+
+  // ------------------------------------------------------------- 019 multi-vendor registry
+
+  it('019 upgrade path: NAS rows that existed at 018 are backfilled (CoovaChilli -> gateway)', () => {
+    expect(backfilled).toEqual({ chilli: 'gateway', uspot: 'native' });
+  });
+
+  it('seed mirrors the @ecloud/adapters registry exactly (hash check) and is idempotent', async () => {
+    const client = new pg.Client({ connectionString: databaseUrl });
+    await client.connect();
+    try {
+      const exec = pgExecutor(client);
+      const check = await verifyRegistryMirror(exec);
+      expect(check.mismatches).toEqual([]);
+      expect(check.ok).toBe(true);
+      expect(check.mirrorHash).toBe(registrySnapshotHash());
+      expect(check.orphans).toEqual([]);
+      const counts = await sql<{ v: number; m: number; f: number; e: number }>`
+        SELECT (SELECT count(*)::int FROM vendors) AS v, (SELECT count(*)::int FROM hardware_models) AS m,
+               (SELECT count(*)::int FROM firmware_versions) AS f, (SELECT count(*)::int FROM compatibility_entries) AS e
+      `.execute(platform);
+      expect(counts.rows[0]).toEqual({
+        v: VENDORS.length,
+        m: new Set(
+          COMPATIBILITY_ROWS.filter((r) => r.hardwareModel !== 'UNKNOWN').map(
+            (r) => `${r.vendorKey}/${r.hardwareModel}`,
+          ),
+        ).size,
+        f: new Set(
+          COMPATIBILITY_ROWS.filter((r) => r.firmware !== 'UNKNOWN').map((r) =>
+            JSON.stringify([r.vendorKey, r.hardwareModel, r.firmware, r.controller]),
+          ),
+        ).size,
+        e: COMPATIBILITY_ROWS.length,
+      });
+
+      const again = await seedRegistry(exec);
+      expect(again.vendors).toMatchObject({ inserted: 0, updated: 0 });
+      expect(again.hardwareModels.inserted).toBe(0);
+      expect(again.firmwareVersions.inserted).toBe(0);
+      expect(again.entries).toMatchObject({ inserted: 0, updated: 0, removed: [] });
+      expect(again.registryHash).toBe(registrySnapshotHash());
+
+      // drift is detected: a tampered cell, a stale hash, an extra row
+      await client.query('BEGIN');
+      try {
+        await client.query(
+          `UPDATE compatibility_entries
+              SET capabilities = jsonb_set(capabilities, '{bandwidth,0,status}', '"VERIFIED_SUPPORTED"')
+            WHERE key = 'mikrotik-planned'`,
+        );
+        await client.query(
+          "UPDATE vendors SET registry_hash = repeat('0', 64) WHERE key = 'cambium'",
+        );
+        const drift = await verifyRegistryMirror(exec);
+        expect(drift.ok).toBe(false);
+        expect(drift.mismatches).toEqual(
+          expect.arrayContaining([
+            'row mikrotik-planned: content differs from the registry',
+            'vendor cambium: stale registry_hash',
+          ]),
+        );
+      } finally {
+        await client.query('ROLLBACK');
+      }
+    } finally {
+      await client.end();
+    }
+  });
+
+  it('registry mirror is read-only for ecloud_app; controllers carry FORCE RLS', async () => {
+    const vendors = await app.selectFrom('vendors').select('key').execute();
+    expect(vendors.length).toBe(VENDORS.length);
+    expect(
+      await sqlState(
+        sql`UPDATE compatibility_entries SET lifecycle = 'production-validated'`.execute(app),
+      ),
+    ).toBe('42501');
+    expect(await sqlState(sql`DELETE FROM vendors`.execute(app))).toBe('42501');
+    // no tenant context -> no controller rows, and inserts for another org fail WITH CHECK
+    expect((await app.selectFrom('controllers').select('id').execute()).length).toBe(0);
   });
 });

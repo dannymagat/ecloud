@@ -1125,6 +1125,138 @@ export interface paths {
     patch: operations['patch_api_v1_orgs_orgId_schedules_id'];
     trace?: never;
   };
+  '/api/v1/orgs/{orgId}/controllers': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * List controllers
+     * @description Permission: `controller:read`
+     */
+    get: operations['get_api_v1_orgs_orgId_controllers'];
+    put?: never;
+    /**
+     * Create a controller
+     * @description Permission: `controller:create`
+     */
+    post: operations['post_api_v1_orgs_orgId_controllers'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/orgs/{orgId}/controllers/{id}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Get a controller
+     * @description Permission: `controller:read`
+     */
+    get: operations['get_api_v1_orgs_orgId_controllers_id'];
+    put?: never;
+    post?: never;
+    /**
+     * Delete a controller
+     * @description Permission: `controller:delete`
+     */
+    delete: operations['delete_api_v1_orgs_orgId_controllers_id'];
+    options?: never;
+    head?: never;
+    /**
+     * Update a controller (If-Match supported)
+     * @description Permission: `controller:update`
+     */
+    patch: operations['patch_api_v1_orgs_orgId_controllers_id'];
+    trace?: never;
+  };
+  '/api/v1/orgs/{orgId}/controllers/{id}/rotate-credential': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Replace the stored controller credential (write-only; refused while impersonating, D-027)
+     * @description Permission: `controller:secret:rotate`
+     */
+    post: operations['post_api_v1_orgs_orgId_controllers_id_rotate_credential'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/compatibility': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Compatibility registry rows with status, evidence level, lifecycle and doc links
+     * @description Permission: `compatibility:read`
+     */
+    get: operations['get_api_v1_compatibility'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/compatibility/{key}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * One compatibility registry row
+     * @description Permission: `compatibility:read`
+     */
+    get: operations['get_api_v1_compatibility_key'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/vendors': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Vendors of the compatibility registry with lifecycle and roadmap phase
+     * @description Permission: `compatibility:read`
+     */
+    get: operations['get_api_v1_vendors'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/api/v1/orgs/{orgId}/voucher-batches': {
     parameters: {
       query?: never;
@@ -1395,6 +1527,48 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
   schemas: {
+    /** @description Registry row (plan §7.1). device_enforced is true only for LAB_VALIDATED / PRODUCTION_VALIDATED evidence with a device-test reference (V12). */
+    CompatibilityEntry: {
+      capabilities: ({
+        capability: string;
+        device_enforced: boolean;
+        dt_refs: string[];
+        evidence_level: string | null;
+        group: string;
+        status: string;
+      } & {
+        [key: string]: unknown;
+      })[];
+      doc_links: ({
+        kind: string;
+        ref: string;
+      } & {
+        [key: string]: unknown;
+      })[];
+      key: string;
+      /** @enum {string} */
+      lifecycle:
+        'planned' | 'researched' | 'implemented' | 'lab-validated' | 'production-validated';
+      registry_hash: string;
+      vendor_key: string;
+    } & {
+      [key: string]: unknown;
+    };
+    /** @description Vendor hotspot controller; the credential is write-only (has_credential only). */
+    Controller: {
+      base_url: string;
+      has_credential: boolean;
+      id: string;
+      /** @enum {string} */
+      kind: 'cloud' | 'on_premises' | 'embedded';
+      name: string;
+      organization_id: string;
+      site_id: string | null;
+      status: string;
+      vendor_key: string;
+    } & {
+      [key: string]: unknown;
+    };
     /** @description RFC 9457 problem details */
     Problem: {
       detail?: string;
@@ -1403,6 +1577,25 @@ export interface components {
       status: number;
       title: string;
       type: string;
+    } & {
+      [key: string]: unknown;
+    };
+    /** @description Vendor entry of the compatibility registry (plan §7.1) */
+    Vendor: {
+      compatibility_keys: string[];
+      doc_links: ({
+        kind: string;
+        ref: string;
+      } & {
+        [key: string]: unknown;
+      })[];
+      key: string;
+      /** @enum {string} */
+      lifecycle:
+        'planned' | 'researched' | 'implemented' | 'lab-validated' | 'production-validated';
+      name: string;
+      registry_hash: string;
+      roadmap_phase: string;
     } & {
       [key: string]: unknown;
     };
@@ -5185,8 +5378,12 @@ export interface operations {
       content: {
         'application/json': {
           adapter_type_key?: string | null;
+          controller_id?: string | null;
           firmware?: string | null;
+          firmware_version_id?: string | null;
+          hardware_model_id?: string | null;
           mac?: string | null;
+          managed?: boolean;
           /** @enum {string} */
           mode?: 'bridge' | 'routed' | 'unknown';
           model?: string | null;
@@ -5382,8 +5579,12 @@ export interface operations {
       content: {
         'application/json': {
           adapter_type_key?: string | null;
+          controller_id?: string | null;
           firmware?: string | null;
+          firmware_version_id?: string | null;
+          hardware_model_id?: string | null;
           mac?: string | null;
+          managed?: boolean;
           /** @enum {string} */
           mode?: 'bridge' | 'routed' | 'unknown';
           model?: string | null;
@@ -5543,6 +5744,9 @@ export interface operations {
             | 'coovachilli-uam';
           coa_port?: number | null;
           coa_supported?: boolean | null;
+          controller_id?: string | null;
+          /** @enum {string} */
+          deployment_mode?: 'native' | 'gateway';
           name: string;
           nas_identifier?: string | null;
           nas_ip: string;
@@ -5746,6 +5950,9 @@ export interface operations {
             | 'coovachilli-uam';
           coa_port?: number | null;
           coa_supported?: boolean | null;
+          controller_id?: string | null;
+          /** @enum {string} */
+          deployment_mode?: 'native' | 'gateway';
           name?: string;
           nas_identifier?: string | null;
           nas_ip?: string;
@@ -7267,6 +7474,597 @@ export interface operations {
       };
       /** @description If-Match mismatch */
       412: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+    };
+  };
+  get_api_v1_orgs_orgId_controllers: {
+    parameters: {
+      query?: {
+        limit?: number;
+        cursor?: string;
+        vendor_key?: string;
+        kind?: 'cloud' | 'on_premises' | 'embedded';
+        status?: 'active' | 'disabled';
+        site_id?: string;
+      };
+      header?: never;
+      path: {
+        orgId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description controller page */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            data: {
+              [key: string]: unknown;
+            }[];
+            next_cursor: string | null;
+          };
+        };
+      };
+      /** @description Validation failed (application/problem+json) */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Authentication required */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Permission denied */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Not found (also returned for objects of other tenants) */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+    };
+  };
+  post_api_v1_orgs_orgId_controllers: {
+    parameters: {
+      query?: never;
+      header?: {
+        'Idempotency-Key'?: string;
+      };
+      path: {
+        orgId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: {
+      content: {
+        'application/json': {
+          base_url: string;
+          credential?: string;
+          /** @enum {string} */
+          kind: 'cloud' | 'on_premises' | 'embedded';
+          name: string;
+          site_id?: string | null;
+          /** @enum {string} */
+          status?: 'active' | 'disabled';
+          vendor_key: string;
+        };
+      };
+    };
+    responses: {
+      /** @description Created */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Controller'];
+        };
+      };
+      /** @description Validation failed (application/problem+json) */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Authentication required */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Permission denied */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Not found (also returned for objects of other tenants) */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+    };
+  };
+  get_api_v1_orgs_orgId_controllers_id: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        orgId: string;
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description controller */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Controller'];
+        };
+      };
+      /** @description Validation failed (application/problem+json) */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Authentication required */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Permission denied */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Not found (also returned for objects of other tenants) */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+    };
+  };
+  delete_api_v1_orgs_orgId_controllers_id: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        orgId: string;
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Deleted */
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Validation failed (application/problem+json) */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Authentication required */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Permission denied */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Not found (also returned for objects of other tenants) */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+    };
+  };
+  patch_api_v1_orgs_orgId_controllers_id: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        orgId: string;
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: {
+      content: {
+        'application/json': {
+          base_url?: string;
+          /** @enum {string} */
+          kind?: 'cloud' | 'on_premises' | 'embedded';
+          name?: string;
+          site_id?: string | null;
+          /** @enum {string} */
+          status?: 'active' | 'disabled';
+          vendor_key?: string;
+        };
+      };
+    };
+    responses: {
+      /** @description Updated */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Controller'];
+        };
+      };
+      /** @description Validation failed (application/problem+json) */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Authentication required */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Permission denied */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Not found (also returned for objects of other tenants) */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description If-Match mismatch */
+      412: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+    };
+  };
+  post_api_v1_orgs_orgId_controllers_id_rotate_credential: {
+    parameters: {
+      query?: never;
+      header: {
+        'Idempotency-Key': string;
+      };
+      path: {
+        orgId: string;
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: {
+      content: {
+        'application/json': {
+          credential: string;
+        };
+      };
+    };
+    responses: {
+      /** @description Credential replaced (the value is never returned) */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            /** @constant */
+            has_credential: true;
+            id: string;
+          };
+        };
+      };
+      /** @description Validation failed (application/problem+json) */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Authentication required */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Permission denied */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Not found (also returned for objects of other tenants) */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+    };
+  };
+  get_api_v1_compatibility: {
+    parameters: {
+      query?: {
+        vendor_key?: string;
+        lifecycle?:
+          'planned' | 'researched' | 'implemented' | 'lab-validated' | 'production-validated';
+        adapter_key?: string;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Registry rows (database mirror of @ecloud/adapters) */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            data: components['schemas']['CompatibilityEntry'][];
+          };
+        };
+      };
+      /** @description Validation failed (application/problem+json) */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Authentication required */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Permission denied */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Not found (also returned for objects of other tenants) */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+    };
+  };
+  get_api_v1_compatibility_key: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        key: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Registry row */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['CompatibilityEntry'];
+        };
+      };
+      /** @description Validation failed (application/problem+json) */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Authentication required */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Permission denied */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Not found (also returned for objects of other tenants) */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+    };
+  };
+  get_api_v1_vendors: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Vendors */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            data: components['schemas']['Vendor'][];
+          };
+        };
+      };
+      /** @description Validation failed (application/problem+json) */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Authentication required */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Permission denied */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Not found (also returned for objects of other tenants) */
+      404: {
         headers: {
           [name: string]: unknown;
         };

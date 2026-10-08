@@ -6,18 +6,25 @@ import {
   POLICY_FIELDS,
   type AdapterFieldDeclaration,
   type AdapterFieldStatus,
+  type EvidenceLevel,
   type PolicyField,
 } from '@ecloud/shared';
 import type { AdapterCapabilities, AttributeDeclaration } from './capabilities.js';
 
 const EV = 'fixture (test only)';
+/** Fixture evidence level (input-only addition, plan §8.1 AC2). */
+const lvl = (status: AdapterFieldStatus): EvidenceLevel =>
+  status === 'VERIFIED_SUPPORTED' ? 'VERIFIED_FROM_SOURCE' : 'DOCUMENTED';
 
 function fields(
   overrides: Partial<Record<PolicyField, AdapterFieldStatus>>,
   base: AdapterFieldStatus,
 ): Record<PolicyField, AdapterFieldDeclaration> {
   const out = {} as Record<PolicyField, AdapterFieldDeclaration>;
-  for (const f of POLICY_FIELDS) out[f] = { field: f, status: overrides[f] ?? base, evidence: EV };
+  for (const f of POLICY_FIELDS) {
+    const status = overrides[f] ?? base;
+    out[f] = { field: f, status, evidence: EV, evidenceLevel: lvl(status) };
+  }
   return out;
 }
 
@@ -26,7 +33,9 @@ function attrs(
 ): Record<string, AttributeDeclaration> {
   const out: Record<string, AttributeDeclaration> = {};
   for (const [name, status, vendor] of list)
-    out[name] = vendor ? { name, status, evidence: EV, vendor } : { name, status, evidence: EV };
+    out[name] = vendor
+      ? { name, status, evidence: EV, evidenceLevel: lvl(status), vendor }
+      : { name, status, evidence: EV, evidenceLevel: lvl(status) };
   return out;
 }
 
@@ -66,9 +75,10 @@ export const captive32: AdapterCapabilities = {
     identifyBy: ['Calling-Station-Id'],
     acctStopEmitted: false,
     evidence: EV,
+    evidenceLevel: 'DOCUMENTED',
   },
-  coaChange: { status: 'UNSUPPORTED', changeable: [], evidence: EV },
-  macAuth: { status: 'VERIFIED_SUPPORTED', evidence: EV },
+  coaChange: { status: 'UNSUPPORTED', changeable: [], evidence: EV, evidenceLevel: 'DOCUMENTED' },
+  macAuth: { status: 'VERIFIED_SUPPORTED', evidence: EV, evidenceLevel: 'VERIFIED_FROM_SOURCE' },
   fields: fields(
     {
       download_rate_kbps: 'VERIFIED_SUPPORTED',

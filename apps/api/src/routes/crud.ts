@@ -85,6 +85,8 @@ export interface CrudConfig {
   /** Post-create hook to add once-only data to the response. */
   afterCreate?: (row: Row, hook: CrudHookContext) => Promise<Row>;
   idempotency?: 'required' | 'optional';
+  /** Runs on the locked row before a delete; throw (e.g. 409) to refuse it. */
+  beforeDelete?: (before: Row, hook: CrudHookContext) => Promise<void>;
 }
 
 function etagHeader(row: Row): Record<string, string> {
@@ -349,7 +351,7 @@ export function crudRoutes(deps: AppDeps, config: CrudConfig): AnyRouteSpec[] {
           config.siteMode === 'none' || config.siteMode === 'self' ? 'organization' : 'any-site',
         params: OrgIdParams,
         responses: { 204: { description: 'Deleted' }, ...problemResponses },
-        handler: async ({ params, ctx }) => {
+        handler: async ({ params, req, ctx }) => {
           await inTenant(deps, params.orgId, async (trx) => {
             let sel = loose(trx)
               .selectFrom(config.table)
@@ -367,6 +369,15 @@ export function crudRoutes(deps: AppDeps, config: CrudConfig): AnyRouteSpec[] {
               config.resource,
               config.permissions.read,
             );
+            if (config.beforeDelete) {
+              await config.beforeDelete(before, {
+                trx,
+                ctx,
+                orgId: params.orgId,
+                req,
+                scratch: {},
+              });
+            }
             if (config.softDelete) {
               await loose(trx)
                 .updateTable(config.table)

@@ -21,6 +21,11 @@ export const ALL_TABLES = Object.freeze([
   'network_devices',
   'wireguard_peers',
   'nas_clients',
+  'vendors',
+  'hardware_models',
+  'firmware_versions',
+  'compatibility_entries',
+  'controllers',
   'identity_providers',
   'user_groups',
   'users',
@@ -60,6 +65,11 @@ export const SEED_TABLES = Object.freeze([
   'adapter_types',
   'roles',
   'role_permissions',
+  // compatibility-registry mirror (migration 019), upserted by `seed` from @ecloud/adapters
+  'vendors',
+  'hardware_models',
+  'firmware_versions',
+  'compatibility_entries',
 ] as const satisfies readonly TableName[]);
 
 /** Everything a test may truncate between cases (seeds survive). */
@@ -78,6 +88,7 @@ export const TENANT_SCOPED_TABLES = Object.freeze([
   'network_devices',
   'nas_clients',
   'wireguard_peers',
+  'controllers',
   'identity_providers',
   'user_groups',
   'users',

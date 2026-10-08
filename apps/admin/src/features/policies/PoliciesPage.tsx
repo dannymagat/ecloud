@@ -11,7 +11,7 @@ export function PoliciesPage() {
     title: 'Policies',
     singular: 'Policy',
     description:
-      'Bandwidth and access intent. The editor shows, per adapter, whether each field is device-enforced, ECLOUD-side, unverified or unsupported.',
+      'Bandwidth and access intent. The editor shows, per adapter, whether each field is lab validated, expected from source (not device-tested), ECLOUD-side, unverified or unsupported.',
     path: '/api/v1/orgs/{orgId}/policies',
     permissions: { read: 'policy:read', delete: 'policy:delete' },
     columns: [

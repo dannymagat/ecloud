@@ -170,6 +170,7 @@ describe('translate — attribute gating (D-028)', () => {
           name: 'Idle-Timeout',
           status: 'UNSUPPORTED' as const,
           evidence: 'fixture',
+          evidenceLevel: 'DOCUMENTED' as const,
         },
       },
     };

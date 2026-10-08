@@ -409,4 +409,93 @@ await describeIntegration('isolation: tenant cases T-01…T-15 (database level)'
       { action: 'platform:access', target_id: t.b.organizationId, reason },
     ]);
   });
+
+  // ------------------------------------------------------------------ 019 multi-vendor tables
+
+  it('T-02/T-09 controllers: A sees its own controller only; B controller invisible by id', async () => {
+    const rows = await withTenant(dbs.app, t.a.organizationId, (trx) =>
+      trx.selectFrom('controllers').select(['id', 'organization_id']).execute(),
+    );
+    expect(rows.map((r) => r.id)).toContain(t.a.controllerId);
+    expect(rows.every((r) => r.organization_id === t.a.organizationId)).toBe(true);
+    const foreign = await withTenant(dbs.app, t.a.organizationId, (trx) =>
+      trx.selectFrom('controllers').select('id').where('id', '=', t.b.controllerId).execute(),
+    );
+    expectNoRows(foreign, 'B controller by id');
+  });
+
+  it('T-03 controllers: composite FKs refuse a site or controller of another organization', async () => {
+    const insertWithForeignSite = `INSERT INTO controllers (organization_id, site_id, vendor_key, name, kind, base_url)
+      VALUES ($1, $2, 'ezelink', 'foreign site', 'on_premises', 'https://10.0.0.1/')`;
+    // ... in A's tenant context (FK checks ignore RLS, the composite key still refuses)
+    await inRolledBackTransaction(dbs.appPool, t.a.organizationId, async (client) => {
+      const probe = await sqlProbe(client, insertWithForeignSite, [t.a.organizationId, t.b.siteId]);
+      expect(probe.ok).toBe(false);
+      expect(probe.code, probe.message).toBe('23503');
+    });
+    // ... and even on the platform (BYPASSRLS) connection
+    await inRolledBackTransaction(dbs.platformPool, null, async (client) => {
+      const probe = await sqlProbe(client, insertWithForeignSite, [t.a.organizationId, t.b.siteId]);
+      expect(probe.code, probe.message).toBe('23503');
+    });
+    for (const table of ['nas_clients', 'network_devices'] as const) {
+      const ownId = table === 'nas_clients' ? t.a.nasClientId : t.a.rows[table]?.value;
+      await inRolledBackTransaction(dbs.appPool, t.a.organizationId, async (client) => {
+        const probe = await sqlProbe(
+          client,
+          `UPDATE ${table} SET controller_id = $1 WHERE id = $2`,
+          [t.b.controllerId, ownId],
+        );
+        expect(probe.ok, `${table} -> B controller`).toBe(false);
+        expect(probe.code, probe.message).toBe('23503');
+      });
+    }
+    // the own controller is accepted
+    await inRolledBackTransaction(dbs.appPool, t.a.organizationId, async (client) => {
+      const probe = await sqlProbe(
+        client,
+        'UPDATE network_devices SET controller_id = $1 WHERE id = $2',
+        [t.a.controllerId, t.a.rows.network_devices?.value],
+      );
+      expect(probe.ok, probe.message).toBe(true);
+      expect(probe.rowCount).toBe(1);
+    });
+  });
+
+  it('controllers: base_url must be https and the credential an envelope (CHECK constraints)', async () => {
+    for (const [baseUrl, credential] of [
+      ['http://10.0.0.1/', null],
+      ['https://user@10.0.0.1/', null],
+      ['https://10.0.0.1/#x', null],
+      ['https://10.0.0.1/', 'clear-text-credential'],
+    ] as const) {
+      await inRolledBackTransaction(dbs.appPool, t.a.organizationId, async (client) => {
+        const probe = await sqlProbe(
+          client,
+          `INSERT INTO controllers (organization_id, vendor_key, name, kind, base_url, credential_secret_ref)
+           VALUES ($1, 'ezelink', 'chk', 'on_premises', $2, $3)`,
+          [t.a.organizationId, baseUrl, credential],
+        );
+        expect(probe.code, `${baseUrl} ${String(credential)}: ${probe.message ?? 'ok'}`).toBe(
+          '23514',
+        );
+      });
+    }
+  });
+
+  it('registry mirror tables are readable but read-only for ecloud_app', async () => {
+    expect(await countOf(dbs.appPool, 'SELECT count(*)::int AS n FROM compatibility_entries')).toBe(
+      await countOf(dbs.platformPool, 'SELECT count(*)::int AS n FROM compatibility_entries'),
+    );
+    for (const statement of [
+      "INSERT INTO vendors (key, name, lifecycle, roadmap_phase, registry_hash) VALUES ('evil', 'Evil', 'planned', 'phase-c', repeat('0', 64))",
+      "UPDATE compatibility_entries SET lifecycle = 'production-validated'",
+      'DELETE FROM hardware_models',
+      "UPDATE firmware_versions SET version = 'x'",
+    ]) {
+      await inRolledBackTransaction(dbs.appPool, t.a.organizationId, async (client) => {
+        expectDenied(await sqlProbe(client, statement), undefined, statement);
+      });
+    }
+  });
 });

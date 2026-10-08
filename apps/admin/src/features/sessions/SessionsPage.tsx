@@ -58,10 +58,10 @@ function SessionsScreen() {
     const key = n.adapter_key ?? n.adapter_type_key;
     if (typeof key === 'string') adapterOfNas.set(n.id, key);
   }
-  const disconnectStatus = new Map<string, unknown>();
+  const disconnectCap = new Map<string, { status?: unknown; evidence_level?: unknown }>();
   for (const a of (catalogue.data?.adapters ?? []) as unknown as Row[]) {
-    const d = a.disconnect as { status?: unknown } | undefined;
-    disconnectStatus.set(str(a.key), d?.status);
+    const d = a.disconnect as { status?: unknown; evidence_level?: unknown } | undefined;
+    disconnectCap.set(str(a.key), d ?? {});
   }
   const endpointAvailable = hasOperation(doc.data, 'post', DISCONNECT_PATH);
 
@@ -69,7 +69,8 @@ function SessionsScreen() {
     const adapterKey =
       typeof row.nas_client_id === 'string' ? (adapterOfNas.get(row.nas_client_id) ?? null) : null;
     return disconnectGate({
-      status: adapterKey ? disconnectStatus.get(adapterKey) : undefined,
+      status: adapterKey ? disconnectCap.get(adapterKey)?.status : undefined,
+      evidenceLevel: adapterKey ? disconnectCap.get(adapterKey)?.evidence_level : undefined,
       adapterKey,
       hasPermission: can(me, 'session:disconnect', {
         organizationId: orgId,
@@ -83,7 +84,7 @@ function SessionsScreen() {
     <div>
       <PageHeader
         title="Sessions"
-        description="RADIUS sessions reported by NAS accounting. Disconnect is offered only for adapters whose disconnect support is verified on a real device."
+        description="RADIUS sessions reported by NAS accounting. Disconnect is offered only for adapters whose disconnect support is lab validated on a recorded device test."
       />
       <Card>
         <div className="mb-3 w-48">

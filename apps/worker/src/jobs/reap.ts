@@ -2,6 +2,8 @@
  * `sessions.reap`: an active session with no accounting for longer than
  * 2 × interim interval + grace is closed as `stopped` / `lost_interim` (AAA §5.3 missing-Stop
  * rule (2), with the Phase 3 threshold). A late Interim revives it (accounting/drain.ts).
+ * `stale` sessions (marked by Accounting-On/Off, NAS restart) follow the same rule: without a
+ * later Interim / Start that revives them they are closed after the same grace period.
  */
 import { withPlatform, type Db } from '@ecloud/db';
 import { sql } from 'kysely';
@@ -46,7 +48,7 @@ export async function reapSessions(deps: ReapDeps): Promise<number> {
         terminate_cause: LOST_INTERIM_CAUSE,
         stopped_at: sql<Date>`COALESCE(last_interim_at, started_at)`,
       })
-      .where('status', '=', 'active')
+      .where('status', 'in', ['active', 'stale'])
       .where(sql<boolean>`COALESCE(last_interim_at, started_at) < ${cutoff}`)
       .returning([
         'id',

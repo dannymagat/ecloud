@@ -213,6 +213,15 @@ function sessionQuery(trx: DbTransaction) {
     ]);
 }
 
+/**
+ * A session may only be attached to records of the NAS that owns it: same organization AND the
+ * same NAS client (Class / Acct-Unique-Session-Id are NAS-supplied and can be echoed by another
+ * tenant's NAS; roaming between NAS creates a new session per NAS, SIM-18).
+ */
+function ownedBy(session: SessionRow, nas: NasInfo): boolean {
+  return session.organization_id === nas.organization_id && session.nas_client_id === nas.id;
+}
+
 /** Class → session id, else acct_unique_id, else (NAS, Acct-Session-Id) of an open session. */
 async function findSession(
   trx: DbTransaction,
@@ -227,12 +236,12 @@ async function findSession(
     const byClass = await sessionQuery(trx)
       .where('se.id', '=', rec.classSessionId)
       .executeTakeFirst();
-    if (byClass && byClass.organization_id === nas.organization_id) return byClass;
+    if (byClass && ownedBy(byClass, nas)) return byClass;
   }
   const byUnique = await sessionQuery(trx)
     .where('se.acct_unique_id', '=', rec.acctUniqueId)
     .executeTakeFirst();
-  if (byUnique && byUnique.organization_id === nas.organization_id) return byUnique;
+  if (byUnique && ownedBy(byUnique, nas)) return byUnique;
   const byNas = await sessionQuery(trx)
     .where('se.nas_client_id', '=', nas.id)
     .where('se.acct_session_id', '=', rec.acctSessionId)
@@ -246,7 +255,7 @@ async function createSession(
   trx: DbTransaction,
   rec: NormalizedAccounting,
   nas: NasInfo,
-): Promise<SessionRow> {
+): Promise<SessionRow | null> {
   const user =
     rec.username === null
       ? undefined
@@ -302,10 +311,64 @@ async function createSession(
     })
     .onConflict((oc) => oc.column('acct_unique_id').doNothing())
     .execute();
+  // Re-read scoped to the authenticated organization AND NAS: when the (globally unique)
+  // acct_unique_id already belongs to another tenant's / NAS's session the insert above was a
+  // no-op and that foreign row must never be returned (cross-tenant attribution defect, SIM-18).
   const created = await sessionQuery(trx)
     .where('se.acct_unique_id', '=', rec.acctUniqueId)
-    .executeTakeFirstOrThrow();
-  return created;
+    .where('se.organization_id', '=', nas.organization_id)
+    .where('se.nas_client_id', '=', nas.id)
+    .executeTakeFirst();
+  return created ?? null;
+}
+
+export const ACCT_UNIQUE_ID_COLLISION_ACTION = 'accounting:acct_unique_id_collision';
+/** At most one collision audit row per (NAS, acct_unique_id) within this window. */
+export const COLLISION_AUDIT_WINDOW_S = 3600;
+
+/**
+ * Security anomaly: an authenticated NAS reported an Acct-Unique-Session-Id that belongs to a
+ * session of another NAS (possibly another tenant). The record is kept for the reporting
+ * organization without a session; no session or usage counter changes. The audit row is
+ * platform-level (organization_id NULL) so neither tenant learns about the other.
+ */
+async function recordCollision(
+  trx: DbTransaction,
+  rec: NormalizedAccounting,
+  nas: NasInfo,
+): Promise<void> {
+  await insertAccountingRecord(trx, rec, nas.organization_id, null);
+  // One audit row per (NAS, acct_unique_id) per window: a NAS retransmitting / interim-updating a
+  // colliding session must not flood the audit log (review F6). Every record is still stored.
+  const recent = await trx
+    .selectFrom('audit_logs')
+    .select('id')
+    .where('action', '=', ACCT_UNIQUE_ID_COLLISION_ACTION)
+    .where('target_id', '=', nas.id)
+    .where(sql<boolean>`after->>'acct_unique_id' = ${rec.acctUniqueId}`)
+    .where('created_at', '>', sql<Date>`now() - make_interval(secs => ${COLLISION_AUDIT_WINDOW_S})`)
+    .limit(1)
+    .executeTakeFirst();
+  if (recent !== undefined) return;
+  await trx
+    .insertInto('audit_logs')
+    .values({
+      organization_id: null,
+      actor_type: 'system',
+      actor_id: null,
+      action: ACCT_UNIQUE_ID_COLLISION_ACTION,
+      target_type: 'nas_client',
+      target_id: nas.id,
+      after: JSON.stringify({
+        reporting_organization_id: nas.organization_id,
+        nas_client_id: nas.id,
+        acct_unique_id: rec.acctUniqueId,
+        acct_session_id: rec.acctSessionId,
+        radacctid: String(rec.radacctId),
+        status_type: rec.statusType,
+      }),
+    })
+    .execute();
 }
 
 function sessionEventData(
@@ -373,19 +436,24 @@ export async function processRecord(
   rec: NormalizedAccounting,
   nasCache: Map<string, NasInfo | null> = new Map(),
 ): Promise<RecordResult> {
+  // Tenant attribution comes from the authenticated packet source only (migration 014):
+  // NAS-IP-Address is NAS-supplied and could name another tenant's NAS.
+  const nas = rec.packetSrcIp === null ? null : await lookupNas(trx, rec.packetSrcIp, nasCache);
+
   const prior = await trx
     .selectFrom('accounting_records')
     .select(sql<boolean>`bool_or(raw->>'radacctid' = ${String(rec.radacctId)})`.as('same'))
-    .select((eb) => eb.fn.countAll<number>().as('n'))
+    // records of OTHER organizations sharing this (NAS-chosen) id must not change our count
+    .select(
+      sql<number>`count(*) FILTER (WHERE organization_id IS NOT DISTINCT FROM ${nas?.organization_id ?? null}::uuid)`.as(
+        'n',
+      ),
+    )
     .where('acct_unique_id', '=', rec.acctUniqueId)
     .executeTakeFirstOrThrow();
   if (prior.same === true) return { outcome: 'duplicate', touchedSessionId: null };
   /** First accounting packet of this session: counts towards usage_counters.session_count. */
   const firstRecord = Number(prior.n) === 0;
-
-  // Tenant attribution comes from the authenticated packet source only (migration 014):
-  // NAS-IP-Address is NAS-supplied and could name another tenant's NAS.
-  const nas = rec.packetSrcIp === null ? null : await lookupNas(trx, rec.packetSrcIp, nasCache);
 
   if (rec.statusType === 'accounting_on' || rec.statusType === 'accounting_off') {
     await insertAccountingRecord(trx, rec, nas?.organization_id ?? null, null);
@@ -419,6 +487,10 @@ export async function processRecord(
       return { outcome: 'unresolved', touchedSessionId: null };
     }
     session = await createSession(trx, rec, nas);
+    if (session === null) {
+      await recordCollision(trx, rec, nas);
+      return { outcome: 'unresolved', touchedSessionId: null };
+    }
     isNew = true;
   }
 
@@ -440,6 +512,19 @@ export async function processRecord(
   let stoppedAt: Date | null | undefined;
   let lastInterimAt: Date | null | undefined;
   let revived = false;
+  // A session the reaper / Accounting-On closed or marked stale that reports again: its last
+  // sign of life is this packet, whatever the type, so the reaper cannot close it again on the
+  // old timestamp (review F5). Interim updates set last_interim_at below anyway.
+  const wasDormant =
+    status === 'stale' ||
+    status === 'expired' ||
+    (status === 'stopped' && terminateCause === 'lost_interim');
+  if (wasDormant && rec.statusType !== 'interim') {
+    lastInterimAt =
+      session.last_interim_at !== null && session.last_interim_at > rec.receivedAt
+        ? session.last_interim_at
+        : rec.receivedAt;
+  }
   if (rec.statusType === 'stop') {
     status = 'stopped';
     terminateCause = rec.terminateCause ?? terminateCause ?? 'unknown';

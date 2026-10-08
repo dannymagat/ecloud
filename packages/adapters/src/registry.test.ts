@@ -293,15 +293,18 @@ describe('buildReplyAttributes / renderConfig', () => {
 
   it('declaration helpers reject duplicates and gaps', () => {
     expect(() =>
-      fieldTable([decl('vlan_id', 'UNSUPPORTED', 'x'), decl('vlan_id', 'UNSUPPORTED', 'x')]),
+      fieldTable([
+        decl('vlan_id', 'UNSUPPORTED', 'DOCUMENTED', 'x'),
+        decl('vlan_id', 'UNSUPPORTED', 'DOCUMENTED', 'x'),
+      ]),
     ).toThrow('duplicate declaration for vlan_id');
-    expect(() => fieldTable([decl('vlan_id', 'UNSUPPORTED', 'x')])).toThrow(
+    expect(() => fieldTable([decl('vlan_id', 'UNSUPPORTED', 'DOCUMENTED', 'x')])).toThrow(
       'missing declaration for download_rate_kbps',
     );
     expect(() =>
       attributeTable([
-        { name: 'Class', status: 'UNSUPPORTED', evidence: 'x' },
-        { name: 'Class', status: 'UNSUPPORTED', evidence: 'x' },
+        { name: 'Class', status: 'UNSUPPORTED', evidence: 'x', evidenceLevel: 'DOCUMENTED' },
+        { name: 'Class', status: 'UNSUPPORTED', evidence: 'x', evidenceLevel: 'DOCUMENTED' },
       ]),
     ).toThrow('duplicate attribute declaration for Class');
   });

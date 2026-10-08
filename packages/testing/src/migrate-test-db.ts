@@ -4,6 +4,7 @@ import {
   pgExecutor,
   runMigrations,
   seedCatalogue,
+  seedRegistry,
   type MigrationResult,
 } from '@ecloud/db';
 import pg from 'pg';
@@ -39,8 +40,15 @@ export interface MigrateTestDatabaseOptions {
    * @ecloud/db: other suites share the database and must not reset it.
    */
   reset?: boolean;
-  /** Run `seedCatalogue` after migrating (default true). */
+  /** Run `seedCatalogue` + `seedRegistry` after migrating (default true). */
   seed?: boolean;
+  /**
+   * Upgrade-path probe (requires `reset`): migrate only up to and including `version`, run `run`
+   * on that older schema (e.g. insert legacy rows), then apply the remaining migrations. Lets
+   * the schema suite prove that a migration's backfill works on a database at the previous
+   * version, not only on a fresh one.
+   */
+  atVersion?: { version: string; run: (client: pg.Client) => Promise<void> };
 }
 
 export interface MigrateTestDatabaseResult {
@@ -76,10 +84,13 @@ export function migrateTestDatabase(
   }
   const reset = options.reset === true;
   const seed = options.seed !== false;
+  if (options.atVersion !== undefined && !reset) {
+    throw new Error('migrateTestDatabase({ atVersion }) requires reset: true');
+  }
   const key = `${databaseUrl}|${String(reset)}|${String(seed)}`;
   let pending = memo.get(key);
   if (pending === undefined) {
-    pending = migrateOnce(databaseUrl, reset, seed);
+    pending = migrateOnce(databaseUrl, reset, seed, options.atVersion);
     memo.set(key, pending);
     pending.catch(() => memo.delete(key));
   }
@@ -90,6 +101,7 @@ async function migrateOnce(
   databaseUrl: string,
   reset: boolean,
   seed: boolean,
+  atVersion?: MigrateTestDatabaseOptions['atVersion'],
 ): Promise<MigrateTestDatabaseResult> {
   configureTypeParsers();
   const client = new pg.Client({
@@ -100,8 +112,25 @@ async function migrateOnce(
   try {
     const exec = pgExecutor(client);
     if (reset) await client.query(RESET_SQL);
-    const results = await runMigrations(exec, discoverMigrations(), { actor: 'ecloud-test' });
-    if (seed) await seedCatalogue(exec);
+    const files = discoverMigrations();
+    let earlier: MigrationResult[] = [];
+    if (atVersion !== undefined) {
+      earlier = await runMigrations(
+        exec,
+        files.filter((f) => f.version <= atVersion.version),
+        { actor: 'ecloud-test' },
+      );
+      await atVersion.run(client);
+    }
+    const later = await runMigrations(exec, files, { actor: 'ecloud-test' });
+    const results = [
+      ...earlier.filter((r) => r.state === 'applied'),
+      ...later.filter((r) => atVersion === undefined || r.state === 'applied'),
+    ];
+    if (seed) {
+      await seedCatalogue(exec);
+      await seedRegistry(exec);
+    }
     return {
       databaseUrl,
       results,

@@ -4,7 +4,9 @@
  */
 import { hashPassword } from '@ecloud/db';
 import { ScheduleRuleSchema, isValidTimeZone } from '@ecloud/policy-engine';
-import { NotFoundError } from '@ecloud/shared';
+import { NotFoundError, ValidationError } from '@ecloud/shared';
+import type { DbTransaction } from '@ecloud/db';
+import { sql } from 'kysely';
 import { z } from 'zod';
 import { writeAudit } from '../audit.js';
 import { requestIsImpersonating } from '../auth/middleware.js';
@@ -15,6 +17,7 @@ import { ImpersonationForbiddenError } from '../http/errors.js';
 import { defineRoute, type AnyRouteSpec } from '../http/route.js';
 import { assertRef, inTenant, requireOnSite } from '../tenant.js';
 import { NAS_ADAPTER_KEYS } from '../nas-adapter.js';
+import { assertControllerFor, resolveDeploymentMode } from './controllers.js';
 import { crudRoutes, loose, type Row } from './crud.js';
 
 const MAC_RE = /^([0-9A-Fa-f]{2}[:-]?){5}[0-9A-Fa-f]{2}$/;
@@ -57,6 +60,8 @@ const SiteUpdate = z.strictObject({
   settings: z.record(z.string(), z.unknown()).optional(),
 });
 
+const DEPLOYMENT_MODES = ['native', 'gateway'] as const;
+
 const NetworkDeviceCreate = z.strictObject({
   site_id: z.uuid(),
   serial: z.string().trim().min(1).max(128),
@@ -69,6 +74,12 @@ const NetworkDeviceCreate = z.strictObject({
     .regex(/^[a-z][a-z0-9_-]{1,63}$/)
     .nullable()
     .optional(),
+  /** Migration 019: compatibility-registry references and the managing controller. */
+  hardware_model_id: z.uuid().nullable().optional(),
+  firmware_version_id: z.uuid().nullable().optional(),
+  controller_id: z.uuid().nullable().optional(),
+  /** false for third-party APs behind a gateway that ECLOUD does not configure. */
+  managed: z.boolean().optional(),
 });
 const NetworkDeviceUpdate = NetworkDeviceCreate.partial().omit({ serial: true });
 
@@ -83,6 +94,10 @@ const NasCreate = z.strictObject({
   coa_port: z.number().int().min(1).max(65535).nullable().optional(),
   coa_supported: z.boolean().nullable().optional(),
   require_message_authenticator: z.boolean().optional(),
+  /** Migration 019: defaults from the compatibility registry rows of `adapter_key`. */
+  deployment_mode: z.enum(DEPLOYMENT_MODES).optional(),
+  /** Migration 019: a controller of the same organization (and of the NAS site when site-bound). */
+  controller_id: z.uuid().nullable().optional(),
 });
 const NasUpdate = NasCreate.partial().extend({ status: z.enum(['active', 'disabled']).optional() });
 
@@ -130,6 +145,68 @@ const ScheduleUpdate = ScheduleCreate.partial();
 
 // ---------------------------------------------------------------------------------------------
 
+/** Effective value of a PATCHed column: the body's when present (null clears), else the row's. */
+function patched(body: Row, before: Row, key: string): unknown {
+  return body[key] !== undefined ? body[key] : before[key];
+}
+
+/** controller_id on PATCH: re-check when the controller or the site changes (G9 + site rule). */
+async function assertControllerOnPatch(trx: DbTransaction, body: Row, before: Row): Promise<void> {
+  const controllerId = patched(body, before, 'controller_id');
+  if (typeof controllerId !== 'string') return;
+  if (body.controller_id === undefined && body.site_id === undefined) return;
+  await assertControllerFor(
+    trx,
+    controllerId,
+    patched(body, before, 'site_id') as string,
+    'body.controller_id',
+  );
+}
+
+/**
+ * Registry references of a network device (019): the model / firmware must exist in the
+ * platform mirror and agree with each other; the controller must belong to the organization.
+ */
+async function assertDeviceRefs(trx: DbTransaction, body: Row, before: Row): Promise<void> {
+  const modelId = patched(body, before, 'hardware_model_id');
+  const firmwareId = patched(body, before, 'firmware_version_id');
+  if (typeof body.hardware_model_id === 'string') {
+    const model = await trx
+      .selectFrom('hardware_models')
+      .select('id')
+      .where('id', '=', body.hardware_model_id)
+      .executeTakeFirst();
+    if (model === undefined) {
+      throw new ValidationError([
+        { path: 'body.hardware_model_id', message: 'unknown hardware model' },
+      ]);
+    }
+  }
+  if (
+    typeof firmwareId === 'string' &&
+    (body.firmware_version_id !== undefined || body.hardware_model_id !== undefined)
+  ) {
+    const firmware = await sql<{ hardware_model_id: string | null }>`
+      SELECT hardware_model_id FROM firmware_versions WHERE id = ${firmwareId}
+    `.execute(trx);
+    const row = firmware.rows[0];
+    if (row === undefined) {
+      throw new ValidationError([
+        { path: 'body.firmware_version_id', message: 'unknown firmware version' },
+      ]);
+    }
+    if (row.hardware_model_id !== null && row.hardware_model_id !== modelId) {
+      throw new ValidationError([
+        {
+          path: 'body.firmware_version_id',
+          message: 'the firmware version belongs to another hardware model',
+        },
+      ]);
+    }
+  }
+  await assertControllerOnPatch(trx, body, before);
+}
+
 function withoutKeys(row: Row, keys: readonly string[]): Row {
   const out: Row = {};
   for (const [k, v] of Object.entries(row)) if (!keys.includes(k)) out[k] = v;
@@ -176,10 +253,12 @@ export function resourceRoutes(deps: AppDeps): AnyRouteSpec[] {
     updateSchema: NetworkDeviceUpdate,
     prepareCreate: async (body, { trx }) => {
       await assertRef(trx, 'sites', body.site_id as string, 'site');
+      await assertDeviceRefs(trx, body, {});
       return body;
     },
-    preparePatch: async (body, _before, { trx }) => {
+    preparePatch: async (body, before, { trx }) => {
       if (typeof body.site_id === 'string') await assertRef(trx, 'sites', body.site_id, 'site');
+      await assertDeviceRefs(trx, body, before);
       return body;
     },
   });
@@ -208,24 +287,62 @@ export function resourceRoutes(deps: AppDeps): AnyRouteSpec[] {
       if (typeof body.network_device_id === 'string') {
         await assertRef(hook.trx, 'network_devices', body.network_device_id, 'network_device');
       }
+      if (typeof body.controller_id === 'string') {
+        await assertControllerFor(
+          hook.trx,
+          body.controller_id,
+          body.site_id as string,
+          'body.controller_id',
+        );
+      }
+      const deploymentMode = resolveDeploymentMode(
+        body.adapter_key as string,
+        body.deployment_mode as 'native' | 'gateway' | undefined,
+      );
       // 32 random bytes → 43 base64url chars; RADIUS shared secrets ≤ 128 octets.
       const secret = randomToken(32);
       hook.scratch.secret = secret;
       return {
         ...body,
+        deployment_mode: deploymentMode,
         adapter_type_key: body.adapter_key,
         secret_ref: sealSecretRef(dataEnvelope, secret),
       };
     },
     afterCreate: (row, hook) => Promise.resolve({ ...row, secret: hook.scratch.secret }),
-    preparePatch: async (body, _before, { trx }) => {
+    preparePatch: async (body, before, { trx }) => {
       if (typeof body.site_id === 'string') await assertRef(trx, 'sites', body.site_id, 'site');
       if (typeof body.network_device_id === 'string') {
         await assertRef(trx, 'network_devices', body.network_device_id, 'network_device');
       }
-      return typeof body.adapter_key === 'string'
-        ? { ...body, adapter_type_key: body.adapter_key }
-        : body;
+      await assertControllerOnPatch(trx, body, before);
+      const next: Row =
+        typeof body.adapter_key === 'string'
+          ? { ...body, adapter_type_key: body.adapter_key }
+          : { ...body };
+      if (body.deployment_mode !== undefined || typeof body.adapter_key === 'string') {
+        const adapterKey = (body.adapter_key ?? before.adapter_key) as string | null;
+        if (adapterKey !== null) {
+          if (body.deployment_mode !== undefined) {
+            next.deployment_mode = resolveDeploymentMode(
+              adapterKey,
+              body.deployment_mode as 'native' | 'gateway',
+            );
+          } else {
+            // adapter changed without a mode: keep the current mode when the new adapter allows
+            // it, else fall back to the new adapter's default
+            try {
+              next.deployment_mode = resolveDeploymentMode(
+                adapterKey,
+                before.deployment_mode as 'native' | 'gateway',
+              );
+            } catch {
+              next.deployment_mode = resolveDeploymentMode(adapterKey, undefined);
+            }
+          }
+        }
+      }
+      return next;
     },
   });
 

@@ -6,6 +6,8 @@
  *   status [--json]                           show applied / pending / changed; exit 2 if not clean
  *   baseline                                  record every file as applied without running it
  *   seed                                      upsert permission catalogue + role templates (@ecloud/shared)
+ *                                             and the compatibility-registry mirror (@ecloud/adapters)
+ *   registry-check [--json]                   compare the registry mirror with @ecloud/adapters; exit 2 on drift
  *   ensure-partitions [--months-ahead N]      create monthly partitions (default 2 months ahead)
  *   create-platform-admin --email E --password-stdin [--display-name N]
  *
@@ -27,6 +29,7 @@ import {
   type MigrationExecutor,
 } from './migrate.js';
 import { DEFAULT_MONTHS_AHEAD, ensureMonthPartitions } from './partitions.js';
+import { seedRegistry, verifyRegistryMirror } from './registry-seed.js';
 import { seedCatalogue } from './seed.js';
 
 const COMMANDS = [
@@ -34,6 +37,7 @@ const COMMANDS = [
   'status',
   'baseline',
   'seed',
+  'registry-check',
   'ensure-partitions',
   'create-platform-admin',
 ] as const;
@@ -45,7 +49,9 @@ commands:
   migrate [--dry-run]                      apply pending migrations
   status [--json]                          report migration state (exit 2 when not clean)
   baseline                                 record all files as applied without executing them
-  seed                                     upsert permission catalogue and role templates
+  seed                                     upsert permission catalogue, role templates and the
+                                           compatibility-registry mirror (hash-checked)
+  registry-check [--json]                  compare the registry mirror with the code (exit 2 on drift)
   ensure-partitions [--months-ahead N]     create monthly partitions ahead of time (default ${String(DEFAULT_MONTHS_AHEAD)})
   create-platform-admin --email E --password-stdin [--display-name N]
 
@@ -175,8 +181,33 @@ export async function main(
           `  template ${t.key.padEnd(22)} ${String(t.permissionCount).padStart(3)} permissions (+${String(t.added)} -${String(t.removed)}) v${String(t.templateVersion)}${t.created ? ' created' : ''}`,
         );
       }
+      const registry = await withClient(url, (exec) => seedRegistry(exec));
+      out(
+        `  registry: ${String(registry.vendors.total)} vendors (+${String(registry.vendors.inserted)} ~${String(registry.vendors.updated)}), ${String(registry.hardwareModels.total)} hardware models (+${String(registry.hardwareModels.inserted)}), ${String(registry.firmwareVersions.total)} firmware versions (+${String(registry.firmwareVersions.inserted)}), ${String(registry.entries.total)} compatibility entries (+${String(registry.entries.inserted)} ~${String(registry.entries.updated)} -${String(registry.entries.removed.length)})`,
+      );
+      out(`  registry hash: ${registry.registryHash} (mirror verified)`);
+      if (registry.check.orphans.length > 0) {
+        out(
+          `  WARNING: ${String(registry.check.orphans.length)} registry-mirror rows are no longer in the registry: ${registry.check.orphans.join(', ')}`,
+        );
+      }
       out('seed: done');
       return 0;
+    }
+    case 'registry-check': {
+      const check = await withClient(url, (exec) => verifyRegistryMirror(exec));
+      if (values.json) {
+        out(JSON.stringify(check, null, 2));
+      } else {
+        for (const m of check.mismatches) out(`  mismatch  ${m}`);
+        for (const o of check.orphans) out(`  orphan    ${o}`);
+        out(
+          check.ok
+            ? `registry-check: ok (${check.registryHash})`
+            : `registry-check: ${String(check.mismatches.length)} mismatches (registry ${check.registryHash}, database ${check.mirrorHash})`,
+        );
+      }
+      return check.ok ? 0 : 2;
     }
     case 'ensure-partitions': {
       const monthsAhead =

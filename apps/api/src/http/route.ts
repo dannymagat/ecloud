@@ -36,6 +36,8 @@ export type ScopeResolver =
   | 'platform'
   | 'organization'
   | 'any-site'
+  /** any binding of the principal that holds the permission (organization-independent reads) */
+  | 'any-binding'
   | ((req: Request, params: Record<string, string>) => AuthzTarget);
 
 export interface ResponseSpec {
@@ -111,6 +113,7 @@ function resolveTarget(
   if (scope === 'platform') return {};
   if (scope === 'organization') return { organizationId: params.orgId ?? null };
   if (scope === 'any-site') return { organizationId: params.orgId ?? null, anySite: true };
+  if (scope === 'any-binding') return { anyBinding: true };
   return scope(req, params);
 }
 
@@ -126,7 +129,7 @@ export function mountRoute(router: Router, deps: AppDeps, spec: AnyRouteSpec): v
     const rawParams = req.params as Record<string, string>;
     if (spec.permission !== undefined && spec.scope !== undefined) {
       const target = resolveTarget(spec.scope, req, rawParams);
-      const memoKey = `${spec.permission}|${target.organizationId ?? ''}|${target.siteId ?? ''}|${String(target.anySite ?? false)}`;
+      const memoKey = `${spec.permission}|${target.organizationId ?? ''}|${target.siteId ?? ''}|${String(target.anySite ?? false)}|${String(target.anyBinding ?? false)}`;
       let allowed = ctx.decisions.get(memoKey);
       if (allowed === undefined) {
         allowed = evaluate(ctx.principal, spec.permission, target);

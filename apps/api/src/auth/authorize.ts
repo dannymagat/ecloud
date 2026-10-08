@@ -18,6 +18,11 @@ export interface AuthzTarget {
    * must then re-check with the concrete `siteId`.
    */
   readonly anySite?: boolean;
+  /**
+   * Catalogue reads that are not tied to one organization (e.g. the compatibility registry):
+   * allow when ANY binding of the principal grants the permission, whatever its scope.
+   */
+  readonly anyBinding?: boolean;
 }
 
 /** Throws at definition time for keys that are not in the catalogue (fail at boot, not at runtime). */
@@ -30,6 +35,7 @@ export function assertPermissionKey(permission: string): PermissionKey {
 
 function grantCovers(grant: Grant, target: AuthzTarget): boolean {
   if (grant.scopeType === 'platform') return true;
+  if (target.anyBinding === true) return true;
   if (target.organizationId === undefined || target.organizationId === null) return false;
   if (grant.organizationId !== target.organizationId) return false;
   if (grant.scopeType === 'organization') return true;
@@ -52,7 +58,13 @@ export function evaluate(
   const definition = getPermission(permission);
   if (definition === undefined) return false;
   if (principal.kind === 'admin' && principal.impersonation !== null) {
-    if (target.organizationId !== principal.impersonation.organizationId) return false;
+    // An impersonating session only holds the impersonation grant of the target organization
+    // (auth/principal.ts), so an any-binding read is still pinned to that organization.
+    if (
+      target.anyBinding !== true &&
+      target.organizationId !== principal.impersonation.organizationId
+    )
+      return false;
     if (definition.platformOnly) return false;
   }
   const applicable = principal.grants.filter((grant) => grantCovers(grant, target));

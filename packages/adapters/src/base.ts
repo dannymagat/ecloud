@@ -7,6 +7,8 @@ import {
   POLICY_FIELDS,
   type AdapterFieldDeclaration,
   type AdapterFieldStatus,
+  type EvidenceLevel,
+  type EvidenceRef,
 } from '@ecloud/shared';
 import {
   translate,
@@ -34,24 +36,59 @@ export interface AdapterExtras {
   readonly renderConfig?: (plan: EnforcementPlan) => ConfigFragment | Unsupported;
 }
 
-/** Helper for terse declaration tables. */
+/**
+ * Evidence text plus its structured references (plan §4.1). A plain string is accepted for
+ * declarations whose level needs no structured reference (DOCUMENTED).
+ */
+export interface SourcedEvidence {
+  readonly text: string;
+  readonly refs: readonly EvidenceRef[];
+}
+
+export type EvidenceInput = string | SourcedEvidence;
+
+/** Bundles evidence text with its references. */
+export function sourced(text: string, refs: readonly EvidenceRef[]): SourcedEvidence {
+  return { text, refs };
+}
+
+function evidenceParts(evidence: EvidenceInput): {
+  evidence: string;
+  evidenceRefs?: readonly EvidenceRef[];
+} {
+  if (typeof evidence === 'string') return { evidence };
+  return evidence.refs.length > 0
+    ? { evidence: evidence.text, evidenceRefs: evidence.refs }
+    : { evidence: evidence.text };
+}
+
+/** Helper for terse declaration tables; `evidenceLevel` is required (plan §8.1). */
 export function decl(
   field: PolicyField,
   status: AdapterFieldStatus,
-  evidence: string,
+  evidenceLevel: EvidenceLevel,
+  evidence: EvidenceInput,
   note?: string,
 ): AdapterFieldDeclaration {
-  return note ? { field, status, evidence, note } : { field, status, evidence };
+  return { field, status, ...evidenceParts(evidence), evidenceLevel, ...(note ? { note } : {}) };
 }
 
 export function attr(
   name: string,
   status: AdapterFieldStatus,
-  evidence: string,
+  evidenceLevel: EvidenceLevel,
+  evidence: EvidenceInput,
   vendor?: RadiusVendor,
   note?: string,
 ): AttributeDeclaration {
-  return { name, status, evidence, ...(vendor ? { vendor } : {}), ...(note ? { note } : {}) };
+  return {
+    name,
+    status,
+    ...evidenceParts(evidence),
+    evidenceLevel,
+    ...(vendor ? { vendor } : {}),
+    ...(note ? { note } : {}),
+  };
 }
 
 /** Builds the `fields` record from a list and asserts every POLICY_FIELDS entry appears once. */

@@ -4,8 +4,9 @@
  * site-scoped intent translates; there is no RADIUS reply path at all.
  */
 import type { AdapterCapabilities, EnforcementPlan } from '@ecloud/policy-engine';
-import { attributeTable, createAdapter, decl, fieldTable } from '../base.js';
-import { EV } from '../evidence.js';
+import { attributeTable, createAdapter, decl, fieldTable, sourced } from '../base.js';
+import { EV, EV_SOURCED } from '../evidence.js';
+import { SRC } from '../source-refs.js';
 import type { ConfigFragment, NasAdapter, Unsupported } from '../types.js';
 
 const RATE_VERIFIED =
@@ -22,6 +23,11 @@ const VLAN_RDT =
   'POLICY_ENGINE.md §3.1 row vlan (openwifi-config): static per-SSID VLAN / vlan-awareness VERIFIED CODE — not per client; NETWORK_INTEGRATION.md §7.3 lists no uCentral key mapping a policy vlan_id to an SSID VLAN id → REQUIRES DEVICE TEST';
 const PUSH_VERIFIED =
   "NETWORK_INTEGRATION.md §5 row 'uCentral configure {uuid, when, config}': any schema key (rate-limit, ACL, captive timers …), VERIFIED DOCS (PROTOCOL.md) + CODE (ap_apply.ts l.475-528); re-applies hostapd/uspot → portal sessions reset (VERIFIED DOCS)";
+
+/** Source references back-filled from PHASE2_VALIDATION.md V-rows (rule V10). */
+const RATE_SRC = sourced(RATE_VERIFIED, [SRC.V001]);
+const SESSION_SRC = sourced(SESSION_VERIFIED, [SRC.CAPTIVE_RENDERER_SESSION_TIMEOUT]);
+const IDLE_SRC = sourced(IDLE_VERIFIED, [SRC.V006]);
 
 export const capabilities: AdapterCapabilities = {
   key: 'openwifi-config',
@@ -42,6 +48,7 @@ export const capabilities: AdapterCapabilities = {
     target: 'none',
     identifyBy: [],
     acctStopEmitted: 'unknown',
+    evidenceLevel: 'DOCUMENTED',
     evidence:
       'POLICY_ENGINE.md §3.1 row disconnect (openwifi-config): none. Last-resort PROPOSED fallback: push access-control-list deny for the MAC (keys VERIFIED CODE) — re-applies hostapd/uspot and resets portal sessions (A2 §5)',
     note: 'not an RFC 5176 path; the ACL fallback is PROPOSED only and not implemented here',
@@ -58,43 +65,48 @@ export const capabilities: AdapterCapabilities = {
       'captive.session-timeout',
     ],
     evidence: PUSH_VERIFIED,
+    evidenceLevel: 'DOCUMENTED',
     note: 'a config re-push, not RADIUS CoA; side effect: portal sessions reset (A2 §5) → batch outside schedule windows (POLICY_ENGINE.md §4.3 e)',
   },
   macAuth: {
     status: 'VERIFIED_SUPPORTED',
+    evidenceLevel: 'VERIFIED_FROM_SOURCE',
+    evidenceRefs: [SRC.V012],
     evidence:
       "NETWORK_INTEGRATION.md §2 row 'RADIUS MAC authentication': ssids[].radius.authentication.mac-filter VERIFIED CODE + DOCS; §7.3 keys mac-filter, captive.mac-auth, mac-format",
     usernameRule:
       'format per mac-format key; the RADIUS username/password rule itself is REQUIRES DEVICE TEST for hostapd (A2 §11 item 7)',
   },
   fields: fieldTable([
-    decl('download_rate_kbps', 'VERIFIED_SUPPORTED', RATE_VERIFIED, RATE_NOTE),
-    decl('upload_rate_kbps', 'VERIFIED_SUPPORTED', RATE_VERIFIED, RATE_NOTE),
-    decl('burst_download_kbps', 'UNSUPPORTED', EV.burstAbsent),
-    decl('burst_upload_kbps', 'UNSUPPORTED', EV.burstAbsent),
-    decl('burst_duration_s', 'UNSUPPORTED', EV.burstAbsent),
-    decl('quota_daily_bytes', 'UNSUPPORTED', QUOTA_UNSUPPORTED),
-    decl('quota_monthly_bytes', 'UNSUPPORTED', QUOTA_UNSUPPORTED),
-    decl('quota_total_bytes', 'UNSUPPORTED', QUOTA_UNSUPPORTED),
+    decl('download_rate_kbps', 'VERIFIED_SUPPORTED', 'VERIFIED_FROM_SOURCE', RATE_SRC, RATE_NOTE),
+    decl('upload_rate_kbps', 'VERIFIED_SUPPORTED', 'VERIFIED_FROM_SOURCE', RATE_SRC, RATE_NOTE),
+    decl('burst_download_kbps', 'UNSUPPORTED', 'VERIFIED_FROM_SOURCE', EV_SOURCED.burstAbsent),
+    decl('burst_upload_kbps', 'UNSUPPORTED', 'VERIFIED_FROM_SOURCE', EV_SOURCED.burstAbsent),
+    decl('burst_duration_s', 'UNSUPPORTED', 'VERIFIED_FROM_SOURCE', EV_SOURCED.burstAbsent),
+    decl('quota_daily_bytes', 'UNSUPPORTED', 'DOCUMENTED', QUOTA_UNSUPPORTED),
+    decl('quota_monthly_bytes', 'UNSUPPORTED', 'DOCUMENTED', QUOTA_UNSUPPORTED),
+    decl('quota_total_bytes', 'UNSUPPORTED', 'DOCUMENTED', QUOTA_UNSUPPORTED),
     decl(
       'session_timeout_s',
       'VERIFIED_SUPPORTED',
-      SESSION_VERIFIED,
+      'VERIFIED_FROM_SOURCE',
+      SESSION_SRC,
       'per-SSID default for captive SSIDs only (captive.session-timeout); site-scoped intent only',
     ),
     decl(
       'idle_timeout_s',
       'VERIFIED_SUPPORTED',
-      IDLE_VERIFIED,
+      'VERIFIED_FROM_SOURCE',
+      IDLE_SRC,
       'per-SSID default (max-inactivity); site-scoped intent only',
     ),
-    decl('max_concurrent_sessions', 'UNSUPPORTED', EV.configOnlyNoPerClient),
-    decl('max_devices', 'UNSUPPORTED', EV.configOnlyNoPerClient),
-    decl('valid_from', 'UNSUPPORTED', EV.configOnlyNoPerClient),
-    decl('valid_until', 'UNSUPPORTED', EV.configOnlyNoPerClient),
-    decl('voucher_validity', 'UNSUPPORTED', EV.configOnlyNoPerClient),
-    decl('schedule_id', 'UNSUPPORTED', EV.configOnlyNoPerClient),
-    decl('vlan_id', 'REQUIRES_DEVICE_TEST', VLAN_RDT),
+    decl('max_concurrent_sessions', 'UNSUPPORTED', 'DOCUMENTED', EV.configOnlyNoPerClient),
+    decl('max_devices', 'UNSUPPORTED', 'DOCUMENTED', EV.configOnlyNoPerClient),
+    decl('valid_from', 'UNSUPPORTED', 'DOCUMENTED', EV.configOnlyNoPerClient),
+    decl('valid_until', 'UNSUPPORTED', 'DOCUMENTED', EV.configOnlyNoPerClient),
+    decl('voucher_validity', 'UNSUPPORTED', 'DOCUMENTED', EV.configOnlyNoPerClient),
+    decl('schedule_id', 'UNSUPPORTED', 'DOCUMENTED', EV.configOnlyNoPerClient),
+    decl('vlan_id', 'REQUIRES_DEVICE_TEST', 'DOCUMENTED', VLAN_RDT),
   ]),
   attributes: attributeTable([]),
 };

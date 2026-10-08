@@ -54,7 +54,7 @@ const ACTION_DESCRIPTIONS: Readonly<Record<string, string>> = {
   suspend: 'Suspend {label}',
   'settings:update': 'Update {label} settings',
   'config:push': 'Push configuration to {label}',
-  'secret:rotate': 'Rotate the shared secret of {label}',
+  'secret:rotate': 'Rotate the shared secret / credential of {label}',
   'key:rotate': 'Rotate the key pair of {label}',
   invite: 'Invite {label}',
   disable: 'Disable {label}',
@@ -110,6 +110,23 @@ const RESOURCES: readonly ResourceSpec[] = [
     label: 'WireGuard peers',
     minScope: 'site',
     actions: ['read', 'create', 'update', 'delete', 'key:rotate'],
+  },
+  {
+    // Vendor hotspot controllers (MULTI_VENDOR_INTEGRATION_PLAN.md §8.2, migration 019). Writes
+    // are organization-level; `read` may be bound at a site so site-scoped bindings see their
+    // site's controllers (organization-wide controllers need an organization binding).
+    resource: 'controller',
+    label: 'hotspot controllers',
+    minScope: 'organization',
+    actions: ['read', 'create', 'update', 'delete', 'secret:rotate'],
+    scopeOverrides: { read: 'site' },
+  },
+  {
+    // The vendor compatibility registry (plan §7): platform-curated, read by every tenant.
+    resource: 'compatibility',
+    label: 'the vendor compatibility registry',
+    minScope: 'organization',
+    actions: ['read'],
   },
   {
     resource: 'administrator',
@@ -338,6 +355,9 @@ export const ROLE_TEMPLATES: readonly RoleTemplate[] = Object.freeze([
     defaultScopeTypes: ['platform'],
     permissions: unique([
       ...READ_KEYS,
+      // 019, written out explicitly (already covered by "all *:read")
+      'controller:read',
+      'compatibility:read',
       'tenant:list',
       'tenant:impersonate',
       'session:disconnect',
@@ -350,7 +370,12 @@ export const ROLE_TEMPLATES: readonly RoleTemplate[] = Object.freeze([
     key: 'org_admin',
     name: 'Organization Admin',
     defaultScopeTypes: ['organization'],
-    permissions: unique(NON_PLATFORM_KEYS),
+    // every non-platform key; the 019 keys are listed explicitly for review (MULTITENANCY §4.3)
+    permissions: unique([
+      ...NON_PLATFORM_KEYS,
+      ...keysOf('controller'),
+      ...keysOf('compatibility'),
+    ]),
   },
   {
     key: 'site_admin',
@@ -360,6 +385,9 @@ export const ROLE_TEMPLATES: readonly RoleTemplate[] = Object.freeze([
       ...keysOf('site', ['read', 'update']),
       ...keysOf('network_device'),
       ...keysOf('nas', ['read']),
+      // 019: follows the nas:read precedent (read-only on controllers and the registry)
+      ...keysOf('controller', ['read']),
+      ...keysOf('compatibility', ['read']),
       ...keysOf('user'),
       ...keysOf('client_device'),
       ...keysOf('policy', ['read', 'preview']),
@@ -389,6 +417,9 @@ export const ROLE_TEMPLATES: readonly RoleTemplate[] = Object.freeze([
       ...keysOf('network_device', ['read']),
       ...keysOf('nas', ['read']),
       ...keysOf('wireguard_peer', ['read']),
+      // 019: operators see controllers and the compatibility registry (read only)
+      ...keysOf('controller', ['read']),
+      ...keysOf('compatibility', ['read']),
     ]),
   },
   {
@@ -397,9 +428,12 @@ export const ROLE_TEMPLATES: readonly RoleTemplate[] = Object.freeze([
     key: 'read_only',
     name: 'Read Only',
     defaultScopeTypes: ['site', 'organization'],
-    permissions: unique(
-      TENANT_READ_KEYS.filter((k) => k !== 'voucher:reveal' && k !== 'audit_log:export'),
-    ),
+    permissions: unique([
+      ...TENANT_READ_KEYS.filter((k) => k !== 'voucher:reveal' && k !== 'audit_log:export'),
+      // 019, written out explicitly (already covered by "every *:read")
+      'controller:read',
+      'compatibility:read',
+    ]),
   },
 ]);
 

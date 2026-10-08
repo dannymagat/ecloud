@@ -1,3 +1,5 @@
+import type { EvidenceLevel, EvidenceRef } from './evidence.js';
+
 /**
  * Owner's four-state enforceability enum (DECISIONS.md D-028). Every adapter reports every
  * policy field with exactly one of these; nothing is presented as device-enforced unless it is
@@ -77,6 +79,10 @@ export interface AdapterFieldDeclaration {
   readonly field: PolicyField;
   readonly status: AdapterFieldStatus;
   readonly evidence: string;
+  /** How the claim is backed (MULTI_VENDOR_INTEGRATION_PLAN.md §4); required, no default. */
+  readonly evidenceLevel: EvidenceLevel;
+  /** Structured references (rule V10: VERIFIED_FROM_SOURCE needs ≥ 1 `source` ref). */
+  readonly evidenceRefs?: readonly EvidenceRef[];
   /** Optional free-text caveat shown in the enforceability preview. */
   readonly note?: string;
 }

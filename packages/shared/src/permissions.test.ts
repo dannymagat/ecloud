@@ -60,6 +60,8 @@ describe('PERMISSION_CATALOGUE', () => {
       network_device: 5,
       nas: 5,
       wireguard_peer: 5,
+      controller: 5, // migration 019 (MULTI_VENDOR_INTEGRATION_PLAN.md §8.2)
+      compatibility: 1,
       administrator: 7, // + mfa_reset (D-038)
       role: 4,
       user: 7,
@@ -165,5 +167,52 @@ describe('ROLE_TEMPLATES', () => {
     expect(readOnly.permissions).not.toContain('voucher:reveal');
     expect(readOnly.permissions).not.toContain('audit_log:export');
     expect(readOnly.permissions.some((k) => getPermission(k)?.platformOnly)).toBe(false);
+  });
+});
+
+describe('multi-vendor keys (MULTI_VENDOR_INTEGRATION_PLAN.md §8.2)', () => {
+  it('adds controller:* and compatibility:read with the documented scopes', () => {
+    expect(
+      PERMISSION_CATALOGUE.filter((p) => p.resource === 'controller').map((p) => p.key),
+    ).toEqual([
+      'controller:read',
+      'controller:create',
+      'controller:update',
+      'controller:delete',
+      'controller:secret:rotate',
+    ]);
+    expect(getPermission('controller:read')).toMatchObject({
+      minScope: 'site',
+      platformOnly: false,
+    });
+    for (const key of ['controller:create', 'controller:update', 'controller:delete'] as const) {
+      expect(getPermission(key)).toMatchObject({ minScope: 'organization', platformOnly: false });
+    }
+    expect(getPermission('controller:secret:rotate')).toMatchObject({
+      minScope: 'organization',
+      platformOnly: false,
+    });
+    expect(getPermission('compatibility:read')).toMatchObject({
+      minScope: 'organization',
+      platformOnly: false,
+    });
+  });
+
+  it('grants them to the templates exactly as §8.2 lists', () => {
+    const newKeys = [
+      'controller:read',
+      'controller:create',
+      'controller:update',
+      'controller:delete',
+      'controller:secret:rotate',
+      'compatibility:read',
+    ];
+    const held = (template: Parameters<typeof getRoleTemplate>[0]) =>
+      newKeys.filter((k) => getRoleTemplate(template).permissions.includes(k as never));
+    expect(held('platform_super_admin')).toEqual(newKeys);
+    expect(held('org_admin')).toEqual(newKeys);
+    for (const template of ['site_admin', 'operator', 'read_only', 'platform_support'] as const) {
+      expect(held(template), template).toEqual(['controller:read', 'compatibility:read']);
+    }
   });
 });

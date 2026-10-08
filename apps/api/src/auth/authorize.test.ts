@@ -104,3 +104,20 @@ describe('evaluate (MULTITENANCY.md §4.4)', () => {
     expect(() => assertPermissionKey('site:explode')).toThrow(/unknown permission key/);
   });
 });
+
+describe('any-binding targets (compatibility registry reads, plan §8.2)', () => {
+  it('allow any binding scope that holds the key, deny without it', () => {
+    const siteOperator = admin([grant('operator', 'site', ORG_A, SITE_A1)]);
+    expect(evaluate(siteOperator, 'compatibility:read', { anyBinding: true })).toBe(true);
+    expect(evaluate(siteOperator, 'compatibility:read', {})).toBe(false);
+    expect(evaluate(admin([]), 'compatibility:read', { anyBinding: true })).toBe(false);
+    // an any-binding target never widens a different key
+    expect(evaluate(siteOperator, 'controller:create', { anyBinding: true })).toBe(false);
+  });
+
+  it('impersonating sessions keep their (target-organization) grant for any-binding reads', () => {
+    const imp = admin([grant('org_admin', 'organization', ORG_B)], ORG_B);
+    expect(evaluate(imp, 'compatibility:read', { anyBinding: true })).toBe(true);
+    expect(evaluate(imp, 'controller:read', { organizationId: ORG_A })).toBe(false);
+  });
+});

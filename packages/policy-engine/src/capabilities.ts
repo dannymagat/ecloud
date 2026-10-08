@@ -3,7 +3,13 @@
  * Defined here (not in `@ecloud/adapters`) so the translation layer stays free of adapter code;
  * `@ecloud/adapters` re-exports the type and ships the five concrete records.
  */
-import type { AdapterFieldDeclaration, AdapterFieldStatus, PolicyField } from '@ecloud/shared';
+import type {
+  AdapterFieldDeclaration,
+  AdapterFieldStatus,
+  EvidenceLevel,
+  EvidenceRef,
+  PolicyField,
+} from '@ecloud/shared';
 
 export const ADAPTER_KEYS = [
   'openwifi-hostapd-radius',
@@ -30,6 +36,9 @@ export type RadiusVendor = 'WISPr' | 'ChilliSpot' | 'CoovaChilli';
 export interface AdapterFlag {
   readonly status: AdapterFieldStatus;
   readonly evidence: string;
+  /** MULTI_VENDOR_INTEGRATION_PLAN.md §4 (additive; required, no default). */
+  readonly evidenceLevel: EvidenceLevel;
+  readonly evidenceRefs?: readonly EvidenceRef[];
   readonly note?: string;
 }
 

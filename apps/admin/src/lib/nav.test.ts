@@ -1,13 +1,20 @@
 // @vitest-environment node
 import {
   ADAPTER_FIELD_STATUSES as SHARED_STATUSES,
+  EVIDENCE_LEVELS as SHARED_EVIDENCE_LEVELS,
   POLICY_FIELDS as SHARED_FIELDS,
   PERMISSION_KEYS,
+  isDeviceEnforced,
 } from '@ecloud/shared';
 import { describe, expect, it } from 'vitest';
 import { adminMe, orgScope, ORG_A, ORG_B, platformScope } from '../test/fixtures';
 import { MFA_RESET_PERMISSION } from '../features/platform/PlatformAdministratorsPage';
-import { ADAPTER_FIELD_STATUSES, POLICY_FIELDS } from './adapterStatus';
+import {
+  ADAPTER_FIELD_STATUSES,
+  EVIDENCE_LEVELS,
+  POLICY_FIELDS,
+  presentStatus,
+} from './adapterStatus';
 import { ORG_NAV, PLATFORM_NAV, visibleOrgNav, visiblePlatformNav } from './nav';
 import { can, canPlatform, organizationIdsOf } from './permissions';
 
@@ -83,5 +90,19 @@ describe('permission-driven navigation', () => {
   it('adapter status and policy field lists match packages/shared (drift guard)', () => {
     expect([...ADAPTER_FIELD_STATUSES]).toEqual([...SHARED_STATUSES]);
     expect([...POLICY_FIELDS]).toEqual([...SHARED_FIELDS]);
+    expect([...EVIDENCE_LEVELS]).toEqual([...SHARED_EVIDENCE_LEVELS]);
+  });
+
+  it('admin deviceEnforced matches shared isDeviceEnforced (V12 drift guard)', () => {
+    for (const status of [...ADAPTER_FIELD_STATUSES, 'UNKNOWN', 'VERIFIED'])
+      for (const level of [...EVIDENCE_LEVELS, undefined, 'LAB']) {
+        // With a device-test reference the admin rule equals the shared rule exactly.
+        expect(
+          presentStatus(status, level, { dtRefs: ['DT-04'] }).deviceEnforced,
+          `${status}/${String(level)}`,
+        ).toBe(isDeviceEnforced(status, level));
+        // Without one, nothing is device-enforced.
+        expect(presentStatus(status, level).deviceEnforced).toBe(false);
+      }
   });
 });

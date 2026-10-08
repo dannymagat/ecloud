@@ -64,8 +64,10 @@ export function PreviewPanel({
     <Card title="Enforceability preview">
       <div className="space-y-4">
         <Notice tone="info">
-          Only <strong>Verified</strong> fields are enforced by the device. “Needs device test”
-          values are sent but unverified; “ECLOUD side” values are enforced by ECLOUD itself
+          <strong>Expected (source-verified, not device-tested)</strong> means the mechanism is
+          confirmed in vendor/firmware source but has not been proven on a lab device. Only{' '}
+          <strong>Lab validated</strong> fields are device-enforced; none are yet. “Needs device
+          test” values are sent but unverified; “ECLOUD side” values are enforced by ECLOUD itself
           (D-028).
         </Notice>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -91,6 +93,7 @@ export function PreviewPanel({
               adapters={toAdapterColumns(catalogue.data.adapters)}
               fields={draftFields}
               caption="Adapter capability catalogue"
+              mode="preview"
             />
           ) : catalogue.isFetching ? (
             <Spinner label="Loading adapter catalogue…" />
@@ -134,7 +137,7 @@ export function PreviewPanel({
                 </dl>
               </details>
             ) : null}
-            <EnforceabilityMatrix adapters={simColumns} fields={rows} />
+            <EnforceabilityMatrix adapters={simColumns} fields={rows} mode="preview" />
           </div>
         ) : null}
       </div>

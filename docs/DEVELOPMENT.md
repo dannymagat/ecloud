@@ -100,7 +100,7 @@ migrations (D-033).
 | Role | Connection | Behaviour |
 | --- | --- | --- |
 | `ecloud_platform` | `DATABASE_URL_PLATFORM` | owner, BYPASSRLS: migrations, worker, `withPlatform()` (audited) |
-| `ecloud_app` | `DATABASE_URL` | FORCE RLS on all 31 tenant-scoped tables; rows visible only inside `withTenant(db, orgId, fn)` which does `SET LOCAL app.current_org`; outside a tenant transaction every tenant table returns 0 rows |
+| `ecloud_app` | `DATABASE_URL` | FORCE RLS on all 32 tenant-scoped tables; rows visible only inside `withTenant(db, orgId, fn)` which does `SET LOCAL app.current_org`; outside a tenant transaction every tenant table returns 0 rows |
 | `ecloud_radius` | FreeRADIUS only | sees only the `radius` schema, insert-only |
 
 Query code receives a `trx` from `withTenant()` / `withPlatform()` (`@ecloud/db`); never run

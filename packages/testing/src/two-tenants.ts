@@ -29,6 +29,8 @@ export interface TenantGraph {
   voucherCodeHash: string;
   nasClientId: string;
   nasIp: string;
+  /** Hotspot controller (migration 019); the NAS references it through `controller_id`. */
+  controllerId: string;
   captivePortalId: string;
   sessionId: string;
   acctUniqueId: string;
@@ -61,6 +63,7 @@ export const TENANT_GRAPH_TABLES: readonly string[] = Object.freeze([
   'invitations',
   'network_devices',
   'wireguard_peers',
+  'controllers',
   'nas_clients',
   'identity_providers',
   'user_groups',
@@ -238,12 +241,29 @@ export async function seedTenantGraph(
   );
   ref('wireguard_peers', wireguardPeerId);
 
+  // Needs the registry mirror (`seedRegistry`) for the vendor FK. The credential column holds an
+  // envelope-shaped placeholder, never a real sealed secret.
+  const controllerId = await insertReturning<string>(
+    db,
+    `INSERT INTO controllers (organization_id, site_id, vendor_key, name, kind, base_url, credential_secret_ref)
+     VALUES ($1, $2, 'ezelink', $3, 'on_premises', $4, $5) RETURNING id`,
+    [
+      organizationId,
+      siteId,
+      `controller ${slug}`,
+      `https://controller-${token}.example.test`,
+      `enc:v1.test.${token}.placeholder`,
+    ],
+  );
+  ref('controllers', controllerId);
+
   const nasIp = randomIp(172);
   const nasClientId = await insertReturning<string>(
     db,
-    `INSERT INTO nas_clients (organization_id, site_id, name, nas_ip, adapter_type_key, adapter_key, secret_ref)
-     VALUES ($1, $2, $3, $4, 'coovachilli-uam', 'coovachilli-uam', $5) RETURNING id`,
-    [organizationId, siteId, `NAS ${slug}`, nasIp, `secret://test/${slug}`],
+    `INSERT INTO nas_clients (organization_id, site_id, name, nas_ip, adapter_type_key, adapter_key, secret_ref,
+                              deployment_mode, controller_id)
+     VALUES ($1, $2, $3, $4, 'coovachilli-uam', 'coovachilli-uam', $5, 'gateway', $6) RETURNING id`,
+    [organizationId, siteId, `NAS ${slug}`, nasIp, `secret://test/${slug}`, controllerId],
   );
   ref('nas_clients', nasClientId);
 
@@ -431,6 +451,7 @@ export async function seedTenantGraph(
     voucherCodeHash,
     nasClientId,
     nasIp,
+    controllerId,
     captivePortalId,
     sessionId,
     acctUniqueId,

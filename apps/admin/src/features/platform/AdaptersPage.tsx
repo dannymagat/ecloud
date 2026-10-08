@@ -1,4 +1,7 @@
-/** Adapter capability catalogue: four-state status of every policy field per adapter (D-028). */
+/**
+ * Adapter capability catalogue: four-state status (D-028) × evidence level
+ * (MULTI_VENDOR_INTEGRATION_PLAN.md §4.4) of every policy field per adapter.
+ */
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../../api/client';
 import type { Row } from '../../api/types';
@@ -30,7 +33,7 @@ function Screen() {
     <div className="space-y-6">
       <PageHeader
         title="Adapters"
-        description="What each NAS adapter can enforce. Only Verified entries have passed a recorded real-device test; hover a badge for its evidence."
+        description="What each NAS adapter can enforce. Verified (source) = mechanism confirmed in source code, expected but not device-tested; Lab validated = proven on a recorded device test. No adapter is lab validated yet. Hover a badge for its evidence."
       />
       <Card title="Policy fields">
         <EnforceabilityMatrix
@@ -70,10 +73,14 @@ function Screen() {
                   </th>
                   {adapters.map((a) => {
                     const cap = a[action.key] as
-                      { status?: unknown; evidence?: string } | undefined;
+                      { status?: unknown; evidence?: string; evidence_level?: unknown } | undefined;
                     return (
                       <td key={a.key as string} className="px-3 py-2">
-                        <StatusBadge status={cap?.status} evidence={cap?.evidence} />
+                        <StatusBadge
+                          status={cap?.status}
+                          evidence={cap?.evidence}
+                          evidenceLevel={cap?.evidence_level}
+                        />
                       </td>
                     );
                   })}

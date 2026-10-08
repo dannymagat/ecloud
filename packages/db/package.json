@@ -26,6 +26,7 @@
     "seed": "node dist/cli.js seed"
   },
   "dependencies": {
+    "@ecloud/adapters": "*",
     "@ecloud/shared": "*",
     "argon2": "^0.45.1",
     "kysely": "^0.29.6",

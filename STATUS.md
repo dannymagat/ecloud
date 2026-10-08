@@ -80,7 +80,10 @@ Out of Phase 3 scope: portal UI beyond skeleton (Phase 6), backups (Phase 10), a
 |---|---|---|
 | 1 | M9 Reproducible container images for api/worker/portal/admin (local build + compose `app` profile; no deployment) | **DONE 2026-10-08** — see cycle log |
 | 2 | M10 Storage abstraction (D-026): interface, local + S3-compatible drivers, contract tests | **DONE 2026-10-08** — see cycle log |
-| 3+ | M11 Multi-vendor foundation L1–L4 | NEXT |
+| 3 | M11-L1 Reconcile hotspot spec + MULTI_VENDOR_INTEGRATION_PLAN.md + registry design | **DONE 2026-10-08** — see cycle log |
+| 4 | M11-L2 Vendor-neutral contract, evidence levels, registry code, admin label fix | **DONE 2026-10-08** — see cycle log |
+| 5 | M11-L3 Additive multi-vendor data structures (migration 019, controllers, registry mirror) | **DONE 2026-10-08** — see cycle log |
+| 6 | M11-L4 Simulator contracts (SIMULATOR_TESTED only) | **DONE 2026-10-08** — SIM-01…SIM-18 all pass (SIM-14 unblocked by vendor quirks hook) |
 
 ### Cycle log
 **Cycle 1 — M9 container images — DONE 2026-10-08**
@@ -88,6 +91,44 @@ Out of Phase 3 scope: portal UI beyond skeleton (Phase 6), backups (Phase 10), a
 - Review: independent security review → PASS WITH FIXES (low/info only: nginx CSP + hidden paths, XFF, runtime tidy, doc precision). Fixed in one round.
 - Tests: four amd64 images built; all `/healthz` 200; SPA loads in a headless browser with 0 CSP violations; portal stops with exit 0; images refuse to start in production mode with dev defaults or local storage without opt-in.
 - Not done (VPS change-list items, gated by D-031): digest pinning, apt pinning, registry push, multi-arch CI. radclient 3.2.1 in the worker image vs FreeRADIUS 3.2.10 server.
+
+**Cycle 3 — M11-L1 multi-vendor reconciliation and plan — DONE 2026-10-08**
+- `MULTI_VENDOR_INTEGRATION_PLAN.md` (691 lines): reconciliation R-01…R-43 (decision register wins), code-grounded discovery, evidence model (four-state status + evidence level + lifecycle, validator rules V1–V12), native vs gateway architecture, nine-operation vendor-neutral contract, compatibility registry schema and initial rows, L2–L4 shapes and acceptance criteria.
+- Cambium: researched only from 9 cited public URLs (all re-read by the reviewer); no adapter, no invented endpoints. 21 other roadmap vendors + 2 legacy candidates: planned, capabilities UNKNOWN.
+- Found live defect R-10: the admin app describes "Verified" as "verified by a recorded device test" while no cell has device evidence → fixed in L2. Conservative rule V12 applied: only LAB_VALIDATED evidence reads as device-enforced; source-verified cells read "Expected (source-verified, not device-tested)".
+- Review: PASS WITH FIXES (5 medium, 8 low; no fabrication; counts 29 cells / 40 attributes recomputed). All fixed in one round; orchestrator confirmed.
+- Owner questions raised: OQ-1 dashboard in ECLOUD admin vs EZECONTROL, OQ-2 Arabic/RTL release 1, OQ-3 Cambium model/firmware/cnMaestro, OQ-6 per-site fail-open, OQ-16 confirm VERIFIED_SUPPORTED = source-verified semantics (applied conservatively), OQ-17 controller fetch policy.
+
+**Cycle 4 — M11-L2 vendor-neutral contract, evidence levels, registry — DONE 2026-10-08**
+- Implemented: `EvidenceLevel`/`Lifecycle` enums; `evidenceLevel` + `evidenceRefs` on every adapter declaration; 29 verified cells and 40 attributes back-filled to PHASE2 V-rows (all VERIFIED_FROM_SOURCE); typed compatibility registry (30 rows, 27 vendors; first-party rows derived from the engine; EZEGATE coova-chilli 1.2.9 presented REQUIRES_DEVICE_TEST pending DT-15; Cambium researched only; 23 roadmap vendors planned/UNKNOWN); validator V1–V12 with a negative test per rule; nine-operation `VendorAdapter` wrappers for the five first-party adapters (UAM md verified timing-safe, replay and tenant checks mandatory, PAP encoding matches reference); admin labels fixed (R-10): "Verified (source)" / "Expected (source-verified, not device-tested)", "Lab validated" only with a DT reference; Disconnect button requires device-enforced status.
+- First-party behaviour unchanged: golden and capabilities tests untouched; reviewer compared HEAD vs working tree on 30 translate/reply/disconnect cases with 0 differences.
+- Review: PASS WITH FIXES (4 medium: DT coverage not checked by V3, production lifecycle allowed, optional replay check, 3 cells with weak evidence). All fixed; the 3 cells were resolved by a fresh source read → new ledger rows V-146 (upstream uspot interim), V-147 (upstream uspot MAC auth), V-148 (CoovaChilli MAC auth). Orchestrator spot-checked V-148 in `chilli.c` and corrected CAPTIVE_PORTAL_ARCHITECTURE.md (CoovaChilli `macpasswd` has no default; unset → MAC-based User-Name).
+- Tests: npm test 573 passed; integration 818 passed, 1 skipped (S3 contract); secrets scan OK.
+- Open: API does not yet emit evidence levels (L3); accounting normaliser duplicated until L3 relocation; `unknown_nas` vs `bad_signature` ordering — portal must map all failures to one generic page.
+
+**Cycle 5 — M11-L3 multi-vendor data structures — DONE 2026-10-08**
+- Migrations 019 (vendors, hardware_models, firmware_versions, compatibility_entries mirror; tenant table `controllers` with FORCE RLS, same-org composite FKs, https-only base_url, sealed credential; `nas_clients.deployment_mode` + `controller_id`; network_devices model/firmware/controller/managed) and 020 (no userinfo in base_url). Additive only.
+- `ecloud-db seed` mirrors the code registry with a hash check; `ecloud-db registry-check` detects drift (hash 7197825…f646 verified).
+- Permissions: controller:read/create/update/delete/secret:rotate, compatibility:read (105 total). Endpoints: GET /compatibility[/{key}], GET /vendors, controllers CRUD + rotate-credential (refused under impersonation; credential write-only, never returned or audited). Adapter catalogue now emits evidence_level, device_enforced, dt_refs from the registry.
+- Closed L2 deviations: worker re-exports the adapters accounting normaliser (duplicate deleted); webhook URL guard moved to `packages/shared/src/net-guard.ts`.
+- Fixed the SIM-18 cross-tenant accounting defect (every session match scoped to organization + NAS; collisions stored without a session and audited at platform level, deduped hourly) and the stale-session reaper.
+- Review: PASS WITH FIXES (2 medium URL-guard gaps `https://localhost./` and `[::127.0.0.1]`; 4 low). All fixed; orchestrator confirmed both bypasses now rejected.
+
+**Vendor quirks hook (SIM-14) — DONE 2026-10-08:** report-only 32-bit counter-wrap detection for openwifi-uspot-uam; worker output unchanged. Open: the worker does not act on wrap anomalies yet, so usage after a wrap is still under-counted.
+
+**Orchestrator verification after cycles 3–6 (2026-10-08):** build, lint, format:check, secrets scan OK; registry-check ok; integration 952 passed, 1 skipped (S3 contract without endpoint) across 81 files. Simulator evidence (SIMULATOR_TESTED, code behaviour only): openwifi-uspot-uam and coovachilli-uam — redirectParse, authorizationHandoff (PAP only), accountingNormalize. Registry promotion of these claims is not yet applied.
+
+**Cycle 6 — M11-L4 simulator contracts — DONE 2026-10-08**
+- Implemented SIM-01…SIM-18 (`tests/simulators`, helpers `packages/testing/src/simulators`): forged/tampered/missing md, unknown NAS, cross-tenant, replay, open-redirect payloads, byte-for-byte opaque preservation, PAP/CHAP vectors (recomputed independently with Python hashlib by the reviewer), accounting retransmit/out-of-order/missing Stop/Gigawords/32-bit wrap/NAS reboot/multi-NAS roaming, unsupported policy, Disconnect mandatory attributes. Machine-readable `SIMULATOR_RESULTS.json` bound to its run (run id + outcome hash).
+- **Defects found by the simulators:** (1) SIM-18 cross-tenant accounting attribution in the worker drainer → fixed in L3; (2) SIM-07 `userurl` values with backslashes (`http:\\evil.example`, `https:/\\evil.example/`, `http://evil\\@x`) accepted after normalisation → orchestrator fixed `safeUserUrl` to refuse any backslash.
+- Evidence (SIMULATOR_TESTED, code behaviour only, not hardware): openwifi-uspot-uam redirectParse + authorizationHandoff; coovachilli-uam redirectParse + authorizationHandoff + accountingNormalize. Withheld: uspot accountingNormalize (SIM-14 needs the vendor quirks hook). authorizationHandoff evidence is PAP only. Registry promotion not yet applied.
+- Review: PASS WITH FIXES; fixed. Tests: simulators 62 passed + 1 todo with DB (four consecutive runs); npm test 651 passed.
+- Note: one transient failure was seen while another agent ran tests on the same test database concurrently; drain tests do not take the production lock. Single full integration runs are unaffected.
+
+**Security finding from cycle 6 (L4 simulators), 2026-10-08 — CLOSED: fixed in cycle 5 (L3), reviewed, SIM-18 and worker regression tests pass.**
+- Defect: `apps/worker/src/accounting/drain.ts` `createSession` inserts with `ON CONFLICT (acct_unique_id) DO NOTHING` and re-reads by `acct_unique_id` without an organization check. `acctuniqueid` is derived from NAS-supplied Class + Acct-Session-Id, so an authenticated NAS of organization B that echoes organization A's values gets its accounting attached to A's session (simulator observed A's counters overwritten and A's session stopped).
+- Scope: local code only; nothing is deployed, so no production impact. Pinned as a failing test (`tests/simulators/db.integration.test.ts`, `[DEFECT]`); the fix must turn it green and add a worker regression test.
+- Related: stale sessions (after Accounting-On/Off) are never closed by the reaper.
 
 **Orchestrator verification after cycles 1–2 (2026-10-08):** build, lint, format:check, secrets scan OK; integration 743 passed, 1 skipped (S3 contract without endpoint) across 63 files.
 

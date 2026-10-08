@@ -3,7 +3,7 @@
  * matrix, support impersonation (D-027 / MULTITENANCY.md §4.5). All run on the platform
  * connection via `withPlatform(reason)`, which writes the `platform:access` audit row.
  */
-import { isAdapterKey, listAdapters } from '@ecloud/adapters';
+import { adapterCellEvidence, isAdapterKey, listAdapters } from '@ecloud/adapters';
 import { withPlatform } from '@ecloud/db';
 import { ForbiddenError, NotFoundError, POLICY_FIELDS, newId } from '@ecloud/shared';
 import { z } from 'zod';
@@ -361,6 +361,17 @@ export function platformRoutes(deps: AppDeps): AnyRouteSpec[] {
       const body = {
         adapters: listAdapters().map((adapter) => {
           const caps = adapter.capabilities();
+          // Evidence comes only from the compatibility registry rows of this engine adapter
+          // (MULTI_VENDOR_INTEGRATION_PLAN.md §8.1 AC4a / V12): `device_enforced` is true only
+          // when every registry row presents the cell as LAB/PRODUCTION-validated with a DT.
+          const evidence = (capability: string) => {
+            const e = adapterCellEvidence(caps.key, capability);
+            return {
+              evidence_level: e?.evidenceLevel ?? null,
+              device_enforced: e?.deviceEnforced ?? false,
+              dt_refs: e?.dtRefs ?? [],
+            };
+          };
           return {
             key: caps.key,
             version: caps.version,
@@ -370,19 +381,34 @@ export function platformRoutes(deps: AppDeps): AnyRouteSpec[] {
               field,
               status: caps.fields[field].status,
               evidence: caps.fields[field].evidence,
+              ...evidence(field),
               ...(caps.fields[field].note ? { note: caps.fields[field].note } : {}),
             })),
             disconnect: {
               status: caps.disconnect.status,
               evidence: caps.disconnect.evidence,
+              ...evidence('disconnect'),
               target: caps.disconnect.target,
             },
-            coa_change: { status: caps.coaChange.status, evidence: caps.coaChange.evidence },
-            mac_auth: { status: caps.macAuth.status, evidence: caps.macAuth.evidence },
+            coa_change: {
+              status: caps.coaChange.status,
+              evidence: caps.coaChange.evidence,
+              ...evidence('coaChange'),
+            },
+            mac_auth: {
+              status: caps.macAuth.status,
+              evidence: caps.macAuth.evidence,
+              ...evidence('macAuth'),
+            },
+            // Reply attributes are not registry cells: the level is the engine declaration's
+            // (from which the registry derives), and no attribute is device-enforced (no DT).
             attributes: Object.values(caps.attributes).map((a) => ({
               name: a.name,
               status: a.status,
               evidence: a.evidence,
+              evidence_level: a.evidenceLevel,
+              device_enforced: false,
+              dt_refs: [],
             })),
           };
         }),

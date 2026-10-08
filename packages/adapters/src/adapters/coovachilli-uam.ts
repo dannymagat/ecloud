@@ -4,8 +4,9 @@
  * gateway test is still due (POLICY_ENGINE.md §9.3 item 10).
  */
 import type { AdapterCapabilities } from '@ecloud/policy-engine';
-import { attr, attributeTable, createAdapter, decl, fieldTable } from '../base.js';
+import { attr, attributeTable, createAdapter, decl, fieldTable, sourced } from '../base.js';
 import { EV } from '../evidence.js';
+import { SRC } from '../source-refs.js';
 import type { NasAdapter } from '../types.js';
 
 const RATE_VERIFIED =
@@ -26,6 +27,14 @@ const VLAN_RDT =
   'CAPTIVE_PORTAL_ARCHITECTURE.md §7.5 row VLAN: CoovaChilli-VLAN-Id → REQUIRES DEVICE TEST; POLICY_ENGINE.md §3.1 row vlan (coovachilli-uam)';
 const DISCONNECT_RDT =
   'CAPTIVE_PORTAL_ARCHITECTURE.md §4 CoA/Disconnect bullet: coaport (default 0 = disabled), source must be a configured RADIUS server unless coanoipcheck, User-Name mandatory, Acct-Session-Id optional (VERIFIED FROM OFFICIAL DOCUMENTATION); gateway test still due (POLICY_ENGINE.md §9.3 item 10, D4) → REQUIRES DEVICE TEST; AAA_ARCHITECTURE.md §6 row CoovaChilli';
+
+/** Source references back-filled from PHASE2_VALIDATION.md V-rows (rule V10). */
+const RATE_SRC = sourced(RATE_VERIFIED, [SRC.V073]);
+const QUOTA_SRC = sourced(QUOTA_VERIFIED, [SRC.V073]);
+const TIMEOUT_SRC = sourced(TIMEOUT_VERIFIED, [SRC.V073]);
+const IDLE_SRC = sourced(IDLE_VERIFIED, [SRC.V073]);
+const INTERIM_SRC = sourced(INTERIM_VERIFIED, [SRC.V073]);
+const CLASS_SRC = sourced(CLASS_VERIFIED, [SRC.V073]);
 
 export const capabilities: AdapterCapabilities = {
   key: 'coovachilli-uam',
@@ -69,6 +78,7 @@ export const capabilities: AdapterCapabilities = {
     identifyBy: ['User-Name', 'Acct-Session-Id'],
     acctStopEmitted: true,
     evidence: DISCONNECT_RDT,
+    evidenceLevel: 'DOCUMENTED',
     note: 'Disconnect terminates with cause Admin-Reset; coaport must be enabled on the gateway (default 0)',
   },
   coaChange: {
@@ -94,95 +104,169 @@ export const capabilities: AdapterCapabilities = {
     ],
     evidence:
       'CAPTIVE_PORTAL_ARCHITECTURE.md §4 CoA/Disconnect bullet: CoA re-applies config_radius_session (timeouts/bandwidth/quota) and honours CoovaChilli-Session-State (VERIFIED FROM OFFICIAL DOCUMENTATION); POLICY_ENGINE.md §3.1 row coa_change (coovachilli-uam): VERIFIED DOCS',
+    evidenceLevel: 'DOCUMENTED',
     note: 'live confirmation on the EZE gateway pending (POLICY_ENGINE.md §9.3 item 10); same coaport/source-IP preconditions as Disconnect',
   },
   macAuth: {
     status: 'VERIFIED_SUPPORTED',
+    evidenceLevel: 'VERIFIED_FROM_SOURCE',
+    evidenceRefs: [SRC.V148],
     evidence:
       'CAPTIVE_PORTAL_ARCHITECTURE.md §4 MAC auth bullet: macauth, macreauth, macsuffix, macpasswd (default password) (VERIFIED FROM OFFICIAL DOCUMENTATION)',
-    usernameRule: 'User-Name = MAC (+ macsuffix); User-Password = macpasswd (default "password")',
+    usernameRule:
+      'User-Name = MAC (+ macsuffix); User-Password = macpasswd, else the User-Name itself; Service-Type Framed (chilli.c auth_radius, V-148)',
   },
   fields: fieldTable([
     decl(
       'download_rate_kbps',
       'VERIFIED_SUPPORTED',
-      RATE_VERIFIED,
+      'VERIFIED_FROM_SOURCE',
+      RATE_SRC,
       'emit one family only (POLICY_ENGINE.md §4.1)',
     ),
     decl(
       'upload_rate_kbps',
       'VERIFIED_SUPPORTED',
-      RATE_VERIFIED,
+      'VERIFIED_FROM_SOURCE',
+      RATE_SRC,
       'emit one family only (POLICY_ENGINE.md §4.1)',
     ),
-    decl('burst_download_kbps', 'UNSUPPORTED', EV.burstRadius),
-    decl('burst_upload_kbps', 'UNSUPPORTED', EV.burstRadius),
-    decl('burst_duration_s', 'UNSUPPORTED', EV.burstRadius),
-    decl('quota_daily_bytes', 'VERIFIED_SUPPORTED', QUOTA_VERIFIED, QUOTA_NOTE),
-    decl('quota_monthly_bytes', 'VERIFIED_SUPPORTED', QUOTA_VERIFIED, QUOTA_NOTE),
-    decl('quota_total_bytes', 'VERIFIED_SUPPORTED', QUOTA_VERIFIED, QUOTA_NOTE),
-    decl('session_timeout_s', 'VERIFIED_SUPPORTED', TIMEOUT_VERIFIED),
-    decl('idle_timeout_s', 'VERIFIED_SUPPORTED', IDLE_VERIFIED),
-    decl('max_concurrent_sessions', 'ECLOUD_SIDE_ONLY', EV.concurrencyEcloudSide),
-    decl('max_devices', 'ECLOUD_SIDE_ONLY', EV.concurrencyEcloudSide),
-    decl('valid_from', 'ECLOUD_SIDE_ONLY', EV.validityEcloudSide),
-    decl('valid_until', 'ECLOUD_SIDE_ONLY', EV.validityEcloudSide),
-    decl('voucher_validity', 'ECLOUD_SIDE_ONLY', EV.voucherEcloudSide),
-    decl('schedule_id', 'ECLOUD_SIDE_ONLY', EV.scheduleEcloudSide),
-    decl('vlan_id', 'REQUIRES_DEVICE_TEST', VLAN_RDT),
+    decl('burst_download_kbps', 'UNSUPPORTED', 'DOCUMENTED', EV.burstRadius),
+    decl('burst_upload_kbps', 'UNSUPPORTED', 'DOCUMENTED', EV.burstRadius),
+    decl('burst_duration_s', 'UNSUPPORTED', 'DOCUMENTED', EV.burstRadius),
+    decl('quota_daily_bytes', 'VERIFIED_SUPPORTED', 'VERIFIED_FROM_SOURCE', QUOTA_SRC, QUOTA_NOTE),
+    decl(
+      'quota_monthly_bytes',
+      'VERIFIED_SUPPORTED',
+      'VERIFIED_FROM_SOURCE',
+      QUOTA_SRC,
+      QUOTA_NOTE,
+    ),
+    decl('quota_total_bytes', 'VERIFIED_SUPPORTED', 'VERIFIED_FROM_SOURCE', QUOTA_SRC, QUOTA_NOTE),
+    decl('session_timeout_s', 'VERIFIED_SUPPORTED', 'VERIFIED_FROM_SOURCE', TIMEOUT_SRC),
+    decl('idle_timeout_s', 'VERIFIED_SUPPORTED', 'VERIFIED_FROM_SOURCE', IDLE_SRC),
+    decl('max_concurrent_sessions', 'ECLOUD_SIDE_ONLY', 'DOCUMENTED', EV.concurrencyEcloudSide),
+    decl('max_devices', 'ECLOUD_SIDE_ONLY', 'DOCUMENTED', EV.concurrencyEcloudSide),
+    decl('valid_from', 'ECLOUD_SIDE_ONLY', 'DOCUMENTED', EV.validityEcloudSide),
+    decl('valid_until', 'ECLOUD_SIDE_ONLY', 'DOCUMENTED', EV.validityEcloudSide),
+    decl('voucher_validity', 'ECLOUD_SIDE_ONLY', 'DOCUMENTED', EV.voucherEcloudSide),
+    decl('schedule_id', 'ECLOUD_SIDE_ONLY', 'DOCUMENTED', EV.scheduleEcloudSide),
+    decl('vlan_id', 'REQUIRES_DEVICE_TEST', 'DOCUMENTED', VLAN_RDT),
   ]),
   attributes: attributeTable([
-    attr('WISPr-Bandwidth-Max-Down', 'VERIFIED_SUPPORTED', RATE_VERIFIED, 'WISPr', 'bit/s'),
-    attr('WISPr-Bandwidth-Max-Up', 'VERIFIED_SUPPORTED', RATE_VERIFIED, 'WISPr', 'bit/s'),
+    attr(
+      'WISPr-Bandwidth-Max-Down',
+      'VERIFIED_SUPPORTED',
+      'VERIFIED_FROM_SOURCE',
+      RATE_SRC,
+      'WISPr',
+      'bit/s',
+    ),
+    attr(
+      'WISPr-Bandwidth-Max-Up',
+      'VERIFIED_SUPPORTED',
+      'VERIFIED_FROM_SOURCE',
+      RATE_SRC,
+      'WISPr',
+      'bit/s',
+    ),
     attr(
       'CoovaChilli-Bandwidth-Max-Down',
       'VERIFIED_SUPPORTED',
-      RATE_VERIFIED,
+      'VERIFIED_FROM_SOURCE',
+      RATE_SRC,
       'CoovaChilli',
       'kbit/s',
     ),
     attr(
       'CoovaChilli-Bandwidth-Max-Up',
       'VERIFIED_SUPPORTED',
-      RATE_VERIFIED,
+      'VERIFIED_FROM_SOURCE',
+      RATE_SRC,
       'CoovaChilli',
       'kbit/s',
     ),
-    attr('CoovaChilli-Max-Total-Octets', 'VERIFIED_SUPPORTED', QUOTA_VERIFIED, 'CoovaChilli'),
-    attr('CoovaChilli-Max-Total-Gigawords', 'VERIFIED_SUPPORTED', QUOTA_VERIFIED, 'CoovaChilli'),
-    attr('CoovaChilli-Max-Input-Octets', 'VERIFIED_SUPPORTED', QUOTA_VERIFIED, 'CoovaChilli'),
-    attr('CoovaChilli-Max-Input-Gigawords', 'VERIFIED_SUPPORTED', QUOTA_VERIFIED, 'CoovaChilli'),
-    attr('CoovaChilli-Max-Output-Octets', 'VERIFIED_SUPPORTED', QUOTA_VERIFIED, 'CoovaChilli'),
-    attr('CoovaChilli-Max-Output-Gigawords', 'VERIFIED_SUPPORTED', QUOTA_VERIFIED, 'CoovaChilli'),
-    attr('Session-Timeout', 'VERIFIED_SUPPORTED', TIMEOUT_VERIFIED),
+    attr(
+      'CoovaChilli-Max-Total-Octets',
+      'VERIFIED_SUPPORTED',
+      'VERIFIED_FROM_SOURCE',
+      QUOTA_SRC,
+      'CoovaChilli',
+    ),
+    attr(
+      'CoovaChilli-Max-Total-Gigawords',
+      'VERIFIED_SUPPORTED',
+      'VERIFIED_FROM_SOURCE',
+      QUOTA_SRC,
+      'CoovaChilli',
+    ),
+    attr(
+      'CoovaChilli-Max-Input-Octets',
+      'VERIFIED_SUPPORTED',
+      'VERIFIED_FROM_SOURCE',
+      QUOTA_SRC,
+      'CoovaChilli',
+    ),
+    attr(
+      'CoovaChilli-Max-Input-Gigawords',
+      'VERIFIED_SUPPORTED',
+      'VERIFIED_FROM_SOURCE',
+      QUOTA_SRC,
+      'CoovaChilli',
+    ),
+    attr(
+      'CoovaChilli-Max-Output-Octets',
+      'VERIFIED_SUPPORTED',
+      'VERIFIED_FROM_SOURCE',
+      QUOTA_SRC,
+      'CoovaChilli',
+    ),
+    attr(
+      'CoovaChilli-Max-Output-Gigawords',
+      'VERIFIED_SUPPORTED',
+      'VERIFIED_FROM_SOURCE',
+      QUOTA_SRC,
+      'CoovaChilli',
+    ),
+    attr('Session-Timeout', 'VERIFIED_SUPPORTED', 'VERIFIED_FROM_SOURCE', TIMEOUT_SRC),
     attr(
       'WISPr-Session-Terminate-Time',
       'VERIFIED_SUPPORTED',
-      TIMEOUT_VERIFIED,
+      'VERIFIED_FROM_SOURCE',
+      TIMEOUT_SRC,
       'WISPr',
       'declared; the engine emits Session-Timeout instead',
     ),
-    attr('Idle-Timeout', 'VERIFIED_SUPPORTED', IDLE_VERIFIED),
+    attr('Idle-Timeout', 'VERIFIED_SUPPORTED', 'VERIFIED_FROM_SOURCE', IDLE_SRC),
     attr(
       'Acct-Interim-Interval',
       'VERIFIED_SUPPORTED',
-      INTERIM_VERIFIED,
+      'VERIFIED_FROM_SOURCE',
+      INTERIM_SRC,
       undefined,
       '< 60 ignored by CoovaChilli',
     ),
-    attr('Class', 'VERIFIED_SUPPORTED', CLASS_VERIFIED),
-    attr('CoovaChilli-VLAN-Id', 'REQUIRES_DEVICE_TEST', VLAN_RDT, 'CoovaChilli'),
+    attr('Class', 'VERIFIED_SUPPORTED', 'VERIFIED_FROM_SOURCE', CLASS_SRC),
+    attr('CoovaChilli-VLAN-Id', 'REQUIRES_DEVICE_TEST', 'DOCUMENTED', VLAN_RDT, 'CoovaChilli'),
     attr(
       'CoovaChilli-Session-State',
       'VERIFIED_SUPPORTED',
-      'CAPTIVE_PORTAL_ARCHITECTURE.md §4 CoA/Disconnect bullet: CoA honours CoovaChilli-Session-State Authorized/NotAuthorized',
+      'VERIFIED_FROM_SOURCE',
+      sourced(
+        'CAPTIVE_PORTAL_ARCHITECTURE.md §4 CoA/Disconnect bullet: CoA honours CoovaChilli-Session-State Authorized/NotAuthorized',
+        [SRC.V074],
+      ),
       'CoovaChilli',
       'CoA only',
     ),
     attr(
       'WISPr-Redirection-URL',
       'VERIFIED_SUPPORTED',
-      'CAPTIVE_PORTAL_ARCHITECTURE.md §7.5 row "Redirect after login": WISPr-Redirection-URL (CoovaChilli)',
+      'VERIFIED_FROM_SOURCE',
+      sourced(
+        'CAPTIVE_PORTAL_ARCHITECTURE.md §7.5 row "Redirect after login": WISPr-Redirection-URL (CoovaChilli)',
+        [SRC.V073],
+      ),
       'WISPr',
       'declared; not produced by the policy engine',
     ),

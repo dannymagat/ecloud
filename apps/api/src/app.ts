@@ -17,11 +17,13 @@ import { OPENAPI_PATH, buildOpenApiDocument } from './openapi.js';
 import { accessRoutes } from './routes/access.js';
 import { administratorRoutes } from './routes/administrators.js';
 import { authRoutes } from './routes/auth.js';
+import { controllerRoutes } from './routes/controllers.js';
 import { importRoutes } from './routes/imports.js';
 import { meRoutes } from './routes/me.js';
 import { platformOpsRoutes } from './routes/platform-ops.js';
 import { platformRoutes } from './routes/platform.js';
 import { policyRoutes } from './routes/policies.js';
+import { registryRoutes } from './routes/registry.js';
 import { resourceRoutes } from './routes/resources.js';
 import { runtimeRoutes } from './routes/runtime.js';
 import { voucherRoutes } from './routes/vouchers.js';
@@ -43,6 +45,8 @@ export function allRoutes(deps: AppDeps): AnyRouteSpec[] {
     ...policyRoutes(deps),
     ...importRoutes(deps),
     ...resourceRoutes(deps),
+    ...controllerRoutes(deps),
+    ...registryRoutes(deps),
     ...voucherRoutes(deps),
     ...runtimeRoutes(deps),
   ];

@@ -225,6 +225,89 @@ export interface InvitationsTable {
 // 3.2 Network
 // ---------------------------------------------------------------------------------------------
 
+// Migration 019: compatibility-registry mirror (platform, seeded from @ecloud/adapters) and
+// tenant controllers (MULTI_VENDOR_INTEGRATION_PLAN.md §8.2).
+
+export type Lifecycle =
+  'planned' | 'researched' | 'implemented' | 'lab-validated' | 'production-validated';
+export type RoadmapPhase = 'pilot' | 'phase-a' | 'phase-b' | 'phase-c' | 'legacy-candidate';
+export type DeploymentMode = 'native' | 'gateway';
+export type EnforcementPoint = 'ap' | 'controller' | 'gateway' | 'UNKNOWN';
+export type ConfigurationKind = 'ucentral' | 'coova-chilli-conf' | 'vendor-ui' | 'UNKNOWN';
+export type ControllerKind = 'cloud' | 'on_premises' | 'embedded';
+
+export interface VendorsTable {
+  key: string;
+  name: string;
+  lifecycle: Lifecycle;
+  roadmap_phase: RoadmapPhase;
+  doc_links: GeneratedJsonb<unknown[]>;
+  notes: string | null;
+  registry_hash: string;
+  created_at: GeneratedTimestamp;
+  updated_at: GeneratedTimestamp;
+}
+
+export interface HardwareModelsTable {
+  id: Generated<Uuid>;
+  vendor_key: string;
+  model: string;
+  notes: string | null;
+  created_at: GeneratedTimestamp;
+  updated_at: GeneratedTimestamp;
+}
+
+export interface FirmwareVersionsTable {
+  id: Generated<Uuid>;
+  vendor_key: string;
+  hardware_model_id: Uuid | null;
+  version: string;
+  controller_product: string | null;
+  controller_version: string | null;
+  created_at: GeneratedTimestamp;
+  updated_at: GeneratedTimestamp;
+}
+
+export interface CompatibilityEntriesTable {
+  key: string;
+  vendor_key: string;
+  hardware_model_id: Uuid | null;
+  firmware_version_id: Uuid | null;
+  hardware_model: string;
+  firmware: string;
+  controller: NullableJsonb<{ product: string; version: string }>;
+  lifecycle: Lifecycle;
+  deployment_modes: ColumnType<DeploymentMode[], DeploymentMode[] | undefined, DeploymentMode[]>;
+  enforcement_point: EnforcementPoint;
+  adapter_key: string | null;
+  source_version_matches_device: boolean | null;
+  configuration_kind: ConfigurationKind;
+  identity: GeneratedJsonb<unknown[]>;
+  profile: Jsonb<Record<string, unknown>>;
+  capabilities: Jsonb<Record<string, unknown>>;
+  open_items: GeneratedJsonb<unknown[]>;
+  registry_hash: string;
+  created_at: GeneratedTimestamp;
+  updated_at: GeneratedTimestamp;
+}
+
+export interface ControllersTable {
+  id: Generated<Uuid>;
+  organization_id: Uuid;
+  site_id: Uuid | null;
+  vendor_key: string;
+  name: string;
+  kind: ControllerKind;
+  /** https only; never fetched in M11 (plan OQ-17). */
+  base_url: string;
+  /** Envelope-sealed credential (`enc:v1.…`); never returned by the API. */
+  credential_secret_ref: string | null;
+  status: Generated<EnabledStatus>;
+  created_at: GeneratedTimestamp;
+  updated_at: GeneratedTimestamp;
+  deleted_at: NullableTimestamp;
+}
+
 export interface AdapterTypesTable {
   key: string;
   name: string;
@@ -252,6 +335,12 @@ export interface NetworkDevicesTable {
   last_seen_at: NullableTimestamp;
   reported_capabilities: NullableJsonb<Record<string, unknown>>;
   wireguard_peer_id: Uuid | null;
+  /** Migration 019: registry references (free-text `model` / `firmware` are kept). */
+  hardware_model_id: Uuid | null;
+  firmware_version_id: Uuid | null;
+  controller_id: Uuid | null;
+  /** false for third-party APs behind a gateway that ECLOUD does not configure. */
+  managed: Generated<boolean>;
   created_at: GeneratedTimestamp;
   updated_at: GeneratedTimestamp;
   deleted_at: NullableTimestamp;
@@ -286,6 +375,10 @@ export interface NasClientsTable {
   adapter_type_key: string;
   /** Migration 015 (D-035): @ecloud/adapters key; NULL only for legacy rows without a mapping. */
   adapter_key: string | null;
+  /** Migration 019: `native` (AP enforces) or `gateway` (CoovaChilli-style gateway). */
+  deployment_mode: Generated<DeploymentMode>;
+  /** Migration 019: optional vendor controller of the same organization. */
+  controller_id: Uuid | null;
   secret_ref: string;
   coa_port: number | null;
   coa_supported: boolean | null;
@@ -792,6 +885,11 @@ export interface Database {
   network_devices: NetworkDevicesTable;
   wireguard_peers: WireguardPeersTable;
   nas_clients: NasClientsTable;
+  vendors: VendorsTable;
+  hardware_models: HardwareModelsTable;
+  firmware_versions: FirmwareVersionsTable;
+  compatibility_entries: CompatibilityEntriesTable;
+  controllers: ControllersTable;
   identity_providers: IdentityProvidersTable;
   user_groups: UserGroupsTable;
   users: UsersTable;
@@ -834,6 +932,9 @@ export type ApiKey = Selectable<ApiKeysTable>;
 export type NasClient = Selectable<NasClientsTable>;
 export type NewNasClient = Insertable<NasClientsTable>;
 export type NetworkDevice = Selectable<NetworkDevicesTable>;
+export type Vendor = Selectable<VendorsTable>;
+export type CompatibilityEntry = Selectable<CompatibilityEntriesTable>;
+export type Controller = Selectable<ControllersTable>;
 export type User = Selectable<UsersTable>;
 export type NewUser = Insertable<UsersTable>;
 export type ClientDevice = Selectable<ClientDevicesTable>;

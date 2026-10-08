@@ -1,3 +1,6 @@
+import { sourced } from './base.js';
+import { SRC } from './source-refs.js';
+
 /**
  * Evidence strings shared by several adapters (brief rule 3: every declaration cites the doc
  * section it rests on). Adapter-specific evidence lives in each adapter file.
@@ -17,4 +20,10 @@ export const EV = {
     'CAPTIVE_PORTAL_ARCHITECTURE.md §7.5 row Burst: not expressible via RADIUS; POLICY_ENGINE.md §3.1 row burst: UNSUPPORTED',
   configOnlyNoPerClient:
     'POLICY_ENGINE.md §4.3 (e) openwifi-config: config-only adapter has no per-client decision point; per-client intent is granularity_mismatch / unsupported',
+} as const;
+
+/** Shared evidence with structured source references (rule V10). */
+export const EV_SOURCED = {
+  /** Absence verified in source (plan §4.2: UNSUPPORTED + source → VERIFIED_FROM_SOURCE). */
+  burstAbsent: sourced(EV.burstAbsent, [SRC.V003]),
 } as const;
