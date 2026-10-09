@@ -11,6 +11,13 @@
  * 401 + Reply-Message. Any backend error is 503 (FreeRADIUS `fail` → reject): never fail open.
  * User-Password is never logged nor persisted.
  *
+ * Ordering (B-3, docs/PERFORMANCE.md): the Argon2id verify never runs inside a transaction.
+ * resolveNas (platform tx) → pre-read of site state + `users` credential (short tenant tx,
+ * released) → Argon2id verify with no connection held → decision tenant tx (site re-check,
+ * fresh `users` re-read: the credential must be unchanged since the verify, else
+ * `credential_changed` reject; status/site/validity evaluated on the fresh row) → policy,
+ * session, translation rows.
+ *
  * post-auth: writes `auth_events` and closes the provisional session when the final RADIUS
  * outcome was a reject (e.g. local PAP mismatch after a 200). Always 204.
  *
@@ -39,8 +46,14 @@ import { AUTHN_ACCESS } from '../auth/principal.js';
 import { loadResolutionInput } from '../policy-data.js';
 import { voucherHash } from '../routes/vouchers.js';
 import { identifyPortalCredential, type PortalAuthMethod } from './portal-credential.js';
-import { IdentityRejected } from './portal-identity.js';
+import {
+  IdentityRejected,
+  credentialUnchanged,
+  findSubscriberByUsername,
+  type PasswordCheck,
+} from './portal-identity.js';
 import { isPortalCredentialUsername } from './portal-store.js';
+import { AAA_VERIFY_MAX_WAIT_MS, passwordVerifyGate } from './verify-gate.js';
 import {
   FORBIDDEN_REPLY_ATTRIBUTES,
   PolicyBuilder,
@@ -175,12 +188,82 @@ interface Identity {
   groupIds: string[];
 }
 
+/**
+ * True when `identify` would take the subscriber-password branch (the only one that runs
+ * Argon2id). Mirrors its early exits: empty User-Name, CHAP, portal credential, MAC auth
+ * (Call-Check) and a missing User-Password never reach the `users` lookup.
+ */
+function takesPasswordPath(body: RadiusRequestBody): boolean {
+  const userName = attr(body, 'User-Name') ?? '';
+  return (
+    userName !== '' &&
+    !hasAttr(body, 'CHAP-Password') &&
+    !isPortalCredentialUsername(userName) &&
+    attr(body, 'Service-Type') !== 'Call-Check' &&
+    attr(body, 'User-Password') !== undefined
+  );
+}
+
+/**
+ * B-3 (docs/PERFORMANCE.md): the Argon2id verify (~45 ms CPU) must not run while a pg
+ * connection is held. A short tenant-scoped (RLS) transaction reads the site state and the
+ * user's credential, the connection is released, and the verify runs. `null` = no verify ran
+ * (not the password path, or the tenant/site is not active: the decision transaction rejects
+ * it exactly as before, without hashing). As before B-3, a username with no `users` row costs
+ * no Argon2id (it falls through to the voucher lookup), and a verify runs only for a user with a
+ * hash and the `password` method enabled.
+ */
+async function precheckPassword(
+  deps: AppDeps,
+  body: RadiusRequestBody,
+  nas: NasRow,
+): Promise<PasswordCheck | null> {
+  if (!takesPasswordPath(body)) return null;
+  const userName = attr(body, 'User-Name') ?? '';
+  const password = attr(body, 'User-Password') ?? '';
+  const user = await withTenant(deps.db, nas.organization_id, async (trx) => {
+    const site = await siteState(trx, nas.site_id);
+    if (site === undefined || site.site_status !== 'active' || site.org_status !== 'active') {
+      return null;
+    }
+    return { row: await findSubscriberByUsername(trx, userName) };
+  });
+  if (user === null) return null;
+  const row = user.row;
+  if (row === undefined) {
+    return { userId: null, passwordHash: null, passwordEnabled: false, verified: false };
+  }
+  const passwordEnabled = row.auth_methods.includes('password');
+  const verify = deps.verifyPassword ?? verifyPassword;
+  const hash = row.password_hash;
+  // A gate timeout (overload) propagates as an error → 503, never as a password mismatch.
+  const verified =
+    hash !== null &&
+    passwordEnabled &&
+    (await passwordVerifyGate.run(
+      () => verify(hash, password).catch(() => false),
+      AAA_VERIFY_MAX_WAIT_MS,
+    ));
+  return { userId: row.id, passwordHash: row.password_hash, passwordEnabled, verified };
+}
+
+function siteState(trx: DbTransaction, siteId: string) {
+  return trx
+    .selectFrom('sites as s')
+    .innerJoin('organizations as o', 'o.id', 's.organization_id')
+    .select(['s.timezone', 's.status as site_status', 'o.status as org_status', 'o.settings'])
+    .where('s.id', '=', siteId)
+    .where('s.deleted_at', 'is', null)
+    .executeTakeFirst();
+}
+
 async function identify(
   deps: AppDeps,
   trx: DbTransaction,
   body: RadiusRequestBody,
   nas: NasRow,
   now: Date,
+  passwordCheck: PasswordCheck | null,
 ): Promise<Identity> {
   const userName = attr(body, 'User-Name') ?? '';
   const password = attr(body, 'User-Password');
@@ -227,26 +310,20 @@ async function identify(
 
   if (password === undefined) throw new Reject('missing_password', 'Access denied');
 
-  const user = await trx
-    .selectFrom('users')
-    .select([
-      'id',
-      'site_id',
-      'password_hash',
-      'auth_methods',
-      'status',
-      'valid_from',
-      'valid_until',
-      'user_group_id',
-    ])
-    .where((eb) => eb(eb.fn('lower', ['username']), '=', userName.toLowerCase()))
-    .where('deleted_at', 'is', null)
-    .executeTakeFirst();
+  // Fresh read inside the decision transaction: status/site/validity are evaluated on this row.
+  const user = await findSubscriberByUsername(trx, userName);
   if (user !== undefined) {
+    // TOCTOU (B-3): the password was verified before this transaction. Accept only if the
+    // credential is still the one verified (same row, same hash, same method flag); otherwise
+    // the account changed in between (password reset, user re-created, method toggled, or a
+    // user created after the pre-read): reject, never accept on stale state.
+    if (!credentialUnchanged(passwordCheck, user)) {
+      throw new Reject('credential_changed', 'Access denied', { auth_method: 'password' });
+    }
     const ok =
       user.password_hash !== null &&
       user.auth_methods.includes('password') &&
-      (await verifyPassword(user.password_hash, password).catch(() => false));
+      passwordCheck?.verified === true;
     if (!ok) throw new Reject('bad_credentials', 'Access denied', { auth_method: 'password' });
     if (user.status !== 'active') throw new Reject(`user_${user.status}`, 'Account is not active');
     if (user.site_id !== null && user.site_id !== nas.site_id) {
@@ -412,18 +489,14 @@ async function decide(deps: AppDeps, body: RadiusRequestBody, now: Date): Promis
   }
 
   try {
+    // B-3: Argon2id first, with no connection held; the decision transaction re-checks.
+    const passwordCheck = await precheckPassword(deps, body, nas);
     return await withTenant(deps.db, nas.organization_id, async (trx) => {
-      const site = await trx
-        .selectFrom('sites as s')
-        .innerJoin('organizations as o', 'o.id', 's.organization_id')
-        .select(['s.timezone', 's.status as site_status', 'o.status as org_status', 'o.settings'])
-        .where('s.id', '=', nas.site_id)
-        .where('s.deleted_at', 'is', null)
-        .executeTakeFirst();
+      const site = await siteState(trx, nas.site_id);
       if (site === undefined || site.site_status !== 'active' || site.org_status !== 'active') {
         throw new Reject('tenant_inactive', 'Service unavailable for this network');
       }
-      const identity = await identify(deps, trx, body, nas, now);
+      const identity = await identify(deps, trx, body, nas, now, passwordCheck);
       const mac = macFrom(attr(body, 'Calling-Station-Id'));
       let clientDeviceId: string | null =
         identity.subject.kind === 'client_device' ? identity.subject.client_device_id : null;

@@ -603,6 +603,23 @@ not VERIFIED DEVICE CAPABILITY: everything device-facing below inherits the adap
   the bound NAS (packet source) + Calling-Station-Id + Acct-Session-Id, consumed once (SET NX),
   identity re-checked; their decision is cached for 30 s (NAS retransmit horizon) so retransmits
   get the same Class (`apps/api/src/internal/portal-credential.ts`).
+- Ordering (B-3, P10-B load test, docs/PERFORMANCE.md): the Argon2id verify never runs while a
+  pg connection is held. Subscriber-password authorize = `resolveNas` (platform tx) → short tenant
+  tx (RLS-scoped exactly as the decision: site/org state + `users` row by lower(username)),
+  released → Argon2id verify outside any tx, through `internal/verify-gate.ts` (at most
+  UV_THREADPOOL_SIZE concurrent verifies; a verify that cannot start within 5 s → `503`, the same
+  fail-closed answer the old 5 s pool wait gave; never a credential reject) → decision tenant tx:
+  site re-check, fresh `users` re-read; the credential must be unchanged since the verify (same
+  row id, byte-identical hash, same `password`-method flag, `credentialUnchanged()`), otherwise
+  reject `credential_changed` (also when no verify ran because the site was inactive at pre-read);
+  status/site/validity are evaluated on the fresh row (a user disabled during the verify gets
+  `user_disabled`; a deleted one falls to the voucher lookup → `bad_credentials`). Unknown
+  usernames still cost no Argon2id on this path (unchanged; vouchers share it). The captive-portal
+  identify (`internal/portal.ts`) uses the same order (pre-read portal + user → verify, dummy hash
+  for unknown users as before → decision tx with `confirmSubscriberLogin`); lockout counters,
+  `portal_login_attempts` rows and reasons are unchanged. Tests:
+  `apps/api/src/aaa-password-verify.integration.test.ts` (pool of 1, TOCTOU, overload 503),
+  B-3 cases in `portal.integration.test.ts`, `internal/verify-gate.test.ts`.
 - Policy: `loadResolutionInput` (assignments by site/user/group/device/voucher batch, schedules,
   org default, usage counters for the site's local day/month, active sessions) →
   `resolveEffectivePolicy` → adapter `translate` + `buildReplyAttributes` (non-experimental only).

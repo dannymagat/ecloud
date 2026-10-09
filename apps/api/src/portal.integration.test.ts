@@ -6,7 +6,7 @@
  * `@ecloud/adapters`); hand-off URLs are decoded the way the device does. Simulator evidence
  * only (SIMULATOR_TESTED): nothing here proves hardware behaviour.
  */
-import { hashPassword } from '@ecloud/db';
+import { createDb, createPool, hashPassword, verifyPassword } from '@ecloud/db';
 import { newId } from '@ecloud/shared';
 import {
   SIM_UAM_SECRET,
@@ -14,6 +14,7 @@ import {
   describeIntegration,
   deviceDecodePapTip,
   deviceDecodePapUpstream,
+  getTestAppDatabaseUrl,
   getTestRedisUrl,
   migrateTestDatabase,
   parseDeviceLogon,
@@ -21,6 +22,7 @@ import {
   type UamFlavour,
   type UamRedirectInput,
 } from '@ecloud/testing';
+import { sql } from 'kysely';
 import { randomBytes } from 'node:crypto';
 import request from 'supertest';
 import { afterAll, beforeAll, expect, it } from 'vitest';
@@ -30,6 +32,7 @@ import { Envelope, sealSecretRef } from './crypto.js';
 import { PORTAL_RETRANSMIT_TTL_S, decisionKey } from './internal/aaa.js';
 import { UAM_SECRET_PURPOSE } from './internal/portal.js';
 import type { RadiusRequestBody } from './internal/radius.js';
+import { passwordVerifyGate } from './internal/verify-gate.js';
 import { MemoryKv, RedisKv, type KvStore } from './kv.js';
 import { voucherHash } from './routes/vouchers.js';
 import {
@@ -769,6 +772,150 @@ await describeIntegration('@ecloud/api captive portal broker (P6-A)', () => {
       password: SUB_PASSWORD,
     });
     expect(login.status).toBe(200);
+  }, 60_000);
+
+  // ------------------------------------------------------- B-3: Argon2id outside the transaction
+
+  /** An app whose subscriber-password verifier runs `during` before the real Argon2id verify. */
+  function verifyingApp(during: () => Promise<void>, over: Partial<AppDeps> = {}) {
+    const calls: string[] = [];
+    const app = createApp({
+      ...deps,
+      ...over,
+      verifyPassword: async (h, p) => {
+        calls.push(h);
+        await during();
+        return verifyPassword(h, p);
+      },
+    }).internalApp;
+    return { app, calls };
+  }
+
+  async function lastAttemptReason(portalId: string): Promise<string | null> {
+    const r = await sql<{ reason: string | null }>`
+      SELECT reason FROM portal_login_attempts WHERE captive_portal_id = ${portalId}::uuid
+      ORDER BY created_at DESC LIMIT 1
+    `.execute(deps.dbPlatform);
+    return r.rows[0]?.reason ?? null;
+  }
+
+  it('B-3: portal password identify holds no pg connection while Argon2id runs (pool of 1)', async () => {
+    const appUrl = getTestAppDatabaseUrl();
+    if (appUrl === undefined) throw new Error('ECLOUD_TEST_DATABASE_URL is required');
+    const pool = createPool(appUrl, { max: 1, connectionTimeoutMillis: 2_000 });
+    const db = createDb(pool);
+    try {
+      let checkedOut = -1;
+      let probe = 'not run';
+      const { app, calls } = verifyingApp(
+        async () => {
+          checkedOut = pool.totalCount - pool.idleCount;
+          probe = await sql`SELECT 1`
+            .execute(db)
+            .then(() => 'ok')
+            .catch((error: unknown) => String(error));
+        },
+        { db },
+      );
+      const f = await fixture();
+      const flow = await startFlow(f, newDevice(), {}, app);
+      const res = await identify(
+        flow.flowId,
+        { method: 'password', username: f.username, password: SUB_PASSWORD },
+        app,
+      );
+      expect(res.status).toBe(200);
+      expect(calls).toHaveLength(1);
+      expect(checkedOut).toBe(0);
+      expect(probe).toBe('ok');
+    } finally {
+      await db.destroy();
+    }
+  }, 60_000);
+
+  it('B-3 TOCTOU: password changed while the portal verifies → rejected (credential_changed)', async () => {
+    const f = await fixture();
+    const { app } = verifyingApp(async () => {
+      const other = await hashPassword('reset-meanwhile', { memoryKib: 8192 });
+      await deps.dbPlatform
+        .updateTable('users')
+        .set({ password_hash: other })
+        .where('username', '=', f.username)
+        .execute();
+    });
+    const flow = await startFlow(f, newDevice(), {}, app);
+    const res = await identify(
+      flow.flowId,
+      { method: 'password', username: f.username, password: SUB_PASSWORD },
+      app,
+    );
+    expect(res.status).toBe(422);
+    expect(res.body).toEqual({ result: 'rejected' });
+    expect(await lastAttemptReason(f.portalId)).toBe('credential_changed');
+  }, 60_000);
+
+  it('B-3 TOCTOU: user disabled while the portal verifies → rejected (user_disabled)', async () => {
+    const f = await fixture();
+    const { app } = verifyingApp(async () => {
+      await deps.dbPlatform
+        .updateTable('users')
+        .set({ status: 'disabled' })
+        .where('username', '=', f.username)
+        .execute();
+    });
+    const flow = await startFlow(f, newDevice(), {}, app);
+    const res = await identify(
+      flow.flowId,
+      { method: 'password', username: f.username, password: SUB_PASSWORD },
+      app,
+    );
+    expect(res.status).toBe(422);
+    expect(await lastAttemptReason(f.portalId)).toBe('user_disabled');
+  }, 60_000);
+
+  it('B-3: unknown username still costs exactly one verify (dummy hash), same generic answer', async () => {
+    const f = await fixture();
+    const { app, calls } = verifyingApp(() => Promise.resolve());
+    const flow = await startFlow(f, newDevice(), {}, app);
+    const res = await identify(
+      flow.flowId,
+      { method: 'password', username: unique('nobody'), password: SUB_PASSWORD },
+      app,
+    );
+    expect(res.status).toBe(422);
+    expect(res.body).toEqual({ result: 'rejected' });
+    expect(calls).toHaveLength(1);
+    expect(calls[0]).not.toBe(hash);
+    expect(await lastAttemptReason(f.portalId)).toBe('bad_credentials');
+  }, 60_000);
+
+  it('B-3 overload: no verify slot within 5 s → 503 unavailable, no attempt row, no failure counted', async () => {
+    const f = await fixture();
+    const flow = await startFlow(f);
+    let release: () => void = () => undefined;
+    const held = new Promise<void>((r) => (release = r));
+    const holders = Array.from({ length: passwordVerifyGate.concurrency }, () =>
+      passwordVerifyGate.run(() => held),
+    );
+    try {
+      const res = await identify(flow.flowId, {
+        method: 'password',
+        username: f.username,
+        password: SUB_PASSWORD,
+      });
+      expect(res.status).toBe(503);
+      expect(res.body).toEqual({ result: 'unavailable' });
+    } finally {
+      release();
+      await Promise.all(holders);
+    }
+    expect(await lastAttemptReason(f.portalId)).toBeNull();
+    const ok = await identify(flow.flowId, {
+      method: 'password',
+      username: f.username,
+      password: SUB_PASSWORD,
+    });
+    expect(ok.status).toBe(200);
   }, 60_000);
 
   it('flow + credential endpoints: unknown flow 404, internal token required', async () => {

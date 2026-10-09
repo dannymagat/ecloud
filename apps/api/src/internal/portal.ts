@@ -36,7 +36,14 @@ import { isIP } from 'node:net';
 import { z } from 'zod';
 import type { AppDeps } from '../context.js';
 import { Envelope, openSecretRef, sealSecretRef, sha256Hex } from '../crypto.js';
-import { IdentityRejected, verifySubscriberLogin, verifyVoucherCode } from './portal-identity.js';
+import {
+  IdentityRejected,
+  checkSubscriberLoginPassword,
+  confirmSubscriberLogin,
+  findSubscriberByUsername,
+  verifyVoucherCode,
+  type PasswordCheck,
+} from './portal-identity.js';
 import {
   CREDENTIAL_TTL_S,
   FLOW_TTL_S,
@@ -661,6 +668,30 @@ export function portalInternalRouter(deps: AppDeps): Router {
       const ls = PORTAL_LIMITS.attemptsPerSite;
       await counter(deps, `pf:rl:site:${flow.siteId}`, ls.max, ls.windowS);
 
+      // B-3: the Argon2id verify (~45 ms CPU) runs with no pg connection held. A short tenant
+      // transaction reads the credential, the verify runs outside it, and the decision
+      // transaction below re-reads the user and requires the credential unchanged.
+      let passwordCheck: PasswordCheck | null = null;
+      if (input.method === 'password') {
+        const pre = await withTenant(deps.db, flow.organizationId, async (trx) => {
+          const portal = await loadPortalRow(trx, flow.captivePortalId);
+          if (
+            portal === undefined ||
+            portal.status !== 'active' ||
+            !enabledMethods(portal).includes('password')
+          ) {
+            return null; // refused by the decision transaction without any verify (as before)
+          }
+          return { user: await findSubscriberByUsername(trx, input.username) };
+        });
+        if (pre !== null) {
+          passwordCheck = await checkSubscriberLoginPassword(pre.user, input.password, {
+            argon2MemoryKib: deps.config.base.argon2.memoryKib,
+            verify: deps.verifyPassword,
+          });
+        }
+      }
+
       type Outcome =
         | { ok: true; identity: BrokerIdentity; uamSecret: string | null }
         | { ok: false; reason: string; status: 403 | 404 | 422 };
@@ -678,12 +709,11 @@ export function portalInternalRouter(deps: AppDeps): Router {
         try {
           if (input.method === 'password') {
             prefix = input.username.slice(0, 3);
-            const user = await verifySubscriberLogin(trx, {
+            const user = await confirmSubscriberLogin(trx, {
               username: input.username,
-              password: input.password,
+              check: passwordCheck,
               siteId: flow.siteId,
               now: at,
-              argon2MemoryKib: deps.config.base.argon2.memoryKib,
             });
             identity = { kind: 'user', userId: user.id };
           } else if (input.method === 'voucher') {

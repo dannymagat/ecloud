@@ -7,11 +7,16 @@
  * every rejection to one generic message (same response body/status for unknown account and wrong
  * password, SECURITY §5.4-§5.5). Timing: an unknown user still costs one Argon2id verification
  * (dummy hash); response times are NOT guaranteed identical (lookup/row differences remain).
+ *
+ * B-3 ordering: the Argon2id verify never runs inside a database transaction. A short tenant
+ * transaction reads the credential, the verify runs with no connection held, and the decision
+ * transaction re-reads the user and requires the credential to be unchanged (credentialUnchanged).
  */
 import { hashPassword, verifyPassword, type DbTransaction } from '@ecloud/db';
 import { randomBytes } from 'node:crypto';
 import { normalizeVoucherCode } from '../crypto.js';
 import { voucherHash } from '../routes/vouchers.js';
+import { passwordVerifyGate } from './verify-gate.js';
 
 export class IdentityRejected extends Error {
   constructor(
@@ -97,29 +102,93 @@ export async function checkSubscriberPassword(
   return match && user.auth_methods.includes('password');
 }
 
-/** Username + password at the portal (case-insensitive username, Argon2id). */
-export async function verifySubscriberLogin(
+/**
+ * Outcome of the Argon2id step of a subscriber login, computed with NO database connection held
+ * (B-3, docs/PERFORMANCE.md: hashing inside the tenant transaction saturated the pool). It keeps
+ * the exact credential state the password was checked against so the decision transaction can
+ * refuse a login whose credential changed in between ({@link credentialUnchanged}).
+ */
+export interface PasswordCheck {
+  /** `users.id` the username denoted at pre-read time; null when no such user existed. */
+  readonly userId: string | null;
+  /** The stored hash read at pre-read time (the one verified, when a verify ran). */
+  readonly passwordHash: string | null;
+  /** Whether the `password` auth method was enabled at pre-read time. */
+  readonly passwordEnabled: boolean;
+  /** True only when the password matched `passwordHash` (and the method was enabled). */
+  readonly verified: boolean;
+}
+
+/** Credential columns needed for the Argon2id step (read in a short tenant transaction). */
+export type CredentialRow = Pick<UserRow, 'id' | 'password_hash' | 'auth_methods'>;
+
+/** Tenant-scoped (RLS) case-insensitive username lookup used by the pre-read and the decision. */
+export async function findSubscriberByUsername(
   trx: DbTransaction,
-  input: {
-    username: string;
-    password: string;
-    siteId: string;
-    now: Date;
-    argon2MemoryKib: number;
-    verify?: PasswordVerifier;
-  },
-): Promise<UsableUser> {
-  const user = (await trx
+  username: string,
+): Promise<UserRow | undefined> {
+  return trx
     .selectFrom('users')
     .select([...USER_COLUMNS])
-    .where((eb) => eb(eb.fn('lower', ['username']), '=', input.username.toLowerCase()))
+    .where((eb) => eb(eb.fn('lower', ['username']), '=', username.toLowerCase()))
     .where('deleted_at', 'is', null)
-    .executeTakeFirst()) as UserRow | undefined;
-  const ok = await checkSubscriberPassword(user, input.password, {
-    verify: input.verify ?? verifyPassword,
-    dummyHash: () => dummyPasswordHash(input.argon2MemoryKib),
-  });
-  if (!ok || user === undefined) throw new IdentityRejected('bad_credentials');
+    .executeTakeFirst();
+}
+
+/**
+ * The credential state at decision time is the one the password was verified against: same user
+ * row, byte-identical hash (Argon2id salts are random, so any password change, even to the same
+ * password, changes it) and the same `password` method flag. A false result means the account
+ * changed between the verify and the decision: callers reject (fail closed), never accept.
+ */
+export function credentialUnchanged(check: PasswordCheck | null, user: CredentialRow): boolean {
+  return (
+    check !== null &&
+    check.userId === user.id &&
+    check.passwordHash === user.password_hash &&
+    check.passwordEnabled === user.auth_methods.includes('password')
+  );
+}
+
+/**
+ * Portal Argon2id step, run OUTSIDE any transaction on a row read by
+ * {@link findSubscriberByUsername}. Exactly one verify runs on every path (dummy hash for an
+ * unknown user or a user without a hash), as before B-3.
+ */
+export async function checkSubscriberLoginPassword(
+  user: CredentialRow | undefined,
+  password: string,
+  opts: { argon2MemoryKib: number; verify?: PasswordVerifier | undefined },
+): Promise<PasswordCheck> {
+  // Bounded admission (verify-gate.ts): a queue timeout propagates (503), never a mismatch.
+  const verified = await passwordVerifyGate.run(() =>
+    checkSubscriberPassword(user, password, {
+      verify: opts.verify ?? verifyPassword,
+      dummyHash: () => dummyPasswordHash(opts.argon2MemoryKib),
+    }),
+  );
+  return {
+    userId: user?.id ?? null,
+    passwordHash: user?.password_hash ?? null,
+    passwordEnabled: user?.auth_methods.includes('password') ?? false,
+    verified,
+  };
+}
+
+/**
+ * Decision-transaction half of a portal username + password login: re-reads the user (fresh
+ * status, site, validity) and accepts only when the credential is unchanged since
+ * {@link checkSubscriberLoginPassword}. `check` null means no verify ran (the portal was not
+ * usable at pre-read time and became usable since): fail closed.
+ */
+export async function confirmSubscriberLogin(
+  trx: DbTransaction,
+  input: { username: string; check: PasswordCheck | null; siteId: string; now: Date },
+): Promise<UsableUser> {
+  const user = await findSubscriberByUsername(trx, input.username);
+  if (user === undefined) throw new IdentityRejected('bad_credentials');
+  if (!credentialUnchanged(input.check, user)) throw new IdentityRejected('credential_changed');
+  if (input.check?.verified !== true) throw new IdentityRejected('bad_credentials');
   return assertUserUsable(user, input.siteId, input.now);
 }
 

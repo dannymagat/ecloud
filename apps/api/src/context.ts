@@ -26,6 +26,12 @@ export interface AppDeps {
   now?: () => Date;
   /** Prometheus metrics (Phase 10); `createApp` creates a registry when absent. */
   metrics?: ApiMetrics;
+  /**
+   * Argon2id verifier of subscriber passwords (AAA authorize, portal identify). Defaults to
+   * `verifyPassword` from `@ecloud/db`; tests inject one to observe that no database connection
+   * is held while it runs (B-3).
+   */
+  verifyPassword?: (hash: string, password: string) => Promise<boolean>;
 }
 
 /** One effective role binding of a principal, with the permission keys of its role. */
