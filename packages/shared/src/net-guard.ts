@@ -149,3 +149,71 @@ export function webhookTarget(raw: string): URL {
   }
   return url;
 }
+
+/*
+ * RADIUS NAS host addresses (nas_clients.nas_ip, FreeRADIUS `client { ipaddr }`), F-P10-07
+ * review. A NAS is matched by the exact UDP source address, so only a single unicast host is
+ * meaningful. Refused: unspecified, loopback, link-local, multicast / reserved / broadcast, the
+ * deprecated IPv4-compatible `::/96` and IPv4-mapped `::ffff:0:0/96` (PostgreSQL `inet` treats
+ * `::ffff:a.b.c.d` and `a.b.c.d` as different values, so the unique index would not catch a
+ * mapped duplicate that shadows another tenant's NAS). Separate IPv4 / IPv6 lists on purpose:
+ * Node's BlockList matches a v6 `::ffff:0:0/96` rule against every IPv4 address.
+ */
+const NAS_BLOCKED_V4 = new BlockList();
+for (const [net, bits] of [
+  ['0.0.0.0', 8], // unspecified / "this" network
+  ['127.0.0.0', 8], // loopback
+  ['169.254.0.0', 16], // link-local
+  ['224.0.0.0', 4], // multicast
+  ['240.0.0.0', 4], // reserved + limited broadcast
+] as const) {
+  NAS_BLOCKED_V4.addSubnet(net, bits, 'ipv4');
+}
+const NAS_BLOCKED_V6 = new BlockList();
+for (const [net, bits] of [
+  ['::', 96], // unspecified, loopback, IPv4-compatible
+  ['fe80::', 10], // link-local
+  ['ff00::', 8], // multicast
+] as const) {
+  NAS_BLOCKED_V6.addSubnet(net, bits, 'ipv6');
+}
+
+export interface NasHostAddress {
+  /** Canonical text: dotted quad, or RFC 5952 lower-case compressed IPv6. */
+  address: string;
+  family: 4 | 6;
+}
+
+/**
+ * Validates and canonicalises a NAS address. Accepts a bare address or one with a full-length
+ * prefix (`/32`, `/128`, the PostgreSQL `inet` text form); returns null for networks, hostnames,
+ * zone ids and every refused range above.
+ */
+export function canonicalNasAddress(raw: string): NasHostAddress | null {
+  const parts = raw.trim().split('/');
+  if (parts.length > 2) return null;
+  const [text, prefix] = parts;
+  if (text === undefined) return null;
+  const family = isIP(text);
+  if (family === 4) {
+    if (prefix !== undefined && prefix !== '32') return null;
+    if (!/^\d{1,3}(?:\.\d{1,3}){3}$/.test(text)) return null;
+    return NAS_BLOCKED_V4.check(text, 'ipv4') ? null : { address: text, family: 4 };
+  }
+  if (family === 6) {
+    if (prefix !== undefined && prefix !== '128') return null;
+    let canonical: string;
+    try {
+      canonical = new URL(`http://[${text}]`).hostname.replace(/^\[|\]$/g, '');
+    } catch {
+      return null; // zone ids and other non-URL forms
+    }
+    if (/^::ffff:[0-9a-f]{1,4}:[0-9a-f]{1,4}$/.test(canonical)) return null; // IPv4-mapped
+    return NAS_BLOCKED_V6.check(canonical, 'ipv6') ? null : { address: canonical, family: 6 };
+  }
+  return null;
+}
+
+/** Human-readable rule for API / renderer errors (no value echoed). */
+export const NAS_ADDRESS_RULE =
+  'must be a single unicast IPv4/IPv6 host address (no prefix; not unspecified, loopback, link-local, multicast, reserved or IPv4-mapped IPv6)';

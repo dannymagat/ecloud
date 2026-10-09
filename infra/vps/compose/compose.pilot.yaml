@@ -251,8 +251,42 @@ services:
         limits: { memory: 320M, cpus: '0.5', pids: 128 }
         reservations: { memory: 160M }
 
-  # BLOCKED for the pilot until the NAS clients.conf renderer exists (docs/SECURITY_REVIEW_P10.md
-  # finding F-P10-07): profile `radius` keeps it from starting by default.
+  # One-shot NAS allow-list renderer (docs/SECURITY_REVIEW_P10.md F-P10-07, fixed): reads the
+  # active nas_clients of every tenant through the platform role, opens each sealed secret with
+  # the data key and atomically replaces radius_clients/ecloud-nas.conf (0640, gid 101 =
+  # freerad). Any failure (DB down, undecryptable secret, invalid IP, zero NAS) exits 1 and
+  # keeps the previous file. After a NAS change (create / IP / rotate-secret / disable):
+  #   docker compose --profile radius run --rm radius-clients && docker compose restart freeradius
+  # (FreeRADIUS 3.2 reads clients only at start-up; SIGHUP does not reload them.)
+  radius-clients:
+    <<: *hardening
+    image: ${ECLOUD_REGISTRY:-ghcr.io/OWNER}/ecloud-api:${IMAGE_TAG:?IMAGE_TAG is required}
+    container_name: ecloud-radius-clients
+    profiles: ['radius']
+    restart: 'no'
+    # node user, primary group 101 (freerad in the FreeRADIUS image) so the rendered file is
+    # group-readable there; ecloud-secrets (10001) comes from the hardening anchor.
+    user: '1000:101'
+    depends_on:
+      db-roles: { condition: service_completed_successfully }
+    command: ['node', 'apps/api/dist/radius-clients-cli.js']
+    environment:
+      NODE_ENV: production
+      DATABASE_URL_PLATFORM_FILE: /run/secrets/database_url_platform
+      DATA_ENCRYPTION_KEY_FILE: /run/secrets/data_encryption_key
+      RADIUS_CLIENTS_FILE: /var/lib/ecloud/radius-clients/ecloud-nas.conf
+    secrets:
+      - database_url_platform
+      - data_encryption_key
+    volumes:
+      - radius_clients:/var/lib/ecloud/radius-clients
+    deploy:
+      resources:
+        limits: { memory: 128M, cpus: '0.25', pids: 32 }
+
+  # RADIUS front-end. Opt-in profile `radius` (VPS-RADIUS-1): needs the WireGuard hub address
+  # below and at least one NAS in ECLOUD. Clients come ONLY from the rendered volume mounted
+  # over clients.d/ (the entrypoint refuses to start without it, RADIUS_CLIENTS_RENDERED=1).
   freeradius:
     <<: *hardening
     image: ${ECLOUD_REGISTRY:-ghcr.io/OWNER}/ecloud-freeradius:${IMAGE_TAG:?IMAGE_TAG is required}
@@ -260,6 +294,7 @@ services:
     profiles: ['radius']
     depends_on:
       postgres: { condition: service_healthy }
+      radius-clients: { condition: service_completed_successfully }
     environment:
       RADIUS_LISTEN_IP: '*'
       RADIUS_SQL_HOST: postgres
@@ -274,6 +309,13 @@ services:
       - radius_sql_password
       - radius_status_secret
       - internal_api_token
+    volumes:
+      # nocopy: never seed the volume with the image's dev client (clients.d/dev.conf).
+      - type: volume
+        source: radius_clients
+        target: /etc/freeradius/clients.d
+        read_only: true
+        volume: { nocopy: true }
     tmpfs:
       - /tmp:size=16m,mode=1777
       - /var/run/freeradius:size=1m,uid=101,gid=101
@@ -301,6 +343,9 @@ volumes:
   pg_data:
   redis_data:
   storage_data:
+  # Rendered FreeRADIUS clients (contains NAS shared secrets: excluded from backups, re-rendered
+  # from the database on restore).
+  radius_clients:
 
 secrets:
   postgres_password: { file: '${ECLOUD_SECRETS_DIR:-/opt/ecloud/secrets}/postgres_password' }

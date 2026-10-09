@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   WebhookTargetError,
+  canonicalNasAddress,
   isPrivateNetworkAddress,
   isPublicWebhookAddress,
   webhookTarget,
@@ -67,5 +68,48 @@ describe('net-guard (moved from the worker webhook transport, L3)', () => {
       expect(() => webhookTarget(bad), bad).toThrow(WebhookTargetError);
     }
     expect(webhookTarget('https://hooks.example.com./').hostname).toBe('hooks.example.com.');
+  });
+});
+
+describe('canonicalNasAddress', () => {
+  it.each([
+    ['192.168.203.198', '192.168.203.198', 4],
+    ['192.168.203.198/32', '192.168.203.198', 4],
+    ['10.0.0.1', '10.0.0.1', 4],
+    ['2001:DB8:0:0::1', '2001:db8::1', 6],
+    ['2001:db8::1/128', '2001:db8::1', 6],
+    ['fd00::10', 'fd00::10', 6],
+  ])('accepts %s', (raw, address, family) => {
+    expect(canonicalNasAddress(raw)).toEqual({ address, family });
+  });
+
+  it.each([
+    '::ffff:192.168.203.198',
+    '::FFFF:C0A8:CBC6',
+    '::ffff:127.0.0.1',
+    '::',
+    '::1',
+    '::10.0.0.1',
+    '0.0.0.0',
+    '0.1.2.3',
+    '127.0.0.1',
+    '127.255.0.9',
+    '169.254.1.1',
+    '224.0.0.1',
+    '239.255.255.250',
+    '240.0.0.1',
+    '255.255.255.255',
+    'ff02::1',
+    'fe80::1',
+    'febf::1',
+    'fe80::1%eth0',
+    '192.168.203.0/24',
+    '192.168.203.198/31',
+    '2001:db8::/64',
+    'ap.example.net',
+    '',
+    '1.2.3.4/32/32',
+  ])('rejects %s', (raw) => {
+    expect(canonicalNasAddress(raw)).toBeNull();
   });
 });

@@ -1,0 +1,18 @@
+# DRAFT, NOT APPLIED (docs/VPS_LOCAL_CHANGE_LIST.md LCL-FW-2) -> /etc/systemd/system/
+# Re-applies the ECLOUD DOCKER-USER policy whenever Docker (re)starts. Docker never flushes
+# DOCKER-USER itself; PartOf= re-runs it after a Docker restart anyway.
+[Unit]
+Description=ECLOUD DOCKER-USER policy (LAN-only publishes)
+After=docker.service firewalld.service
+PartOf=docker.service
+ConditionPathExists=/etc/ecloud/docker-user.env
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+EnvironmentFile=/etc/ecloud/docker-user.env
+ExecStart=/opt/ecloud/infra/vps-local/firewall/docker-user.sh apply
+ExecStop=/opt/ecloud/infra/vps-local/firewall/docker-user.sh rollback
+
+[Install]
+WantedBy=docker.service

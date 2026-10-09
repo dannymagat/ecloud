@@ -104,7 +104,7 @@ Precondition: DNS-1.
 |---|---|
 | VPS-DB-1 | Roles `ecloud_app` (NOBYPASSRLS), `ecloud_platform` (BYPASSRLS, migrations/worker), `ecloud_radius` (INSERT-only via migration 010); `REVOKE ALL ON DATABASE ecloud FROM PUBLIC`; `password_encryption=scram-sha-256`; no published port; migrations via the `migrate` one-shot; seed via `node packages/db/dist/cli.js seed` (permission catalogue) |
 | VPS-REDIS-1 | `requirepass` from secret file, `protected-mode yes`, `maxmemory 96mb`, `noeviction` (BullMQ must not lose jobs), AOF on |
-| VPS-RADIUS-1 | **Blocked** until the `clients.conf` renderer exists (F-P10-07). Then: `require_message_authenticator = yes` per client (already in templates), tunnel-only bind, `RADIUS_CLIENTS_RENDERED=1`, never `-X` in production |
+| VPS-RADIUS-1 | **Unblocked** (F-P10-07 fixed 2026-10-09). Compose profile `radius` = one-shot `radius-clients` (api image, `user: '1000:101'`, secrets `database_url_platform` + `data_encryption_key`, writes `ecloud-nas.conf` 0640 to volume `radius_clients`) → `freeradius` (`depends_on` it `service_completed_successfully`; volume read-only, `nocopy`, over `/etc/freeradius/clients.d`; `RADIUS_CLIENTS_RENDERED=1`). Per client `require_message_authenticator` from `nas_clients` (default yes), tunnel-only bind, never `-X` in production. NAS change → `docker compose --profile radius run --rm radius-clients && docker compose restart freeradius` (renderer exit 0 = ok, 3 = written but some NAS rows skipped, listed by id in its JSON; 1 = nothing written, previous file kept) (FreeRADIUS 3.2 does not reload clients on SIGHUP). Rebuild both the api and the freeradius images first. `radius_clients` holds NAS secrets: not backed up (re-rendered from the DB) |
 
 ## 9. Backup (D-026) and monitoring
 

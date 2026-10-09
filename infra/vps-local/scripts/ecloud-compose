@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+# docker compose for the ECLOUD project on vps-local (DRAFT). Installed as
+# /opt/ecloud/bin/ecloud-compose so owner commands stay short, e.g.
+#   ssh -t vps-local 'sudo /opt/ecloud/bin/ecloud-compose ps'
+# Settings (IMAGE_TAG, ECLOUD_REGISTRY, ECLOUD_LAN_IP, ...) live in /opt/ecloud/ecloud.env
+# (no secrets; example: infra/vps-local/compose/ecloud.env.example).
+set -euo pipefail
+ROOT="${ECLOUD_ROOT:-/opt/ecloud}"
+exec docker compose --env-file "$ROOT/ecloud.env" \
+  -f "$ROOT/infra/vps/compose/compose.pilot.yaml" \
+  -f "$ROOT/infra/vps-local/compose/compose.vps-local.yaml" "$@"

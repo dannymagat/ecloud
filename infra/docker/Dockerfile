@@ -53,8 +53,14 @@ RUN apt-get update \
  && rm -rf /var/lib/apt/lists/* \
  && rm -rf /usr/local/lib/node_modules/npm /usr/local/lib/node_modules/corepack \
            /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/corepack \
- && mkdir -p /var/lib/ecloud/storage \
- && chown node:node /var/lib/ecloud/storage
+ && mkdir -p /var/lib/ecloud/storage /var/lib/ecloud/radius-clients \
+ && chown node:node /var/lib/ecloud/storage \
+ && chown node:101 /var/lib/ecloud/radius-clients \
+ && chmod 2750 /var/lib/ecloud/radius-clients
+#  /var/lib/ecloud/radius-clients: mount point of the rendered FreeRADIUS clients volume
+#  (radius-clients-cli.js, F-P10-07). gid 101 = `freerad` in the FreeRADIUS image; an empty
+#  named volume copies this owner/mode on first mount, so the renderer (node) can write and
+#  the FreeRADIUS container (101:101, read-only mount) can read through the group.
 ENV NODE_ENV=production \
     STORAGE_LOCAL_PATH=/var/lib/ecloud/storage
 WORKDIR /app

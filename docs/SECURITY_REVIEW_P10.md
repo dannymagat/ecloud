@@ -22,7 +22,7 @@ items are listed as findings (§4).
 | T1 | Admin account takeover | argon2id m=19456 t=2 p=1; generic 401 + dummy verify for unknown e-mails; per-IP (30/5 min) and per-account (10 failures → 15 min lock) limits failing **closed** without Redis; TOTP (mandatory for platform bindings / `require_mfa`); MFA challenge 5 attempts — **now atomic** (P10-A) + per-IP limit; opaque 256-bit session tokens hashed at rest, idle 30 min / absolute 12 h, revocation; audit of `auth:login` / `auth:login:failed`; fail2ban `ecloud-admin` events (P10-A) | `packages/db/src/admin.ts`; `apps/api/src/auth/rate-limit.ts`; `apps/api/src/routes/auth.ts`; `apps/api/src/auth/principal.ts`; tests `apps/api/src/auth/mfa-verify.test.ts`, `apps/api/src/app.test.ts` (fail-closed login), `apps/api/src/phase4.integration.test.ts`; `infra/vps/fail2ban/` | real-time TOTP phishing relay | WebAuthn (F-P10-18) |
 | T2 | Subscriber credential attacks | portal limits per method/account/site/IP (`PORTAL_LIMITS`), 5 password failures / 5 min → 15 min lock; vouchers 32-symbol alphabet, HMAC-SHA-256 with pepper, single-use/limits (D-037); generic rejection page, password never echoed; fail2ban `ecloud-portal` events (P10-A) | `apps/api/src/internal/portal.ts`, `apps/api/src/crypto.ts`; tests `apps/portal/src/index.test.ts` (generic 422/429, no echo, P10-A event), `apps/api/src/portal.integration.test.ts`, `apps/api/src/integration.test.ts` (single-use voucher) | PAP over the AP LAN hop (UAM protocol limit) | — |
 | T3 | Portal spoofing / phishing | separate portal origin; CSP with nonce, `frame-ancestors 'none'`, `form-action` limited to the NAS; HSTS when secure; `userurl` filtered (`safeUserUrl`); NAS hand-off URL verified before redirect; branding from DB tokens only; Caddy portal vhost headers (drafted) | `apps/portal/src/index.ts`; `apps/api/src/internal/portal.ts`; tests `apps/portal/src/index.test.ts` (foreign hand-off rejected), `apps/api/src/portal-admin/*.test.ts`; `infra/vps/caddy/sites/ezecloud.caddy` | evil-twin SSIDs cannot be detected by the portal | — |
-| T4 | RADIUS client impersonation | tunnel-only RADIUS (D-032) — publish on 100.100.0.1 only (drafted), nftables/DOCKER-USER allow RADIUS only from `wg0` to the hub (drafted); `require_message_authenticator = yes`, `limit_proxy_state = auto`; unknown NAS → reject + `auth_events` with reason `unknown_nas` | `infra/freeradius/raddb/clients.conf`, `sites-enabled/status`; `apps/api/src/internal/aaa.ts`; `infra/vps/nftables/*`, `infra/vps/compose/compose.pilot.yaml`; tests `tests/aaa-contract/` | topology C (public RADIUS) relies on secret + allow-list (not enabled) | production client rendering (F-P10-07) |
+| T4 | RADIUS client impersonation | tunnel-only RADIUS (D-032) — publish on 100.100.0.1 only (drafted), nftables/DOCKER-USER allow RADIUS only from `wg0` to the hub (drafted); `require_message_authenticator = yes`, `limit_proxy_state = auto`; unknown NAS → reject + `auth_events` with reason `unknown_nas` | `infra/freeradius/raddb/clients.conf`, `sites-enabled/status`; `apps/api/src/internal/aaa.ts`; `infra/vps/nftables/*`, `infra/vps/compose/compose.pilot.yaml`; tests `tests/aaa-contract/` | topology C (public RADIUS) relies on secret + allow-list (not enabled) | — (production client rendering: F-P10-07 fixed 2026-10-09, §4.3) |
 | T5 | Stolen / shared RADIUS secrets | one secret per NAS, 32 random bytes, sealed AES-256-GCM (`enc:v1`, HKDF purpose per secret type), returned once, rotation endpoint (`nas:secret:rotate`, refused while impersonating, audited); no plaintext secret columns; FreeRADIUS `-X` forbidden in production | `apps/api/src/routes/resources.ts`, `apps/api/src/crypto.ts`; tests `tests/security/db-security.test.ts` (no plaintext secret columns) | controller-side clear storage outside ECLOUD | dual-secret window (F-P10-06); key ring (F-P10-04) |
 | T6 | API abuse | API keys `eck_` + 32 random bytes, SHA-256 at rest, prefix lookup, constant-time compare, expiry/revocation/org status/`allowed_cidrs`; export limit 10/h; idempotency keys; 1 MiB public / 64 KiB internal body limits; `api.` vhost Bearer-only (drafted) | `apps/api/src/auth/principal.ts`, `apps/api/src/export-guard.ts`, `apps/api/src/app.ts`; tests `apps/api/src/units.test.ts`, `apps/api/src/app.test.ts` | — | per-key / per-tenant request rate limit and invalid-key throttling (F-P10-05) |
 | T7 | Injection | Kysely parameterised queries only (no `sql.raw` in app code), zod validation of body, query and params on every route (strictness per schema), `radclient` via `execFile` + stdin (no shell), portal HTML auto-escaped, FreeRADIUS `rlm_sql` safe characters, `macaddr`/`inet` types | `apps/api/src/http/route.ts`, `apps/worker/src/coa/radclient.ts`, `apps/portal/src/pages.ts`; tests `apps/worker/src/coa/radclient.test.ts`, `apps/portal/src/index.test.ts` (escaped username), `apps/api/src/app.test.ts` (validation problems) | hostile strings kept in `accounting_records.raw` (rendered escaped) | — |
@@ -51,7 +51,7 @@ items are listed as findings (§4).
 | Parameterised DB access | IMPLEMENTED | Kysely; no `sql.raw` in app code |
 | Brute-force / abuse controls | IMPLEMENTED (+P10-A) app side; DRAFTED host side | rate limits; atomic MFA attempts; fail2ban jails + app events |
 | Secrets outside source control | IMPLEMENTED (+P10-A) | check-no-secrets CI; `_FILE` support; `scripts/secrets/` |
-| Protect RADIUS shared secrets | IMPLEMENTED (sealed, per NAS) / GAP (key ring, dual window, renderer) | §1 T5 |
+| Protect RADIUS shared secrets | IMPLEMENTED (sealed, per NAS; rendered 0640 clients file, F-P10-07 fixed) / GAP (key ring, dual window) | §1 T5 |
 | Restrict database exposure | IMPLEMENTED dev / DRAFTED pilot | no `ports:` on postgres/redis in the pilot file |
 | Minimal public ports | DRAFTED | 22, 80, 443 (+udp), 51820 only (`docs/VPS_CHANGE_LIST.md` §5) |
 | Audit privileged actions | IMPLEMENTED | `apps/api/src/audit.ts`, route-level audit enforcement |
@@ -89,7 +89,7 @@ rendered FreeRADIUS clients happens after D-031 approval (SECURITY_ARCHITECTURE 
 | F-P10-04 | Medium | Envelope keys (`MFA_ENCRYPTION_KEY`, `DATA_ENCRYPTION_KEY`) have no key id / key ring: in-place rotation makes every sealed TOTP secret, NAS/UAM secret and controller credential undecryptable (docs/SECRETS_MANAGEMENT.md R4/R5 describe the only safe interim procedure) | `v2.<kid>.…` envelope format + key ring config + background re-wrap job; keep `v1` readable |
 | F-P10-05 | Medium | No per-API-key / per-tenant request rate limit on the public API (T6); every invalid Bearer token costs a DB lookup | Redis fixed-window per key and per org (fail open), per-IP throttle on invalid keys |
 | F-P10-06 | Medium | NAS secret rotation has no dual-secret window (SECURITY_ARCHITECTURE §4.1); a NAS rejects until reconfigured | dual client definitions during the window once the renderer exists |
-| F-P10-07 | High (pilot readiness) | The production FreeRADIUS `clients.conf` renderer from `nas_clients` does not exist yet; the pilot `freeradius` service is therefore behind a Compose profile and VPS-RADIUS-1 is blocked | implement the worker renderer (0600, read-only mount, `RADIUS_CLIENTS_RENDERED=1`) |
+| ~~F-P10-07~~ | High (pilot readiness) | **Fixed 2026-10-09 (§4.3).** Was: the production FreeRADIUS `clients.conf` renderer from `nas_clients` did not exist; the pilot `freeradius` service was behind a Compose profile and VPS-RADIUS-1 was blocked | done: `radius-clients` one-shot renderer + rendered-clients volume (§4.3) |
 | F-P10-14 | Low | `npm audit` (dev): 7 advisories (5 high, 2 moderate) all via `tailwindcss` 3 → `chokidar`/`fast-glob`/`micromatch`/`braces`, `postcss-nested`/`postcss-selector-parser` — build-time CSS tooling of `apps/admin`, not in any runtime image (production audit: 0). Fix requires tailwindcss 4 (major) | schedule the tailwind 4 migration; CI reports dev advisories (artifact), gates production only |
 | F-P10-15 | Low | Admin test image: nginx 1.28.2 in `nginxinc/nginx-unprivileged:1.28.2-alpine` has 1 CRITICAL + 6 HIGH fixed only in 1.28.3 (no newer upstream image digest at review time) | local-testing image only (production serves the SPA from Caddy, D-030); CI scans it report-only; bump when upstream publishes |
 | F-P10-16 | Low | `/readyz` on the public listener reveals dependency status | blocked at the edge (Caddy 404); optionally move to the internal listener |
@@ -99,6 +99,53 @@ rendered FreeRADIUS clients happens after D-031 approval (SECURITY_ARCHITECTURE 
 | F-P10-20 | Low (functional) | The worker resolves `secret_ref` only as `env:`/`file:`, while the API seals NAS secrets as `enc:v1` → CoA/Disconnect for API-created NAS records cannot get the secret (CoA is off, D-006) | decide whether the worker holds `DATA_ENCRYPTION_KEY` (wider key exposure) or the API renders CoA secrets; resolve before enabling CoA |
 | F-P10-21 | Low | GitHub Actions referenced by tag (`actions/checkout@v4`, …), no Renovate/Dependabot | pin by commit SHA + automated update PRs |
 | F-P10-22 | Info | Pilot FreeRADIUS `read_only` + tmpfs paths and the root:10001 0440 secret model are not runtime-verified on Linux (Docker Desktop on macOS does not enforce bind-mount ownership like Linux) | verify on the first approved host run |
+
+### 4.3 F-P10-07 fix (2026-10-09): rendered FreeRADIUS clients
+
+Design: a one-shot CLI in the api image, `node apps/api/dist/radius-clients-cli.js`
+(`apps/api/src/radius-clients/{load,render,write,run}.ts`), reads every active, non-deleted
+`nas_clients` row of non-deleted organizations through the platform role (`withPlatform`, audited
+`radius:clients:render`), opens each `enc:v1` `secret_ref` with the api's `DATA_ENCRYPTION_KEY`
+(`NAS_SECRET_PURPOSE`) and atomically replaces `ecloud-nas.conf` (dot-temp file in the same
+directory, `O_EXCL|O_NOFOLLOW`, 0640, fsync, rename, dir fsync) on a named volume that FreeRADIUS
+mounts read-only (`nocopy`) over `/etc/freeradius/clients.d/`. The image's `clients.conf` is now
+only `$INCLUDE clients.d/`; the dev client moved to `clients.d/dev.conf`, which the volume hides.
+
+| Control | Implementation | Evidence |
+|---|---|---|
+| One client per NAS, exact unicast host | `ipaddr = <ip>/32` (`/128`, canonical RFC 5952 text for IPv6); networks, hostnames, zone ids, unspecified, loopback, link-local, multicast / reserved and IPv4-mapped / -compatible IPv6 refused (`canonicalNasAddress`, packages/shared/src/net-guard.ts) | `apps/api/src/radius-clients/radius-clients.test.ts` (61 tests), `packages/shared/src/net-guard.test.ts` |
+| No tenant free text | client name `nas-<uuid>`, `shortname = <uuid>` (what `resolveNas()` already matches) | unit + integration (`NAS name` absent from the file) |
+| Syntax-injection proof | secret allow-list `[A-Za-z0-9._~+/=-]{16,128}`, single-quoted (literal in FR3); quotes, `\`, `$`, braces, `#`, whitespace, CR/LF, NUL, non-ASCII rejected (row skipped); id must be a lowercase UUID; rows sharing a canonical address are all left out (each such row skipped) | `radius-clients.test.ts` |
+| BlastRADIUS | `require_message_authenticator` from `nas_clients` (default `yes`, `limit_proxy_state = auto`); a relaxed NAS gets `limit_proxy_state = yes`; the summary counts relaxed clients | unit tests |
+| Fail closed, per row vs global | per-row problem (bad / special address, bad secret, unopenable or unsupported `secret_ref`, shared address) → that row is **skipped**, the file is written with the valid NAS, stdout JSON `skipped: {count, nas: [{id, reason}]}`, exit **3**. Global problems → exit 1, nothing written, previous file kept: zero valid clients, a key that opens none of the sealed secrets (wrong / rotated `DATA_ENCRYPTION_KEY`), a DB error; production refuses the dev / short key (exit 2). Errors and the summary name NAS ids and rules, never secrets or URLs | unit tests; `--check` against `ecloud_test`: 50 clients, 43 skipped (27 other-key, 16 placeholder scheme), exit 3, nothing written |
+| FreeRADIUS refuses unsafe start | entrypoint with `RADIUS_CLIENTS_RENDERED=1`: exit 1 if `clients.d/dev.conf` is visible (volume not mounted) or `ecloud-nas.conf` is missing / empty / defines no `client nas-` | integration test + local run of the rebuilt image |
+| Reload semantics | FreeRADIUS 3.2.10 SIGHUP re-reads modules but **not clients** (verified: after HUP the old secret still answered, the new one did not; after `docker restart` the reverse) → trigger = re-render + container restart | `apps/api/src/radius-clients.integration.test.ts` "SIGHUP is not enough" |
+| Permissions | api image ships `/var/lib/ecloud/radius-clients` `node:101` 2750; empty-volume copy-up keeps it; renderer runs `user: '1000:101'`, so the file is `1000:101` 0640 and freerad (101) reads it through the group | local hardened run (read-only, cap_drop ALL): `drwxr-s--- 1000 101`, `-rw-r----- 1000 101 ecloud-nas.conf`; FreeRADIUS `-XC` on the volume: client loaded, "Configuration appears to be OK" |
+
+**Independent review (2026-10-09): PASS WITH FIXES, fixes applied.**
+(1) MEDIUM: IPv4-mapped IPv6 (`::ffff:a.b.c.d`, distinct in `inet` so `uq_nas_clients_ip` missed
+it and it could shadow another tenant's NAS) and special addresses were accepted by the API and
+the renderer → one shared rule `canonicalNasAddress` used by `NasCreate` / `NasUpdate` (API 400,
+message names the rule) and the renderer (row skipped; IPv6 canonicalised before the duplicate
+check), plus database backstop migration `027_nas_ip_unicast_host.sql`: CHECK
+`ck_nas_clients_nas_ip_unicast_host` on active, non-deleted rows (`/32` / `/128`, not `0/8`,
+`127/8`, `169.254/16`, `224/3`, `::/96`, `::ffff:0:0/96`, `fe80::/10`, `ff00::/8`), added
+`NOT VALID` so an unknown database with old rows cannot fail the migration (0 violating rows in
+dev and `ecloud_test`; such rows can still be disabled / soft-deleted, the renderer skips them).
+(2) LOW/MEDIUM: one bad row no longer blocks every NAS change (per-row skip, exit 3, see table).
+(3) `freeradius -XC` on the rendered file runs in the integration test. Evidence: 34 net-guard
+tests, 61 renderer unit tests, 8 integration tests (API 400 for 10 mapped / special addresses on
+create and PATCH, CHECK violations for 6 addresses and for re-activating a disabled loopback row,
+skipped row reported by id, `-XC` "Configuration appears to be OK", FreeRADIUS reply only with
+the ECLOUD secret from a fixed non-loopback NAS address on a throw-away docker network).
+
+End to end (`ECLOUD_TEST_RADIUS=1`, both the dev image and the rebuilt image): a NAS sealed by the
+API envelope is rendered, FreeRADIUS (`--network none`, repo `clients.conf` + entrypoint) answers
+Access-Requests with that secret and silently drops a wrong secret; a rotated secret works only
+after re-render + restart. Residual: F-P10-06 (no dual-secret window) and F-P10-04 (no key ring)
+unchanged; whether the pilot AP's uspot sends Message-Authenticator is still a device test
+(SECURITY_ARCHITECTURE §4.2 ST1): if it does not, FreeRADIUS logs the BlastRADIUS drop and the
+operator sets `require_message_authenticator=false` on that NAS, re-renders and restarts.
 
 ## 5. Dependencies (SCA), lockfile, SBOM
 

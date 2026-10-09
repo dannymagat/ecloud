@@ -106,6 +106,9 @@ export class Envelope {
  */
 export const SECRET_REF_PREFIX = 'enc:';
 
+/** HKDF purpose label of the envelope that seals `nas_clients.secret_ref` (data key). */
+export const NAS_SECRET_PURPOSE = 'ecloud:nas:secret:v1'; // check-no-secrets: allow
+
 export function sealSecretRef(envelope: Envelope, secret: string): string {
   return `${SECRET_REF_PREFIX}${envelope.encrypt(secret)}`;
 }

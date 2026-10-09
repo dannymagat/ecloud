@@ -1,0 +1,11 @@
+# DRAFT, NOT APPLIED (LCL-MON-1) -> /etc/systemd/system/
+[Unit]
+Description=ECLOUD health check every 5 minutes
+
+[Timer]
+OnBootSec=5min
+OnUnitActiveSec=5min
+AccuracySec=30s
+
+[Install]
+WantedBy=timers.target

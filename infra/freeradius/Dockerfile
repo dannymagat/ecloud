@@ -35,7 +35,8 @@ COPY --chown=freerad:freerad raddb/ ${RADDB}/
 RUN ln -s ../mods-available/rest "${RADDB}/mods-enabled/rest" \
  && ln -s ../mods-available/sql  "${RADDB}/mods-enabled/sql" \
  && chown -h freerad:freerad "${RADDB}/mods-enabled/rest" "${RADDB}/mods-enabled/sql" \
- && chmod 0640 "${RADDB}/clients.conf" "${RADDB}/sites-enabled/status"
+ && chmod 0750 "${RADDB}/clients.d" \
+ && chmod 0640 "${RADDB}/clients.conf" "${RADDB}/clients.d/dev.conf" "${RADDB}/sites-enabled/status"
 
 COPY --chown=root:root --chmod=0755 docker-entrypoint.sh /usr/local/bin/ecloud-entrypoint.sh
 COPY --chown=root:root --chmod=0755 healthcheck.sh       /usr/local/bin/ecloud-healthcheck.sh

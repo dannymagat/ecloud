@@ -4,14 +4,19 @@
  */
 import { hashPassword } from '@ecloud/db';
 import { ScheduleRuleSchema, isValidTimeZone } from '@ecloud/policy-engine';
-import { NotFoundError, ValidationError } from '@ecloud/shared';
+import {
+  NAS_ADDRESS_RULE,
+  NotFoundError,
+  ValidationError,
+  canonicalNasAddress,
+} from '@ecloud/shared';
 import type { DbTransaction } from '@ecloud/db';
 import { sql } from 'kysely';
 import { z } from 'zod';
 import { writeAudit } from '../audit.js';
 import { requestIsImpersonating } from '../auth/middleware.js';
 import type { AppDeps } from '../context.js';
-import { Envelope, randomToken, sealSecretRef } from '../crypto.js';
+import { Envelope, NAS_SECRET_PURPOSE, randomToken, sealSecretRef } from '../crypto.js';
 import { OrgIdParams, ResourceSchema, problemResponses } from '../http/common.js';
 import { ImpersonationForbiddenError } from '../http/errors.js';
 import { defineRoute, type AnyRouteSpec } from '../http/route.js';
@@ -86,7 +91,10 @@ const NetworkDeviceUpdate = NetworkDeviceCreate.partial().omit({ serial: true })
 const NasCreate = z.strictObject({
   site_id: z.uuid(),
   name,
-  nas_ip: z.union([z.ipv4(), z.ipv6()]),
+  /** F-P10-07 review: a single unicast host (no mapped / loopback / link-local / multicast). */
+  nas_ip: z
+    .union([z.ipv4(), z.ipv6()])
+    .refine((ip) => canonicalNasAddress(ip) !== null, { message: NAS_ADDRESS_RULE }),
   nas_identifier: z.string().trim().min(1).max(253).nullable().optional(),
   /** D-035: the @ecloud/adapters key; `adapter_type_key` is derived from it. */
   adapter_key: z.enum(NAS_ADAPTER_KEYS),
@@ -214,7 +222,7 @@ function withoutKeys(row: Row, keys: readonly string[]): Row {
 }
 
 export function resourceRoutes(deps: AppDeps): AnyRouteSpec[] {
-  const dataEnvelope = new Envelope(deps.config.dataEncryptionKey, 'ecloud:nas:secret:v1');
+  const dataEnvelope = new Envelope(deps.config.dataEncryptionKey, NAS_SECRET_PURPOSE);
   const argonMemory = deps.config.base.argon2.memoryKib;
 
   const sites = crudRoutes(deps, {

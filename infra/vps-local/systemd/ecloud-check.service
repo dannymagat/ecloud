@@ -1,0 +1,16 @@
+# DRAFT, NOT APPLIED (docs/VPS_LOCAL_CHANGE_LIST.md LCL-MON-1) -> /etc/systemd/system/
+# Read-only health check every 5 min; failures go to the journal (tag ecloud-check) and, when
+# CHECK_PUSH_URL is set in /etc/ecloud/check.env, success is pushed to uptime-kuma.
+[Unit]
+Description=ECLOUD health check (read-only)
+After=docker.service
+
+[Service]
+Type=oneshot
+EnvironmentFile=-/etc/ecloud/check.env
+ExecStart=/opt/ecloud/infra/vps-local/scripts/check-host.sh ecloud
+Nice=10
+PrivateTmp=yes
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes

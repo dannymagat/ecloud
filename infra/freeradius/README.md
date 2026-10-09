@@ -17,7 +17,8 @@ infra/freeradius/
     mods-available/sql         rlm_sql_postgresql -> radius.radacct_raw (role ecloud_radius)
     mods-config/sql/main/postgresql/queries.conf   per-status-type INSERT ... ON CONFLICT DO NOTHING (no UPDATE)
     policy.d/ecloud            ecloud_request_context, ecloud_rest_headers, ecloud_post_auth_context
-    clients.conf               rendered TEMPLATE with the single dev client
+    clients.conf               only `$INCLUDE clients.d/`
+    clients.d/dev.conf         the single dev client (hidden in production by the rendered-clients volume)
     dictionary, dictionary.ecloud   ChilliSpot Gigawords 21-23 etc., ECLOUD-* internal attributes
   test/                      radclient attribute files for the A9 lab tests (placeholders only)
 ```
@@ -30,7 +31,7 @@ infra/freeradius/
 | §2.1 pipeline `filter_username`, `rewrite_calling_station_id`, `rewrite_called_station_id`, `Message-Authenticator := 0x00` in every reply | `sites-enabled/ecloud` | done (stock policies from the image) |
 | §2.2/§2.6 PAP / CHAP / MS-CHAP against `control:Cleartext-Password`; `Accept` when ECLOUD verified itself | `authenticate { Auth-Type PAP/CHAP/MS-CHAP }` | done |
 | §2.4 802.1X EAP-TTLS / PEAP, inner-tunnel | -- | **not in this milestone**; `eap` module and `inner-tunnel` site removed in the Dockerfile |
-| §3 clients rendered from `nas_clients`; one secret per NAS; `read_clients` later | `clients.conf` (template with one dev client), `mods-available/sql` `read_clients = no` | dev done; renderer is a worker task (A5/A6/A3 later) |
+| §3 clients rendered from `nas_clients`; one secret per NAS; `read_clients` later | `clients.conf` → `$INCLUDE clients.d/`; dev: `clients.d/dev.conf`; production: `ecloud-nas.conf` rendered by `node apps/api/dist/radius-clients-cli.js` (api image) into a volume mounted read-only over `clients.d/` | done (F-P10-07, docs/SECURITY_REVIEW_P10.md §4.3). FreeRADIUS 3.2 reads clients only at start-up (SIGHUP reloads modules, not clients; verified) → re-render + `docker compose restart freeradius` |
 | §4.2 HTTP code mapping, no fail-open | `authorize` block: `fail/invalid -> reject "AAA backend unavailable"`, `401/403/404 -> reject` | done, verified |
 | §4.3 dictionary gap: ChilliSpot Gigawords 21-23 | `dictionary.ecloud` (+ Session-State 15, VLAN-Id 24) | done; `CoovaChilli-*` aliases intentionally NOT defined (see file header) |
 | §5 `rlm_sql` insert-only into `radius.radacct_raw`, idempotency on retransmit, Gigawords folded, `Event-Timestamp` else receive time | `mods-available/sql`, `queries.conf` | done, verified against `packages/db/migrations/009_radius_schema.sql` |
@@ -47,7 +48,7 @@ infra/freeradius/
 |---|---|---|
 | Listening address inside the container | `RADIUS_LISTEN_IP=0.0.0.0` | `*` (default) |
 | Published ports | `127.0.0.1:1812-1813/udp` only | `${RADIUS_BIND_IP}:1812-1813/udp` = WireGuard hub `100.100.0.1` (tunnel-only, D-032); optional RadSec 2083 later; never 3799 |
-| Clients | one `client ecloud_dev` from `RADIUS_DEV_CLIENT_CIDR` (default `172.16.0.0/12`: compose network + Docker gateway, which is the source of host-published packets -- verified `172.19.0.1`) with `RADIUS_DEV_CLIENT_SECRET` | `clients.conf` rendered by the ECLOUD worker from `nas_clients` (0600, mounted read-only over `/etc/freeradius/clients.conf`); set `RADIUS_CLIENTS_RENDERED=1` so the entrypoint stops requiring the dev variables |
+| Clients | `clients.d/dev.conf`: one `client ecloud_dev` from `RADIUS_DEV_CLIENT_CIDR` (default `172.16.0.0/12`: compose network + Docker gateway, which is the source of host-published packets -- verified `172.19.0.1`) with `RADIUS_DEV_CLIENT_SECRET` | `clients.d/ecloud-nas.conf` rendered from `nas_clients` by the `radius-clients` one-shot (api image, 0640 `1000:101`) into a volume mounted read-only (`nocopy`) over `/etc/freeradius/clients.d`; `RADIUS_CLIENTS_RENDERED=1` makes the entrypoint skip the dev variables and refuse to start if `dev.conf` is visible or the rendered file is missing/empty |
 | ECLOUD API | `ECLOUD_INTERNAL_URL=http://host.docker.internal:3001` (api runs on the host, `INTERNAL_PORT`) | api container on the compose network (`http://api:3001`) or `https://` with the CA pinned in `mods-available/rest` `tls {}` |
 | Secrets | plain env with obviously-fake defaults (`ecloud_dev_*`) | `RADIUS_SQL_PASSWORD_FILE`, `RADIUS_STATUS_SECRET_FILE`, `INTERNAL_API_TOKEN_FILE` (Compose `secrets:` -> `/run/secrets/...`), resolved by `docker-entrypoint.sh`; the healthcheck uses `radclient -S <file>` |
 | PostgreSQL role | `ecloud_radius` / `RADIUS_SQL_PASSWORD` -- **not yet created by the dev init** (see §6) | `ecloud_radius`, INSERT-only on `radius.radacct_raw` (`packages/db/migrations/010`) |

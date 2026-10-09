@@ -1,0 +1,100 @@
+# =============================================================================================
+#  ECLOUD on vps-local (EZEOS v2.1 / Oracle Linux 8 appliance) — Compose OVERRIDE
+#  DRAFT, NOT APPLIED (docs/VPS_LOCAL_CHANGE_LIST.md, per-id owner approval).
+#
+#  Used ON TOP OF infra/vps/compose/compose.pilot.yaml (unchanged, reused):
+#    docker compose --env-file /opt/ecloud/ecloud.env \
+#      -f /opt/ecloud/infra/vps/compose/compose.pilot.yaml \
+#      -f /opt/ecloud/infra/vps-local/compose/compose.vps-local.yaml <command>
+#  (wrapper: infra/vps-local/scripts/ecloud-compose). Needs Compose >= 2.24.4 for !reset /
+#  !override; the host has 2.27.0.
+#
+#  LAN ONLY (owner decision 2026-10-09): nothing is exposed to the Internet, the Cloudflare
+#  tunnel is not used. Differences from the base file:
+#    - api / portal are NOT published on the host at all (the base publishes 127.0.0.1:3000 /
+#      127.0.0.1:3002); the only web entry is the `edge` container (nginx, TLS) on the LAN
+#      address: 8443 = admin SPA + same-origin /api, 8444 = captive portal.
+#    - freeradius (profile `radius`) publishes 1812/1813 udp on the LAN address instead of the
+#      WireGuard hub address (amends D-032 for the LAN pilot, D-042). The F-P10-07 fix is
+#      inherited unchanged from the base file: the `radius-clients` one-shot (api image, renders
+#      the NAS allow-list into the `radius_clients` volume, which backups never include), and
+#      freeradius depending on it with clients.d mounted read-only from that volume.
+#      After any NAS change: infra/vps-local/scripts/reload-radius.sh (re-renders; restarts
+#      freeradius on renderer exit 0 or 3; never restarts on 1/2). SIGHUP does not reload clients.
+#    - origins become the LAN URLs.
+#  Source restriction (LAN subnet only) for every LAN publish is enforced in the DOCKER-USER
+#  chain (infra/vps-local/firewall/docker-user.sh): firewalld zone rules do NOT see
+#  Docker-published ports (DNAT'ed packets are accepted by firewalld's `ct status dnat accept`).
+#  Relative paths in an override resolve against the FIRST file's directory, so every host
+#  path here is built from ECLOUD_ROOT.
+# =============================================================================================
+
+x-lan-origins: &lan-origins
+  PUBLIC_ADMIN_ORIGIN: https://${ECLOUD_LAN_IP:?ECLOUD_LAN_IP is required}:8443
+  # No separate integration-API origin on the LAN pilot: /api/v1 is served same-origin on 8443.
+  PUBLIC_API_ORIGIN: https://${ECLOUD_LAN_IP:?ECLOUD_LAN_IP is required}:8443
+  PUBLIC_PORTAL_ORIGIN: https://${ECLOUD_LAN_IP:?ECLOUD_LAN_IP is required}:8444
+
+services:
+  migrate:
+    environment:
+      <<: *lan-origins
+
+  api:
+    environment:
+      <<: *lan-origins
+    # Only reachable through `edge` on the Compose network.
+    ports: !reset []
+
+  portal:
+    environment:
+      <<: *lan-origins
+    ports: !reset []
+
+  worker:
+    environment:
+      <<: *lan-origins
+
+  freeradius:
+    # LAN-only RADIUS (D-042). Binding a specific host address requires bond1 to hold it when
+    # Docker starts (DHCP reservation + NetworkManager-wait-online, LCL-PRE-7).
+    ports: !override
+      - '${ECLOUD_LAN_IP:?ECLOUD_LAN_IP is required}:1812:1812/udp'
+      - '${ECLOUD_LAN_IP:?ECLOUD_LAN_IP is required}:1813:1813/udp'
+
+  # TLS edge: the admin image (static SPA in /usr/share/ecloud-admin, nginx-unprivileged, uid 101)
+  # with its local-testing nginx config replaced by infra/vps-local/edge/*.
+  edge:
+    image: ${ECLOUD_REGISTRY:-ghcr.io/OWNER}/ecloud-admin:${IMAGE_TAG:?IMAGE_TAG is required}
+    container_name: ecloud-edge
+    read_only: true
+    tmpfs:
+      - /tmp:size=32m,mode=1777
+    cap_drop: ['ALL']
+    security_opt: ['no-new-privileges:true']
+    restart: unless-stopped
+    # gid 10001 = ecloud-secrets: reads the 0440 TLS key file.
+    group_add: ['10001']
+    networks: [ecloud_internal]
+    volumes:
+      # Replaces the image's conf.d (local-testing admin-nginx.conf) with the edge config.
+      - ${ECLOUD_ROOT:-/opt/ecloud}/infra/vps-local/edge:/etc/nginx/conf.d:ro
+    secrets:
+      - edge_tls_crt
+      - edge_tls_key
+    ports:
+      # Container ports equal host ports so redirects and Host headers carry the real port.
+      - '${ECLOUD_LAN_IP:?ECLOUD_LAN_IP is required}:8443:8443'
+      - '${ECLOUD_LAN_IP:?ECLOUD_LAN_IP is required}:8444:8444'
+    healthcheck:
+      test: ['CMD', 'wget', '-q', '-O', '/dev/null', 'http://127.0.0.1:8081/healthz']
+      interval: 30s
+      timeout: 3s
+      retries: 3
+    deploy:
+      resources:
+        limits: { memory: 64M, cpus: '0.5', pids: 64 }
+
+secrets:
+  edge_tls_crt: { file: '${ECLOUD_TLS_DIR:-/opt/ecloud/tls}/edge.crt' }
+  edge_tls_key: { file: '${ECLOUD_TLS_DIR:-/opt/ecloud/tls}/edge.key' }

@@ -56,6 +56,27 @@ if [ -n "$missing" ]; then
 	exit 1
 fi
 
+#  Rendered clients (docs/SECURITY_REVIEW_P10.md F-P10-07): fail closed unless the
+#  rendered-clients volume is really mounted over clients.d/ (the image's dev client
+#  is then hidden) and holds a non-empty rendered file with at least one client.
+#  An empty directory would start a server that silently ignores every NAS.
+if [ -n "${RADIUS_CLIENTS_RENDERED:-}" ]; then
+	clients_dir=/etc/freeradius/clients.d
+	rendered="$clients_dir/${RADIUS_CLIENTS_RENDERED_FILE:-ecloud-nas.conf}"
+	if [ -e "$clients_dir/dev.conf" ]; then
+		echo "freeradius: RADIUS_CLIENTS_RENDERED is set but $clients_dir/dev.conf is visible; mount the rendered-clients volume over $clients_dir" >&2
+		exit 1
+	fi
+	if [ ! -s "$rendered" ] || [ ! -r "$rendered" ]; then
+		echo "freeradius: rendered clients file $rendered is missing, empty or unreadable; run the radius-clients renderer first" >&2
+		exit 1
+	fi
+	if ! grep -q '^client nas-' "$rendered"; then
+		echo "freeradius: rendered clients file $rendered defines no client" >&2
+		exit 1
+	fi
+fi
+
 case "$INTERNAL_API_TOKEN" in
 	*[%\"\\]*)
 		echo "freeradius: INTERNAL_API_TOKEN must not contain %, \" or \\ (it is embedded in an xlat string)" >&2
