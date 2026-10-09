@@ -40,7 +40,7 @@ import {
 } from './uam.js';
 
 /** Portal host per CAPTIVE_PORTAL_ARCHITECTURE.md §7.4 (not live until the D-031 gate). */
-export const PORTAL_ORIGIN = 'https://portal.ecloud.ezelink.ai';
+export const PORTAL_ORIGIN = 'https://portal.ezecloud.ezelink.ai';
 
 interface FirstPartySpec {
   readonly key: AdapterKey;
@@ -127,7 +127,7 @@ function uspotSetup(nasId: string): readonly SetupStep[] {
       'walled-garden-fqdn',
       'Walled garden (wildcards are not rendered)',
       'captive.walled-garden-fqdn',
-      'portal.ecloud.ezelink.ai,<IDP_HOSTS>',
+      'portal.ezecloud.ezelink.ai,<IDP_HOSTS>',
     ),
   ];
 }
@@ -198,7 +198,7 @@ const SPECS: readonly FirstPartySpec[] = [
         'coaport',
         '3799',
       ),
-      step('uamallowed', 'Walled garden', 'uamallowed', 'portal.ecloud.ezelink.ai,<IDP_HOSTS>'),
+      step('uamallowed', 'Walled garden', 'uamallowed', 'portal.ezecloud.ezelink.ai,<IDP_HOSTS>'),
       step('uamdomain', 'Wildcard IdP domains', 'uamdomain', '<IDP_DOMAINS>'),
       step(
         'definteriminterval',

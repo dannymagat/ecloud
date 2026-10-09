@@ -68,9 +68,9 @@ describe('portal config', () => {
       DATABASE_URL: 'postgres://u:p@db:5432/x',
       DATABASE_URL_PLATFORM: 'postgres://u2:p2@db:5432/x',
       REDIS_URL: 'redis://redis:6379',
-      PUBLIC_ADMIN_ORIGIN: 'https://ecloud.ezelink.ai',
-      PUBLIC_API_ORIGIN: 'https://api.ecloud.ezelink.ai',
-      PUBLIC_PORTAL_ORIGIN: 'https://portal.ecloud.ezelink.ai',
+      PUBLIC_ADMIN_ORIGIN: 'https://ezecloud.ezelink.ai',
+      PUBLIC_API_ORIGIN: 'https://api.ezecloud.ezelink.ai',
+      PUBLIC_PORTAL_ORIGIN: 'https://portal.ezecloud.ezelink.ai',
     };
     let base;
     try {

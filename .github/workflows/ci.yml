@@ -22,6 +22,38 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: bash scripts/check-no-secrets.sh
+      # P10-A: per-environment secret tooling (generate/rotate/validate) self-test, no values printed.
+      - run: bash scripts/secrets/selftest.sh
+
+  # P10-A dependency / supply-chain gate (SECURITY_ARCHITECTURE.md §6.9, T17).
+  supply-chain:
+    name: Dependencies (lockfile, audit, signatures, SBOM)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - name: Lockfile integrity (lockfileVersion 3, registry.npmjs.org only, sha512 everywhere)
+        run: node scripts/security/check-lockfile.mjs
+      # npm ci also refuses a lockfile that is out of sync with package.json.
+      - run: npm ci
+      - name: Registry signatures / provenance of the installed tree
+        run: npm audit signatures
+      - name: Production advisories (fails on high / critical)
+        run: npm audit --omit=dev --audit-level=high
+      - name: All advisories incl. dev tooling (report only; triage in docs/SECURITY_REVIEW_P10.md)
+        run: npm audit --json > npm-audit-all.json || true
+      - name: SBOM (CycloneDX, production dependency tree)
+        run: npm sbom --sbom-format cyclonedx --sbom-type application --omit=dev > sbom.cdx.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: supply-chain
+          path: |
+            sbom.cdx.json
+            npm-audit-all.json
+          retention-days: 90
 
   check:
     name: Build, lint, unit tests
@@ -144,3 +176,52 @@ jobs:
       - name: Stop the stack
         if: always()
         run: $COMPOSE down -v
+
+  # P10-A container image build + scan (SECURITY_ARCHITECTURE.md §6.9/§6.10). Trivy runs from its
+  # official image pinned by version + digest (no third-party action); nothing is pushed.
+  # Gate: CRITICAL vulnerabilities WITH an available fix fail the job for the images that ship
+  # (api, worker, portal, freeradius). HIGH and unfixed findings are reported in the artifact.
+  # The admin image is local-testing only (production serves the SPA from native Caddy, D-030)
+  # and is scanned report-only.
+  images:
+    name: Container images (build, Trivy scan, image SBOM)
+    runs-on: ubuntu-latest
+    needs: check
+    env:
+      TRIVY_IMAGE: aquasec/trivy:0.75.0@sha256:af6acf9a6b85dfe389a1941505c0ce9efef52a4719635e1a962f022a3d855daa
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build images (linux/amd64, VCS_REF = commit)
+        run: |
+          for target in api worker portal admin; do
+            docker build -f infra/docker/Dockerfile --target "$target" \
+              --build-arg VCS_REF="${GITHUB_SHA}" -t "ecloud-$target:ci" .
+          done
+          docker build -t ecloud-freeradius:ci infra/freeradius
+      - name: Trivy gate (CRITICAL with fix available)
+        run: |
+          mkdir -p image-reports
+          for image in api worker portal freeradius; do
+            docker run --rm -v /var/run/docker.sock:/var/run/docker.sock \
+              -v trivy-cache:/root/.cache "$TRIVY_IMAGE" image --quiet --scanners vuln \
+              --severity CRITICAL --ignore-unfixed --exit-code 1 "ecloud-$image:ci"
+          done
+      - name: Trivy reports + CycloneDX SBOM per image (report only)
+        if: always()
+        run: |
+          mkdir -p image-reports
+          for image in api worker portal admin freeradius; do
+            docker run --rm -v /var/run/docker.sock:/var/run/docker.sock \
+              -v trivy-cache:/root/.cache "$TRIVY_IMAGE" image --quiet --scanners vuln \
+              --severity HIGH,CRITICAL --format table "ecloud-$image:ci" \
+              > "image-reports/$image.trivy.txt" || true
+            docker run --rm -v /var/run/docker.sock:/var/run/docker.sock \
+              -v trivy-cache:/root/.cache "$TRIVY_IMAGE" image --quiet --format cyclonedx \
+              "ecloud-$image:ci" > "image-reports/$image.cdx.json" || true
+          done
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: image-reports
+          path: image-reports/
+          retention-days: 90

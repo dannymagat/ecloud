@@ -3,7 +3,7 @@
  * /healthz and graceful shutdown. All writes go through `withPlatform(…, 'worker:<job>')`.
  */
 import { createDb, type Db } from '@ecloud/db';
-import { redactUrl, type Logger } from '@ecloud/shared';
+import { MetricsRegistry, registerProcessMetrics, redactUrl, type Logger } from '@ecloud/shared';
 import { Queue, Worker, type Job, type Processor } from 'bullmq';
 import { Redis } from 'ioredis';
 import { sql } from 'kysely';
@@ -44,11 +44,15 @@ export interface StartOptions {
   fetch?: FetchLike;
   /** Skip registering repeatable schedulers (tests drive processors directly). */
   schedulers?: boolean;
+  /** Interval of the missing-scheduler check (default 60 s). */
+  schedulerCheckMs?: number;
 }
 
 export interface RunningWorker {
   healthPort: number;
   queues: readonly QueueName[];
+  /** Prometheus text exposition (also served at GET /metrics on the health listener). */
+  renderMetrics(): Promise<string>;
   stop(): Promise<void>;
 }
 
@@ -60,7 +64,12 @@ export async function startWorker(options: StartOptions): Promise<RunningWorker>
   });
   await redis.connect();
   const db =
-    options.db ?? createDb(config.app.database.platformUrl, { applicationName: 'ecloud-worker' });
+    options.db ??
+    createDb(config.app.database.platformUrl, {
+      applicationName: 'ecloud-worker',
+      onIdleError: (error) =>
+        logger.warn({ err: error.message }, 'postgres idle connection lost; pool will reconnect'),
+    });
   const state: WorkerState = new RedisWorkerState(redis);
   const resolveSecret = options.resolveSecret ?? createSecretResolver();
   const connection = { connection: redis, prefix: QUEUE_PREFIX };
@@ -112,6 +121,10 @@ export async function startWorker(options: StartOptions): Promise<RunningWorker>
         drained.touchedSessionIds,
       );
       if (drained.read > 0) logger.debug({ drained, quota }, 'accounting.drain tick');
+      drainedRows.inc({ kind: 'processed' }, drained.processed);
+      drainedRows.inc({ kind: 'duplicates' }, drained.duplicates);
+      drainedRows.inc({ kind: 'unresolved' }, drained.unresolved);
+      drainedRows.inc({ kind: 'skipped' }, drained.skipped);
       return { ...drained, touchedSessionIds: drained.touchedSessionIds.length, quota };
     }),
     [QUEUES.policyEnforce]: singleFlight(QUEUES.policyEnforce, async () => {
@@ -194,6 +207,44 @@ export async function startWorker(options: StartOptions): Promise<RunningWorker>
       );
   }
 
+  // Phase 10 metrics: job outcomes/latency, drained rows, queue depths (computed per scrape).
+  const metrics = new MetricsRegistry();
+  const stopProcessMetrics = registerProcessMetrics(metrics, 'ecloud_worker');
+  const jobsTotal = metrics.counter({
+    name: 'ecloud_worker_jobs_total',
+    help: 'Finished BullMQ jobs by queue and result (completed|failed).',
+    labelNames: ['queue', 'result'],
+  });
+  const jobDuration = metrics.histogram({
+    name: 'ecloud_worker_job_duration_seconds',
+    help: 'BullMQ job processing time by queue.',
+    labelNames: ['queue'],
+  });
+  const drainedRows = metrics.counter({
+    name: 'ecloud_worker_accounting_drained_rows_total',
+    help: 'radacct_raw rows handled by accounting.drain by kind.',
+    labelNames: ['kind'],
+  });
+  const schedulerRegistrations = metrics.counter({
+    name: 'ecloud_worker_scheduler_registrations_total',
+    help: 'Times the repeatable job schedulers were (re-)registered (startup and Redis reconnects).',
+  });
+  const depthStates = ['waiting', 'active', 'delayed', 'failed', 'prioritized'] as const;
+  metrics.gauge({
+    name: 'ecloud_worker_queue_depth',
+    help: 'BullMQ job counts per queue and state at scrape time (dead-letter queues included).',
+    labelNames: ['queue', 'state'],
+    collect: async () => {
+      const all = [...new Set([...Object.values(QUEUES), ...Object.values(DEAD_LETTER)])];
+      const counts = await Promise.all(
+        all.map(async (name) => [name, await queue(name).getJobCounts(...depthStates)] as const),
+      );
+      return counts.flatMap(([name, c]) =>
+        depthStates.map((state) => ({ labels: { queue: name, state }, value: c[state] ?? 0 })),
+      );
+    },
+  });
+
   const workers: Worker[] = [];
   const names = Object.values(QUEUES);
   for (const name of names) {
@@ -201,8 +252,15 @@ export async function startWorker(options: StartOptions): Promise<RunningWorker>
       ...connection,
       concurrency: WORKER_CONCURRENCY[name],
     });
+    worker.on('completed', (job) => {
+      jobsTotal.inc({ queue: name, result: 'completed' });
+      if (job.processedOn !== undefined && job.finishedOn !== undefined) {
+        jobDuration.observe({ queue: name }, (job.finishedOn - job.processedOn) / 1_000);
+      }
+    });
     worker.on('failed', (job, err) => {
       if (job === undefined) return;
+      jobsTotal.inc({ queue: name, result: 'failed' });
       const exhausted = job.attemptsMade >= (job.opts.attempts ?? 1);
       logger.warn(
         { queue: name, jobId: job.id, attempt: job.attemptsMade, exhausted, err: err.message },
@@ -228,20 +286,66 @@ export async function startWorker(options: StartOptions): Promise<RunningWorker>
     workers.push(worker);
   }
 
-  if (options.schedulers !== false) {
+  // `all`: (re)define every scheduler (start-up: the definitions may have changed).
+  // `missing`: only add schedulers that are gone, so a flapping Redis never re-upserts an existing
+  // one (which could keep pushing its next run back).
+  const registerSchedulers = async (mode: 'all' | 'missing'): Promise<number> => {
+    let registered = 0;
     for (const s of SCHEDULES) {
-      await queue(s.queue).upsertJobScheduler(`${s.queue}.schedule`, s.schedule, {
+      const id = `${s.queue}.schedule`;
+      if (mode === 'missing' && (await queue(s.queue).getJobScheduler(id)) !== undefined) continue;
+      await queue(s.queue).upsertJobScheduler(id, s.schedule, {
         name: s.queue,
         data: {},
         opts: SCHEDULED_JOB_OPTIONS,
       });
+      registered += 1;
     }
+    if (registered > 0) schedulerRegistrations.inc();
+    return registered;
+  };
+  // P10-B review M3: one attempt at a time (re-entry guard), retried with backoff, so a reconnect
+  // that fails mid-upsert does not leave drain/reap unscheduled until the next reconnect.
+  let restoring: Promise<void> | undefined;
+  let stopped = false;
+  const restoreSchedulers = (reason: string): Promise<void> => {
+    restoring ??= (async () => {
+      for (let attempt = 1; attempt <= 5 && !stopped; attempt += 1) {
+        try {
+          const n = await registerSchedulers('missing');
+          if (n > 0) logger.warn({ reason, registered: n }, 'job schedulers re-registered');
+          return;
+        } catch (e: unknown) {
+          logger.error({ err: e, reason, attempt }, 'job scheduler re-registration failed');
+          await new Promise((r) => setTimeout(r, 500 * 2 ** (attempt - 1)).unref());
+        }
+      }
+    })().finally(() => {
+      restoring = undefined;
+    });
+    return restoring;
+  };
+  let schedulerCheck: NodeJS.Timeout | undefined;
+  const onRedisReady = (): void => void restoreSchedulers('redis reconnected');
+  if (options.schedulers !== false) {
+    await registerSchedulers('all');
+    // P10-B failure drill: the pilot Redis has no persistence, so a Redis restart loses the
+    // scheduler definitions and nothing would drain/reap until the worker restarted. Every
+    // reconnect ('ready' after the initial connect) restores missing ones, and a periodic check
+    // covers data loss without a reconnect (e.g. FLUSHDB) and a reconnect whose retries failed.
+    redis.on('ready', onRedisReady);
+    schedulerCheck = setInterval(
+      () => void restoreSchedulers('periodic check'),
+      options.schedulerCheckMs ?? 60_000,
+    );
+    schedulerCheck.unref();
   }
 
   const health = createHealthServer({
     host: config.health.host,
     port: config.health.port,
     queues: names,
+    metrics: () => metrics.render(),
     checks: {
       redis: async () => (await redis.ping()) === 'PONG',
       database: async () => {
@@ -268,9 +372,14 @@ export async function startWorker(options: StartOptions): Promise<RunningWorker>
   const stop = (): Promise<void> => {
     stopping ??= (async () => {
       logger.info('worker stopping');
+      stopped = true;
+      if (schedulerCheck !== undefined) clearInterval(schedulerCheck);
+      redis.off('ready', onRedisReady);
+      await restoring?.catch(() => undefined);
       await Promise.allSettled(workers.map((w) => w.close()));
       await Promise.allSettled([...queues.values()].map((q) => q.close()));
       await new Promise<void>((resolve) => health.close(() => resolve()));
+      stopProcessMetrics();
       await redis.quit().catch(() => undefined);
       if (options.db === undefined) await db.destroy();
       logger.info('worker stopped');
@@ -278,5 +387,5 @@ export async function startWorker(options: StartOptions): Promise<RunningWorker>
     return stopping;
   };
 
-  return { healthPort, queues: names, stop };
+  return { healthPort, queues: names, renderMetrics: () => metrics.render(), stop };
 }

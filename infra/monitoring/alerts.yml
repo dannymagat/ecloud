@@ -1,0 +1,145 @@
+# DRAFT alert rules (not applied; D-031). Routed via webhook only (no MTA on the host,
+# DEPLOYMENT_ARCHITECTURE.md §6: Alertmanager -> ALERT_WEBHOOK_URL, channel REQUIRES CLARIFICATION).
+# Thresholds are PROPOSED starting points from the P10-B load test (docs/PERFORMANCE.md) and
+# SECURITY_ARCHITECTURE.md alert list; tune after the pilot baseline. Metric labels never carry
+# tenant ids, usernames, MACs or IPs, so per-tenant alerts stay in the app/audit layer.
+groups:
+  - name: ecloud-availability
+    rules:
+      - alert: EcloudTargetDown
+        expr: up{job=~"ecloud-(api|worker|portal)"} == 0
+        for: 2m
+        labels: { severity: critical }
+        annotations:
+          summary: '{{ $labels.job }} is not answering /metrics'
+          runbook: docs/FAILURE_DRILLS.md
+      - alert: EcloudAaaBackendUnavailable
+        # Fail-closed answers (503 -> FreeRADIUS reject): every login fails while this fires.
+        expr: sum(rate(ecloud_aaa_authorize_decisions_total{outcome="unavailable"}[5m])) > 0
+        for: 2m
+        labels: { severity: critical }
+        annotations:
+          summary: 'AAA authorize answers 503 (database/redis unavailable) - subscribers cannot log in'
+          runbook: docs/FAILURE_DRILLS.md
+      - alert: EcloudPortalBackendUnavailable
+        expr: sum(rate(ecloud_portal_logins_total{result="unavailable"}[5m])) > 0
+        for: 2m
+        labels: { severity: critical }
+        annotations:
+          summary: 'Captive portal cannot reach the api internal listener'
+      - alert: EcloudApi5xxRatio
+        expr: |
+          sum(rate(ecloud_api_http_requests_total{status=~"5.."}[5m]))
+            / clamp_min(sum(rate(ecloud_api_http_requests_total[5m])), 1e-9) > 0.05
+        for: 5m
+        labels: { severity: warning }
+        annotations:
+          summary: 'More than 5 % of api requests fail with 5xx'
+
+  - name: ecloud-performance
+    rules:
+      - alert: EcloudAuthorizeLatencyP95High
+        # Target: authorize p95 < 100 ms on the pilot budget (docs/PERFORMANCE.md).
+        expr: |
+          histogram_quantile(0.95, sum by (le) (rate(ecloud_aaa_authorize_duration_seconds_bucket{outcome!="unavailable"}[5m]))) > 0.1
+        for: 10m
+        labels: { severity: warning }
+        annotations:
+          summary: 'AAA authorize p95 above 100 ms for 10 min'
+      - alert: EcloudEventLoopLag
+        expr: max by (job) ({__name__=~"ecloud_(api|worker|portal)_event_loop_lag_seconds"}) > 0.2
+        for: 5m
+        labels: { severity: warning }
+        annotations:
+          summary: '{{ $labels.job }} event loop lag above 200 ms (CPU saturation)'
+      - alert: EcloudApiMemoryNearLimit
+        # api container limit 384 MiB (DEPLOYMENT_ARCHITECTURE.md §2.2)
+        expr: ecloud_api_process_resident_memory_bytes > 0.85 * 384 * 1024 * 1024
+        for: 10m
+        labels: { severity: warning }
+        annotations:
+          summary: 'api RSS above 85 % of its 384 MiB limit'
+
+  - name: ecloud-worker
+    rules:
+      - alert: EcloudAccountingDrainStalled
+        # Also catches lost repeatable schedulers (Redis without persistence restarted).
+        expr: sum(increase(ecloud_worker_jobs_total{queue="accounting.drain",result="completed"}[5m])) == 0
+        for: 5m
+        labels: { severity: critical }
+        annotations:
+          summary: 'accounting.drain has not completed a run for 10 min (usage/quotas stale)'
+          runbook: docs/FAILURE_DRILLS.md
+      - alert: EcloudSessionsReapStalled
+        expr: sum(increase(ecloud_worker_jobs_total{queue="sessions.reap",result="completed"}[10m])) == 0
+        for: 10m
+        labels: { severity: warning }
+        annotations:
+          summary: 'sessions.reap has not completed for 20 min'
+      - alert: EcloudQueueBacklog
+        expr: max by (queue) (ecloud_worker_queue_depth{state="waiting", queue!~"dead\\..*"}) > 100
+        for: 10m
+        labels: { severity: warning }
+        annotations:
+          summary: 'Queue {{ $labels.queue }} has more than 100 waiting jobs'
+      - alert: EcloudDeadLetters
+        expr: sum by (queue) (ecloud_worker_queue_depth{queue=~"dead\\..*"}) > 0
+        for: 1m
+        labels: { severity: warning }
+        annotations:
+          summary: 'Dead-letter queue {{ $labels.queue }} holds exhausted jobs (CoA/webhooks)'
+      - alert: EcloudWorkerJobFailures
+        expr: sum by (queue) (rate(ecloud_worker_jobs_total{result="failed"}[15m])) > 0.05
+        for: 15m
+        labels: { severity: warning }
+        annotations:
+          summary: 'Jobs of {{ $labels.queue }} keep failing'
+      - alert: EcloudRedisDataLoss
+        # Schedulers are re-registered on every Redis reconnect (P10-B fix); an increase after
+        # startup means Redis restarted and its non-persistent state (cursor, locks) was rebuilt.
+        expr: increase(ecloud_worker_scheduler_registrations_total[10m]) > 0 and on() ecloud_worker_process_uptime_seconds > 600
+        labels: { severity: info }
+        annotations:
+          summary: 'Redis reconnect: worker re-registered its schedulers'
+
+  - name: ecloud-security
+    rules:
+      - alert: EcloudUnknownNas
+        # Access-Requests from a client that maps to no nas_clients row (SECURITY_ARCHITECTURE alert list).
+        expr: sum(increase(ecloud_aaa_authorize_decisions_total{reason="unknown_nas"}[10m])) > 0
+        labels: { severity: warning }
+        annotations:
+          summary: 'Authorize requests from an unknown NAS'
+      - alert: EcloudAuthFailureSpike
+        # Platform-wide proxy for "auth failures > 50 / 5 min"; per-tenant detail in auth_events.
+        expr: sum(increase(ecloud_aaa_authorize_decisions_total{outcome="reject", reason="bad_credentials"}[5m])) > 50
+        labels: { severity: warning }
+        annotations:
+          summary: 'More than 50 RADIUS credential rejects in 5 min'
+      - alert: EcloudPortalFailureSpike
+        expr: sum(increase(ecloud_portal_logins_total{result=~"rejected|rate_limited"}[10m])) > 500
+        labels: { severity: warning }
+        annotations:
+          summary: 'More than 500 failed/limited portal logins in 10 min'
+
+  - name: ecloud-host-and-backup
+    rules:
+      - alert: EcloudBackupMissing
+        # scripts/backup/backup.sh writes this via the node_exporter textfile collector
+        # (BACKUP_TEXTFILE_DIR); the uptime-kuma push monitor (26 h) is the pilot equivalent.
+        # `absent()` also fires when no backup has ever succeeded (metric never written).
+        expr: |
+          time() - ecloud_backup_last_success_timestamp_seconds > 26 * 3600
+            or absent(ecloud_backup_last_success_timestamp_seconds)
+        for: 1h
+        labels: { severity: critical }
+        annotations:
+          summary: 'No successful encrypted off-site backup for 26 h (RPO 24 h at risk)'
+      - alert: EcloudDiskFilling
+        expr: |
+          (node_filesystem_avail_bytes{mountpoint="/",fstype!~"tmpfs|overlay"}
+            / node_filesystem_size_bytes{mountpoint="/",fstype!~"tmpfs|overlay"}) < 0.2
+        for: 15m
+        labels: { severity: warning }
+        annotations:
+          summary: 'Root filesystem above 80 % used'

@@ -1,0 +1,7 @@
+# EXAMPLE ONLY - age recipients (PUBLIC keys) for scripts/backup/backup.sh.
+# The key below is a throwaway example whose private half was deleted when it was generated;
+# backups encrypted to it can never be decrypted. Replace it with the owner's real backup
+# PUBLIC key(s) on the host (e.g. /opt/ecloud/secrets/backup-recipients.txt, 0600). The matching
+# private identity stays OFFLINE (SECURITY_ARCHITECTURE.md §10.1); never put it on the VPS.
+# Add a second line (ops key) so that losing one key does not lose the backups.
+age1aup695gkaer0h8wn0afcmqvaanwp4gvjjadz4f4jg6ljk0nznckq2ly7h3

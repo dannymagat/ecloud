@@ -27,6 +27,7 @@ import type { AppDeps, Principal } from '../context.js';
 import { randomToken, sha256Hex } from '../crypto.js';
 import { ServiceUnavailableError } from '../http/errors.js';
 import { defineRoute, type AnyRouteSpec } from '../http/route.js';
+import { logAuthFailure } from '../security-events.js';
 
 const TAG = ['auth'];
 const MFA_CHALLENGE_TTL_S = 300;
@@ -65,7 +66,8 @@ const SessionResponse = z.object({
 
 interface MfaChallenge {
   administratorId: string;
-  attempts: number;
+  /** Legacy field; attempts are counted atomically under `<challenge key>:attempts`. */
+  attempts?: number;
 }
 
 let dummyHash: Promise<string> | undefined;
@@ -151,6 +153,7 @@ export function authRoutes(deps: AppDeps): AnyRouteSpec[] {
             targetId: admin?.id ?? null,
           }),
         );
+        logAuthFailure(deps.logger, 'admin_login_failed', ctx.ip, ctx.requestId);
         throw new UnauthorizedError({ detail: 'Invalid email or password.' });
       }
       await clearFailures(deps, body.email);
@@ -219,21 +222,33 @@ export function authRoutes(deps: AppDeps): AnyRouteSpec[] {
       401: { description: 'Invalid or expired challenge / code' },
     },
     handler: async ({ body, res, ctx }) => {
+      await hitLimit(
+        deps,
+        `mfa:ip:${ctx.ip ?? 'unknown'}`,
+        LOGIN_LIMITS.perIp,
+        LOGIN_LIMITS.windowSeconds,
+      );
       const key = `mfa:${sha256Hex(body.mfa_token)}`;
+      const mfaFailed = (detail: string): UnauthorizedError => {
+        logAuthFailure(deps.logger, 'admin_mfa_failed', ctx.ip, ctx.requestId);
+        return new UnauthorizedError({ detail });
+      };
       let raw: string | null;
+      let attempts: number;
       try {
         raw = await deps.kv.get(key);
+        // P10-A: atomic counter (INCR). The former read-modify-write of `attempts` let parallel
+        // requests on one challenge each see the same count and exceed LOGIN_LIMITS.mfaAttempts.
+        attempts = raw === null ? 0 : await deps.kv.incr(`${key}:attempts`, MFA_CHALLENGE_TTL_S);
       } catch {
         throw new ServiceUnavailableError('MFA challenge store unavailable.');
       }
-      if (raw === null) throw new UnauthorizedError({ detail: 'MFA challenge expired.' });
+      if (raw === null) throw mfaFailed('MFA challenge expired.');
       const challenge = JSON.parse(raw) as MfaChallenge;
-      challenge.attempts += 1;
-      if (challenge.attempts > LOGIN_LIMITS.mfaAttempts) {
-        await deps.kv.del(key);
-        throw new UnauthorizedError({ detail: 'MFA challenge expired.' });
+      if (attempts > LOGIN_LIMITS.mfaAttempts) {
+        await deps.kv.del(key).catch(() => undefined);
+        throw mfaFailed('MFA challenge expired.');
       }
-      await deps.kv.set(key, JSON.stringify(challenge), MFA_CHALLENGE_TTL_S);
       const at = now();
 
       const result = await withPlatform(deps.dbPlatform, AUTHN_ACCESS, async (trx) => {
@@ -302,9 +317,10 @@ export function authRoutes(deps: AppDeps): AnyRouteSpec[] {
         );
         return { session, admin: row };
       });
-      if (result === null) throw new UnauthorizedError({ detail: 'Invalid MFA code.' });
+      if (result === null) throw mfaFailed('Invalid MFA code.');
       ctx.audited = true;
       await deps.kv.del(key);
+      await deps.kv.del(`${key}:attempts`).catch(() => undefined);
       setSessionCookie(deps, res, result.session.token, ttl);
       return {
         status: 200,
@@ -585,7 +601,10 @@ export function authRoutes(deps: AppDeps): AnyRouteSpec[] {
           .where('expires_at', '>', at)
           .executeTakeFirst(),
       );
-      if (invitation === undefined) throw new UnauthorizedError({ detail: 'Invalid invitation.' });
+      if (invitation === undefined) {
+        logAuthFailure(deps.logger, 'admin_invitation_failed', ctx.ip, ctx.requestId);
+        throw new UnauthorizedError({ detail: 'Invalid invitation.' });
+      }
       const existing = await withPlatform(deps.dbPlatform, AUTHN_ACCESS, (trx) =>
         trx
           .selectFrom('administrators')
@@ -599,7 +618,10 @@ export function authRoutes(deps: AppDeps): AnyRouteSpec[] {
           existing.password_hash !== null &&
           existing.status === 'active' &&
           (await verifyPassword(existing.password_hash, body.password).catch(() => false));
-        if (!ok) throw new UnauthorizedError({ detail: 'Invalid invitation.' });
+        if (!ok) {
+          logAuthFailure(deps.logger, 'admin_invitation_failed', ctx.ip, ctx.requestId);
+          throw new UnauthorizedError({ detail: 'Invalid invitation.' });
+        }
       }
       const passwordHash =
         existing === undefined

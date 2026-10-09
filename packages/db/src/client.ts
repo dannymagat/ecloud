@@ -16,6 +16,12 @@ export interface PoolOptions {
   applicationName?: string;
   /** Server-side `statement_timeout` for every connection (default 30 000 ms; 0 disables). */
   statementTimeoutMillis?: number;
+  /**
+   * Called when an IDLE pooled client errors (server restart, `pg_terminate_backend`, network
+   * drop). The pool discards that client and reconnects on the next query; the error is never
+   * rethrown (default: ignored). Callers may pass a logger here.
+   */
+  onIdleError?: (error: Error) => void;
 }
 
 const INT8_OID = 20;
@@ -36,7 +42,7 @@ export function configureTypeParsers(): void {
 export function createPool(url: string, options: PoolOptions = {}): pg.Pool {
   configureTypeParsers();
   const statementTimeout = options.statementTimeoutMillis ?? 30_000;
-  return new pg.Pool({
+  const pool = new pg.Pool({
     connectionString: url,
     max: options.max ?? 10,
     idleTimeoutMillis: options.idleTimeoutMillis ?? 30_000,
@@ -44,6 +50,22 @@ export function createPool(url: string, options: PoolOptions = {}): pg.Pool {
     application_name: options.applicationName ?? 'ecloud',
     ...(statementTimeout > 0 ? { statement_timeout: statementTimeout } : {}),
   });
+  // P10-B failure drill: without a listener, an idle client's error (e.g. "terminating
+  // connection due to administrator command" when PostgreSQL restarts) is an unhandled 'error'
+  // event that crashes the whole api/worker process. node-postgres removes the broken client
+  // itself; requests in flight fail and are answered fail-closed (503) by the callers.
+  // Default: one stderr line (never silent); api/worker pass their structured logger instead.
+  const onIdleError =
+    options.onIdleError ??
+    ((error: Error) => {
+      process.stderr.write(
+        `postgres idle connection lost (${error.message}); pool will reconnect\n`,
+      );
+    });
+  pool.on('error', (error: Error) => {
+    onIdleError(error);
+  });
+  return pool;
 }
 
 /**

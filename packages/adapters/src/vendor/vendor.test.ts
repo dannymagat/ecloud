@@ -29,8 +29,8 @@ import {
 } from './uam.js';
 
 const TEST_UAM_SECRET = 'test-uam-secret';
-const USPOT_SERVER = 'https://portal.ecloud.ezelink.ai/uam/uspot/';
-const CHILLI_SERVER = 'https://portal.ecloud.ezelink.ai/uam/chilli/';
+const USPOT_SERVER = 'https://portal.ezecloud.ezelink.ai/uam/uspot/';
+const CHILLI_SERVER = 'https://portal.ezecloud.ezelink.ai/uam/chilli/';
 const NOW = new Date('2026-10-06T06:00:00Z');
 
 /** uspot T order (CP §3.2): userurl raw (not url-encoded), md last. */

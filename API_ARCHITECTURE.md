@@ -14,16 +14,16 @@ One codebase, one container image, three processes (`api`, `worker`, `portal`) p
 |---|---|---|
 | `api` | REST `/api/v1`, admin authN/authZ, RBAC evaluation, policy engine (resolve intent → adapters), AAA internal endpoints for FreeRADIUS, portal internal endpoints, adapter registry, outbox writer | Latency-critical (`/internal/aaa/authorize` < 100 ms); must never block on batch work |
 | `worker` | BullMQ consumers: accounting ingestion & counter roll-ups, CoA/Disconnect dispatcher (`radclient`), schedulers (quota resets, expiries, voucher cleanup, reconciliation, partition creation, backups), webhook delivery, WireGuard peer reconcile (via host helper), CSV import/export jobs | Spawns processes, long transactions, retries — isolated from request path; horizontally scalable later |
-| `portal` | Server-rendered captive-portal pages on `portal.ecloud.ezelink.ai`; UAM adapters (`uspot-uam`, `coovachilli-uam`); talks only to `api` via `/internal/portal/*` | Anonymous, high-volume, walled-garden hostname; a portal flood must not starve admins (A7/A1 requirement); smaller attack surface (no DB credentials in the portal container) |
+| `portal` | Server-rendered captive-portal pages on `portal.ezecloud.ezelink.ai`; UAM adapters (`uspot-uam`, `coovachilli-uam`); talks only to `api` via `/internal/portal/*` | Anonymous, high-volume, walled-garden hostname; a portal flood must not starve admins (A7/A1 requirement); smaller attack surface (no DB credentials in the portal container) |
 | `freeradius` | RADIUS front-end; `rlm_rest` → `/internal/aaa/*` (A3 decides rlm_sql vs rlm_rest split) | Vendor software |
 | `postgres`, `redis` | State; queues, rate limits, admin session index | Shared state so `api`/`portal`/`worker` stay stateless |
 
 ```mermaid
 flowchart LR
   subgraph PUB["Public (Caddy :443, native on VPS)"]
-    ADMIN["ecloud.ezelink.ai\nadmin SPA (static)"]
-    APIH["api.ecloud.ezelink.ai"]
-    PORTH["portal.ecloud.ezelink.ai"]
+    ADMIN["ezecloud.ezelink.ai\nadmin SPA (static)"]
+    APIH["api.ezecloud.ezelink.ai"]
+    PORTH["portal.ezecloud.ezelink.ai"]
   end
   subgraph DOCKER["Docker network ecloud_internal 172.28.0.0/16 (no public ports)"]
     API["api :3000\nREST + RBAC + policy engine + adapters"]
@@ -79,7 +79,7 @@ Precedent (VERIFIED FROM EXISTING CODE, `/Users/danny/Project/ezecontroller`): `
 
 | Topic | Rule |
 |---|---|
-| Base paths | Admin/public: `https://api.ecloud.ezelink.ai/api/v1/…` (also same-origin `/api/v1` through the admin host per `DEPLOYMENT_ARCHITECTURE.md §3.1`). Internal: `http://api:<INTERNAL_PORT>/internal/…` (never through Caddy). Portal public: `https://portal.ecloud.ezelink.ai/…` |
+| Base paths | Admin/public: `https://api.ezecloud.ezelink.ai/api/v1/…` (also same-origin `/api/v1` through the admin host per `DEPLOYMENT_ARCHITECTURE.md §3.1`). Internal: `http://api:<INTERNAL_PORT>/internal/…` (never through Caddy). Portal public: `https://portal.ezecloud.ezelink.ai/…` |
 | Tenant scoping | Organization resources live under `/api/v1/orgs/{orgId}/…`; platform resources under `/api/v1/platform/…`. The path `orgId` is the **target** for `authorize()` (`MULTITENANCY.md §4.4`); the request runs inside `withTenant(orgId)` so RLS is the second lock. `siteId` is a filter/body field validated against the same org (G9 FK re-check). `/api/v1/me` is scope-less |
 | IDs | UUID v7 strings; append-only rows never exposed by id (A6) |
 | Pagination | Cursor-based: `?limit=50&cursor=<opaque>` → `{ data: [...], next_cursor, total?: n }` (`total` only when `?include_total=true`, capped count). Sorting `?sort=-started_at,username` (allow-list per resource). Filtering `?filter[status]=active&filter[site_id]=…`; time ranges `?from=&to=` (RFC 3339, UTC) |
@@ -222,7 +222,7 @@ Permissions are keys from `MULTITENANCY.md §4.2` exactly. `—` = authenticated
 | `/internal/adapters/openwifi/devices/{serial}/state` | POST | EZE controller → ECLOUD (webhook, Option A, PROPOSED) | `state.interfaces[].ssids[].associations[]` byte counters → telemetry adapter (`NETWORK_INTEGRATION.md §7.4`) |
 | `/internal/adapters/openwifi/push` | POST | worker → controller client | queue entry; actual HTTP goes out to `EZE_CONTROLLER_URL` (§6) |
 
-**Portal public (`portal.ecloud.ezelink.ai`, served by `portal` process; CSRF + rate limits below)**
+**Portal public (`portal.ezecloud.ezelink.ai`, served by `portal` process; CSRF + rate limits below)**
 
 | Path | Method | Notes |
 |---|---|---|
@@ -245,7 +245,7 @@ Portal CSRF/rate-limit design: flow cookie `__Host-pf` (HttpOnly, Secure, SameSi
 
 | Aspect | Decision (PROPOSED) | Precedent / rationale |
 |---|---|---|
-| Session carrier | **Opaque session id in cookie** `__Host-ecloud_sid` (HttpOnly, Secure, SameSite=Lax, Path=/) when API is same-origin via admin host; if the SPA calls `api.ecloud…` cross-subdomain, use `Domain=.ecloud.ezelink.ai` + SameSite=Lax + `Origin` check + CSRF header (`X-CSRF-Token` = value from `GET /auth/csrf`). Server-side row `admin_sessions` (`token_hash` = SHA-256 of id) mirrored in Redis for O(1) lookup; idle 30 min, absolute 12 h (A7 §5), revocable instantly | Precedent: JWT in `localStorage` (`server.ts` L299, `public/js/app.js`) — rejected (XSS-readable, no server revocation). The precedent already mints HttpOnly SameSite=Lax cookies for tickets (`server.ts` L889, L4274) and has `SessionService.ts` dual-writing `sessions` rows — ECLOUD makes that authoritative. A7 prefers cookie; A8 reviewing |
+| Session carrier | **Opaque session id in cookie** `__Host-ecloud_sid` (HttpOnly, Secure, SameSite=Lax, Path=/) when API is same-origin via admin host; if the SPA calls `api.ecloud…` cross-subdomain, use `Domain=.ezecloud.ezelink.ai` + SameSite=Lax + `Origin` check + CSRF header (`X-CSRF-Token` = value from `GET /auth/csrf`). Server-side row `admin_sessions` (`token_hash` = SHA-256 of id) mirrored in Redis for O(1) lookup; idle 30 min, absolute 12 h (A7 §5), revocable instantly | Precedent: JWT in `localStorage` (`server.ts` L299, `public/js/app.js`) — rejected (XSS-readable, no server revocation). The precedent already mints HttpOnly SameSite=Lax cookies for tickets (`server.ts` L889, L4274) and has `SessionService.ts` dual-writing `sessions` rows — ECLOUD makes that authoritative. A7 prefers cookie; A8 reviewing |
 | Non-browser clients | API keys (below). No JWT issuance in v1; a signed short-lived JWT can be added later for the controller webhook if mTLS is unavailable | |
 | Passwords | **Argon2id** (`argon2` package; m=64 MiB, t=3, p=1), `needsRehash()` on login | Precedent `passwordService.ts` is algorithm-agile with Argon2id preferred, scrypt default, bcrypt verify-only (VERIFIED) — port the shape, drop bcrypt |
 | MFA | TOTP (RFC 6238), secret AES-256-GCM at rest under `ENCRYPTION_KEY_FILE`, 10 recovery codes (hashed); enforced for platform bindings; per-org `settings.mfa_required` | Precedent `totpService.ts` zero-dep implementation incl. encryption + recovery codes (VERIFIED) — reuse |

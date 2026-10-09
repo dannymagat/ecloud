@@ -9,7 +9,8 @@ coverage
 .env.*
 !.env.example
 
-# local runtime data
+# local runtime data (scripts/secrets/ writes per-environment secrets to var/secrets/)
 var/
+/secrets/
 *.log
 .DS_Store

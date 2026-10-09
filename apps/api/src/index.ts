@@ -6,6 +6,7 @@ import { createApp } from './app.js';
 import { loadApiConfig, type ApiConfig } from './config.js';
 import type { AppDeps } from './context.js';
 import { MemoryKv, RedisKv, type KvStore } from './kv.js';
+import { createApiMetrics } from './metrics.js';
 
 export const PACKAGE_NAME = '@ecloud/api';
 
@@ -14,6 +15,7 @@ export { loadApiConfig, type ApiConfig } from './config.js';
 export type { AppDeps, Principal, Grant, RequestContext } from './context.js';
 export { MemoryKv, RedisKv, type KvStore } from './kv.js';
 export { buildOpenApiDocument, OPENAPI_PATH } from './openapi.js';
+export { createApiMetrics, type ApiMetrics } from './metrics.js';
 export { UAM_SECRET_PURPOSE, sealUamSecret } from './internal/portal.js';
 
 export interface MainOptions {
@@ -63,18 +65,22 @@ function closeServer(server: Server, graceMs: number): Promise<void> {
 export async function main(options: MainOptions = {}): Promise<RunningApi> {
   const config = options.config ?? loadApiConfig();
   const logger = options.logger ?? createLogger({ name: 'api', level: config.base.logLevel });
+  const onIdleError = (error: Error) =>
+    logger.warn({ err: error.message }, 'postgres idle connection lost; pool will reconnect');
   const kv: KvStore =
     config.kvDriver === 'memory' ? new MemoryKv() : RedisKv.connect(config.base.redis.url);
   const deps: AppDeps = {
     config,
     logger,
-    db: createDb(config.base.database.url, { applicationName: 'ecloud-api' }),
+    db: createDb(config.base.database.url, { applicationName: 'ecloud-api', onIdleError }),
     dbPlatform: createDb(config.base.database.platformUrl, {
       applicationName: 'ecloud-api-platform',
       max: 5,
+      onIdleError,
     }),
     kv,
     storage: createStorage(config.base.storage),
+    metrics: createApiMetrics(),
   };
   const { publicApp, internalApp, routes } = createApp(deps);
   const publicServer = await listen(publicApp, config.base.ports.api, config.apiBindHost);
@@ -93,6 +99,12 @@ export async function main(options: MainOptions = {}): Promise<RunningApi> {
     },
     'api listening',
   );
+  if (config.internalApiTokenPrevious !== null) {
+    // The rotation window has no built-in expiry: it lasts until the variable is removed.
+    logger.warn(
+      'INTERNAL_API_TOKEN_PREVIOUS is set: the previous internal token is still accepted; remove it once portal and freeradius use the new token (SECRETS_MANAGEMENT R1)',
+    );
+  }
 
   let stopping: Promise<void> | undefined;
   const shutdown = (): Promise<void> => {
@@ -108,6 +120,7 @@ export async function main(options: MainOptions = {}): Promise<RunningApi> {
         kv.close(),
         deps.storage?.close(),
       ]);
+      deps.metrics?.stop();
       logger.info('api stopped');
     })();
     return stopping;

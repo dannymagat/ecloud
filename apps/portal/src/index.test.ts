@@ -14,7 +14,7 @@ import type {
 } from './api-client.js';
 import { loadPortalConfig, type PortalConfig } from './config.js';
 import { t } from './i18n.js';
-import { PACKAGE_NAME, createServer, main, signFlowToken } from './index.js';
+import { PACKAGE_NAME, createPortalMetrics, createServer, main, signFlowToken } from './index.js';
 import { PORTAL_CSS_PATH } from './styles.js';
 
 const logger = createLogger({ name: 'portal-test', level: 'silent' });
@@ -247,6 +247,33 @@ describe('@ecloud/portal server', () => {
     expect(locked.text).toContain('10 minute(s)');
   });
 
+  it('P10-A: rejections log a fail2ban-matchable event with the client IP and no credentials', async () => {
+    const lines: string[] = [];
+    const sink = { write: (chunk: string) => lines.push(chunk) };
+    const api = new FakeApi();
+    const config = portalConfig();
+    const app = createServer({
+      config,
+      logger: createLogger({ name: 'portal-test', level: 'info', destination: sink }),
+      api,
+      now: () => NOW,
+    });
+    const token = signFlowToken(config.stateSecret, FLOW_ID, EXPIRES);
+    const { cookie, csrf } = await formSession(app, `/f/${token}/login`);
+    api.identifyOutcome = { result: 'rejected' };
+    await request(app)
+      .post(`/f/${token}/login`)
+      .set('Cookie', cookie)
+      .type('form')
+      .send({ csrf, username: 'someone', password: 'hunter2-secret' });
+    const events = lines.filter((l) => l.includes('"event":"portal_auth_failed"'));
+    expect(events).toHaveLength(1);
+    // The fail2ban filter expects `"event":"portal_auth_failed","ip":"<addr>"` adjacent.
+    expect(events[0]).toMatch(/"event":"portal_auth_failed","ip":"[0-9a-f.:]+"/);
+    expect(lines.join('')).not.toContain('hunter2-secret');
+    expect(lines.join('')).not.toContain('someone');
+  });
+
   it('click-through requires the terms checkbox and shows the versioned terms', async () => {
     const { api, app, token } = setup();
     const { cookie, csrf, res } = await formSession(app, `/f/${token}/terms`);
@@ -476,5 +503,62 @@ describe('@ecloud/portal server', () => {
     signals.emit(signal);
     await vi.waitFor(() => expect(exit).toHaveBeenCalledWith(0));
     expect(running.server.listening).toBe(false);
+  });
+});
+
+describe('P10-B metrics', () => {
+  it('records route templates and login outcomes without tokens or usernames', async () => {
+    const api = new FakeApi();
+    const config = portalConfig();
+    const metrics = createPortalMetrics();
+    const app = createServer({ config, logger, api, now: () => NOW, metrics });
+    const token = signFlowToken(config.stateSecret, FLOW_ID, EXPIRES);
+    const { cookie, csrf } = await formSession(app, `/f/${token}/login`);
+    api.identifyOutcome = { result: 'rejected' };
+    await request(app)
+      .post(`/f/${token}/login`)
+      .set('Cookie', cookie)
+      .type('form')
+      .send({ csrf, username: 'metrics-user', password: 'metrics-secret' });
+    const text = await metrics.registry.render();
+    metrics.stop();
+    expect(text).toContain('ecloud_portal_logins_total{method="password",result="rejected"} 1');
+    expect(text).toContain(
+      'ecloud_portal_http_requests_total{method="GET",route="/f/:token/login",status="200"} 1',
+    );
+    expect(text).toContain(
+      'ecloud_portal_http_requests_total{method="POST",route="/f/:token/login",status="422"} 1',
+    );
+    expect(text).not.toContain(token);
+    expect(text).not.toContain('metrics-user');
+    expect(text).not.toContain('metrics-secret');
+  });
+
+  it('main() serves /metrics on a separate listener only; the public listener 404s it', async () => {
+    const running = await main({
+      config: { ...portalConfig(), metrics: { host: '127.0.0.1', port: 0 } },
+      logger,
+      handleSignals: false,
+    });
+    const pub = (running.server.address() as AddressInfo).port;
+    const mport = (running.metricsServer?.address() as AddressInfo).port;
+    await fetch(`http://127.0.0.1:${String(pub)}/healthz`);
+    const res = await fetch(`http://127.0.0.1:${String(mport)}/metrics`);
+    expect(res.status).toBe(200);
+    expect(res.headers.get('content-type')).toContain('version=0.0.4');
+    expect(await res.text()).toContain('route="/healthz",status="200"');
+    expect((await fetch(`http://127.0.0.1:${String(mport)}/healthz`)).status).toBe(404);
+    expect((await fetch(`http://127.0.0.1:${String(pub)}/metrics`)).status).toBe(404);
+    await running.shutdown();
+    expect(running.metricsServer?.listening).toBe(false);
+  });
+
+  it('PORTAL_METRICS_PORT enables the listener; unset leaves it disabled', () => {
+    expect(portalConfig().metrics).toBeNull();
+    expect(portalConfig({ PORTAL_METRICS_PORT: '9465' }).metrics).toEqual({
+      host: '127.0.0.1',
+      port: 9465,
+    });
+    expect(() => portalConfig({ PORTAL_METRICS_PORT: '70000' })).toThrow();
   });
 });

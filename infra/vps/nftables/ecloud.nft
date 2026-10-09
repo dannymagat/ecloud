@@ -1,0 +1,125 @@
+#!/usr/sbin/nft -f
+# =============================================================================================
+#  ECLOUD host firewall -- table `inet ecloud`  (DRAFT, NOT APPLIED; docs/VPS_CHANGE_LIST.md)
+#  Target: /etc/nftables.d/ecloud.nft on vps (Ubuntu 24.04, iptables-nft backend, Docker 29).
+#  Sources: SECURITY_ARCHITECTURE.md §2.2-2.5, D-031, D-032 (tunnel-only RADIUS, hub
+#  100.100.0.1, UDP 51820), REMOTE_ENVIRONMENT.md §3-4 (ens3 dual-stack, Caddy 80/443 tcp +
+#  443 udp HTTP/3, DHCPv4 lease on ens3, IPv6 static /128).
+#
+#  Docker-aware by construction:
+#   - Only this table is (re)defined. The file NEVER runs `flush ruleset`: Docker's own
+#     iptables-nft tables (NAT for q-mira.com's 127.0.0.1:8088 publish, FORWARD, DOCKER-USER)
+#     live in the same kernel ruleset and must survive every apply / reload / rollback.
+#   - Container ingress (DNAT'd, i.e. FORWARD path) is filtered in DOCKER-USER by
+#     docker-user.sh (Docker's documented hook). This table filters the host INPUT path and
+#     the non-Docker FORWARD paths of the WireGuard overlay.
+#   - A drop verdict in any base chain is final, an accept is not: the forward chain below
+#     (priority -10, before Docker's iptables-nft FORWARD at 0) can only take traffic away.
+#
+#  Idempotent: the first two statements create-then-delete the table, so `nft -f` of this file
+#  replaces exactly this table and nothing else (works on every nft/kernel, no `destroy`).
+# =============================================================================================
+table inet ecloud
+delete table inet ecloud
+
+table inet ecloud {
+	# Optional operator allow-list for SSH (exempt from the per-source rate limit). Elements are
+	# added at apply time from the operator's real addresses; never committed (PII).
+	set ssh_admins4 {
+		type ipv4_addr
+		flags interval
+	}
+	set ssh_admins6 {
+		type ipv6_addr
+		flags interval
+	}
+
+	# Per-source SSH rate meters (SECURITY_ARCHITECTURE §2.2: <= 6 new conn/min/IP). Deviation
+	# from the §2.3 outline: the outline used ONE global `limit rate`, which brute-force noise
+	# (~17 200 attempts / 7 days, F-37) could exhaust and thereby lock the operator out.
+	set ssh_meter4 {
+		type ipv4_addr
+		flags dynamic, timeout
+		timeout 10m
+		size 65535
+	}
+	set ssh_meter6 {
+		type ipv6_addr
+		flags dynamic, timeout
+		timeout 10m
+		size 65535
+	}
+
+	# WireGuard overlay (D-032). Tenants get /24s inside 100.100.0.0/16; hub is 100.100.0.1.
+	set wg_tenants {
+		type ipv4_addr
+		flags interval
+		elements = { 100.100.0.0/16 }
+	}
+
+	# Topology C fallback ONLY (public RADIUS, disabled by D-032). Keep empty.
+	set radius_allow {
+		type ipv4_addr
+		flags interval
+	}
+
+	chain input {
+		type filter hook input priority filter; policy drop;
+
+		iif "lo" accept
+		ct state established,related accept
+		ct state invalid counter drop
+
+		# ICMP / ICMPv6 (IPv6 neighbour discovery and PMTU must never be dropped)
+		ip protocol icmp icmp type { echo-request, destination-unreachable, time-exceeded, parameter-problem } limit rate 20/second accept
+		meta l4proto ipv6-icmp accept
+
+		# DHCPv4 lease renewal on ens3 (the public IPv4 is DHCP-assigned, netplan 50-cloud-init).
+		iifname "ens3" udp sport 67 udp dport 68 accept
+
+		# 1) SSH FIRST (lock-out guard): allow-listed operators, then per-source rate limit.
+		tcp dport 22 ip saddr @ssh_admins4 accept
+		tcp dport 22 ip6 saddr @ssh_admins6 accept
+		tcp dport 22 ct state new add @ssh_meter4 { ip saddr limit rate over 6/minute burst 10 packets } counter drop
+		tcp dport 22 ct state new add @ssh_meter6 { ip6 saddr limit rate over 6/minute burst 10 packets } counter drop
+		tcp dport 22 accept
+
+		# 2) Web edge: Caddy (q-mira.com today; ezecloud./api.ezecloud./portal.ezecloud. after D-031 approval).
+		tcp dport { 80, 443 } accept
+		udp dport 443 accept    # HTTP/3 (Caddy listens on udp/443 today)
+
+		# 3) WireGuard hub (D-032)
+		udp dport 51820 accept
+
+		# 4) From the overlay: only RADIUS to the hub address (+ ICMP above). RADIUS is normally
+		#    DNAT'd to the freeradius container (FORWARD path, see docker-user.sh); this INPUT rule
+		#    covers a host-native FreeRADIUS or docker-proxy fallback. Nothing else from wg0 —
+		#    no SSH, no 5432/6379, no Caddy (T16).
+		iifname "wg0" ip saddr @wg_tenants ip daddr 100.100.0.1 udp dport { 1812, 1813 } accept
+		iifname "wg0" counter drop
+
+		# 5) Topology C (public RADIUS from allow-listed site WANs) — disabled (D-032).
+		# ip saddr @radius_allow udp dport { 1812, 1813 } accept
+
+		limit rate 5/minute burst 10 packets log prefix "ecloud-drop " level info
+		counter drop
+	}
+
+	chain forward {
+		# Runs before Docker's iptables-nft FORWARD (priority filter = 0). Drops are final.
+		type filter hook forward priority filter - 10; policy accept;
+
+		iifname "wg0" oifname "wg0" counter drop                 # no site-to-site / cross-tenant
+		iifname "wg0" oifname "ens3" counter drop                # overlay never uses the VPS as Internet gateway
+		iifname "ens3" oifname "wg0" ct state new counter drop   # Internet cannot originate into the overlay
+
+		# MSS clamp towards the overlay (WIREGUARD_ARCHITECTURE W8)
+		oifname "wg0" tcp flags syn tcp option maxseg size set rt mtu
+	}
+
+	chain output {
+		type filter hook output priority filter; policy accept;
+		# Egress hygiene (production): restrict host-originated traffic to DNS/NTP/apt/registry/
+		# ACME/webhook targets. Not enabled for the pilot (PROPOSED, SECURITY_ARCHITECTURE §2.3).
+	}
+}

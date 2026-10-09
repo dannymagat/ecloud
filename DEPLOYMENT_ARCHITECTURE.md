@@ -119,14 +119,14 @@ Prerequisites before any deployment — from DISCOVERY_REPORT.md §7.5 (all requ
 
 ### 3.1 Subdomains vs paths
 
-| Criterion | Subdomains `ecloud.` / `api.ecloud.` / `portal.ecloud.ezelink.ai` | Single host with paths `/`, `/api`, `/portal` |
+| Criterion | Subdomains `ecloud.` / `api.ecloud.` / `portal.ezecloud.ezelink.ai` | Single host with paths `/`, `/api`, `/portal` |
 |---|---|---|
-| Captive-portal clients | Walled garden needs only `portal.ecloud.ezelink.ai`; admin UI/API are **not** reachable by unauthenticated subscribers at all | Whole host must be in the walled garden → admin UI/API exposed to pre-auth subscribers (login page attack surface) |
+| Captive-portal clients | Walled garden needs only `portal.ezecloud.ezelink.ai`; admin UI/API are **not** reachable by unauthenticated subscribers at all | Whole host must be in the walled garden → admin UI/API exposed to pre-auth subscribers (login page attack surface) |
 | Cookies / sessions | Separate origins: admin session cookie never sent to the portal; CSRF surface smaller | Shared cookie scope unless carefully path-scoped |
 | TLS / ACME | One cert per name (Caddy automatic; HTTP-01 needs port 80 reachable for each name and DNS A/AAAA → VPS). Wildcard would need DNS-01 (Cloudflare API) — avoid for pilot | One cert |
 | Rate limiting / WAF | Per-vhost policies (portal: high volume, anonymous; api: authenticated) | Path matchers; workable but coarser |
 | Future split | api/portal can move to other hosts/regions by DNS alone | Requires path routing at an LB |
-| Recommendation | **Subdomains** (PROPOSED). `ecloud.ezelink.ai` = admin UI (serves the SPA and proxies `/api/*` to api for same-origin convenience, optional); `api.ecloud.ezelink.ai` = REST (devices, integrations); `portal.ecloud.ezelink.ai` = captive portal | — |
+| Recommendation | **Subdomains** (PROPOSED). `ezecloud.ezelink.ai` = admin UI (serves the SPA and proxies `/api/*` to api for same-origin convenience, optional); `api.ezecloud.ezelink.ai` = REST (devices, integrations); `portal.ezecloud.ezelink.ai` = captive portal | — |
 
 Conditions (REQUIRES CLARIFICATION, Q13): the three names must resolve to 57.129.69.122 / the IPv6 /128 **DNS-only** (not Cloudflare-proxied) — proxied records would (a) hide client IPs from the portal (needed for NAS/client correlation unless trusted-proxy headers are configured), and (b) be inconsistent with RADIUS/WireGuard which cannot be proxied anyway. Captive-portal detection probes use plain HTTP first; Caddy's automatic HTTP→HTTPS redirect handles that, provided the portal host is in the walled garden (A2 domain: uspot/CoovaChilli allowlist).
 
@@ -146,25 +146,25 @@ import /etc/caddy/sites/*.caddy
 ```
 ```caddyfile
 # /etc/caddy/sites/ecloud.caddy  (PROPOSED)
-ecloud.ezelink.ai {
+ezecloud.ezelink.ai {
 	encode zstd gzip
 	log { output file /var/log/caddy/ecloud.access.log { roll_size 50mb roll_keep 5 } }
 	header { Strict-Transport-Security "max-age=31536000" X-Content-Type-Options nosniff X-Frame-Options DENY }
 	reverse_proxy 127.0.0.1:3000
 }
-api.ecloud.ezelink.ai {
+api.ezecloud.ezelink.ai {
 	encode zstd gzip
 	log { output file /var/log/caddy/api.access.log { roll_size 50mb roll_keep 5 } }
 	reverse_proxy 127.0.0.1:3000 { header_up X-Forwarded-For {remote_host} }
 }
-portal.ecloud.ezelink.ai {
+portal.ezecloud.ezelink.ai {
 	encode zstd gzip
 	log { output file /var/log/caddy/portal.access.log { roll_size 50mb roll_keep 10 } }
 	header { X-Frame-Options DENY X-Content-Type-Options nosniff }
 	reverse_proxy 127.0.0.1:3001
 }
 ```
-(Optional) monitoring UI behind auth: `kuma.ecloud.ezelink.ai { basic_auth { <user> <hash from caddy hash-password> } reverse_proxy 127.0.0.1:3002 }`.
+(Optional) monitoring UI behind auth: `kuma.ezecloud.ezelink.ai { basic_auth { <user> <hash from caddy hash-password> } reverse_proxy 127.0.0.1:3002 }`.
 
 ### 3.3 Validation / reload procedure (Phase 3, after approval; preserves q-mira.com)
 
@@ -173,9 +173,9 @@ Caddy CLI: `caddy validate` "Tests whether a config file is valid"; `caddy adapt
 1. `sudo cp -a /etc/caddy/Caddyfile /etc/caddy/Caddyfile.bak.$(date +%F)` and `sudo mkdir -p /etc/caddy/sites /var/log/caddy && sudo chown caddy:caddy /var/log/caddy`.
 2. Write new files to a staging path first: `/tmp/caddy-new/Caddyfile`, `/tmp/caddy-new/sites/ecloud.caddy` (with `import /tmp/caddy-new/sites/*.caddy` temporarily, or validate the final paths after copying).
 3. `caddy fmt --overwrite /tmp/caddy-new/Caddyfile` then `caddy validate --config /etc/caddy/Caddyfile.new --adapter caddyfile` (and `caddy adapt --config … --validate --pretty | less` to eyeball that the `q-mira.com` site block is unchanged).
-4. Confirm DNS for the new names already points at the VPS (otherwise ACME for those names fails and retries; the q-mira.com site keeps serving, but avoid noise): `dig +short ecloud.ezelink.ai A AAAA`.
+4. Confirm DNS for the new names already points at the VPS (otherwise ACME for those names fails and retries; the q-mira.com site keeps serving, but avoid noise): `dig +short ezecloud.ezelink.ai A AAAA`.
 5. Install: `sudo install -m 0644 /tmp/caddy-new/Caddyfile /etc/caddy/Caddyfile; sudo install -m 0644 /tmp/caddy-new/sites/ecloud.caddy /etc/caddy/sites/`.
-6. `sudo systemctl reload caddy` (graceful; equivalent to `caddy reload --config /etc/caddy/Caddyfile`), then `systemctl status caddy`, `journalctl -u caddy -n 50`, `curl -sI https://q-mira.com | head -1`, `curl -sI https://ecloud.ezelink.ai | head -1`.
+6. `sudo systemctl reload caddy` (graceful; equivalent to `caddy reload --config /etc/caddy/Caddyfile`), then `systemctl status caddy`, `journalctl -u caddy -n 50`, `curl -sI https://q-mira.com | head -1`, `curl -sI https://ezecloud.ezelink.ai | head -1`.
 7. Rollback: `sudo cp -a /etc/caddy/Caddyfile.bak.<date> /etc/caddy/Caddyfile && sudo systemctl reload caddy`.
 
 ---
@@ -187,9 +187,9 @@ Caddy CLI: `caddy validate` "Tests whether a config file is valid"; `caddy adapt
 ```
 # --- identity / URLs
 ECLOUD_ENV=pilot|production
-ECLOUD_BASE_URL=https://ecloud.ezelink.ai
-ECLOUD_API_URL=https://api.ecloud.ezelink.ai
-ECLOUD_PORTAL_URL=https://portal.ecloud.ezelink.ai
+ECLOUD_BASE_URL=https://ezecloud.ezelink.ai
+ECLOUD_API_URL=https://api.ezecloud.ezelink.ai
+ECLOUD_PORTAL_URL=https://portal.ezecloud.ezelink.ai
 IMAGE_TAG=                      # git sha or semver; used by compose for rollback
 # --- database
 POSTGRES_DB= POSTGRES_USER= POSTGRES_PASSWORD_FILE=/run/secrets/postgres_password
@@ -344,7 +344,7 @@ flowchart TB
 
 ## Open questions for owner
 
-1. **Q13** DNS: will `ecloud.`, `api.ecloud.`, `portal.ecloud.ezelink.ai` point (DNS-only, unproxied) at 57.129.69.122 / the IPv6 address? Is the subdomain structure accepted?
+1. **Q13** DNS: will `ecloud.`, `api.ecloud.`, `portal.ezecloud.ezelink.ai` point (DNS-only, unproxied) at 57.129.69.122 / the IPv6 address? Is the subdomain structure accepted?
 2. **Q14** Deploy root `/opt/ecloud` (recommended) vs `/home/ubuntu/ecloud`.
 3. **Q15** Confirm keeping native Caddy as the shared edge (recommended) rather than a containerised proxy.
 4. **Q16** Confirm `172.28.0.0/16` (Compose) and `100.100.0.0/16` (overlay) do not collide with any site/VPN addressing.
@@ -361,11 +361,11 @@ flowchart TB
 | # | Test | Decides |
 |---|---|---|
 | D1 | NAS configured with primary + `secondary` RADIUS server; stop primary; observe failover and accounting continuity | RADIUS HA design (§7) |
-| D2 | Captive-portal client detection flow against `portal.ecloud.ezelink.ai` with only that FQDN in the walled garden (HTTP probe → Caddy redirect → HTTPS portal) | Subdomain decision (§3.1), walled-garden list (A2) |
+| D2 | Captive-portal client detection flow against `portal.ezecloud.ezelink.ai` with only that FQDN in the walled garden (HTTP probe → Caddy redirect → HTTPS portal) | Subdomain decision (§3.1), walled-garden list (A2) |
 | D3 | RADIUS Access-Request/Accounting from AP reaches FreeRADIUS published on the tunnel IP (`100.100.0.1:1812`) vs public IP with nftables allowlist | Exposure policy (§2.1) |
 | D4 | `radclient status` (Status-Server) against the FreeRADIUS container from the worker container — healthcheck viability | Healthchecks (§2.1) |
 | D5 | End-to-end latency budget: portal login → RADIUS → policy applied on AP, measured with limits from §2.2 under load (e.g. 50 concurrent logins) | Resource sizing (§2.2) |
-| D6 | Site gateway/AP reaching `api.ecloud.ezelink.ai` (if device-side integrations are needed) over public vs tunnel | API path (§2.1, WIREGUARD §6) |
+| D6 | Site gateway/AP reaching `api.ezecloud.ezelink.ai` (if device-side integrations are needed) over public vs tunnel | API path (§2.1, WIREGUARD §6) |
 
 ---
 

@@ -1,0 +1,21 @@
+# DRAFT (not applied; VPS change list, D-031). Nightly ECLOUD backup - scripts/backup/backup.sh.
+[Unit]
+Description=ECLOUD encrypted backup (pg_dump + config, age, off-site)
+Wants=network-online.target docker.service
+After=network-online.target docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/opt/ecloud/bin/backup.sh --env-file /opt/ecloud/secrets/backup.env
+Nice=10
+IOSchedulingClass=idle
+MemoryMax=128M
+CPUQuota=25%
+PrivateTmp=yes
+NoNewPrivileges=yes
+ProtectSystem=strict
+ReadWritePaths=/var/backups/ecloud
+# node_exporter textfile collector (BACKUP_TEXTFILE_DIR); `-` = ignored if it does not exist.
+ReadWritePaths=-/var/lib/node_exporter/textfile
+ProtectHome=read-only
+UMask=0077

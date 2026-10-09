@@ -41,3 +41,29 @@ describe('/healthz', () => {
     expect((await fetch(`http://127.0.0.1:${String(port)}/other`)).status).toBe(404);
   });
 });
+
+describe('/metrics', () => {
+  it('serves the Prometheus exposition when configured, 500 when rendering fails, 404 otherwise', async () => {
+    let fail = false;
+    server = createHealthServer({
+      host: '127.0.0.1',
+      port: 0,
+      checks: {},
+      queues: [],
+      metrics: () =>
+        fail ? Promise.reject(new Error('redis down')) : Promise.resolve('# TYPE x counter\nx 1\n'),
+    });
+    const port = await listen(server, 0, '127.0.0.1');
+    const ok = await fetch(`http://127.0.0.1:${String(port)}/metrics`);
+    expect(ok.status).toBe(200);
+    expect(ok.headers.get('content-type')).toContain('version=0.0.4');
+    expect(await ok.text()).toBe('# TYPE x counter\nx 1\n');
+    fail = true;
+    expect((await fetch(`http://127.0.0.1:${String(port)}/metrics`)).status).toBe(500);
+  });
+
+  it('is 404 when no metrics renderer is configured', async () => {
+    const port = await start({});
+    expect((await fetch(`http://127.0.0.1:${String(port)}/metrics`)).status).toBe(404);
+  });
+});

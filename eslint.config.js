@@ -14,6 +14,8 @@ export default defineConfig(
       '**/*.d.ts',
       'var/**',
       '.remember/**',
+      // k6 scripts run in the k6 (goja) runtime, not Node: k6/* modules, open(), __ENV.
+      '**/*.k6.js',
     ],
   },
   js.configs.recommended,

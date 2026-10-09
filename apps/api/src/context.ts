@@ -6,6 +6,7 @@ import type { Logger, PermissionScope } from '@ecloud/shared';
 import type { ObjectStorage } from '@ecloud/storage';
 import type { ApiConfig } from './config.js';
 import type { KvStore } from './kv.js';
+import type { ApiMetrics } from './metrics.js';
 
 export interface AppDeps {
   config: ApiConfig;
@@ -23,6 +24,8 @@ export interface AppDeps {
   storage?: ObjectStorage;
   /** Clock (tests may freeze it). */
   now?: () => Date;
+  /** Prometheus metrics (Phase 10); `createApp` creates a registry when absent. */
+  metrics?: ApiMetrics;
 }
 
 /** One effective role binding of a principal, with the permission keys of its role. */

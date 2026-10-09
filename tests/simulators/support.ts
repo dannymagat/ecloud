@@ -33,7 +33,7 @@ export const NOW = new Date('2026-10-08T06:00:00Z');
 export const ORG_A = '01900000-0000-7000-8000-00000000000a';
 export const ORG_B = '01900000-0000-7000-8000-00000000000b';
 export const SITE_A = '01900000-0000-7000-8000-0000000000a1';
-export const PORTAL = 'https://portal.ecloud.ezelink.ai';
+export const PORTAL = 'https://portal.ezecloud.ezelink.ai';
 
 export interface SimTarget {
   readonly adapterKey: SimAdapterKey;

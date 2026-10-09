@@ -176,7 +176,8 @@ async function loadVoucher(
     'codeHash' in where
       ? query.where('v.code_hash', '=', where.codeHash)
       : query.where('v.id', '=', where.id);
-  return lock ? query.forUpdate().executeTakeFirst() : query.executeTakeFirst();
+  // FOR UPDATE OF v: never lock the shared voucher_batches row (P10-B load test bottleneck).
+  return lock ? query.forUpdate('v').executeTakeFirst() : query.executeTakeFirst();
 }
 
 type VoucherRow = NonNullable<Awaited<ReturnType<typeof loadVoucher>>>;

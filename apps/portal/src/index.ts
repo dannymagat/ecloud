@@ -1,5 +1,5 @@
 /**
- * ECLOUD captive portal (`portal.ecloud.ezelink.ai`, D-029). Server-rendered pages only; all
+ * ECLOUD captive portal (`portal.ezecloud.ezelink.ai`, D-029). Server-rendered pages only; all
  * decisions are made by the api over `/internal/portal/*` (the portal has no DB credentials and
  * never sees a UAM secret or a subscriber password at rest).
  *
@@ -27,6 +27,12 @@ import { HttpPortalApi, type FlowView, type IdentifyInput, type PortalApi } from
 import { loadPortalConfig, type PortalConfig } from './config.js';
 import { DEFAULT_LOCALE, t } from './i18n.js';
 import {
+  createMetricsServer,
+  createPortalMetrics,
+  portalHttpMetrics,
+  type PortalMetrics,
+} from './metrics.js';
+import {
   DEFAULT_THEME,
   renderPage,
   type Branding,
@@ -53,6 +59,7 @@ export { renderPreview, renderPage, escapeHtml } from './pages.js';
 export { loadPortalConfig, type PortalConfig } from './config.js';
 export { HttpPortalApi, type PortalApi } from './api-client.js';
 export { signFlowToken, verifyFlowToken } from './state.js';
+export { createPortalMetrics, createMetricsServer, type PortalMetrics } from './metrics.js';
 
 /** Default time in-flight requests get to finish on shutdown before connections are cut. */
 export const DEFAULT_SHUTDOWN_GRACE_MS = 10_000;
@@ -82,6 +89,8 @@ export interface ServerOptions {
   api?: PortalApi;
   /** Clock (tests may freeze it). */
   now?: () => Date;
+  /** Prometheus metrics (Phase 10); recorded only when given. */
+  metrics?: PortalMetrics;
 }
 
 interface Rendered {
@@ -123,6 +132,8 @@ export function createServer(options: ServerOptions = {}): Express {
   const app = express();
   app.disable('x-powered-by');
   app.set('trust proxy', config.trustProxyHops);
+  const metrics = options.metrics;
+  if (metrics !== undefined) app.use(portalHttpMetrics(metrics));
 
   app.use((_req, res, next) => {
     res.setHeader('X-Content-Type-Options', 'nosniff');
@@ -445,6 +456,7 @@ export function createServer(options: ServerOptions = {}): Express {
         };
       }
       const outcome = await api.identify(l.view.id, input);
+      metrics?.logins.inc({ method: route.method, result: outcome.result });
       const username = route.method === 'password' ? field('username').slice(0, 253) : '';
       switch (outcome.result) {
         case 'ok':
@@ -458,9 +470,18 @@ export function createServer(options: ServerOptions = {}): Express {
           res.redirect(302, outcome.handoffUrl);
           return;
         case 'rejected':
+          // fail2ban `ecloud-portal` jail (infra/vps/fail2ban): `event` then `ip`, no credentials.
+          logger.warn(
+            { event: 'portal_auth_failed', ip: req.ip ?? 'unknown', flow_id: l.view.id },
+            'security: portal_auth_failed',
+          );
           formPage(req, res, l, page, 422, t('form.rejected'), username);
           return;
         case 'rate_limited':
+          logger.warn(
+            { event: 'portal_auth_rate_limited', ip: req.ip ?? 'unknown', flow_id: l.view.id },
+            'security: portal_auth_rate_limited',
+          );
           formPage(
             req,
             res,
@@ -577,6 +598,8 @@ export interface MainOptions {
 
 export interface RunningPortal {
   server: Server;
+  /** The separate `/metrics` listener when `PORTAL_METRICS_PORT` is set. */
+  metricsServer: Server | null;
   /** Stops accepting connections, drains in-flight requests (bounded by the grace period). */
   shutdown: () => Promise<void>;
 }
@@ -602,20 +625,50 @@ export async function main(options: MainOptions = {}): Promise<RunningPortal> {
   const config = options.config ?? loadPortalConfig();
   const logger = options.logger ?? createLogger({ name: 'portal', level: config.base.logLevel });
   const graceMs = options.shutdownGraceMs ?? DEFAULT_SHUTDOWN_GRACE_MS;
-  const app = createServer({ config, logger, ...(options.api ? { api: options.api } : {}) });
+  const metrics = createPortalMetrics();
+  const app = createServer({
+    config,
+    logger,
+    metrics,
+    ...(options.api ? { api: options.api } : {}),
+  });
   const server = await new Promise<Server>((resolve, reject) => {
     const s = app.listen(config.base.ports.portal, (error?: Error) => {
       if (error) reject(error);
       else resolve(s);
     });
   });
-  logger.info({ port: config.base.ports.portal }, 'portal listening');
+  let metricsServer: Server | null = null;
+  if (config.metrics !== null) {
+    const { host, port } = config.metrics;
+    const ms = createMetricsServer(metrics);
+    await new Promise<void>((resolve, reject) => {
+      ms.once('error', reject);
+      ms.listen(port, host, () => {
+        ms.off('error', reject);
+        resolve();
+      });
+    });
+    metricsServer = ms;
+  }
+  logger.info(
+    {
+      port: config.base.ports.portal,
+      metrics:
+        config.metrics === null ? null : `${config.metrics.host}:${String(config.metrics.port)}`,
+    },
+    'portal listening',
+  );
 
   let stopping: Promise<void> | undefined;
   const shutdown = (): Promise<void> => {
     stopping ??= (async () => {
       logger.info('portal shutting down: draining connections');
-      await closeServer(server, graceMs);
+      await Promise.all([
+        closeServer(server, graceMs),
+        ...(metricsServer === null ? [] : [closeServer(metricsServer, graceMs)]),
+      ]);
+      metrics.stop();
       logger.info('portal stopped');
     })();
     return stopping;
@@ -630,5 +683,5 @@ export async function main(options: MainOptions = {}): Promise<RunningPortal> {
       });
     }
   }
-  return { server, shutdown };
+  return { server, metricsServer, shutdown };
 }

@@ -4,7 +4,7 @@
  * listener knobs). They are validated here with the same rules: dev-only defaults that are
  * rejected when NODE_ENV=production, and error messages that name variables, never values.
  */
-import { ConfigError, loadConfig, type AppConfig } from '@ecloud/shared';
+import { ConfigError, loadConfig, resolveSecretFiles, type AppConfig } from '@ecloud/shared';
 import { z } from 'zod';
 
 /** Dev-only key material (obviously fake, rejected in production — D-033). */
@@ -24,6 +24,16 @@ export const apiEnvSchema = z.object({
   MFA_ENCRYPTION_KEY: z.string().min(16).default(API_DEV_DEFAULTS.MFA_ENCRYPTION_KEY),
   DATA_ENCRYPTION_KEY: z.string().min(16).default(API_DEV_DEFAULTS.DATA_ENCRYPTION_KEY),
   VOUCHER_PEPPER: z.string().min(16).default(API_DEV_DEFAULTS.VOUCHER_PEPPER),
+  /**
+   * P10-A rotation window (docs/SECRETS_MANAGEMENT.md R1): the internal listener also accepts
+   * this previous token while FreeRADIUS / the portal are switched to the new INTERNAL_API_TOKEN.
+   * Unset it once every caller uses the new token.
+   */
+  INTERNAL_API_TOKEN_PREVIOUS: z
+    .string()
+    .trim()
+    .transform((v) => (v === '' ? undefined : v))
+    .optional(),
   /** Idle timeout of admin sessions (SECURITY_ARCHITECTURE.md §6.3: 30 min). */
   SESSION_IDLE_SECONDS: z.coerce.number().int().min(60).max(86_400).default(1_800),
   /** `Secure` cookie attribute; defaults to true in production. */
@@ -68,6 +78,8 @@ export interface ApiConfig {
   mfaEncryptionKey: string;
   dataEncryptionKey: string;
   voucherPepper: string;
+  /** Previous internal token accepted during a rotation window (null = none). */
+  internalApiTokenPrevious: string | null;
   session: {
     cookieName: string;
     ttlSeconds: number;
@@ -94,7 +106,7 @@ export function loadApiConfig(
   env: Record<string, string | undefined> = process.env,
   base: AppConfig = loadConfig(env),
 ): ApiConfig {
-  const parsed = apiEnvSchema.safeParse(env);
+  const parsed = apiEnvSchema.safeParse(resolveSecretFiles(env));
   if (!parsed.success) {
     throw new ConfigError(
       parsed.error.issues.map((issue) => `${issue.path.join('.') || '(root)'}: ${issue.message}`),
@@ -110,11 +122,29 @@ export function loadApiConfig(
         problems.push(`${key}: must be at least 32 characters when NODE_ENV=production`);
       }
     }
+    if (raw.INTERNAL_API_TOKEN_PREVIOUS !== undefined) {
+      if (raw.INTERNAL_API_TOKEN_PREVIOUS.length < 32) {
+        problems.push(
+          'INTERNAL_API_TOKEN_PREVIOUS: must be at least 32 characters when NODE_ENV=production',
+        );
+      }
+      if (raw.INTERNAL_API_TOKEN_PREVIOUS === base.internalApiToken) {
+        problems.push('INTERNAL_API_TOKEN_PREVIOUS: must differ from INTERNAL_API_TOKEN');
+      }
+    }
     if (raw.KV_DRIVER === 'memory') {
       problems.push('KV_DRIVER: memory is not allowed when NODE_ENV=production');
     }
     if (raw.RATE_LIMIT_DISABLED) {
       problems.push('RATE_LIMIT_DISABLED: not allowed when NODE_ENV=production');
+    }
+    // SECURITY_ARCHITECTURE.md §6.3: production admin cookie is `__Host-…; Secure` (the portal
+    // already refuses PORTAL_COOKIE_SECURE=false in production; the API now matches it).
+    if (raw.SESSION_COOKIE_SECURE === 'false' || raw.SESSION_COOKIE_SECURE === '0') {
+      problems.push('SESSION_COOKIE_SECURE: must not be false when NODE_ENV=production');
+    }
+    if (!base.session.cookieName.startsWith('__Host-')) {
+      problems.push('SESSION_COOKIE_NAME: must start with __Host- when NODE_ENV=production');
     }
   }
   if (problems.length > 0) throw new ConfigError(problems);
@@ -129,6 +159,7 @@ export function loadApiConfig(
     mfaEncryptionKey: raw.MFA_ENCRYPTION_KEY,
     dataEncryptionKey: raw.DATA_ENCRYPTION_KEY,
     voucherPepper: raw.VOUCHER_PEPPER,
+    internalApiTokenPrevious: raw.INTERNAL_API_TOKEN_PREVIOUS ?? null,
     session: {
       cookieName: base.session.cookieName,
       ttlSeconds: base.session.ttlSeconds,

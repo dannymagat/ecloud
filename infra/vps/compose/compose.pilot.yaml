@@ -1,0 +1,321 @@
+# =============================================================================================
+#  ECLOUD pilot Compose project (DRAFT, NOT APPLIED; docs/VPS_CHANGE_LIST.md, D-031)
+#  Host: vps, deploy root /opt/ecloud (D-030). Derived from infra/compose/docker-compose.dev.yml
+#  (M9) with production settings: NODE_ENV=production, secrets ONLY as files (Compose
+#  `secrets:` -> /run/secrets/<name>, apps read <NAME>_FILE), nothing published except loopback
+#  TCP for Caddy and RADIUS UDP on the WireGuard hub address (D-032).
+#
+#  Secrets: /opt/ecloud/secrets/<name> produced by scripts/secrets/ (generate.sh / unseal.sh),
+#  installed root:10001 mode 0440, directory 0750 (docs/SECRETS_MANAGEMENT.md). gid 10001 =
+#  `ecloud-secrets`; every consumer gets it via group_add / user. Compose file secrets are bind
+#  mounts, so host ownership is what the container sees.
+#
+#  Validate locally (no daemon changes):
+#    ECLOUD_SECRETS_DIR=$PWD/var/secrets/pilot docker compose -f infra/vps/compose/compose.pilot.yaml config -q
+# =============================================================================================
+name: ecloud
+
+x-hardening: &hardening
+  read_only: true
+  tmpfs:
+    - /tmp:size=16m,mode=1777
+  cap_drop: ['ALL']
+  security_opt: ['no-new-privileges:true']
+  restart: unless-stopped
+  group_add: ['10001']
+  networks: [ecloud_internal]
+
+x-app-env: &app-env
+  NODE_ENV: production
+  LOG_LEVEL: info
+  DATABASE_URL_FILE: /run/secrets/database_url
+  DATABASE_URL_PLATFORM_FILE: /run/secrets/database_url_platform
+  REDIS_URL_FILE: /run/secrets/redis_url
+  INTERNAL_API_TOKEN_FILE: /run/secrets/internal_api_token
+  PUBLIC_ADMIN_ORIGIN: https://ezecloud.ezelink.ai
+  PUBLIC_API_ORIGIN: https://api.ezecloud.ezelink.ai
+  PUBLIC_PORTAL_ORIGIN: https://portal.ezecloud.ezelink.ai
+  # D-026: local driver for non-critical branding assets only (volume below, backed up).
+  STORAGE_DRIVER: local
+  STORAGE_LOCAL_ALLOW_PRODUCTION: 'true'
+
+# fail2ban (infra/vps/fail2ban) reads api/portal security events from journald by container
+# name; journald itself is capped (P10-B logging drafts). Other services use the daemon default.
+x-journald: &journald
+  driver: journald
+  options:
+    tag: '{{.Name}}'
+
+services:
+  postgres:
+    image: postgres:16-alpine@sha256:721873c34ceb9f8d8fc265984940dc982404c105f19ad51be9fdc5970a6080ea
+    container_name: ecloud-postgres
+    environment:
+      POSTGRES_DB: ecloud
+      POSTGRES_USER: ecloud
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
+    command:
+      [
+        'postgres',
+        '-c',
+        'shared_buffers=256MB',
+        '-c',
+        'max_connections=60',
+        '-c',
+        'password_encryption=scram-sha-256',
+      ]
+    secrets:
+      - postgres_password
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    networks: [ecloud_internal]
+    # no `ports:` - never published (T15)
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U ecloud -d ecloud']
+      interval: 10s
+      timeout: 5s
+      retries: 12
+    security_opt: ['no-new-privileges:true']
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits: { memory: 640M, cpus: '1.0', pids: 200 }
+        reservations: { memory: 384M }
+
+  db-roles:
+    image: postgres:16-alpine@sha256:721873c34ceb9f8d8fc265984940dc982404c105f19ad51be9fdc5970a6080ea
+    container_name: ecloud-db-roles
+    depends_on:
+      postgres: { condition: service_healthy }
+    user: '0:10001'
+    entrypoint: ['/bin/sh', '-euc']
+    command:
+      - >-
+        export PGPASSWORD="$$(cat /run/secrets/postgres_password)"
+        ECLOUD_APP_PASSWORD="$$(cat /run/secrets/ecloud_app_password)"
+        ECLOUD_PLATFORM_PASSWORD="$$(cat /run/secrets/ecloud_platform_password)"
+        RADIUS_SQL_PASSWORD="$$(cat /run/secrets/radius_sql_password)"
+        POSTGRES_DB=ecloud;
+        exec psql -h postgres -U ecloud -d ecloud -v ON_ERROR_STOP=1 -q -f /sql/db-roles.sql
+    secrets:
+      - postgres_password
+      - ecloud_app_password
+      - ecloud_platform_password
+      - radius_sql_password
+    volumes:
+      - ./db-roles.sql:/sql/db-roles.sql:ro
+    networks: [ecloud_internal]
+    read_only: true
+    cap_drop: ['ALL']
+    security_opt: ['no-new-privileges:true']
+    restart: 'no'
+
+  redis:
+    image: redis:7-alpine@sha256:858f009f9709ce576febc734aa78b8f6d624b82571f9ddb6bda4377c833b3499
+    container_name: ecloud-redis
+    # Runs directly as redis:ecloud-secrets (no gosu) so the 0440 config secret is readable.
+    user: '999:10001'
+    command:
+      [
+        'redis-server',
+        '/run/secrets/redis_conf',
+        '--maxmemory',
+        '96mb',
+        '--maxmemory-policy',
+        'noeviction',
+        '--appendonly',
+        'yes',
+        '--protected-mode',
+        'yes',
+      ]
+    secrets:
+      - redis_conf
+    volumes:
+      - redis_data:/data
+    networks: [ecloud_internal]
+    healthcheck:
+      test:
+        [
+          'CMD-SHELL',
+          'redis-cli -a "$$(sed -n "s/^requirepass //p" /run/secrets/redis_conf)" --no-auth-warning ping | grep -q PONG',
+        ]
+      interval: 10s
+      timeout: 3s
+      retries: 12
+    read_only: true
+    cap_drop: ['ALL']
+    security_opt: ['no-new-privileges:true']
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits: { memory: 128M, cpus: '0.25', pids: 64 }
+
+  migrate:
+    <<: *hardening
+    image: ${ECLOUD_REGISTRY:-ghcr.io/OWNER}/ecloud-api:${IMAGE_TAG:?IMAGE_TAG is required}
+    container_name: ecloud-migrate
+    profiles: ['migrate']
+    restart: 'no'
+    depends_on:
+      db-roles: { condition: service_completed_successfully }
+    command: ['node', 'packages/db/dist/cli.js', 'migrate']
+    environment:
+      <<: *app-env
+    secrets:
+      - database_url
+      - database_url_platform
+      - redis_url
+      - internal_api_token
+
+  api:
+    <<: *hardening
+    image: ${ECLOUD_REGISTRY:-ghcr.io/OWNER}/ecloud-api:${IMAGE_TAG:?IMAGE_TAG is required}
+    container_name: ecloud-api
+    depends_on:
+      db-roles: { condition: service_completed_successfully }
+      redis: { condition: service_healthy }
+    environment:
+      <<: *app-env
+      MFA_ENCRYPTION_KEY_FILE: /run/secrets/mfa_encryption_key
+      DATA_ENCRYPTION_KEY_FILE: /run/secrets/data_encryption_key
+      VOUCHER_PEPPER_FILE: /run/secrets/voucher_pepper
+      SESSION_COOKIE_NAME: __Host-ecloud_sid
+      SESSION_COOKIE_SECURE: 'true'
+      TRUST_PROXY_HOPS: '1'
+      # internal listener on the private network only (FreeRADIUS, portal); never published
+      INTERNAL_BIND_HOST: 0.0.0.0
+      NODE_OPTIONS: --max-old-space-size=256
+    secrets:
+      - database_url
+      - database_url_platform
+      - redis_url
+      - internal_api_token
+      - mfa_encryption_key
+      - data_encryption_key
+      - voucher_pepper
+    volumes:
+      - storage_data:/var/lib/ecloud/storage
+    ports:
+      - '127.0.0.1:3000:3000'
+    logging: *journald
+    deploy:
+      resources:
+        limits: { memory: 384M, cpus: '0.75', pids: 128 }
+        reservations: { memory: 192M }
+
+  portal:
+    <<: *hardening
+    image: ${ECLOUD_REGISTRY:-ghcr.io/OWNER}/ecloud-portal:${IMAGE_TAG:?IMAGE_TAG is required}
+    container_name: ecloud-portal
+    depends_on:
+      api: { condition: service_healthy }
+    environment:
+      <<: *app-env
+      PORTAL_STATE_SECRET_FILE: /run/secrets/portal_state_secret
+      PORTAL_COOKIE_SECURE: 'true'
+      PORTAL_TRUST_PROXY_HOPS: '1'
+      PORTAL_INTERNAL_API_URL: http://api:3001
+      NODE_OPTIONS: --max-old-space-size=160
+    secrets:
+      - database_url
+      - database_url_platform
+      - redis_url
+      - internal_api_token
+      - portal_state_secret
+    ports:
+      - '127.0.0.1:3002:3002'
+    logging: *journald
+    deploy:
+      resources:
+        limits: { memory: 256M, cpus: '0.5', pids: 128 }
+        reservations: { memory: 128M }
+
+  worker:
+    <<: *hardening
+    image: ${ECLOUD_REGISTRY:-ghcr.io/OWNER}/ecloud-worker:${IMAGE_TAG:?IMAGE_TAG is required}
+    container_name: ecloud-worker
+    depends_on:
+      db-roles: { condition: service_completed_successfully }
+      redis: { condition: service_healthy }
+    environment:
+      <<: *app-env
+      NODE_OPTIONS: --max-old-space-size=224
+    secrets:
+      - database_url
+      - database_url_platform
+      - redis_url
+      - internal_api_token
+    # no `ports:`; /healthz stays on 127.0.0.1 inside the container (image default)
+    deploy:
+      resources:
+        limits: { memory: 320M, cpus: '0.5', pids: 128 }
+        reservations: { memory: 160M }
+
+  # BLOCKED for the pilot until the NAS clients.conf renderer exists (docs/SECURITY_REVIEW_P10.md
+  # finding F-P10-07): profile `radius` keeps it from starting by default.
+  freeradius:
+    <<: *hardening
+    image: ${ECLOUD_REGISTRY:-ghcr.io/OWNER}/ecloud-freeradius:${IMAGE_TAG:?IMAGE_TAG is required}
+    container_name: ecloud-freeradius
+    profiles: ['radius']
+    depends_on:
+      postgres: { condition: service_healthy }
+    environment:
+      RADIUS_LISTEN_IP: '*'
+      RADIUS_SQL_HOST: postgres
+      RADIUS_SQL_DB: ecloud
+      RADIUS_SQL_USER: ecloud_radius
+      RADIUS_SQL_PASSWORD_FILE: /run/secrets/radius_sql_password
+      RADIUS_STATUS_SECRET_FILE: /run/secrets/radius_status_secret
+      INTERNAL_API_TOKEN_FILE: /run/secrets/internal_api_token
+      ECLOUD_INTERNAL_URL: http://api:3001
+      RADIUS_CLIENTS_RENDERED: '1'
+    secrets:
+      - radius_sql_password
+      - radius_status_secret
+      - internal_api_token
+    tmpfs:
+      - /tmp:size=16m,mode=1777
+      - /var/run/freeradius:size=1m,uid=101,gid=101
+    # Tunnel-only RADIUS (D-032): the WireGuard hub address, never 0.0.0.0. CoA 3799 is not
+    # published (the hub originates CoA).
+    ports:
+      - '100.100.0.1:1812:1812/udp'
+      - '100.100.0.1:1813:1813/udp'
+    deploy:
+      resources:
+        limits: { memory: 192M, cpus: '0.5', pids: 64 }
+
+networks:
+  ecloud_internal:
+    name: ecloud_internal
+    driver: bridge
+    driver_opts:
+      # Fixed bridge name, referenced by infra/vps/nftables (DOCKER-USER / forward rules).
+      com.docker.network.bridge.name: br-ecloud
+    ipam:
+      config:
+        - subnet: 172.28.0.0/16
+
+volumes:
+  pg_data:
+  redis_data:
+  storage_data:
+
+secrets:
+  postgres_password: { file: '${ECLOUD_SECRETS_DIR:-/opt/ecloud/secrets}/postgres_password' }
+  ecloud_app_password: { file: '${ECLOUD_SECRETS_DIR:-/opt/ecloud/secrets}/ecloud_app_password' }
+  ecloud_platform_password:
+    { file: '${ECLOUD_SECRETS_DIR:-/opt/ecloud/secrets}/ecloud_platform_password' }
+  radius_sql_password: { file: '${ECLOUD_SECRETS_DIR:-/opt/ecloud/secrets}/radius_sql_password' }
+  radius_status_secret: { file: '${ECLOUD_SECRETS_DIR:-/opt/ecloud/secrets}/radius_status_secret' }
+  internal_api_token: { file: '${ECLOUD_SECRETS_DIR:-/opt/ecloud/secrets}/internal_api_token' }
+  mfa_encryption_key: { file: '${ECLOUD_SECRETS_DIR:-/opt/ecloud/secrets}/mfa_encryption_key' }
+  data_encryption_key: { file: '${ECLOUD_SECRETS_DIR:-/opt/ecloud/secrets}/data_encryption_key' }
+  voucher_pepper: { file: '${ECLOUD_SECRETS_DIR:-/opt/ecloud/secrets}/voucher_pepper' }
+  portal_state_secret: { file: '${ECLOUD_SECRETS_DIR:-/opt/ecloud/secrets}/portal_state_secret' }
+  database_url: { file: '${ECLOUD_SECRETS_DIR:-/opt/ecloud/secrets}/database_url' }
+  database_url_platform:
+    { file: '${ECLOUD_SECRETS_DIR:-/opt/ecloud/secrets}/database_url_platform' }
+  redis_url: { file: '${ECLOUD_SECRETS_DIR:-/opt/ecloud/secrets}/redis_url' }
+  redis_conf: { file: '${ECLOUD_SECRETS_DIR:-/opt/ecloud/secrets}/redis_conf' }

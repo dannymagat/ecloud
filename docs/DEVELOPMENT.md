@@ -246,7 +246,7 @@ invitation token, recovery codes, voucher codes) are shown once by `SecretOnce` 
 `VoucherCodes` and dropped from memory on acknowledgement. Impersonation shows a persistent
 banner with reason, countdown and Stop (D-027).
 
-**Production.** Caddy serves `apps/admin/dist` for `ecloud.ezelink.ai` with an SPA fallback
+**Production.** Caddy serves `apps/admin/dist` for `ezecloud.ezelink.ai` with an SPA fallback
 (`try_files {path} /index.html`) and reverse-proxies `/api/*` to the API (same origin). Source
 maps are emitted but not referenced (`sourcemap: 'hidden'`); do not publish `*.map`.
 

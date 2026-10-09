@@ -4,7 +4,7 @@
  * variables, never values. The portal holds no DB credentials and no UAM/RADIUS secret
  * (API_ARCHITECTURE.md §1): only the internal API token and its own state-signing key.
  */
-import { ConfigError, loadConfig, type AppConfig } from '@ecloud/shared';
+import { ConfigError, loadConfig, resolveSecretFiles, type AppConfig } from '@ecloud/shared';
 import { z } from 'zod';
 
 export const PORTAL_DEV_DEFAULTS = Object.freeze({
@@ -21,6 +21,13 @@ export const portalEnvSchema = z.object({
   PORTAL_COOKIE_SECURE: z.enum(['true', 'false', '1', '0']).optional(),
   /** Express `trust proxy` hop count (Caddy in front = 1). */
   PORTAL_TRUST_PROXY_HOPS: z.coerce.number().int().min(0).max(10).default(0),
+  /** Separate Prometheus `/metrics` listener (Phase 10); unset/empty = disabled. */
+  PORTAL_METRICS_PORT: z
+    .string()
+    .optional()
+    .transform((v) => (v === undefined || v.trim() === '' ? undefined : Number(v)))
+    .pipe(z.number().int().min(1).max(65535).optional()),
+  PORTAL_METRICS_HOST: z.string().trim().min(1).default('127.0.0.1'),
 });
 
 export interface PortalConfig {
@@ -30,13 +37,15 @@ export interface PortalConfig {
   apiTimeoutMs: number;
   secureCookies: boolean;
   trustProxyHops: number;
+  /** `/metrics` listener; null = disabled. Never the public portal listener. */
+  metrics: { host: string; port: number } | null;
 }
 
 export function loadPortalConfig(
   env: Record<string, string | undefined> = process.env,
   base: AppConfig = loadConfig(env),
 ): PortalConfig {
-  const parsed = portalEnvSchema.safeParse(env);
+  const parsed = portalEnvSchema.safeParse(resolveSecretFiles(env));
   if (!parsed.success) {
     throw new ConfigError(
       parsed.error.issues.map((issue) => `${issue.path.join('.') || '(root)'}: ${issue.message}`),
@@ -68,5 +77,9 @@ export function loadPortalConfig(
     apiTimeoutMs: raw.PORTAL_API_TIMEOUT_MS,
     secureCookies,
     trustProxyHops: raw.PORTAL_TRUST_PROXY_HOPS,
+    metrics:
+      raw.PORTAL_METRICS_PORT === undefined
+        ? null
+        : { host: raw.PORTAL_METRICS_HOST, port: raw.PORTAL_METRICS_PORT },
   };
 }

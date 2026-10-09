@@ -1,0 +1,16 @@
+# /etc/systemd/system/ecloud-docker-user.service (DRAFT, NOT APPLIED)
+# Re-applies the DOCKER-USER policy whenever Docker (re)starts.
+[Unit]
+Description=ECLOUD DOCKER-USER firewall policy
+After=docker.service
+PartOf=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/opt/ecloud/infra/vps/nftables/docker-user.sh apply
+ExecStop=/opt/ecloud/infra/vps/nftables/docker-user.sh rollback
+
+[Install]
+WantedBy=docker.service

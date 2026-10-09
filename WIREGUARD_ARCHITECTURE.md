@@ -158,7 +158,7 @@ flowchart LR
 flowchart LR
   AP["EZEAP / site gateway"] -- "RadSec TCP 2083 (TLS) or RADIUS UDP 1812/1813 (firewall-restricted)" --> FR["FreeRADIUS (public, nftables allowlist)"]
   AP -- "uCentral websocket TLS (controller)" --> OWGW["OpenWiFi gateway / EZE controller"]
-  AP -- "HTTPS portal.ecloud.ezelink.ai" --> PORTAL["Captive portal (Caddy)"]
+  AP -- "HTTPS portal.ezecloud.ezelink.ai" --> PORTAL["Captive portal (Caddy)"]
   FR -. "CoA/Disconnect UDP 3799 → AP public IP? (NAT!)" .-> AP
 ```
 
@@ -211,7 +211,7 @@ Underlay: hub endpoint `57.129.69.122:51820/udp` (port PROPOSED; any free UDP po
 | **CoA / Disconnect (RFC 5176)** | Hub sends CoA-Request/Disconnect-Request to the NAS DAS address:port over the tunnel. FreeRADIUS: `home_server { type = coa; port = 3799 }` + `originate-coa` virtual server, or `radclient … coa|disconnect` (default port 3799). **Route requirement:** the NAS DAS IP must be inside the peer's AllowedIPs on the hub and the site gateway must route it. Which address the AP listens on and which port is configured by `interface.ssid.radius.dynamic-authorization {host, port, secret}` (schema) — whether the AP honours CoA at all is **D-006 / REQUIRES DEVICE TEST** (A2). | Blocked by NAT unless port-forwarded; the NAS public IP changes. | FreeRADIUS CoA: VERIFIED FROM OFFICIAL DOCUMENTATION (https://raw.githubusercontent.com/FreeRADIUS/freeradius-server/v3.2.x/raddb/sites-available/originate-coa ; …/sites-available/coa ; …/man/man1/radclient.1). AP support: REQUIRES DEVICE TEST. |
 | **Device management (uCentral websocket to controller)** | Today EZEAPs talk to the EZE controller (`ssh controller`) — not the VPS. Keep that path **public/unchanged** in the pilot; the tunnel carries only ECLOUD traffic. Later, controller endpoint could be given a tunnel address (unetd `root-node.ipaddr`). | Public TLS websocket (OWGW uses server + device certificates — https://raw.githubusercontent.com/Telecominfraproject/wlan-cloud-ucentralgw/main/README.md). | PROPOSED; OWGW: VERIFIED FROM OFFICIAL DOCUMENTATION |
 | **Monitoring** | Hub can ICMP-ping gateways/APs, poll SNMP (`service.snmpd` exists in schema — VERIFIED FROM EXISTING CODE; enabling it on EZEAP REQUIRES DEVICE TEST), and read `wg show … latest-handshakes` as a per-site liveness signal (wg(8)). | Only cloud-side signals (RADIUS accounting liveness, controller telemetry). | PROPOSED |
-| **API communication (site→cloud)** | Portal/API hostnames resolve publicly; captive clients must reach `portal.ecloud.ezelink.ai` via the walled garden — this is *subscriber* traffic and should **not** traverse the management tunnel (keeps hub bandwidth off the subscriber path and honours "VPS is not the enforcement point"). Only AP/gateway-originated API calls (if any) may use tunnel IPs. | Public HTTPS. | PROPOSED |
+| **API communication (site→cloud)** | Portal/API hostnames resolve publicly; captive clients must reach `portal.ezecloud.ezelink.ai` via the walled garden — this is *subscriber* traffic and should **not** traverse the management tunnel (keeps hub bandwidth off the subscriber path and honours "VPS is not the enforcement point"). Only AP/gateway-originated API calls (if any) may use tunnel IPs. | Public HTTPS. | PROPOSED |
 | **Multi-tenancy isolation** | Tenant = `/24` block. (1) AllowedIPs: a peer can only inject/receive its own prefixes (W2) — a compromised site cannot spoof another tenant's NAS IP. (2) nftables on hub: `FORWARD` from `wg0` to `wg0` **drop** (no site-to-site, no cross-tenant), `INPUT` from `wg0` limited to RADIUS/CoA-reply/ICMP/SNMP ports. (3) Production: one `wgN` interface + UDP port per tenant (or per-tenant VRF/netns per W10) for hard separation and per-tenant rate limits. | Application-level only. | PROPOSED |
 
 ---
@@ -334,7 +334,7 @@ flowchart TB
     H3["Hub B1"]
   end
   CP["Control plane: API, PostgreSQL (managed), peer inventory"]
-  DNS["hub.ecloud.ezelink.ai → regional A/AAAA (DNS steering) or anycast"]
+  DNS["hub.ezecloud.ezelink.ai → regional A/AAAA (DNS steering) or anycast"]
   Sites1["Sites region A"] --> DNS --> H1
   Sites2["Sites region B"] --> DNS --> H3
   H1 --> CP

@@ -1,0 +1,12 @@
+# LOCAL VALIDATION HARNESS ONLY (infra/vps/scripts/validate-local.sh). Not a VPS file.
+# Stand-in for the live /etc/caddy/Caddyfile: one existing site block (shape from
+# DEPLOYMENT_ARCHITECTURE.md §3.2; the real block is kept verbatim on the host) + the one
+# `import` line the change adds.
+q-mira.com, www.q-mira.com {
+	@www host www.q-mira.com
+	redir @www https://q-mira.com{uri} permanent
+	encode zstd gzip
+	reverse_proxy 127.0.0.1:8088
+}
+
+import /etc/caddy/sites/*.caddy

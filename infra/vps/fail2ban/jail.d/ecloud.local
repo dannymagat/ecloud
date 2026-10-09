@@ -1,0 +1,55 @@
+# /etc/fail2ban/jail.d/ecloud.local  (DRAFT, NOT APPLIED; SECURITY_ARCHITECTURE.md §2.4)
+# Bans are enforced by fail2ban's own nftables table (`inet f2b-table`, input hook, priority -1),
+# i.e. before `inet ecloud` and independent of Docker's chains. Caddy and sshd are host-native,
+# so INPUT-hook bans cover the admin, api and portal vhosts.
+
+[DEFAULT]
+banaction = nftables-multiport
+banaction_allports = nftables-allports
+# Operator addresses are added on the host only (never committed). 192.0.2.0/24 is the
+# RFC 5737 documentation range = placeholder.
+ignoreip = 127.0.0.1/8 ::1 192.0.2.0/24
+bantime.increment = true
+bantime.maxtime = 1w
+
+# sshd (F-37: ~17 200 failed attempts / 7 days). Distro default backend/logpath
+# (rsyslog is active on vps, REMOTE_ENVIRONMENT.md §14).
+[sshd]
+enabled = true
+mode = aggressive
+maxretry = 5
+findtime = 10m
+bantime = 1h
+
+# Admin UI / API logins: apps/api emits `"event":"admin_login_failed","ip":"<addr>"` (also
+# admin_mfa_failed, admin_invitation_failed) — apps/api/src/security-events.ts. Requires the api
+# container to log to journald (infra/vps/compose/compose.pilot.yaml `logging.driver: journald`)
+# and TRUST_PROXY_HOPS=1 behind Caddy so `ip` is the client, not 127.0.0.1.
+[ecloud-admin]
+enabled = true
+backend = systemd
+journalmatch = CONTAINER_NAME=ecloud-api
+filter = ecloud-admin
+port = http,https
+maxretry = 10
+findtime = 15m
+bantime = 30m
+
+# Captive portal: apps/portal emits `"event":"portal_auth_failed","ip":"<addr>"`. Sites sit
+# behind NAT (one IP = many subscribers) -> high threshold, short ban; the primary limiter is
+# per nasid+mac inside the app (SECURITY_ARCHITECTURE §5.4). Requires PORTAL_TRUST_PROXY_HOPS=1.
+[ecloud-portal]
+enabled = true
+backend = systemd
+journalmatch = CONTAINER_NAME=ecloud-portal
+filter = ecloud-portal
+port = http,https
+maxretry = 30
+findtime = 10m
+bantime = 15m
+
+[recidive]
+enabled = true
+maxretry = 3
+findtime = 1d
+bantime = 1w

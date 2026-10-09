@@ -2,7 +2,8 @@
 #
 #  ECLOUD FreeRADIUS -- AAA_ARCHITECTURE.md §9 "FreeRADIUS container design".
 #
-#  Base: official image, pinned tag (pin by digest in production).
+#  Base: official image, pinned by tag AND digest (P10-A); OS packages upgraded at build
+#  time (the pinned base carried fixable OpenSSL CVEs, docs/SECURITY_REVIEW_P10.md).
 #  Facts verified on this image (2026-10-07): Ubuntu 22.04, radiusd 3.2.10,
 #  /etc/raddb -> /etc/freeradius owned by freerad:freerad, /var/log/freeradius
 #  and /var/run/freeradius owned by freerad, radclient at /usr/bin/radclient,
@@ -13,7 +14,11 @@
 #  `freeradius -C` syntax check below runs with throw-away placeholder
 #  values that are not persisted in any layer (plain RUN env, no ENV).
 #
-FROM freeradius/freeradius-server:3.2.10
+FROM freeradius/freeradius-server:3.2.10@sha256:cc7fd136e7b03e7b332d94297530318e824a4ecfedbce54562cced723e71e812
+
+RUN apt-get update \
+ && apt-get upgrade -y --no-install-recommends \
+ && rm -rf /var/lib/apt/lists/*
 
 ARG RADDB=/etc/freeradius
 

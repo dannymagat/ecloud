@@ -1,0 +1,106 @@
+# /etc/caddy/sites/ezecloud.caddy  (DRAFT, NOT APPLIED; DEPLOYMENT_ARCHITECTURE.md §3, D-029, D-030)
+#
+# Added to the live Caddyfile by appending ONE line after the existing q-mira.com block, which
+# stays byte-for-byte unchanged:   import /etc/caddy/sites/*.caddy
+# Procedure: infra/vps/README.md "Caddy" (backup -> validate -> reload, never restart -> verify
+# q-mira.com). DNS for the three names is a separate, owner-approved change (D-029).
+#
+# Upstreams (ports follow the code, DEPLOYMENT_ARCHITECTURE.md M9 deviation 1):
+#   api public listener 127.0.0.1:3000, portal 127.0.0.1:3002. The api INTERNAL listener (3001),
+#   worker health (3003) and any /metrics endpoint are never routed by Caddy.
+# Apps must run with TRUST_PROXY_HOPS=1 / PORTAL_TRUST_PROXY_HOPS=1: reverse_proxy sets
+# X-Forwarded-For to the real peer address and, with no `trusted_proxies` configured, does not
+# pass a client-supplied value through (caddy 2.11 flags an explicit header_up as redundant).
+
+(ecloud_edge) {
+	encode zstd gzip
+	header {
+		# `?` = only when the upstream did not set it (the apps set their own CSP / HSTS).
+		?Strict-Transport-Security "max-age=31536000"
+		?X-Content-Type-Options "nosniff"
+		?X-Frame-Options "DENY"
+		?Cross-Origin-Opener-Policy "same-origin"
+		?Permissions-Policy "camera=(), microphone=(), geolocation=()"
+		-Server
+		-X-Powered-By
+	}
+	# Never reachable from the Internet: readiness detail, Prometheus metrics, internal API.
+	# A `handle` (not a bare `respond`): on a vhost whose other routes are `handle` blocks, Caddy
+	# orders `handle` before `respond`, so a bare respond would never fire (F-P10R-2).
+	@ecloud_private path /readyz /metrics /metrics/* /internal /internal/*
+	handle @ecloud_private {
+		respond 404
+	}
+}
+
+(ecloud_log) {
+	log {
+		output file /var/log/caddy/{args[0]}.access.log {
+			roll_size 50mb
+			roll_keep {args[1]}
+		}
+		format filter {
+			request>headers>Cookie delete
+			request>headers>Authorization delete
+			request>headers>X-Internal-Token delete
+			resp_headers>Set-Cookie delete
+		}
+	}
+}
+
+ezecloud.ezelink.ai {
+	import ecloud_edge
+	import ecloud_log ecloud 5
+	header {
+		Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
+		Referrer-Policy "same-origin"
+	}
+	# Same-origin API for the admin SPA (D-029): session cookie + CSRF checks live in the api.
+	handle /api/* {
+		reverse_proxy 127.0.0.1:3000
+	}
+	# Static SPA build (apps/admin/dist) copied to /opt/ecloud/admin by the deploy step.
+	handle {
+		root * /opt/ecloud/admin
+		@assets path /assets/*
+		header @assets Cache-Control "public, max-age=31536000, immutable"
+		try_files {path} /index.html
+		file_server {
+			hide .*
+		}
+	}
+}
+
+api.ezecloud.ezelink.ai {
+	import ecloud_edge
+	import ecloud_log api 5
+	header Referrer-Policy "no-referrer"
+	# SECURITY_ARCHITECTURE §6.3: the integration API accepts Bearer API keys only, never
+	# cookies. Cookie-issuing auth endpoints are not served on this origin.
+	@cookie_auth path /api/v1/auth/login /api/v1/auth/mfa/* /api/v1/auth/accept-invitation /api/v1/auth/logout
+	respond @cookie_auth 404
+	request_header -Cookie
+	header -Set-Cookie
+	reverse_proxy 127.0.0.1:3000
+}
+
+portal.ezecloud.ezelink.ai {
+	import ecloud_edge
+	import ecloud_log portal 10
+	# Captive-portal URLs carry MAC, NAS id and UAM challenge in the query string: the portal
+	# access log keeps the path only (SECURITY_ARCHITECTURE §6.11 / §8).
+	log {
+		output file /var/log/caddy/portal.access.log {
+			roll_size 50mb
+			roll_keep 10
+		}
+		format filter {
+			request>uri regexp "\?.*$" "?[REDACTED]"
+			request>headers>Cookie delete
+			request>headers>Referer delete
+			resp_headers>Location delete
+			resp_headers>Set-Cookie delete
+		}
+	}
+	reverse_proxy 127.0.0.1:3002
+}

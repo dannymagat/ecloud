@@ -8,7 +8,10 @@
 #    docker build -f infra/docker/Dockerfile --target admin  -t ecloud-admin:local  .
 #
 #  Design (DEPLOYMENT_ARCHITECTURE.md §4.3, SECURITY_ARCHITECTURE.md §6.10):
-#  - Base images pinned by exact tag (pin by digest for production, see the M9 notes).
+#  - Base images pinned by exact tag AND digest (P10-A; multi-arch index digests recorded in
+#    docs/SECURITY_REVIEW_P10.md). Bump both together; CI scans the result (Trivy).
+#  - OS packages of the runtime bases are upgraded at build time (P10-A: the pinned bases
+#    carried fixable CRITICAL CVEs, e.g. Debian perl-base / Alpine OpenSSL).
 #  - `npm ci` against the root package-lock.json, scoped to ONE workspace (`-w`), so every
 #    image installs only what its app needs. The build stage adds the root devDependencies
 #    (typescript) via --include-workspace-root; the runtime stage gets a separate
@@ -20,8 +23,8 @@
 #  - The admin SPA image is for LOCAL testing only; production serves the static build
 #    from native Caddy (D-030).
 #
-ARG NODE_IMAGE=node:22.23.3-bookworm-slim
-ARG NGINX_IMAGE=nginxinc/nginx-unprivileged:1.28.2-alpine
+ARG NODE_IMAGE=node:22.23.3-bookworm-slim@sha256:c3de60bf2f9dd0ac6370e6117950ff62d6e339527e7472301c9c78a017978392
+ARG NGINX_IMAGE=nginxinc/nginx-unprivileged:1.28.2-alpine@sha256:7377697a821c131a924a7105fafbe7414db4e9fcc77a6f08f776f33f141ec3f8
 
 # ---------------------------------------------------------------------------------------
 FROM ${NODE_IMAGE} AS node-base
@@ -45,6 +48,7 @@ RUN mkdir /manifests \
 #  Node runtime base: tini, no npm/corepack (not needed at run time, smaller attack surface).
 FROM ${NODE_IMAGE} AS node-runtime
 RUN apt-get update \
+ && apt-get upgrade -y --no-install-recommends \
  && apt-get install -y --no-install-recommends tini \
  && rm -rf /var/lib/apt/lists/* \
  && rm -rf /usr/local/lib/node_modules/npm /usr/local/lib/node_modules/corepack \
@@ -217,6 +221,8 @@ LABEL org.opencontainers.image.title="ecloud-admin" \
       org.opencontainers.image.source="${SOURCE_URL}" \
       org.opencontainers.image.revision="${VCS_REF}" \
       org.opencontainers.image.licenses="UNLICENSED"
+USER root
+RUN apk upgrade --no-cache
 COPY --chown=root:root --chmod=0644 infra/docker/admin-nginx.conf /etc/nginx/conf.d/default.conf
 COPY --from=admin-build --chown=root:root /src/apps/admin/dist/ /usr/share/ecloud-admin/
 # The base image already runs as uid 101 (nginx); stated explicitly for clarity.

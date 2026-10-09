@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { z } from 'zod';
 import { LOG_LEVELS } from './logger.js';
 
@@ -137,11 +138,75 @@ export class ConfigError extends Error {
 }
 
 /**
- * Loads and validates configuration from `env` (defaults to `process.env`).
+ * Secret-bearing variables that may instead be supplied as `<NAME>_FILE=<path>` (Compose
+ * `secrets:` -> `/run/secrets/<name>`, SECURITY_ARCHITECTURE.md §6.11 / §9): the value then never
+ * appears in `docker inspect` or the process environment of the image. One list for every app so
+ * api, worker and portal accept the same contract. `RADIUS_SQL_PASSWORD_FILE` is not in it: that
+ * path is consumed by FreeRADIUS itself.
+ */
+export const SECRET_FILE_VARIABLES = Object.freeze([
+  'DATABASE_URL',
+  'DATABASE_URL_PLATFORM',
+  'REDIS_URL',
+  'INTERNAL_API_TOKEN',
+  'INTERNAL_API_TOKEN_PREVIOUS',
+  'S3_ACCESS_KEY_ID',
+  'S3_SECRET_ACCESS_KEY',
+  'MFA_ENCRYPTION_KEY',
+  'DATA_ENCRYPTION_KEY',
+  'VOUCHER_PEPPER',
+  'PORTAL_STATE_SECRET',
+] as const);
+
+export type SecretFileReader = (path: string) => string;
+
+const defaultSecretFileReader: SecretFileReader = (path) => readFileSync(path, 'utf8');
+
+/**
+ * Returns a copy of `env` where every `<NAME>_FILE` of `SECRET_FILE_VARIABLES` is replaced by
+ * `<NAME>` = the file content (one trailing newline removed). Setting both forms, an unreadable
+ * file or an empty file is a `ConfigError` that names the variable, never the value. The
+ * returned object no longer contains the `_FILE` keys, so calling it twice is harmless.
+ */
+export function resolveSecretFiles(
+  env: Record<string, string | undefined>,
+  readFile: SecretFileReader = defaultSecretFileReader,
+): Record<string, string | undefined> {
+  const out: Record<string, string | undefined> = { ...env };
+  const problems: string[] = [];
+  for (const name of SECRET_FILE_VARIABLES) {
+    const fileKey = `${name}_FILE`;
+    const path = out[fileKey]?.trim();
+    delete out[fileKey];
+    if (path === undefined || path === '') continue;
+    if (out[name] !== undefined && out[name] !== '') {
+      problems.push(`${fileKey}: set either ${name} or ${fileKey}, not both`);
+      continue;
+    }
+    let value: string;
+    try {
+      value = readFile(path).replace(/\r?\n$/, '');
+    } catch {
+      problems.push(`${fileKey}: the file cannot be read`);
+      continue;
+    }
+    if (value.trim() === '') {
+      problems.push(`${fileKey}: the file is empty`);
+      continue;
+    }
+    out[name] = value;
+  }
+  if (problems.length > 0) throw new ConfigError(problems);
+  return out;
+}
+
+/**
+ * Loads and validates configuration from `env` (defaults to `process.env`). `<NAME>_FILE`
+ * variables are resolved first (`resolveSecretFiles`).
  * Never logs: callers that want to print the effective config must use `redactConfig()`.
  */
 export function loadConfig(env: Record<string, string | undefined> = process.env): AppConfig {
-  const parsed = envSchema.safeParse(env);
+  const parsed = envSchema.safeParse(resolveSecretFiles(env));
   if (!parsed.success) {
     throw new ConfigError(
       parsed.error.issues.map((issue) => `${issue.path.join('.') || '(root)'}: ${issue.message}`),

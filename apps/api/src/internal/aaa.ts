@@ -33,6 +33,7 @@ import { isUuid, newId } from '@ecloud/shared';
 import type { Request, RequestHandler, Response } from 'express';
 import type { AppDeps } from '../context.js';
 import { normalizeVoucherCode, safeEqual, sha256Hex } from '../crypto.js';
+import { recordAaaDecision } from '../metrics.js';
 import { nasAdapter } from '../nas-adapter.js';
 import { AUTHN_ACCESS } from '../auth/principal.js';
 import { loadResolutionInput } from '../policy-data.js';
@@ -291,7 +292,9 @@ async function identify(
     ])
     .where('v.code_hash', '=', voucherHash(deps.config.voucherPepper, code))
     .where('v.deleted_at', 'is', null)
-    .forUpdate()
+    // Lock only the voucher row: a bare FOR UPDATE on the join also locks the shared
+    // voucher_batches row and serialises every voucher login of a batch (P10-B load test).
+    .forUpdate('v')
     .executeTakeFirst();
   if (voucher === undefined) throw new Reject('bad_credentials', 'Access denied');
   if (
@@ -592,9 +595,13 @@ async function decide(deps: AppDeps, body: RadiusRequestBody, now: Date): Promis
 
 function tokenCheck(deps: AppDeps): RequestHandler {
   const expected = deps.config.base.internalApiToken;
+  const previous = deps.config.internalApiTokenPrevious;
   return (req, res, next) => {
     const presented = req.get('X-Internal-Token') ?? '';
-    if (!safeEqual(presented, expected)) {
+    // Both comparisons always run (constant work whether or not a rotation window is open).
+    const current = safeEqual(presented, expected);
+    const old = previous !== null && safeEqual(presented, previous);
+    if (!current && !old) {
       // Contract §1: 401 without a body.
       res.status(401).end();
       return;
@@ -616,11 +623,20 @@ export function authorizeHandler(deps: AppDeps): RequestHandler {
   return async (req: Request, res: Response) => {
     const body = (req.body ?? {}) as RadiusRequestBody;
     const rtKey = retransmitKey(body);
+    const started = process.hrtime.bigint();
+    const elapsed = () => Number(process.hrtime.bigint() - started) / 1e9;
     try {
       const cached = await deps.kv.get(rtKey);
       if (cached !== null) {
         const decision = JSON.parse(cached) as CachedDecision;
         req.log.info({ status: decision.status, retransmit: true }, 'aaa authorize (retransmit)');
+        recordAaaDecision(
+          deps.metrics,
+          decision.status === 200 ? 'accept' : 'reject',
+          elapsed(),
+          null,
+          true,
+        );
         res.status(decision.status).json(decision.body);
         return;
       }
@@ -645,9 +661,17 @@ export function authorizeHandler(deps: AppDeps): RequestHandler {
         },
         'aaa authorize',
       );
+      recordAaaDecision(
+        deps.metrics,
+        decision.status === 200 ? 'accept' : 'reject',
+        elapsed(),
+        decision.facts.reason,
+        false,
+      );
       res.status(decision.status).json(decision.body);
     } catch (error) {
       req.log.error({ err: error }, 'aaa authorize failed: backend unavailable');
+      recordAaaDecision(deps.metrics, 'unavailable', elapsed(), null, false);
       unavailable(res);
     }
   };

@@ -1,12 +1,12 @@
 # Project Status
 
 ## Current Stage
-`PHASE 3 — FOUNDATION IMPLEMENTATION (LOCAL) COMPLETE — AWAITING OWNER REVIEW`
+`PHASES 3–10 LOCAL WORK COMPLETE (2026-10-09) — AWAITING OWNER APPROVAL OF THE VPS CHANGE LIST (D-031)`
 
 Owner approved the Phase 2 decision gate on 2026-10-07 (DECISIONS.md D-021 … D-034). Phase 3 is authorised for **local development on the MacBook only**. **VPS deployment is gated (D-031)**: no remote host, EZEAP, EZE controller, DNS, firewall, Caddy or RADIUS exposure change may happen until the exact change list is presented and approved.
 
 ## Confirmed Goal
-Multi-tenant cloud bandwidth management platform (ECLOUD): admin policy control, captive portal (uspot / CoovaChilli), AAA/RADIUS, policy translation to verified device mechanisms on EZEAP / TIP OpenWiFi, sessions/accounting, reporting, WireGuard site connectivity, domains `ecloud.ezelink.ai`, `api.ecloud.ezelink.ai`, `portal.ecloud.ezelink.ai`.
+Multi-tenant cloud bandwidth management platform (ECLOUD): admin policy control, captive portal (uspot / CoovaChilli), AAA/RADIUS, policy translation to verified device mechanisms on EZEAP / TIP OpenWiFi, sessions/accounting, reporting, WireGuard site connectivity, domains `ezecloud.ezelink.ai`, `api.ezecloud.ezelink.ai`, `portal.ezecloud.ezelink.ai`.
 
 ## Owner Decisions in Force (2026-10-07)
 - D-001…D-020 APPROVED as design. **D-006 (CoA/Disconnect) stays REQUIRES_DEVICE_TEST.** Approval ≠ verified device capability.
@@ -142,7 +142,7 @@ Out of Phase 3 scope: portal UI beyond skeleton (Phase 6), backups (Phase 10), a
 ## P5 lab session 2026-10-08 — SKIPPED by owner
 - Owner approved the lab changes (FreeRADIUS reachable on the lab network; AP changed directly). Mac side prepared and seeded a lab tenant through the API; owner applied the lab AP config (uuid 1791450130) and restarted captive services.
 - Result: no device test executed. uspot did not start because the rendered captive instance section was not in the AP's stored `/etc/config/uspot` (recorded as a DT-03 attempt in PHASE2_VALIDATION.md). Owner then skipped AP testing.
-- Mac side restored: lab API stopped, FreeRADIUS back to 127.0.0.1 only. **The AP still runs the lab config** (open SSID on a routed guest network, no working portal) until rolled back with `lab/rollback-lab.sh` (outside the repo). The lab RADIUS secret was printed in the apply output; it is no longer accepted anywhere and must not be reused.
+- Mac side restored: lab API stopped, FreeRADIUS back to 127.0.0.1 only. **Lab AP restored (checked 2026-10-09, read-only):** active config `1791452890` equals the original `1791313886` except radios pinned to the channels ACS had chosen (5 GHz 132, 2.4 GHz 11) — most likely pushed by the EZE controller/RRM; no rollback applied, to avoid overwriting that newer config. The owner deleted the lab config file (which held the retired lab RADIUS secret) from the AP and changed the AP's default password on 2026-10-09. Future AP access should use an SSH key, not a password shared in chat. The lab RADIUS secret was printed in the apply output; it is no longer accepted anywhere and must not be reused.
 
 ## Phase 6 — Captive portal (LOCAL) — CODE COMPLETE 2026-10-08 (device exit criterion pending)
 Owner: "go to next phase" after skipping P5 device tests; interpreted as Phase 6, built locally with the Continuous Engineering Loop (spec in the job's TASK_P6.md, summarised here).
@@ -185,6 +185,18 @@ Scope: operational status, usage, authentication outcomes, site/device health wh
 - **Dev DB note:** 600 synthetic `auth_events` rows (lab org, NAS 192.0.2.1) remain in the local dev database because the table is append-only by design; the synthetic `usage_hourly` rows were removed.
 - **Orchestrator verification 2026-10-08:** build, lint, format:check, secrets scan OK; integration 1283 passed, 1 skipped (S3 contract) across 116 files; portal e2e 4/4.
 
+## Phase 10 — Hardening (LOCAL parts) — COMPLETE 2026-10-09
+Local-only cycles; every VPS-side control (firewall, fail2ban, SSH hardening, backup schedule, TLS on Caddy, monitoring agents) is authored as files and goes into the D-031 VPS change list — nothing applied to the server.
+| Cycle | Scope | Status |
+|---|---|---|
+| P10-A | Security hardening: whole-codebase security review against SECURITY_ARCHITECTURE threat model, dependency/SCA + SBOM in CI, container image hardening/scan, secrets-management tooling (sops/age pattern), authored nftables/fail2ban/sshd/Caddy fragments for the VPS change list | **DONE 2026-10-09** — review PASS WITH FIXES (docs/SECURITY_REVIEW_P10.md §8): Caddy apply validated as root could break the next Caddy restart → validate as `caddy`, auto-restore on failed reload; private paths returned the SPA on the admin vhost → `handle` + behaviour check; Docker-after-`wg0` ordering (VPS-WG-3); SSH allow-list now a required precondition (PRE-6); dead-man `confirm` checks; secrets tooling fixes |
+| P10-B | Resilience: encrypted backup + restore scripts with a real local restore drill, failure drills (DB, Redis, FreeRADIUS, API, worker down/restart → fail-closed behaviour), load test (authorize p95 target < 100 ms), log rotation and monitoring config drafts | **DONE 2026-10-09** — drills found and fixed 3 defects (Postgres restart crashed api/worker; schedulers lost after Redis data loss; voucher batch row lock serialised logins: p95 1 193 → 44 ms). Restore drill PASS (490 MB restored in 15 s, RLS/policies/grants identical); failure drills 40/40; review PASS WITH FIXES: backup lock, non-fatal metric write, `absent()` backup alert, scheduler restore with retry + periodic missing-only check, restore live-target guard, `ecloud_backup` role (BYPASSRLS, read-only, tested) |
+
+- **Load test (workstation, not VPS):** voucher/portal-credential authorize, portal login and password authorize ≤ 5/s meet p95 < 100 ms; **password authorize at 10/s does not reliably** (p95 70–677 ms on a busy host; saturation ≈ 17/s). Open: **B-3** — Argon2 hash runs inside the tenant DB transaction, holding a pool connection; fix = verify before opening the transaction (touches the AAA decision path; next cycle). Re-measure on the VPS after approval.
+- **D-039 domain rename** applied repo-wide (`ezecloud.ezelink.ai`, `api.`/`portal.` and auxiliary names); DECISIONS.md keeps the superseded names in D-005/D-014/D-029 as history. No DNS change.
+- **Open residuals:** off-site backup retention via bucket lifecycle (Q18); CI actions pinned by tag not SHA; Prometheus server not in the pilot (uptime-kuma is); drain cursor in Redis (rescan after data loss).
+- **Orchestrator verification 2026-10-09:** build, lint, format:check, secrets scan, secrets selftest, lockfile check OK; integration **1315 passed, 1 skipped** (S3 contract) across 126 files; portal e2e 4/4; `infra/vps` validate-local 6/6; promtool 18 rules OK.
+
 ## Verified Environment Facts
 See REMOTE_ENVIRONMENT.md and PHASE2_VALIDATION.md. Ledger: 105 claims — 40 verified, 17 proposed, 1 unknown, 47 requires device test; 24 device tests (DT-01…DT-24). **DT-01 executed 2026-10-07 (PASS, identification only)** on lab AP EZE-AP1832, EZEAP 6 r32912, uCentral schema 4.2.0: uspot is the TIP fork; no WireGuard/unetd on the AP (topology B unsupported on this firmware); hostapd supports DAS and dynamic VLAN. DT-02…DT-24 not executed. No device configuration was changed.
 
@@ -194,4 +206,4 @@ See REMOTE_ENVIRONMENT.md and PHASE2_VALIDATION.md. Ledger: 105 claims — 40 ve
 - Production regulatory retention (D-025) before production.
 
 ## Next Action
-Phase 3 milestones M1–M8 complete locally. Owner decisions pending: API_ARCHITECTURE open questions 1–3, then the D-031 VPS change list (no remote change until approved).
+Owner review of `docs/VPS_CHANGE_LIST.md` (DRAFT, per-id approval, D-031) and DNS-1 for `ezecloud.ezelink.ai` (D-039). Nothing is applied to the VPS, DNS or devices until approved. Local follow-up available without approval: B-3 (password hash outside the DB transaction).

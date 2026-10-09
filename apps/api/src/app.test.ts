@@ -202,6 +202,40 @@ describe('internal listener', () => {
     expect(JSON.stringify(res.body)).not.toContain('Auth-Type');
   });
 
+  it('GET /metrics (internal only) exposes request and fail-closed AAA counters without secrets', async () => {
+    await request(internalApp)
+      .post('/internal/aaa/authorize')
+      .set('X-Internal-Token', TEST_INTERNAL_TOKEN)
+      .send(radiusBody);
+    const res = await request(internalApp).get('/metrics');
+    expect(res.status).toBe(200);
+    expect(res.headers['content-type']).toContain('text/plain');
+    expect(res.headers['content-type']).toContain('version=0.0.4');
+    expect(res.text).toMatch(
+      /^ecloud_aaa_authorize_decisions_total\{outcome="unavailable",reason="",retransmit="false"\} [1-9]/m,
+    );
+    expect(res.text).toMatch(
+      /^ecloud_aaa_authorize_duration_seconds_count\{outcome="unavailable"\} [1-9]/m,
+    );
+    expect(res.text).toMatch(
+      /^ecloud_api_http_requests_total\{listener="internal",method="POST",route="\/internal\/aaa\/authorize",status="503"\} [1-9]/m,
+    );
+    expect(res.text).toContain('# TYPE ecloud_api_process_resident_memory_bytes gauge');
+    expect(res.text).not.toContain('alice');
+    expect(res.text).not.toContain('secret-password');
+    expect(res.text).not.toContain('192.0.2.10');
+    // never on the public listener (Caddy-facing)
+    const pub = await request(publicApp).get('/metrics');
+    expect(pub.status).toBe(404);
+  });
+
+  it('labels unmatched routes as `unmatched` (bounded cardinality)', async () => {
+    await request(publicApp).get('/api/v1/nope/abc-123');
+    const res = await request(internalApp).get('/metrics');
+    expect(res.text).toMatch(/route="unmatched",status="404"/);
+    expect(res.text).not.toContain('abc-123');
+  });
+
   it('post-auth always acknowledges with 204', async () => {
     const res = await request(internalApp)
       .post('/internal/aaa/post-auth')

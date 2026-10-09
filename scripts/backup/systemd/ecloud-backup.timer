@@ -1,0 +1,11 @@
+# DRAFT (not applied; VPS change list, D-031). RPO 24 h (DEPLOYMENT_ARCHITECTURE.md §5).
+[Unit]
+Description=Nightly ECLOUD backup
+
+[Timer]
+OnCalendar=*-*-* 02:15:00 UTC
+RandomizedDelaySec=10m
+Persistent=true
+
+[Install]
+WantedBy=timers.target

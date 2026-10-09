@@ -15,7 +15,7 @@ You are working on ECLOUD, EzeLink's multi-tenant cloud bandwidth management and
 - Policy intent is vendor-neutral. Every adapter must declare each capability as `VERIFIED_SUPPORTED`, `REQUIRES_DEVICE_TEST`, `UNSUPPORTED`, or `ECLOUD_SIDE_ONLY`.
 - D-006 CoA/Disconnect remains `REQUIRES_DEVICE_TEST`; architecture approval is not device evidence.
 - Pilot RADIUS transport is WireGuard tunnel-only by default. Do not expose UDP 1812/1813/3799 broadly to the public Internet. RadSec is a fallback only where endpoint support is verified.
-- Admin app: `ecloud.ezelink.ai`; integration API: `api.ecloud.ezelink.ai`; captive portal: `portal.ecloud.ezelink.ai`. DNS changes remain deployment-gated.
+- Admin app: `ezecloud.ezelink.ai`; integration API: `api.ezecloud.ezelink.ai`; captive portal: `portal.ezecloud.ezelink.ai`. DNS changes remain deployment-gated.
 - Server deployment root is `/opt/ecloud`; native Caddy remains the shared edge and existing `q-mira.com` must be preserved.
 - Secrets must never be committed. Use secret references/environment injection and per-NAS credentials.
 - The current VPS is development/pilot only. No VPS hardening, package installation, DNS change, Caddy change, WireGuard configuration, RADIUS exposure or application deployment is authorized solely by this document.

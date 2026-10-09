@@ -35,9 +35,9 @@ Lessons for ECLOUD (**PROPOSED**): keep Tailwind + React/TS + self-hosted vendor
 
 | Surface | Host | Audience | Rendering |
 |---|---|---|---|
-| (a) Admin app | `ecloud.ezelink.ai` | Platform + Org + Site + Operator + Read-only admins | SPA-ish React app, single Vite build, served as static files by Caddy; talks to `api.ecloud.ezelink.ai` (or same-origin `/api`, A5 decides) |
-| (b) Captive portal | `portal.ecloud.ezelink.ai` (one host, per-site routing by token/`?site=`/NAS id) | Subscribers inside mini-browsers (iOS CNA, Android captive sign-in, Windows) | Server-rendered templates (Node, same backend image) + progressive, optional ~5 KB vanilla JS; no framework |
-| (c) Self-care | `my.ecloud.ezelink.ai` or `portal…/account` (future) | Subscribers | Server-rendered first; reuse portal theme |
+| (a) Admin app | `ezecloud.ezelink.ai` | Platform + Org + Site + Operator + Read-only admins | SPA-ish React app, single Vite build, served as static files by Caddy; talks to `api.ezecloud.ezelink.ai` (or same-origin `/api`, A5 decides) |
+| (b) Captive portal | `portal.ezecloud.ezelink.ai` (one host, per-site routing by token/`?site=`/NAS id) | Subscribers inside mini-browsers (iOS CNA, Android captive sign-in, Windows) | Server-rendered templates (Node, same backend image) + progressive, optional ~5 KB vanilla JS; no framework |
+| (c) Self-care | `my.ezecloud.ezelink.ai` or `portal…/account` (future) | Subscribers | Server-rendered first; reuse portal theme |
 
 **Admin app: SPA vs server-rendered + islands.** Recommendation: **single-build React SPA (Vite, React 18/19, TypeScript, Tailwind, TanStack Query/Table/Router)** rather than cloning the ezecontroller include-partials + islands pattern. Reasons: (1) ECLOUD is greenfield — the islands pattern in ezecontroller exists only to migrate a legacy vanilla shell incrementally (`vite.config.islands.mjs` header comment cites `docs/react-migration`), a constraint we do not have; (2) one shared React runtime instead of 15 copies; (3) the 2 vCPU / 3.7 GiB pilot VPS favours static files behind Caddy (zero server CPU per page) over SSR; (4) team already owns React/TS/Tailwind kit code (`EzeTable`, `EzeModal`, `EzeWizard`) that can be lifted. Keep what is good from precedent: Tailwind tokens, self-hosted fonts/icons, permission catalogue, dark mode. Avoid Next.js/SSR for admin (needs a Node render process per request; no SEO benefit). Code-split by route; budget ≤ 250 KB gz initial.
 
@@ -106,7 +106,7 @@ flowchart LR
 ## 5. Admin auth/session UX (**PROPOSED**; mechanism owned by A8/A5)
 
 - Login: email + password → optional TOTP step (owner wants MFA option; ezecontroller already has `totpService.ts` — **VERIFIED** precedent). Recovery codes shown once. "Trust this browser 30 days" optional.
-- Session carrier: UI prefers **HttpOnly, Secure, SameSite=Lax session cookie** (same-site API or cookie-domain `.ecloud.ezelink.ai`) over localStorage JWT (precedent) because XSS can't read it and logout/idle can be enforced server-side; if A8 picks JWT, use short-lived access token in memory + refresh cookie. UI needs: `GET /me`, `POST /auth/logout`, 401 → redirect to login preserving deep link, 403 → inline "insufficient permission" state.
+- Session carrier: UI prefers **HttpOnly, Secure, SameSite=Lax session cookie** (same-site API or cookie-domain `.ezecloud.ezelink.ai`) over localStorage JWT (precedent) because XSS can't read it and logout/idle can be enforced server-side; if A8 picks JWT, use short-lived access token in memory + refresh cookie. UI needs: `GET /me`, `POST /auth/logout`, 401 → redirect to login preserving deep link, 403 → inline "insufficient permission" state.
 - Idle timeout: 30 min default (per-org configurable), warning modal at 28 min with "stay signed in"; absolute lifetime 12 h.
 - Impersonation / assume-tenant: persistent top banner "You are acting in Org X as Support — ends in 59:30 · Exit", distinct colour, every action audited with `impersonator_id`; impersonation cannot change admins/roles or secrets (PROPOSED guardrail).
 - Password policy, lockout, email verification: A8.
@@ -140,13 +140,13 @@ flowchart LR
 3. White-label needs: per-organization branding of the **admin app** (logo/colours/custom admin domain), or only per-site portal branding?
 4. Should Site Admins be allowed to create policies, or only assign org-defined policies (affects `policy.write` scoping)?
 5. Platform Support "assume-tenant": acceptable, and must the tenant be notified/see it in their audit log?
-6. Portal domain: single `portal.ecloud.ezelink.ai` for all sites vs custom per-org portal hostnames (adds certificate + walled-garden work per site)?
+6. Portal domain: single `portal.ezecloud.ezelink.ai` for all sites vs custom per-org portal hostnames (adds certificate + walled-garden work per site)?
 7. Is the subscriber self-care surface in scope for the first release?
 8. Voucher print format requirements (card size, QR, logo) and any fiscal/legal text?
 
 ## 9. Items requiring a real device test
 
 - Which portal hand-off parameters uspot (click/radius/credentials/uam modes) and CoovaChilli actually send/accept, and the exact redirect/success behaviour inside iOS CNA / Android captive sign-in — drives the per-adapter "NAS hand-off partial" (A4).
-- Whether the walled garden on EZEAP permits the portal host by default or must list `portal.ecloud.ezelink.ai` explicitly, and whether identity-broker domains for social login can be whitelisted (uCentral `walled-garden-fqdn` exists in schema; runtime behaviour untested).
+- Whether the walled garden on EZEAP permits the portal host by default or must list `portal.ezecloud.ezelink.ai` explicitly, and whether identity-broker domains for social login can be whitelisted (uCentral `walled-garden-fqdn` exists in schema; runtime behaviour untested).
 - CoA/Disconnect support per NAS type — gates the Sessions "Disconnect" button (`coa=VERIFIED`).
 - Mini-browser page-weight behaviour: confirm < 50 KB pages render and the success page releases the CNA on real iOS/Android/Windows clients.

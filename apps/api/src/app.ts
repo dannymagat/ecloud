@@ -12,6 +12,7 @@ import type { AppDeps, RequestContext } from './context.js';
 import { clientIp } from './http/common.js';
 import { notFoundHandler, problemHandler } from './http/errors.js';
 import { mountRoute, type AnyRouteSpec } from './http/route.js';
+import { createApiMetrics, httpMetrics, metricsHandler } from './metrics.js';
 import { authorizeHandler, internalTokenGuard, postAuthHandler } from './internal/aaa.js';
 import { portalInternalRouter } from './internal/portal.js';
 import { OPENAPI_PATH, buildOpenApiDocument } from './openapi.js';
@@ -155,12 +156,16 @@ function health(app: Express, deps: AppDeps): void {
 
 export interface Apps {
   publicApp: Express;
+  /** The deps the apps were built with (including the metrics registry). */
+  deps: AppDeps;
   internalApp: Express;
   routes: AnyRouteSpec[];
   openapi: unknown;
 }
 
-export function createApp(deps: AppDeps): Apps {
+export function createApp(appDeps: AppDeps): Apps {
+  const metrics = appDeps.metrics ?? createApiMetrics();
+  const deps: AppDeps = { ...appDeps, metrics };
   const routes = allRoutes(deps);
   const openapi = buildOpenApiDocument(routes, API_VERSION);
 
@@ -169,6 +174,7 @@ export function createApp(deps: AppDeps): Apps {
   publicApp.set('trust proxy', deps.config.trustProxyHops);
   publicApp.use(requestContext());
   publicApp.use(httpLogger(deps, 'public'));
+  publicApp.use(httpMetrics(metrics, 'public'));
   publicApp.use(
     helmet({
       contentSecurityPolicy: { directives: { defaultSrc: ["'none'"], frameAncestors: ["'none'"] } },
@@ -200,9 +206,12 @@ export function createApp(deps: AppDeps): Apps {
   internalApp.disable('x-powered-by');
   internalApp.use(requestContext());
   internalApp.use(httpLogger(deps, 'internal'));
+  internalApp.use(httpMetrics(metrics, 'internal'));
   internalApp.get('/healthz', (_req, res) => {
     res.json({ status: 'ok' });
   });
+  // Prometheus scrape target: internal listener only (loopback / compose network, never Caddy).
+  internalApp.get('/metrics', metricsHandler(metrics));
   internalApp.use('/internal', internalTokenGuard(deps));
   internalApp.use(express.json({ limit: INTERNAL_BODY_LIMIT }));
   internalApp.post('/internal/aaa/authorize', authorizeHandler(deps));
@@ -213,5 +222,5 @@ export function createApp(deps: AppDeps): Apps {
   internalApp.use(notFoundHandler());
   internalApp.use(problemHandler(deps.logger));
 
-  return { publicApp, internalApp, routes, openapi };
+  return { publicApp, internalApp, routes, openapi, deps };
 }

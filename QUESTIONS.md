@@ -14,7 +14,7 @@ The owner reviewed Phase 2 and ruled as follows (recorded in DECISIONS.md D-021 
 | Q59 | No MinIO on the pilot VPS; storage abstraction with local filesystem for non-critical assets, S3-compatible external storage in production; backups never only on the VPS filesystem (D-026). | AMENDED |
 | Q70 | Impersonation: permission-controlled, time-limited, audited, visible, cannot create API keys / rotate secrets / change privileged bindings; tenant-controlled enablement for production (D-027). | AMENDED |
 | Q82 / Q11 | Model every policy type now; enforcement staged (rates → session timeout → idle timeout → validity → vouchers → quotas → concurrency → schedules → VLAN → burst); adapters report `VERIFIED_SUPPORTED / REQUIRES_DEVICE_TEST / UNSUPPORTED / ECLOUD_SIDE_ONLY` per field (D-028). | AMENDED |
-| Q13, Q33 | Domain structure approved; admin SPA may use `ecloud.ezelink.ai/api/v1` same-origin; no DNS change without deployment approval (D-029). | ANSWERED |
+| Q13, Q33 | Domain structure approved; admin SPA may use `ezecloud.ezelink.ai/api/v1` same-origin; no DNS change without deployment approval (D-029). | ANSWERED |
 | Q14 | `/opt/ecloud` (D-030). | ANSWERED |
 | Q15 | Keep native Caddy with backup → preserve → validate → reload → verify procedure (D-030). | ANSWERED |
 | Q51, Q35-exposure | Tunnel-only RADIUS for the pilot; no public 1812/1813/3799; RadSec fallback (D-032). | ANSWERED |
@@ -45,7 +45,7 @@ Legend: **ANSWERED** · **PARTIAL** (owner gave the principle; details still ope
 | Q10 | Single org vs multi-tenant | **ANSWERED** | Multi-tenant (D-007), hierarchy given | multi-tenant |
 | Q11 | Policy controls in first release | **PARTIAL** | Full list given (rate, burst, quotas, timeouts, concurrency, validity, schedules, VLAN, priority); **which are release-1 vs later** still open | all stored; enforceability per adapter preview |
 | Q12 | Subscriber auth methods | **PARTIAL** | username/password, voucher, MAC/device, social login (extensible IdP). **Still open:** which IdPs (Q30), MAC-auth acceptance (Q31) | all four; social via broker |
-| Q13 | Domains / DNS | **PARTIAL** | `ecloud.ezelink.ai` primary; evaluate `api.`/`portal.` (D-014 proposes them). **Still open:** approve structure; point DNS (unproxied) at the VPS when Phase 3 deploys | proposed three hosts; dev via hosts file |
+| Q13 | Domains / DNS | **PARTIAL** | `ezecloud.ezelink.ai` primary; evaluate `api.`/`portal.` (D-014 proposes them). **Still open:** approve structure; point DNS (unproxied) at the VPS when Phase 3 deploys | proposed three hosts; dev via hosts file |
 | Q14 | Deploy root | **OPEN** | DEP recommends `/opt/ecloud` | `/opt/ecloud` |
 | Q15 | Keep native Caddy | **OPEN** | DEP/D-015 recommend keep | keep |
 | Q16 | Address overlap (sites/VPN vs Docker) | **OPEN** | Needed for `172.28.0.0/16` (Compose) and `100.100.0.0/16` (overlay); site LAN ranges per tenant (WG Q1) | as proposed; reassign if collision |
@@ -70,7 +70,7 @@ Legend: **ANSWERED** · **PARTIAL** (owner gave the principle; details still ope
 | Q30 | Will one physical site/NAS ever serve two organizations (shared venue)? If yes, realm/SSID tenant resolution and NAS↔org many-to-many are needed now. | no | MT M2 |
 | Q31 | Secrets model: one RADIUS secret per NAS (not per site) and a separate DAS/CoA secret per NAS (`nas_clients.coa_secret_ref`)? | yes to both | AAA Q5, SEC §4.1 |
 | Q32 | Fail mode when ECLOUD api/DB is unreachable: fail-closed for unknown subjects + cached-allow (≤15 min) for recently authorized subjects; no fail-open? | fail-closed + cached-allow (PE D7, AAA Q2) | AAA Q2, PE Q7 |
-| Q33 | SPA calls the API same-origin via `ecloud.ezelink.ai/api/v1` (`__Host-` cookie) while `api.ecloud.` stays for integrations? | yes (C-08) | API Q1 |
+| Q33 | SPA calls the API same-origin via `ezecloud.ezelink.ai/api/v1` (`__Host-` cookie) while `api.ecloud.` stays for integrations? | yes (C-08) | API Q1 |
 | Q34 | Redis in the pilot (sessions, queues, rate limits, policy cache) or defer to save memory? | include Redis (needed for Idempotency-Key, cached-allow, BullMQ) | DEP Q9 |
 | Q35 | Frontend: React + TypeScript + Tailwind SPA (team precedent) — any objection? | React SPA | A7 Q1 |
 | Q36 | Who inserts the `sessions` row — engine at authorize or drainer at Acct-Start? (internal, needs A3/A5b sign-off) | engine inserts `authorized`; drainer activates on Start (C-07) | PE Q10 |
@@ -131,7 +131,7 @@ Legend: **ANSWERED** · **PARTIAL** (owner gave the principle; details still ope
 | Q76 | Should Site Admins create policies or only assign org-defined ones (`policy:create` scope)? | assign-only | A7 Q4 |
 | Q77 | Arabic / RTL required for admin app, portal, or both; release-1 locales? | English only; RTL-ready CSS | A7 Q2 |
 | Q78 | White-label admin app per organization (logo/colours/custom domain) or per-site portal branding only? | portal branding only | A7 Q3 |
-| Q79 | Single `portal.ecloud.ezelink.ai` for all sites vs custom per-org portal hostnames (adds certificate + walled-garden work per site)? | single host | A7 Q6, CP Q3 |
+| Q79 | Single `portal.ezecloud.ezelink.ai` for all sites vs custom per-org portal hostnames (adds certificate + walled-garden work per site)? | single host | A7 Q6, CP Q3 |
 | Q80 | Subscriber self-care surface in release 1? | no | A7 Q7 |
 | Q81 | Voucher print format (card size, QR, logo) and fiscal/legal text? | A4 grid + QR, no fiscal text | A7 Q8 |
 | Q82 | Which policy controls must be in release 1 (refines Q11): rate + session/idle timeout + validity + vouchers first; quotas/concurrency/schedules/VLAN later? | that order | Q11, PE |
