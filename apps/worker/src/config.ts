@@ -3,7 +3,7 @@
  * define these yet; they are read here with zod and listed in the Phase 3 report so they can
  * be moved into the shared schema.
  */
-import { ConfigError, loadConfig, type AppConfig } from '@ecloud/shared';
+import { ConfigError, loadConfig, resolveSecretFiles, type AppConfig } from '@ecloud/shared';
 import { z } from 'zod';
 
 const boolFlag = (fallback: boolean) =>
@@ -43,6 +43,19 @@ export const workerEnvSchema = z.object({
     .min(1)
     .max(100_000_000_000)
     .default(1_000_000_000),
+  /**
+   * Cycle D: the controller AP inventory job makes OUTBOUND calls to tenant controllers; off
+   * unless explicitly enabled (it also needs DATA_ENCRYPTION_KEY to open the sealed credential).
+   */
+  WORKER_CONTROLLER_INVENTORY_ENABLED: boolFlag(false),
+  /**
+   * Cycle D review F4: the PRE-DERIVED vendor-API key (`vapi1.…`, HKDF of the master data key with
+   * purpose `ecloud:vendor-api:secret:v1`; `node packages/vendor-api/dist/cli.js derive-key
+   * vendor-api`). The worker never receives DATA_ENCRYPTION_KEY.
+   */
+  VENDOR_API_SECRET_KEY: z.string().min(1).optional(),
+  /** Platform deny-list for outbound vendor-API calls (CIDRs, comma separated). */
+  VENDOR_API_DENY_CIDRS: z.string().optional(),
 });
 
 export interface WorkerConfig {
@@ -52,13 +65,22 @@ export interface WorkerConfig {
   retention: { apply: boolean };
   sessions: { interimIntervalS: number; reapGraceS: number; authorizationTtlS: number };
   drain: { batchSize: number; wrapMaxBps: number };
+  /** Cycle D controller-API inventory (outbound; off by default). */
+  vendorApi: {
+    inventoryEnabled: boolean;
+    /** Derived purpose key (review F4), validated by the job before use. */
+    secretKey: string | null;
+    /** True when the master DATA_ENCRYPTION_KEY[_FILE] was given to the worker (refused). */
+    masterKeyPresent: boolean;
+    denyCidrs: string | null;
+  };
 }
 
 export function loadWorkerConfig(
   env: Record<string, string | undefined> = process.env,
 ): WorkerConfig {
   const app = loadConfig(env);
-  const parsed = workerEnvSchema.safeParse(env);
+  const parsed = workerEnvSchema.safeParse(resolveSecretFiles(env));
   if (!parsed.success) {
     throw new ConfigError(
       parsed.error.issues.map((issue) => `${issue.path.join('.') || '(root)'}: ${issue.message}`),
@@ -81,5 +103,12 @@ export function loadWorkerConfig(
       authorizationTtlS: raw.WORKER_AUTHORIZATION_TTL_S,
     },
     drain: { batchSize: raw.WORKER_DRAIN_BATCH, wrapMaxBps: raw.WORKER_COUNTER_WRAP_MAX_BPS },
+    vendorApi: {
+      inventoryEnabled: raw.WORKER_CONTROLLER_INVENTORY_ENABLED,
+      secretKey: raw.VENDOR_API_SECRET_KEY ?? null,
+      masterKeyPresent:
+        (env.DATA_ENCRYPTION_KEY ?? '') !== '' || (env.DATA_ENCRYPTION_KEY_FILE ?? '') !== '',
+      denyCidrs: raw.VENDOR_API_DENY_CIDRS ?? null,
+    },
   };
 }

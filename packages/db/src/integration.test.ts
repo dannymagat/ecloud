@@ -151,7 +151,7 @@ await describeIntegration('@ecloud/db schema', () => {
       .sort();
     expect(publicTables).toEqual([...ALL_TABLES].sort());
     expect(radiusTables).toEqual([...RADIUS_TABLES].sort());
-    expect(publicTables).toHaveLength(49); // + portal_assets, portal_terms_versions (021); + session_enforcement, accounting_anomalies (023); + usage_hourly (026); + nas_access_points, vendor_api_credentials (028)
+    expect(publicTables).toHaveLength(50); // + vendor_api_sessions (031); + portal_assets, portal_terms_versions (021); + session_enforcement, accounting_anomalies (023); + usage_hourly (026); + nas_access_points, vendor_api_credentials (028)
 
     const view = await sql<{ count: number }>`
       SELECT count(*)::int AS count FROM pg_views WHERE schemaname = 'radius' AND viewname = 'nas_v'
@@ -598,9 +598,12 @@ await describeIntegration('@ecloud/db schema', () => {
     expect(keys.map((k) => k.key)).toEqual([
       'coovachilli-uam',
       'generic-radius-8021x',
+      'mist-guest-portal', // 031
+      'omada-api', // 031
       'openwifi-config',
       'openwifi-hostapd-radius',
       'openwifi-uspot-uam',
+      'unifi-external-portal', // 031
       'uspot-upstream-uam',
     ]);
   });

@@ -21,6 +21,9 @@
       "path": "../../packages/adapters/tsconfig.build.json"
     },
     {
+      "path": "../../packages/vendor-api/tsconfig.build.json"
+    },
+    {
       "path": "../../packages/storage/tsconfig.build.json"
     },
     {

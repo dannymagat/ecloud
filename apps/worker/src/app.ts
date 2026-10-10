@@ -21,6 +21,7 @@ import { enforceRuntimeLimits, resolveClosedEnforcement } from './jobs/enforceme
 import { enforceQuotas } from './jobs/quota.js';
 import { expireAuthorizations, reapSessions } from './jobs/reap.js';
 import { pruneRetention } from './jobs/retention.js';
+import { runControllerInventory } from './jobs/controller-inventory.js';
 import {
   COA_JOB_OPTIONS,
   DEAD_LETTER,
@@ -186,6 +187,20 @@ export async function startWorker(options: StartOptions): Promise<RunningWorker>
       ),
     [QUEUES.coaDisconnect]: coaProcessor(),
     [QUEUES.coaChange]: coaProcessor(),
+    [QUEUES.controllersInventory]: singleFlight(QUEUES.controllersInventory, async () => {
+      const report = await runControllerInventory({
+        db,
+        logger,
+        enabled: config.vendorApi.inventoryEnabled,
+        vendorApiKey: config.vendorApi.secretKey,
+        masterKeyPresent: config.vendorApi.masterKeyPresent,
+        ...(config.vendorApi.denyCidrs !== null ? { denyCidrs: config.vendorApi.denyCidrs } : {}),
+      });
+      if (report.controllers > 0 || report.expiredApiSessions > 0) {
+        logger.info({ report }, 'controllers.inventory done');
+      }
+      return report;
+    }),
   };
 
   function coaProcessor(): Processor {

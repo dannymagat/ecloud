@@ -156,6 +156,8 @@ export const SECRET_FILE_VARIABLES = Object.freeze([
   'DATA_ENCRYPTION_KEY',
   'VOUCHER_PEPPER',
   'PORTAL_STATE_SECRET',
+  // Cycle D review F4: the worker's derived vendor-API key (never the master data key)
+  'VENDOR_API_SECRET_KEY',
 ] as const);
 
 export type SecretFileReader = (path: string) => string;

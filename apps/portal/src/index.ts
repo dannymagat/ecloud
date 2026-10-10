@@ -72,6 +72,69 @@ const NAS_ORIGIN_RE = /^http:\/\/(\d{1,3}\.){3}\d{1,3}:\d{1,5}$/;
  * Open-redirect guard: a NAS hand-off is followed only when it targets this flow's own
  * `http://uamip:uamport` (validated by the API) and exactly the expected path.
  */
+/**
+ * Cycle D review F6: the requested page becomes the primary "Continue" only when the tenant
+ * configured / allow-listed its host; otherwise the tenant's landing page (if any) is primary
+ * and the requested page is a secondary link with its host visible.
+ */
+export function vendorSuccessBody(o: {
+  continueUrl: string | null;
+  continueHost: string | null;
+  trusted: boolean;
+  landingUrl: string | null;
+}): {
+  page: 'success';
+  continueUrl: string | null;
+  statusHref: null;
+  continueHost: string | null;
+  unlisted: { url: string; host: string } | null;
+} {
+  const hostOf = (u: string): string | null => {
+    try {
+      return new URL(u).hostname;
+    } catch {
+      return null;
+    }
+  };
+  if (o.trusted && o.continueUrl !== null) {
+    return {
+      page: 'success',
+      continueUrl: o.continueUrl,
+      statusHref: null,
+      continueHost: o.continueHost,
+      unlisted: null,
+    };
+  }
+  const unlisted =
+    o.continueUrl !== null && o.continueHost !== null
+      ? { url: o.continueUrl, host: o.continueHost }
+      : null;
+  return {
+    page: 'success',
+    continueUrl: o.landingUrl,
+    statusHref: null,
+    continueHost: o.landingUrl === null ? null : hostOf(o.landingUrl),
+    unlisted,
+  };
+}
+
+/** Cycle D: a Mist grant may only go to https://portal[.<region>].mist.com/authorize. */
+export function isMistGrantUrl(raw: string): boolean {
+  try {
+    const u = new URL(raw);
+    return (
+      u.protocol === 'https:' &&
+      u.username === '' &&
+      u.password === '' &&
+      u.port === '' &&
+      /^portal\.(?:[a-z0-9-]{1,32}\.)?mist\.com$/.test(u.hostname) &&
+      u.pathname === '/authorize'
+    );
+  } catch {
+    return false;
+  }
+}
+
 export function isNasHandoff(
   url: string,
   nasOrigin: string | null,
@@ -363,6 +426,52 @@ export function createServer(options: ServerOptions = {}): Express {
     click_through: 'terms',
   };
 
+  // ------------------------------------------------------- Cycle D vendor-API entry points
+  // UniFi external portal: the controller sends the guest to `<portal>/guest/s/<site>/?ap=…`;
+  // Omada (API mode) and Mist are configured with `/ext/omada` and `/ext/mist`. The API resolves
+  // the tenant from a VERIFIED AP MAC only; every refusal is the same generic page.
+  const vendorEntry = async (
+    req: Request,
+    res: Response,
+    adapter: 'unifi' | 'omada' | 'mist',
+    path: string,
+  ): Promise<void> => {
+    if (api.vendorRedirect === undefined) {
+      errorPage(res, 400, t('error.generic'));
+      return;
+    }
+    const q = req.originalUrl.indexOf('?');
+    const rawQuery = q < 0 ? '' : req.originalUrl.slice(q + 1);
+    const outcome = await api.vendorRedirect({ adapter, path, rawQuery, clientIp: req.ip ?? null });
+    if (outcome.kind === 'flow') {
+      nonceFor(req, res);
+      const token = signFlowToken(secret, outcome.flowId, outcome.expiresAt);
+      res.setHeader('Cache-Control', 'no-store');
+      res.redirect(303, flowHref(token));
+      return;
+    }
+    if (outcome.kind === 'rate_limited') {
+      errorPage(
+        res,
+        429,
+        t('form.rate_limited', { minutes: Math.max(1, Math.ceil(outcome.retryAfter / 60)) }),
+      );
+      return;
+    }
+    if (outcome.kind === 'unavailable') {
+      errorPage(res, 503, t('error.unavailable'));
+      return;
+    }
+    errorPage(res, 400, t('error.generic'));
+  };
+  app.get(['/guest/s/:site', '/guest/s/:site/'], (req, res) =>
+    vendorEntry(req, res, 'unifi', `/guest/s/${String(req.params.site)}/`),
+  );
+  app.get(['/ext/omada', '/ext/omada/'], (req, res) =>
+    vendorEntry(req, res, 'omada', '/ext/omada'),
+  );
+  app.get(['/ext/mist', '/ext/mist/'], (req, res) => vendorEntry(req, res, 'mist', '/ext/mist'));
+
   app.get('/f/:token', async (req, res) => {
     const l = await load(req, res);
     if (l === null) return;
@@ -503,6 +612,27 @@ export function createServer(options: ServerOptions = {}): Express {
           return;
         case 'handoff_unavailable':
           errorPage(res, 400, t('error.generic'), l.view);
+          return;
+        case 'vendor_authorized':
+          // Cycle D: the controller authorised the device; no NAS hand-off exists.
+          send(res, {
+            status: 200,
+            theme: themeOf(l.view),
+            branding: brandingOf(l.view),
+            body: vendorSuccessBody(outcome),
+          });
+          return;
+        case 'vendor_grant':
+          if (!isMistGrantUrl(outcome.grantUrl)) {
+            logger.error({ flowId: l.view.id }, 'portal vendor grant URL rejected');
+            errorPage(res, 502, t('error.unavailable'), l.view);
+            return;
+          }
+          res.setHeader('Cache-Control', 'no-store');
+          res.redirect(302, outcome.grantUrl);
+          return;
+        case 'vendor_unavailable':
+          errorPage(res, 502, t('error.unavailable'), l.view);
           return;
         case 'unavailable':
           errorPage(res, 503, t('error.unavailable'), l.view);

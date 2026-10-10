@@ -565,7 +565,7 @@ await describeIntegration('@ecloud/api multi-vendor Cycle A', () => {
     const id = await controller(a.agent, a.orgId, {
       vendor_key: 'ubiquiti-unifi',
       kind: 'on_premises',
-      base_url: 'https://10.20.30.40:11443/',
+      base_url: 'https://10.20.30.40:8443/',
     });
 
     const missing = await a.agent.get(`/api/v1/orgs/${a.orgId}/controllers/${id}/api-credential`);
@@ -583,7 +583,7 @@ await describeIntegration('@ecloud/api multi-vendor Cycle A', () => {
 
     const set = await setCredential(a.agent, a.orgId, id, {
       api_kind: 'unifi-network',
-      base_url: 'https://10.20.30.40:11443/proxy/network/integration',
+      base_url: 'https://10.20.30.40:8443/proxy/network/integration',
       secret: FAKE_API_SECRET,
       external_site_id: 'default',
     });
@@ -628,7 +628,7 @@ await describeIntegration('@ecloud/api multi-vendor Cycle A', () => {
     // rotate: new seal, new rotation time
     const rotated = await setCredential(a.agent, a.orgId, id, {
       api_kind: 'unifi-network',
-      base_url: 'https://10.20.30.40:11443/proxy/network/integration',
+      base_url: 'https://10.20.30.40:8443/proxy/network/integration',
       secret: `${FAKE_API_SECRET}-2`,
     });
     expect(rotated.status).toBe(200);

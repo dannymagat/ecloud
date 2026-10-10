@@ -4,6 +4,7 @@
  * listener knobs). They are validated here with the same rules: dev-only defaults that are
  * rejected when NODE_ENV=production, and error messages that name variables, never values.
  */
+import { parseDenyCidrs } from '@ecloud/vendor-api';
 import { ConfigError, loadConfig, resolveSecretFiles, type AppConfig } from '@ecloud/shared';
 import { z } from 'zod';
 
@@ -34,6 +35,26 @@ export const apiEnvSchema = z.object({
     .trim()
     .transform((v) => (v === '' ? undefined : v))
     .optional(),
+  /**
+   * Cycle D review F2: extra networks outbound vendor-API calls may never reach (CIDRs, comma
+   * separated). Unset = @ecloud/vendor-api DEFAULT_DENY_CIDRS (compose bridge 172.28.0.0/16,
+   * docker0 172.17.0.0/16, WireGuard overlay 100.100.0.0/16); setting it REPLACES that default.
+   */
+  VENDOR_API_DENY_CIDRS: z
+    .string()
+    .optional()
+    .refine(
+      (v) => {
+        if (v === undefined) return true;
+        try {
+          parseDenyCidrs(v);
+          return true;
+        } catch {
+          return false;
+        }
+      },
+      { message: 'comma-separated CIDR list' },
+    ),
   /** Idle timeout of admin sessions (SECURITY_ARCHITECTURE.md §6.3: 30 min). */
   SESSION_IDLE_SECONDS: z.coerce.number().int().min(60).max(86_400).default(1_800),
   /** `Secure` cookie attribute; defaults to true in production. */
@@ -100,6 +121,8 @@ export interface ApiConfig {
   coaEnabled: boolean;
   shutdownGraceMs: number;
   rateLimitDisabled: boolean;
+  /** Cycle D review F2: VENDOR_API_DENY_CIDRS (undefined = vendor-api default list). */
+  vendorApiDenyCidrs?: string;
 }
 
 export function loadApiConfig(
@@ -177,5 +200,8 @@ export function loadApiConfig(
     coaEnabled: raw.ECLOUD_COA_ENABLED,
     shutdownGraceMs: raw.SHUTDOWN_GRACE_MS,
     rateLimitDisabled: raw.RATE_LIMIT_DISABLED,
+    ...(raw.VENDOR_API_DENY_CIDRS !== undefined
+      ? { vendorApiDenyCidrs: raw.VENDOR_API_DENY_CIDRS }
+      : {}),
   };
 }

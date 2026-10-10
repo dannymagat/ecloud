@@ -408,6 +408,12 @@ export interface NasAccessPointsTable {
    */
   verified_at: NullableTimestamp;
   verification_source: 'radius-called-station' | 'controller-inventory' | null;
+  /**
+   * Cycle D review F1 (migration 031): a pinned on-prem controller's inventory reported this MAC.
+   * A candidate signal only; verification needs a platform confirmation.
+   */
+  inventory_seen_at: NullableTimestamp;
+  inventory_controller_id: Uuid | null;
   created_at: GeneratedTimestamp;
   updated_at: GeneratedTimestamp;
   deleted_at: NullableTimestamp;
@@ -431,6 +437,51 @@ export interface VendorApiCredentialsTable {
   external_org_id: string | null;
   external_site_id: string | null;
   rotated_at: GeneratedTimestamp;
+  created_at: GeneratedTimestamp;
+  updated_at: GeneratedTimestamp;
+  /** Cycle D (migration 031): pinned TLS trust anchor (certificate PEM only, never a key). */
+  tls_ca_pem: Generated<string | null>;
+  /** Cycle D: pinned SHA-256 leaf fingerprint `AB:CD:…` (on-prem self-signed controllers). */
+  tls_fingerprint_sha256: Generated<string | null>;
+  /** Cycle D: non-secret per-adapter settings (omada_controller_id, mist_portal_host, …). */
+  settings: GeneratedJsonb<Record<string, unknown>>;
+  last_test_at: NullableTimestamp;
+  /** `ok` or a vendor-api error code; never vendor text. */
+  last_test_result: Generated<string | null>;
+  inventory_checked_at: NullableTimestamp;
+  inventory_result: Generated<string | null>;
+  inventory_matched: Generated<number | null>;
+}
+
+/**
+ * Cycle D (migration 031): an "API-authorised session" of a controller-API / signed-grant vendor
+ * (UniFi, Omada API mode, Mist). Not a `sessions` row: these vendors send no RADIUS accounting,
+ * so there are no counters; `usage_source` says where usage would come from (`unknown` today).
+ */
+export interface VendorApiSessionsTable {
+  id: Generated<Uuid>;
+  organization_id: Uuid;
+  site_id: Uuid;
+  nas_client_id: Uuid;
+  controller_id: Uuid;
+  adapter_key: 'unifi-external-portal' | 'omada-api' | 'mist-guest-portal';
+  api_kind: 'unifi-network' | 'omada-controller' | 'mist';
+  client_mac: Macaddr;
+  ap_mac: Macaddr | null;
+  identity_kind: 'user' | 'voucher' | 'click_through';
+  user_id: Uuid | null;
+  voucher_id: Uuid | null;
+  status: 'pending' | 'authorized' | 'granted_url_issued' | 'failed' | 'expired';
+  vendor_client_ref: string | null;
+  requested_at: GeneratedTimestamp;
+  authorized_at: NullableTimestamp;
+  expires_at: NullableTimestamp;
+  granted_duration_s: number | null;
+  requested_limits: GeneratedJsonb<Record<string, unknown>>;
+  field_statuses: GeneratedJsonb<unknown[]>;
+  usage_source: Generated<'unknown' | 'ecloud_side'>;
+  accounting: Generated<'none'>;
+  error_code: string | null;
   created_at: GeneratedTimestamp;
   updated_at: GeneratedTimestamp;
 }
@@ -1039,6 +1090,7 @@ export interface Database {
   compatibility_entries: CompatibilityEntriesTable;
   controllers: ControllersTable;
   vendor_api_credentials: VendorApiCredentialsTable;
+  vendor_api_sessions: VendorApiSessionsTable;
   identity_providers: IdentityProvidersTable;
   user_groups: UserGroupsTable;
   users: UsersTable;

@@ -26,6 +26,13 @@ import {
   isPublicWebhookAddress,
   webhookTarget,
 } from '@ecloud/shared';
+import {
+  isCertificatePem,
+  normalizeFingerprint,
+  openVendorCredential,
+  testVendorConnection,
+  validateVendorApiSettings,
+} from '@ecloud/vendor-api';
 import { isIP } from 'node:net';
 import { sql } from 'kysely';
 import { z } from 'zod';
@@ -34,10 +41,12 @@ import { requestIsImpersonating } from '../auth/middleware.js';
 import type { AppDeps } from '../context.js';
 import { Envelope, sealSecretRef } from '../crypto.js';
 import { OrgIdParams, problemResponses } from '../http/common.js';
-import { ImpersonationForbiddenError } from '../http/errors.js';
+import { ImpersonationForbiddenError, TooManyRequestsError } from '../http/errors.js';
 import { defineRoute, type AnyRouteSpec } from '../http/route.js';
 import { assertRef, inTenant, requireOnSite } from '../tenant.js';
 import { crudRoutes, loose, type Row } from './crud.js';
+import { loadStoredCredential, vendorHttpOf } from '../vendor-api/store.js';
+import { resetControllerInventoryTrust } from '../vendor-api/trust.js';
 
 export const CONTROLLER_KINDS = ['cloud', 'on_premises', 'embedded'] as const;
 export type ControllerKind = (typeof CONTROLLER_KINDS)[number];
@@ -240,6 +249,30 @@ export function resolveDeploymentMode(
   return requested;
 }
 
+/** Review F2: per-organization limits (security caps; not disabled by RATE_LIMIT_DISABLED). */
+export const TEST_CONNECTION_LIMIT = Object.freeze({ max: 10, windowS: 60 });
+export const CONTROLLER_CREATE_LIMIT = Object.freeze({ max: 20, windowS: 60 });
+
+/** Test outcomes that reveal nothing about reachability and are returned as-is. */
+const TEST_CODES_KEPT: ReadonlySet<string> = new Set([
+  'ok',
+  'auth_failed',
+  'not_implemented',
+  'rate_limited',
+  'secret_unavailable',
+  'invalid_target',
+  'port_not_allowed',
+]);
+
+async function orgRateLimit(
+  deps: AppDeps,
+  key: string,
+  limit: { readonly max: number; readonly windowS: number },
+): Promise<void> {
+  const n = await deps.kv.incr(key, limit.windowS);
+  if (n > limit.max) throw new TooManyRequestsError((await deps.kv.ttl(key)) || limit.windowS);
+}
+
 export function controllerRoutes(deps: AppDeps): AnyRouteSpec[] {
   const envelope = new Envelope(deps.config.dataEncryptionKey, CONTROLLER_CREDENTIAL_PURPOSE);
 
@@ -265,6 +298,12 @@ export function controllerRoutes(deps: AppDeps): AnyRouteSpec[] {
     },
     serialize: serializeController,
     prepareCreate: async (body, { trx, req }) => {
+      // Review F2: bound how fast a tenant can create controllers (outbound targets).
+      await orgRateLimit(
+        deps,
+        `rl:controller-create:${String(req.params.orgId)}`,
+        CONTROLLER_CREATE_LIMIT,
+      );
       // D-027: secret material is never set while impersonating (same rule as rotate).
       if (body.credential !== undefined && requestIsImpersonating(req)) {
         throw new ImpersonationForbiddenError('controller:secret:rotate');
@@ -310,6 +349,14 @@ export function controllerRoutes(deps: AppDeps): AnyRouteSpec[] {
         }
       }
       const next: Row = { ...body };
+      // Review F1: inventory trust belongs to the exact controller configuration.
+      if (
+        (body.base_url !== undefined && body.base_url !== before.base_url) ||
+        (body.kind !== undefined && body.kind !== before.kind) ||
+        (body.vendor_key !== undefined && body.vendor_key !== before.vendor_key)
+      ) {
+        await resetControllerInventoryTrust(trx, before.id as string);
+      }
       if (body.base_url !== undefined || body.kind !== undefined) {
         const effectiveKind = (body.kind ?? before.kind) as ControllerKind;
         const effectiveUrl = (body.base_url ?? before.base_url) as string;
@@ -343,6 +390,7 @@ export function controllerRoutes(deps: AppDeps): AnyRouteSpec[] {
       return next;
     },
     beforeDelete: async (before, { trx }) => {
+      await resetControllerInventoryTrust(trx, before.id as string);
       // Cycle A: the sealed API credential goes with its controller (hard delete).
       await trx
         .deleteFrom('vendor_api_credentials')
@@ -455,8 +503,49 @@ export const VendorApiCredentialBody = z
     secret: z.string().min(1).max(4096),
     external_org_id: externalId,
     external_site_id: externalId,
+    /**
+     * Cycle D (migration 031): trust anchor for an on-prem controller with a private CA /
+     * self-signed certificate (PEM certificate(s) only, never a key). Mutually exclusive with
+     * `tls_fingerprint_sha256`. TLS is always verified; there is no "insecure" option.
+     */
+    tls_ca_pem: z.string().max(16_384).nullable().optional(),
+    /** Cycle D: SHA-256 fingerprint of the controller's leaf certificate (`AB:CD:…`). */
+    tls_fingerprint_sha256: z.string().max(200).nullable().optional(),
+    /** Cycle D: non-secret per-adapter settings (see @ecloud/vendor-api `VendorApiSettings`). */
+    settings: z.record(z.string(), z.unknown()).optional(),
   })
   .superRefine((value, ctx) => {
+    if (typeof value.tls_ca_pem === 'string' && !isCertificatePem(value.tls_ca_pem)) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['tls_ca_pem'],
+        message: 'PEM CERTIFICATE block(s) only',
+      });
+    }
+    if (
+      typeof value.tls_fingerprint_sha256 === 'string' &&
+      normalizeFingerprint(value.tls_fingerprint_sha256) === null
+    ) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['tls_fingerprint_sha256'],
+        message: '32 hex octets (SHA-256)',
+      });
+    }
+    if (typeof value.tls_ca_pem === 'string' && typeof value.tls_fingerprint_sha256 === 'string') {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['tls_fingerprint_sha256'],
+        message: 'pin either a CA or a fingerprint, not both',
+      });
+    }
+    const settings = validateVendorApiSettings(value.api_kind, value.settings ?? {});
+    if (!settings.ok) {
+      for (const issue of settings.issues) {
+        ctx.addIssue({ code: 'custom', path: issue.path.split('.'), message: issue.message });
+      }
+    }
+
     if (
       VENDOR_API_USERNAME_REQUIRED.includes(value.api_kind) &&
       (value.username === undefined || value.username === null)
@@ -480,6 +569,14 @@ const VendorApiCredentialSchema = z
     has_secret: z.literal(true),
     rotated_at: z.string(),
     updated_at: z.string(),
+    tls_trust: z.enum(['system', 'ca', 'fingerprint']),
+    tls_fingerprint_sha256: z.string().nullable(),
+    settings: z.record(z.string(), z.unknown()),
+    last_test_at: z.string().nullable(),
+    last_test_result: z.string().nullable(),
+    inventory_checked_at: z.string().nullable(),
+    inventory_result: z.string().nullable(),
+    inventory_matched: z.number().nullable(),
   })
   .meta({
     id: 'VendorApiCredential',
@@ -495,6 +592,15 @@ interface CredentialRow {
   external_site_id: string | null;
   rotated_at: Date;
   updated_at: Date;
+  // Cycle D (migration 031); optional so pre-031 callers keep compiling.
+  tls_ca_pem?: string | null;
+  tls_fingerprint_sha256?: string | null;
+  settings?: Record<string, unknown> | null;
+  last_test_at?: Date | null;
+  last_test_result?: string | null;
+  inventory_checked_at?: Date | null;
+  inventory_result?: string | null;
+  inventory_matched?: number | null;
 }
 
 /** Metadata only: `secret_ref` never leaves the server. */
@@ -509,6 +615,19 @@ export function serializeVendorApiCredential(row: CredentialRow): Record<string,
     has_secret: true,
     rotated_at: row.rotated_at.toISOString(),
     updated_at: row.updated_at.toISOString(),
+    tls_trust:
+      (row.tls_fingerprint_sha256 ?? null) !== null
+        ? 'fingerprint'
+        : (row.tls_ca_pem ?? null) !== null
+          ? 'ca'
+          : 'system',
+    tls_fingerprint_sha256: row.tls_fingerprint_sha256 ?? null,
+    settings: row.settings ?? {},
+    last_test_at: row.last_test_at?.toISOString() ?? null,
+    last_test_result: row.last_test_result ?? null,
+    inventory_checked_at: row.inventory_checked_at?.toISOString() ?? null,
+    inventory_result: row.inventory_result ?? null,
+    inventory_matched: row.inventory_matched ?? null,
   };
 }
 
@@ -521,6 +640,14 @@ const CREDENTIAL_COLUMNS = [
   'external_site_id',
   'rotated_at',
   'updated_at',
+  'tls_ca_pem',
+  'tls_fingerprint_sha256',
+  'settings',
+  'last_test_at',
+  'last_test_result',
+  'inventory_checked_at',
+  'inventory_result',
+  'inventory_matched',
 ] as const;
 
 function vendorApiCredentialRoutes(deps: AppDeps): AnyRouteSpec[] {
@@ -628,6 +755,15 @@ function vendorApiCredentialRoutes(deps: AppDeps): AnyRouteSpec[] {
             },
           ]);
         }
+        // Review F2: only 443 and the documented controller HTTPS ports.
+        if (!vendorHttpOf(deps).isPortAllowed(new URL(normalizedUrl).port)) {
+          throw new ValidationError([
+            {
+              path: 'body.base_url',
+              message: 'port must be 443 or a documented controller port (8443, 8043, 8843, 8444)',
+            },
+          ]);
+        }
         const values = {
           api_kind: body.api_kind,
           base_url: normalizedUrl,
@@ -636,6 +772,20 @@ function vendorApiCredentialRoutes(deps: AppDeps): AnyRouteSpec[] {
           external_site_id: body.external_site_id ?? null,
           secret_ref: sealSecretRef(envelope, body.secret),
           rotated_at: new Date(),
+          tls_ca_pem: body.tls_ca_pem ?? null,
+          tls_fingerprint_sha256:
+            typeof body.tls_fingerprint_sha256 === 'string'
+              ? normalizeFingerprint(body.tls_fingerprint_sha256)
+              : null,
+          settings: JSON.stringify(
+            (() => {
+              const v = validateVendorApiSettings(body.api_kind, body.settings ?? {});
+              return v.ok ? v.settings : {};
+            })(),
+          ),
+          // a new credential has not been tested yet
+          last_test_at: null,
+          last_test_result: null,
         };
         const existed = await trx
           .selectFrom('vendor_api_credentials')
@@ -656,6 +806,8 @@ function vendorApiCredentialRoutes(deps: AppDeps): AnyRouteSpec[] {
                 .where('id', '=', existed.id)
                 .returning([...CREDENTIAL_COLUMNS])
                 .executeTakeFirstOrThrow();
+        // Review F1: a new / rotated credential (URL, pin, secret) invalidates inventory trust.
+        await resetControllerInventoryTrust(trx, params.id);
         // Audit without values: no secret, no username, no external ids.
         await writeAudit(trx, ctx, {
           organizationId: params.orgId,
@@ -667,6 +819,12 @@ function vendorApiCredentialRoutes(deps: AppDeps): AnyRouteSpec[] {
             api_kind: body.api_kind,
             base_url_host: new URL(normalizedUrl).host,
             has_username: values.username !== null,
+            tls_trust:
+              values.tls_fingerprint_sha256 !== null
+                ? 'fingerprint'
+                : values.tls_ca_pem !== null
+                  ? 'ca'
+                  : 'system',
           },
         });
         return stored;
@@ -706,6 +864,7 @@ function vendorApiCredentialRoutes(deps: AppDeps): AnyRouteSpec[] {
         if (Number(deleted.numDeletedRows) === 0) {
           throw new NotFoundError('vendor_api_credential', params.id);
         }
+        await resetControllerInventoryTrust(trx, params.id);
         await writeAudit(trx, ctx, {
           organizationId: params.orgId,
           action: 'controller:secret:rotate',
@@ -718,5 +877,107 @@ function vendorApiCredentialRoutes(deps: AppDeps): AnyRouteSpec[] {
     },
   });
 
-  return [get, set, remove];
+  /**
+   * Cycle D: "Test connection". One read-only (UniFi: list clients of the site) or login-only
+   * (Omada) call through the SSRF-safe client; Mist only proves local signing. The secret is
+   * opened in-process after the read transaction; the outcome (a code, never vendor text) is
+   * stored and audited. Permission `controller:update`, site-scoped like the controller.
+   */
+  const test = defineRoute({
+    method: 'post',
+    path: `${path}/test`,
+    summary: 'Test the controller API credential (outbound, SSRF-guarded, audited)',
+    tags: ['controllers'],
+    auth: 'principal',
+    permission: 'controller:update',
+    scope: 'any-site',
+    params: OrgIdParams,
+    responses: {
+      200: {
+        description: 'Test outcome (codes only; the secret is never returned)',
+        schema: z
+          .object({
+            ok: z.boolean(),
+            code: z.string(),
+            contacted: z.boolean(),
+            detail: z.string(),
+            tested_at: z.string(),
+          })
+          .meta({ id: 'VendorApiCredentialTest' }),
+      },
+      ...problemResponses,
+    },
+    handler: async ({ params, ctx, req }) => {
+      await orgRateLimit(deps, `rl:vapi-test:${params.orgId}`, TEST_CONNECTION_LIMIT);
+      const started = Date.now();
+      const stored = await inTenant(deps, params.orgId, async (trx) => {
+        const controller = await trx
+          .selectFrom('controllers')
+          .select(['id', 'site_id'])
+          .where('id', '=', params.id)
+          .where('deleted_at', 'is', null)
+          .executeTakeFirst();
+        if (controller === undefined) throw new NotFoundError('controller', params.id);
+        requireOnSite(
+          ctx,
+          'controller:update',
+          params.orgId,
+          controller.site_id,
+          'controller',
+          'controller:read',
+        );
+        return loadStoredCredential(trx, params.id);
+      });
+      if (stored === null) throw new NotFoundError('vendor_api_credential', params.id);
+      let result: { ok: boolean; code: string; contacted: boolean; detail: string };
+      try {
+        result = await testVendorConnection(
+          vendorHttpOf(deps),
+          openVendorCredential(deps.config.dataEncryptionKey, stored),
+        );
+      } catch {
+        result = {
+          ok: false,
+          code: 'secret_unavailable',
+          contacted: false,
+          detail: 'stored secret cannot be opened',
+        };
+      }
+      // Review F2: for non-cloud (possibly private) targets every reachability failure is ONE
+      // code with a uniform minimum latency, so the endpoint is no port / host oracle. The
+      // detailed code is logged without the target.
+      if (stored.controllerKind !== 'cloud' && !TEST_CODES_KEPT.has(result.code)) {
+        req.log.info(
+          { controllerId: params.id, code: result.code },
+          'vendor api test: target unreachable (collapsed)',
+        );
+        result = {
+          ok: false,
+          code: 'unreachable',
+          contacted: false,
+          detail: 'controller not reachable or not trusted (details in the server log)',
+        };
+        const wait = (deps.vendorTestFloorMs ?? 10_000) - (Date.now() - started);
+        if (wait > 0) await new Promise((r) => setTimeout(r, wait));
+      }
+      const testedAt = new Date();
+      await inTenant(deps, params.orgId, async (trx) => {
+        await trx
+          .updateTable('vendor_api_credentials')
+          .set({ last_test_at: testedAt, last_test_result: result.code })
+          .where('controller_id', '=', params.id)
+          .execute();
+        await writeAudit(trx, ctx, {
+          organizationId: params.orgId,
+          action: 'controller:api_credential_test',
+          targetType: 'controller',
+          targetId: params.id,
+          after: { result: result.code, contacted: result.contacted, api_kind: stored.apiKind },
+        });
+      });
+      return { status: 200, body: { ...result, tested_at: testedAt.toISOString() } };
+    },
+  });
+
+  return [get, set, remove, test];
 }

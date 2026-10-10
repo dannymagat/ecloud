@@ -96,6 +96,10 @@ export type PageBody =
       readonly page: 'success';
       readonly continueUrl: string | null;
       readonly statusHref: string | null;
+      /** Cycle D review F6: host of the primary continue link, shown next to it. */
+      readonly continueHost?: string | null;
+      /** An unlisted destination: secondary link only, host shown, never a button. */
+      readonly unlisted?: { readonly url: string; readonly host: string } | null;
     }
   | { readonly page: 'error'; readonly message: string; readonly retryHref: string | null }
   | { readonly page: 'expired' }
@@ -204,15 +208,23 @@ function body(theme: PageTheme, b: PageBody): string {
       return `${errorLine(b.error)}<div class="terms" tabindex="0">${escapeHtml(text)}</div>${version}${formOpen(b.form)}<label class="check" for="accept"><input type="checkbox" id="accept" name="accept_terms" value="yes" required> ${escapeHtml(t('form.accept_terms', {}, l))}</label><button type="submit">${escapeHtml(s.click_through_button)}</button></form>${back(b.backHref, l)}`;
     }
     case 'success': {
+      const hostLine =
+        b.continueUrl !== null && typeof b.continueHost === 'string'
+          ? `<p class="links">${escapeHtml(t('success.destination', { host: b.continueHost }, l))}</p>`
+          : '';
       const cont =
         b.continueUrl === null
           ? ''
-          : `<a class="button" href="${escapeHtml(b.continueUrl)}" rel="noreferrer">${escapeHtml(t('success.continue', {}, l))}</a>`;
+          : `<a class="button" href="${escapeHtml(b.continueUrl)}" rel="noreferrer">${escapeHtml(t('success.continue', {}, l))}</a>${hostLine}`;
+      const unlisted =
+        b.unlisted === undefined || b.unlisted === null
+          ? ''
+          : `<p class="links">${escapeHtml(t('success.unlisted', { host: b.unlisted.host }, l))} <a href="${escapeHtml(b.unlisted.url)}" rel="noreferrer nofollow">${escapeHtml(b.unlisted.host)}</a></p>`;
       const status =
         b.statusHref === null
           ? ''
           : `<p class="links"><a href="${escapeHtml(b.statusHref)}">${escapeHtml(t('success.status', {}, l))}</a></p>`;
-      return `<p role="status">${escapeHtml(s.success_text)}</p>${cont}${status}`;
+      return `<p role="status">${escapeHtml(s.success_text)}</p>${cont}${unlisted}${status}`;
     }
     case 'error': {
       const retry =

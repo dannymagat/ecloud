@@ -472,3 +472,70 @@ Compliance notes (PROPOSED; jurisdiction REQUIRES CLARIFICATION): subscriber PII
 | ST8 | MAC-auth username/password format from hostapd and uspot | §4.8 policy restrictions |
 | ST9 | From a site gateway peer: S-01..S-03 overlay isolation probes against the hub | §3.4 |
 | ST10 | Clear-secret exposure on device: where uCentral stores `auth-secret`/`uam-secret` on the AP filesystem and whether `ubus`/`state` reports leak them to the controller | residual risk T5 |
+
+## 13. Outbound vendor-API calls (multi-vendor Cycle D, 2026-10-10)
+
+Scope: ECLOUD → tenant-configured vendor controllers (UniFi Network API, Omada hotspot operator
+API) and the Mist signed grant. Implementation `packages/vendor-api` (`VendorHttpClient`); plan
+OQ-17 rules made binding. Every rule below is enforced per request and covered by mocked-server
+tests (`packages/vendor-api/src/http.test.ts`, `apps/api/src/cycle-d.integration.test.ts`).
+
+1. **Target.** Only the stored, validated `vendor_api_credentials.base_url` plus a code-defined
+   path; same origin enforced after joining; `..`, encoded separators, query / fragment in the path,
+   userinfo, non-`https:` and `localhost` names refused (`invalid_target`). Never a URL taken from
+   a redirect or a vendor response (this is why Ruckus NBI `nbiIP` stays a stub).
+2. **SSRF / DNS.** The client resolves the host itself and checks **every** answer against the
+   controller-kind policy: `cloud` → public unicast only; `on_premises` / `embedded` → public or
+   RFC 1918 / CGNAT-WireGuard / ULA. Loopback, link-local and cloud metadata (169.254.169.254),
+   `::/96`, IPv4-mapped forms of those, multicast and reserved ranges are always refused
+   (`blocked_address`). The socket connects to the checked address (no second lookup, no
+   rebinding); SNI / host-name verification still use the configured name.
+3. **Redirects.** Never followed: any 3xx is `redirect_refused` and the `Location` is not read.
+4. **TLS.** Always verified, minimum TLS 1.2. Trust = system roots (default), or a pinned
+   per-controller CA (`tls_ca_pem`, chain + host name checked), or a pinned SHA-256 leaf
+   fingerprint (`tls_fingerprint_sha256`) for on-prem self-signed controllers. In fingerprint
+   mode the TLS session is established and the fingerprint compared (constant time) **before any
+   request byte (and so any credential) is written**. There is no "insecure" option anywhere
+   (API, DB CHECK, UI). The vendor sample code that disables verification (Omada) is not followed.
+5. **Bounds.** One deadline per request (default 10 s, max 30 s) covering DNS, connect, TLS and the
+   whole response; response size cap (default 1 MiB, inventory 4 MiB, max 8 MiB; Content-Length
+   checked first, then the streamed count); request body ≤ 64 KiB.
+6. **Rate limit.** Token bucket per controller (burst 20, 5/s) before any I/O, per process
+   (`rate_limited`). Portal flows keep their own per-IP / per-NAS limits.
+7. **Secrets.** The sealed `secret_ref` (purpose `ecloud:vendor-api:secret:v1`) is opened only in
+   the process making the call, after the DB transaction ended, and dropped after the call
+   (`openVendorCredential`); it is never logged, returned, queued, cached in Redis or put in a job
+   payload. Omada's CSRF token / session cookie live only for one operation. The worker needs
+   `DATA_ENCRYPTION_KEY` for the inventory job and stays off by default
+   (`WORKER_CONTROLLER_INVENTORY_ENABLED=false`).
+8. **No secrets in logs / audit.** Errors carry fixed messages chosen by code; logs and
+   `last_test_result` / `inventory_result` / `vendor_api_sessions.error_code` store codes only
+   (DB CHECK `^[a-z_]{2,40}$`); audit `controller:api_credential_test` records `{result,
+   contacted, api_kind}`.
+9. **Tenant safety.** Redirects are unsigned for all three vendors: the tenant is taken only from a
+   **verified** AP MAC; UniFi additionally requires the controller to report the client on the
+   configured site; Mist requires the WLAN id to be registered on the credential. The inventory
+   job verifies only AP rows of the same organization whose NAS is managed by the reporting
+   controller.
+10. **Honest accounting.** UniFi / Omada API mode / Mist send no RADIUS accounting:
+    `vendor_api_sessions.accounting = 'none'`, `usage_source = 'unknown'`; no usage is shown as
+    device-reported.
+
+Open: the per-replica rate limit is not fleet-wide; vendor-side rate limits are
+REQUIRES_CLARIFICATION; reachability of on-prem controllers is via the WireGuard hub (D-032) and is
+not configured here (no server change in this cycle).
+
+### 13.1 Review fixes (2026-10-10, MULTI_VENDOR_INTEGRATION_PLAN.md §14.1)
+
+11. **Ports.** Only 443 and the documented controller ports 8443, 8043, 8843, 8444 (credential
+    validation and per request, before any I/O).
+12. **Platform deny-list.** `VENDOR_API_DENY_CIDRS` (api and worker; default `172.28.0.0/16`,
+    `172.17.0.0/16`, `100.100.0.0/16`, IPv4-mapped forms included), applied on top of rule 2.
+13. **No oracle.** "Test connection" to a non-cloud controller answers and stores one
+    `unreachable` code for every network / TLS / protocol failure, after a uniform minimum
+    latency; per-org limits 10 tests/min and 20 controller creations/min.
+14. **Inventory is not proof.** A controller inventory produces a candidate only; verification
+    needs a platform confirmation (or RADIUS observation). Any change to the controller URL,
+    kind, vendor, credential or TLS pin, or to a NAS's controller, resets inventory trust.
+15. **Least key.** The worker holds only the derived vendor-API purpose key, never the master
+    data key (it refuses to run the inventory if given the master key).

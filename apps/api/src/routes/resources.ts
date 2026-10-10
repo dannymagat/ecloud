@@ -21,6 +21,8 @@ import { OrgIdParams, ResourceSchema, problemResponses } from '../http/common.js
 import { ImpersonationForbiddenError } from '../http/errors.js';
 import { defineRoute, type AnyRouteSpec } from '../http/route.js';
 import { assertRef, inTenant, requireOnSite } from '../tenant.js';
+import { VENDOR_API_ADAPTER_KEYS } from '@ecloud/vendor-api';
+import { resetNasInventoryTrust } from '../vendor-api/trust.js';
 import { NAS_ADAPTER_KEYS } from '../nas-adapter.js';
 import { releaseGlobalSlots } from '../global-slots.js';
 import { softDeleteAccessPointsOf } from './access-points.js';
@@ -99,7 +101,12 @@ const NasCreate = z.strictObject({
     .refine((ip) => canonicalNasAddress(ip) !== null, { message: NAS_ADDRESS_RULE }),
   nas_identifier: z.string().trim().min(1).max(253).nullable().optional(),
   /** D-035: the @ecloud/adapters key; `adapter_type_key` is derived from it. */
-  adapter_key: z.enum(NAS_ADAPTER_KEYS),
+  /**
+   * Cycle D: the controller-API / signed-grant keys (UniFi, Omada API mode, Mist) are NAS rows
+   * too (AP MAC identity, tenant, site) but are never RADIUS engine adapters (no reply
+   * attributes, no CoA; `nasAdapter()` returns null for them).
+   */
+  adapter_key: z.enum([...NAS_ADAPTER_KEYS, ...VENDOR_API_ADAPTER_KEYS]),
   network_device_id: z.uuid().nullable().optional(),
   coa_port: z.number().int().min(1).max(65535).nullable().optional(),
   coa_supported: z.boolean().nullable().optional(),
@@ -332,6 +339,10 @@ export function resourceRoutes(deps: AppDeps): AnyRouteSpec[] {
         await assertRef(trx, 'network_devices', body.network_device_id, 'network_device');
       }
       await assertControllerOnPatch(trx, body, before);
+      // Cycle D review F1: APs of a NAS that changes controller lose inventory-based trust.
+      if (body.controller_id !== undefined && body.controller_id !== before.controller_id) {
+        await resetNasInventoryTrust(trx, before.id as string);
+      }
       const next: Row =
         typeof body.adapter_key === 'string'
           ? { ...body, adapter_type_key: body.adapter_key }

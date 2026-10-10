@@ -820,3 +820,108 @@ EAP-TTLS. Still open: per-vendor Called-Station-Id parsing, the "API limits" tra
 - **L4.** Replay keys are `pf:replay:v2:` + SHA-256 of a JSON array (unambiguous). Migration: `isReplayed` also reads the legacy `|`-joined UAM key; nothing writes it any more, so legacy markers expire within `REPLAY_TTL_S` (24 h); remove `legacyReplayKey` after that window.
 - **L5.** Call-Check MAC auth uses strict MAC parsing only and rejects when neither User-Name nor Calling-Station-Id is a MAC.
 - **L6.** `apps/api/src/internal/login-token-store.ts` (Redis `SET NX EX` claim; store error → `ServiceUnavailableError` 503), integration-tested against the test Redis.
+
+## 14. Multi-vendor Cycle D (controller APIs) — IMPLEMENTED, LOCAL ONLY (2026-10-10, D-044)
+
+Scope (D-044 "D"): UniFi API, Omada API, Mist; Ruckus NBI only if clearly documented. LOCAL only:
+no device, server or VPS change, no real vendor controller contacted (mock HTTPS controllers in
+tests). Migration **031**. Every vendor cell stays DOCUMENTED / REQUIRES_DEVICE_TEST (D-028, V12);
+lifecycle at most `implemented`.
+
+| # | Deliverable | Where | Notes |
+|---|---|---|---|
+| D1 | Safe outbound vendor-API client (OQ-17 enforced) | `packages/vendor-api/src/http.ts` (`VendorHttpClient`), `rate-limit.ts`, `errors.ts` | Same-origin code-defined paths only; own DNS resolution, **every** answer re-checked against the controller-kind policy (`cloud` public only; on-prem / embedded public or RFC 1918 / CGNAT-WireGuard / ULA; loopback, metadata, `::/96`, multicast, reserved always refused), connect pinned to the checked address; TLS always verified (system roots, pinned CA PEM, or pinned SHA-256 leaf fingerprint checked **before any byte is written**; no insecure mode); no redirects; one deadline (10 s default, 30 s max); response cap (1 MiB default); per-controller token bucket; fixed-text error codes. SECURITY_ARCHITECTURE.md §13 |
+| D2 | Credentials opened in-process (Cycle A "HandoffSecrets" gap) | `packages/vendor-api/src/sealed.ts`, `credentials.ts` (`openVendorCredential`, `StoredVendorCredential` → `OpenedVendorCredential`) | Byte-compatible with the API `Envelope` (`ecloud:vendor-api:secret:v1`; cross-check test `apps/api/src/cycle-d.test.ts`). Opened after the DB transaction ends, passed down the call stack only. `HandoffSecrets` itself is unchanged: the backend-API adapters are orchestrated by `apps/api/src/vendor-api/portal.ts`, not by `VendorAdapter.authorizeSession` |
+| D3 | `unifi-external-portal` | `redirects.ts` `parseUnifiRedirect` (`/guest/s/<site>/` + `ap`, `id`, `t`, `url`, `ssid`; help.ui.com 31228198640023), `unifi.ts` (`X-API-KEY`; `GET /v1/sites/{siteId}/clients?filter=macAddress.eq('…')`, `POST …/clients/{clientId}/actions` `AUTHORIZE_GUEST_ACCESS` + `timeLimitMinutes`, `dataUsageLimitMBytes`, `rxRateLimitKbps`, `txRateLimitKbps`) | Client must be reported by the controller on the configured site (forged MAC can only authorise a present device); a non-GUEST `access.type` is refused. No RADIUS accounting: `vendor_api_sessions` row (`accounting = none`, `usage_source = unknown`). `t` uninterpreted |
+| D4 | `omada-api` (Omada Controller ≥ 6.2.10, no RADIUS) | `redirects.ts` `parseOmadaRedirect`, `omada.ts` | Documented 6.2.10 form only (support.omadanetworks.com 132060, read 2026-10-10): EAP `clientMac, clientIp, apMac, ssidName, t, radioId, site, redirectUrl`; gateway `clientMac, gatewayMac, vid, t, site, redirectUrl`. `POST /{CONTROLLER_ID}/api/v2/hotspot/login` → `result.token` + `TPOMADA_SESSIONID` / `TPEAP_SESSIONID` cookie; `POST …/extPortal/auth` with `Csrf-Token`, `authType 4`, `time` (ms), `totalTrafficLimitBytes`, `downloadRateLimitKbps`, `uploadRateLimitKbps`. Case variants (`clientIP`, `GatewayMac`, `originalUrl`) are **not** read: REQUIRES_DEVICE_TEST |
+| D5 | `mist-guest-portal` | `redirects.ts` `parseMistRedirect`, `mist.ts` `buildMistGrant` | No signature on the inbound Mist redirect is documented → none verified; tenant from the verified AP MAC, WLAN id must be in the credential's `mist_wlan_ids`. Grant: `token = base64(wlan/ap/client/authorize_min/0/0/0)`, `signature = base64(HMAC-SHA1(WLAN API secret, "expires=…&token=…&forward=…"))`, `expires` = now + 120 s, host `portal[.<region>].mist.com` over https; the vendor worked example is a unit test. No server-side call |
+| D6 | Ruckus NBI | `packages/vendor-api/src/ruckus.ts` | **Stub, REQUIRES_CLARIFICATION** (response codes, SmartZone host/port/path, encrypted UE-IP/UE-MAC, binding the redirect-supplied `nbiIP` to the registered URL). Test connection answers `not_implemented`; nothing is sent |
+| D7 | Controller-inventory AP verification | `apps/worker/src/jobs/controller-inventory.ts`, queue `controllers.inventory` (hourly, single-flight) | UniFi `GET /v1/sites/{siteId}/devices` (paged, ≤ 5000) → `nas_access_points.verified_at` / `verification_source = 'controller-inventory'` only for still-unverified rows of the **same organization** whose NAS is managed by **that** controller; additive (never un-verifies). Off unless `WORKER_CONTROLLER_INVENTORY_ENABLED=true` and `DATA_ENCRYPTION_KEY` is given. Also expires `vendor_api_sessions` past their granted duration. Omada / Mist inventory REQUIRES_CLARIFICATION |
+| D8 | Policy → API limits target | `packages/policy-engine/src/api-limits.ts` `translateApiLimits(target, {fields, sessionCapS, remainingQuotaBytes})` | UniFi: minutes / MB rounded down (min 1), rx = client download **ASSUMPTION** (REQUIRES_DEVICE_TEST); Omada: ms duration, bytes, kbps; Mist: `authorize_min` only. Per field D-028 status with `evidenceLevel: DOCUMENTED`: rates / session / total quota REQUIRES_DEVICE_TEST; daily / monthly quota, idle timeout, VLAN, burst UNSUPPORTED; validity / voucher / schedule / concurrency ECLOUD_SIDE_ONLY (concurrency counted over API sessions) |
+| D9 | Admin | `apps/admin/src/features/org/ControllersPage.tsx`, `lib/adapterStatus.ts` | Credential dialog: UniFi site name, Omada CONTROLLER_ID, Mist portal host + WLAN ids, TLS fingerprint / CA PEM; shows TLS trust, last test, inventory result; "Test connection" (`controller:update`, audited `controller:api_credential_test`). NAS dropdown gains the three adapters with "no RADIUS accounting" labels |
+| D10 | Portal | `apps/portal/src/index.ts` (`/guest/s/<site>/`, `/ext/omada`, `/ext/mist`), `apps/api/src/vendor-api/portal.ts`, one branch in `internal/portal.ts` identify | Same identity broker (password / voucher / click-through, lockouts); vendor call outside any DB transaction; Mist grant accepted by the portal only for `https://portal[.<region>].mist.com/authorize` |
+
+Migration 031: adapter types `unifi-external-portal`, `omada-api`, `mist-guest-portal`
+(`ck_nas_clients_adapter_key` rebuilt as the **union** of the existing list and these keys, so
+029/030 keys of parallel cycles survive any order); `vendor_api_credentials` + `tls_ca_pem`
+(certificate only, CHECK refuses `PRIVATE KEY`), `tls_fingerprint_sha256`, `settings`,
+`last_test_*`, `inventory_*`; table `vendor_api_sessions` (T, RLS) without any usage counter.
+`packages/db/src/migrate.test.ts` now requires strictly increasing versions (not contiguous)
+because 029/030 are reserved for Cycles B/C.
+
+Test evidence (2026-10-10, MacBook, own DB `ecloud_test_d` + Redis db 4): see the Cycle D report;
+`npm run build`, `npm run lint`, `npm run format:check`, `bash scripts/check-no-secrets.sh` clean.
+
+REQUIRES_CLARIFICATION / REQUIRES_DEVICE_TEST raised or kept by Cycle D:
+
+1. UniFi: URL prefix in front of `/v1` on a console (operator-entered in `base_url`); rx/tx direction;
+   MB vs MiB; meaning of `t`; `UNAUTHORIZE_GUEST_ACCESS` (revoke not implemented); `/devices`
+   inventory list and the client `access` shape; reachability through the UniFi cloud connector.
+2. Omada: `time` unit / semantics (6.2.10 doc "millisecond, expiration time", 5.x doc
+   "microsecond", PHP sample passes a duration; ECLOUD sends a ms duration); JSON value types
+   (quoted in the doc example, numbers in the PHP template); the parameter-case variants; inventory.
+3. Mist: https on `portal.mist.com/authorize` (the doc shows `http://`); regional host list; the
+   JWT alternative (documented, not implemented); trailing `0/0/0` token fields; per-user rate.
+4. Ruckus NBI: everything in D6.
+5. Vendor-side API rate limits; per-replica (not fleet-wide) outbound rate limit; on-prem
+   controller reachability via the WireGuard hub (D-032) is not configured (no server change).
+6. A voucher use is consumed when the API authorisation is reserved; a vendor failure after that
+   does not refund it (fail-safe: never grant unaccounted access).
+
+### 14.1 Review fixes (independent review: CONDITIONAL PASS, applied 2026-10-10)
+
+- **F1 controller-inventory trust (MED-HIGH).** A tenant controls both its credential and the
+  server behind it, so an inventory alone could "verify" a sniffed MAC of another tenant's AP.
+  Rule chosen (the stricter feasible one): the inventory job runs only for **on-prem / embedded**
+  controllers with a **pinned** TLS trust (CA or fingerprint), and it only marks a **candidate**
+  (`nas_access_points.inventory_seen_at` / `inventory_controller_id`, migration 031). It never sets
+  `verified_at`. Verification from inventory needs a **second signal**: a platform operator's
+  `POST /api/v1/platform/access-points/confirm-inventory` (`organization:update`, platform scope,
+  reason ≥ 10 chars, refused while impersonating, audited `access_point:verify` in the owning
+  org; refused unless the candidate came from the controller the AP's NAS has now). RADIUS
+  observation stays the other path. Candidates and inventory-sourced verification are reset when
+  the controller's base URL / kind / vendor changes, the controller is deleted, its API
+  credential is set / rotated / removed (URL, pin, secret), a NAS changes controller, or an AP's
+  MAC / NAS changes. Test: the attack (pinned tenant server listing a sniffed MAC) yields a
+  candidate only, never `verified_at`.
+- **F2 reachability oracle (MED-HIGH).** For non-cloud controllers every failure of "Test
+  connection" except `auth_failed` / config errors is returned and stored as `unreachable`, with
+  a uniform minimum latency (default 10 s, `AppDeps.vendorTestFloorMs`); the detailed code is
+  logged without the target. Ports: 443 + 8443, 8043, 8843, 8444 only (credential validation and
+  every request, `port_not_allowed`). Platform deny-list `VENDOR_API_DENY_CIDRS` (api + worker;
+  default `172.28.0.0/16` pilot Compose bridge, `172.17.0.0/16` docker0, `100.100.0.0/16`
+  WireGuard overlay; IPv4-mapped IPv6 forms included) on top of the loopback / link-local /
+  metadata refusal. Per-org limits: Test connection 10/min, controller creation 20/min (429).
+- **F3 voucher burn (MED).** The final `failed` update restores the voucher atomically (use count,
+  status, and `activated_at` / `expires_at` when it was the first use), guarded by
+  `use_count = before + 1`.
+- **F4 master key in the worker (MED).** The worker receives only `VENDOR_API_SECRET_KEY`
+  (`vapi1.` + HKDF purpose key; CLI `node packages/vendor-api/dist/cli.js derive-key vendor-api`);
+  `openSealedSecret` accepts `{kind: 'derived'}` keys (which cannot open other purposes); the
+  inventory refuses to run when `DATA_ENCRYPTION_KEY[_FILE]` reaches the worker or the key is not
+  a `vapi1.` key. docs/SECRETS_MANAGEMENT.md §4, `scripts/secrets/secrets.manifest` comment.
+- **F5 races (MED-LOW).** Redis `SET NX pf:claim:<flow>` (TTL = flow TTL) before the vendor
+  completion (released on refusal / vendor failure so the guest can retry); `SELECT … FOR UPDATE`
+  on the voucher / user row before the concurrency count; a vendor flow not in `ARRIVED` (e.g. a
+  Mist grant in `LOGON_SENT`) is never re-identified (409).
+- **F6 continue-URL phishing (MED-LOW).** The API returns the requested URL with its host and
+  `trusted` (host = the portal's `redirect_url` host or in `adapter_config.allowed_continue_hosts`)
+  plus the tenant landing page. The portal success page shows the destination host; only a trusted
+  host (or the tenant landing page) is the primary button; an unlisted host is a secondary
+  `rel="noreferrer nofollow"` link with the host visible. Mist `forward` is the requested URL only
+  when trusted, else the tenant landing page (or none).
+- **F8 (LOW).** `tls_ca_pem` must parse block by block with `new X509Certificate()` (1–8 blocks).
+- **F7 (LOW, REQUIRES_DEVICE_TEST, no code change).** Omada and Mist redirects carry unsigned
+  client-MAC / AP-MAC claims; only UniFi checks the client against the controller (and that is
+  meaningful only with a trusted controller). A guest with a valid voucher could therefore try to
+  authorise an arbitrary client MAC on Omada / Mist. Expected mitigation: the Omada controller and
+  Mist reject clients they do not know — REQUIRES_DEVICE_TEST.
+- **F9 (LOW / INFO, known gaps, no code change).**
+  - `unifi_site_name` is optional; when unset the redirect path's site is ignored and the
+    credential's API site id is used, which is safe.
+  - Omada and Mist APs can only become verified via RADIUS observation or the platform
+    confirmation: the inventory job covers UniFi only (functional gap).
+  - The outbound token bucket is per process and per controller (10 000-key cap); there is no
+    fleet-wide cap.
+  - Migration 031's CHECK-union regex assumes 029 / 030 produce simple `IN (...)` literal lists for
+    `ck_nas_clients_adapter_key` (true today); re-check at merge.

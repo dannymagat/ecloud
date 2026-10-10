@@ -59,6 +59,10 @@ export const ADAPTER_KEYS = [
   'uspot-upstream-uam',
   'coovachilli-uam',
   'generic-radius-8021x',
+  // Cycle D (migration 031): controller-API / signed-grant portals (no RADIUS engine adapter)
+  'unifi-external-portal',
+  'omada-api',
+  'mist-guest-portal',
 ] as const;
 
 /** Human labels for the NAS adapter dropdown (the key stays visible for support). */
@@ -68,6 +72,9 @@ export const ADAPTER_LABELS: Readonly<Record<(typeof ADAPTER_KEYS)[number], stri
   'uspot-upstream-uam': 'OpenWrt uspot captive portal',
   'coovachilli-uam': 'CoovaChilli gateway captive portal',
   'generic-radius-8021x': 'Any vendor: 802.1X / MAC auth (generic RADIUS)',
+  'unifi-external-portal': 'UniFi external portal (controller API, no RADIUS accounting)',
+  'omada-api': 'Omada external portal, API mode (no RADIUS accounting)',
+  'mist-guest-portal': 'Juniper Mist external guest portal (signed grant URL)',
 };
 
 export interface StatusPresentation {
