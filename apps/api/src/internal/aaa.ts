@@ -563,7 +563,12 @@ async function identify(
   };
 }
 
-async function consumeVoucher(trx: DbTransaction, voucherId: string, now: Date): Promise<void> {
+/** Also used by the Cycle D vendor-API completion (one use per API authorisation). */
+export async function consumeVoucher(
+  trx: DbTransaction,
+  voucherId: string,
+  now: Date,
+): Promise<void> {
   const v = await trx
     .selectFrom('vouchers as v')
     .innerJoin('voucher_batches as b', 'b.id', 'v.batch_id')

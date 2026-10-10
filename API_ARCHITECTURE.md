@@ -1466,3 +1466,42 @@ limited to documented ports and RFC 1918 / registered / configured hosts. NAS cr
 a generic 409 when a NAS identifier would collide across organizations for adapters that expose it
 in public URLs (`external-portal-postback`, `mikrotik-hotspot`). Details:
 MULTI_VENDOR_INTEGRATION_PLAN.md §15.1.
+### Implementation notes (multi-vendor Cycle D, 2026-10-10, D-044)
+
+Controller-API / signed-grant vendors (UniFi Network ≥ 9.1.105, Omada Controller ≥ 6.2.10 API
+mode, Juniper Mist). Migration **031**. Every outbound call goes through `@ecloud/vendor-api`
+(`VendorHttpClient`, SECURITY_ARCHITECTURE.md §13); nothing is device-tested.
+
+| Path | Method | Permission | Notes |
+|---|---|---|---|
+| `/api/v1/orgs/{orgId}/controllers/{id}/api-credential` | POST (extended) | `controller:secret:rotate` | New optional fields: `tls_ca_pem` (PEM certificate(s) only, ≤ 16 KiB), `tls_fingerprint_sha256` (32 hex octets, any common spelling → `AB:CD:…`; mutually exclusive with the CA), `settings` (per kind: UniFi `unifi_site_name`; Omada `omada_controller_id`; Mist `mist_portal_host`, `mist_wlan_ids`; unknown keys → 400). A rotate resets `last_test_*`. Audit adds `tls_trust` (`system`/`ca`/`fingerprint`) only |
+| same | GET (extended) | `controller:read` | Adds `tls_trust`, `tls_fingerprint_sha256`, `settings`, `last_test_at`, `last_test_result`, `inventory_checked_at`, `inventory_result`, `inventory_matched`. The CA PEM itself is not echoed |
+| `/api/v1/orgs/{orgId}/controllers/{id}/api-credential/test` | POST | `controller:update` (site-scoped like the controller) | "Test connection": UniFi lists one client of the configured site, Omada logs in as the hotspot operator, Mist only signs a grant locally (`contacted: false`); Ruckus / Meraki → `not_implemented`. Response `{ok, code, contacted, detail, tested_at}`; `code` is `ok` or a fixed error code (`blocked_address`, `dns_failure`, `tls_error`, `tls_pin_mismatch`, `timeout`, `response_too_large`, `redirect_refused`, `rate_limited`, `auth_failed`, `http_error`, `invalid_response`, `secret_unavailable`, …), never vendor text. Stored in `last_test_*`, audited `controller:api_credential_test` `{result, contacted, api_kind}` |
+| `/api/v1/orgs/{orgId}/nas` | POST / PATCH | unchanged | `adapter_key` also accepts `unifi-external-portal`, `omada-api`, `mist-guest-portal` (NAS rows for AP-MAC identity and tenancy; never RADIUS engine adapters: no reply attributes, no CoA). Such a NAS needs `controller_id` with a matching credential |
+
+Internal (X-Internal-Token):
+
+| Path | Notes |
+|---|---|
+| `POST /internal/vendor-portal/redirects` | Body `{adapter: unifi\|omada\|mist, path, raw_query, client_ip?}` (the portal serves `GET /guest/s/<site>/`, `/ext/omada`, `/ext/mist`). Documented parameters only (`@ecloud/vendor-api` `redirects.ts`). NAS resolved **only** from a **verified** AP MAC (`findNasByIdentity`); NAS adapter must match; the controller must carry a credential of the matching kind; Mist WLAN id must be in `mist_wlan_ids`; UniFi path site must equal `unifi_site_name` when set; an active `external` captive portal of the site is required. Answers `{kind: flow, flow_id, expires_at}` or the generic `{kind: error}` (reason logged only); per-IP and per-NAS rate limits |
+| `POST /internal/portal/flows/{id}/identify` (changed) | For the three adapters the broker skips the portal credential: identity re-check (as AAA does) → `resolveEffectivePolicy` → `translateApiLimits` (policy-engine "API limits" target) → reserve (`vendor_api_sessions` `pending`, voucher use, ECLOUD-side concurrency over API sessions) → vendor call **outside any DB transaction** with the secret opened in-process → `authorized` / `granted_url_issued` / `failed`. Responses: UniFi/Omada `{result: ok, handoff: {kind: vendor-api, url: <continue URL or null>}, accounting: none}`; Mist `{result: ok, handoff: {kind: vendor-grant, method: GET-302, url: https://portal.mist.com/authorize?…}}`; vendor failure `502 {result: vendor_unavailable}`; policy / identity refusal `422 {result: rejected}` |
+
+`vendor_api_sessions` is an "API-authorised session" record, not a RADIUS session: `accounting`
+is always `none`, `usage_source` is `unknown` (or `ecloud_side` if a future poller fills usage);
+there are no octet columns. The worker queue `controllers.inventory` (hourly, single-flight,
+outbound only with `WORKER_CONTROLLER_INVENTORY_ENABLED=true` + `DATA_ENCRYPTION_KEY`) verifies AP
+MACs from the UniFi device inventory (tenant-scoped: same organization, NAS managed by that
+controller) and expires API sessions whose granted duration has passed.
+
+Review fixes (same day, MULTI_VENDOR_INTEGRATION_PLAN.md §16.1):
+
+- `POST /api/v1/platform/access-points/confirm-inventory` (`organization:update`, platform scope,
+  body `{mac, reason}`, refused while impersonating, audited `access_point:verify`): verifies an AP
+  only when a current controller-inventory candidate exists (400 otherwise). The worker never
+  verifies from inventory. Access points carry `inventory_seen_at` / `inventory_controller_id`.
+- Test connection: non-cloud failures → `code: unreachable` (uniform latency); 429 after 10/min/org.
+  Controller create: 429 after 20/min/org. Credential `base_url` port must be 443, 8443, 8043, 8843
+  or 8444.
+- Identify (vendor adapters): 409 `flow_state` unless the flow is `ARRIVED` and its completion
+  claim is free; vendor failure restores the voucher. The `vendor-api` hand-off adds `host`,
+  `trusted`, `landing_url`.

@@ -64,7 +64,25 @@ export type IdentifyOutcome =
   | { result: 'flow_state' }
   | { result: 'method_not_allowed' }
   | { result: 'handoff_unavailable' }
-  | { result: 'unavailable' };
+  | { result: 'unavailable' }
+  // Cycle D: the controller authorised the client through its API (UniFi / Omada API mode);
+  // there is no NAS hand-off, the guest just continues.
+  | {
+      result: 'vendor_authorized';
+      /** Requested page (validated by the API) and its host. */
+      continueUrl: string | null;
+      continueHost: string | null;
+      /** True only when the tenant configured / allow-listed that host (review F6). */
+      trusted: boolean;
+      /** The tenant's own landing page, if configured. */
+      landingUrl: string | null;
+    }
+  // Cycle D: Mist signed grant URL (the browser follows it; validated host in index.ts).
+  | { result: 'vendor_grant'; grantUrl: string }
+  | { result: 'vendor_unavailable' };
+
+/** Cycle D vendor-API redirect sources (`/guest/s/<site>/`, `/ext/omada`, `/ext/mist`). */
+export type VendorRedirectAdapter = 'unifi' | 'omada' | 'mist';
 
 export interface StatusView {
   flowState: string;
@@ -93,6 +111,13 @@ export interface PortalApi {
   postbackRedirect?(input: {
     profile: string;
     nasid: string | null;
+    rawQuery: string;
+    clientIp: string | null;
+  }): Promise<RedirectOutcome>;
+  /** Cycle D: UniFi / Omada (API mode) / Mist redirect (optional: older test fakes omit it). */
+  vendorRedirect?(input: {
+    adapter: VendorRedirectAdapter;
+    path: string;
     rawQuery: string;
     clientIp: string | null;
   }): Promise<RedirectOutcome>;
@@ -200,10 +225,37 @@ export class HttpPortalApi implements PortalApi {
     const j = r.json;
     const flowId = str(j.flow_id);
     const exp = str(j.expires_at);
-    if (j.kind === 'flow' && flowId !== null && exp !== null)
+    if (j.kind === 'flow' && flowId !== null && exp !== null) {
       return { kind: 'flow', flowId, expiresAt: new Date(exp) };
-    if (j.kind === 'rate_limited')
+    }
+    if (j.kind === 'rate_limited') {
       return { kind: 'rate_limited', retryAfter: Number(j.retry_after) || 60 };
+    }
+    return { kind: 'error' };
+  }
+
+  async vendorRedirect(input: {
+    adapter: VendorRedirectAdapter;
+    path: string;
+    rawQuery: string;
+    clientIp: string | null;
+  }): Promise<RedirectOutcome> {
+    const r = await this.call('POST', '/internal/vendor-portal/redirects', {
+      adapter: input.adapter,
+      path: input.path,
+      raw_query: input.rawQuery,
+      ...(input.clientIp === null ? {} : { client_ip: input.clientIp }),
+    });
+    if (r === null) return { kind: 'unavailable' };
+    const j = r.json;
+    const flowId = str(j.flow_id);
+    const exp = str(j.expires_at);
+    if (j.kind === 'flow' && flowId !== null && exp !== null) {
+      return { kind: 'flow', flowId, expiresAt: new Date(exp) };
+    }
+    if (j.kind === 'rate_limited') {
+      return { kind: 'rate_limited', retryAfter: Number(j.retry_after) || 60 };
+    }
     return { kind: 'error' };
   }
 
@@ -267,7 +319,23 @@ export class HttpPortalApi implements PortalApi {
     const j = r.json;
     switch (j.result) {
       case 'ok': {
-        const h = (j.handoff ?? {}) as Json;
+        const handoff = j.handoff as Json | undefined;
+        if (handoff?.kind === 'vendor-api') {
+          return {
+            result: 'vendor_authorized',
+            continueUrl: str(handoff.url),
+            continueHost: str(handoff.host),
+            trusted: handoff.trusted === true,
+            landingUrl: str(handoff.landing_url),
+          };
+        }
+        if (handoff?.kind === 'vendor-grant') {
+          const grant = str(handoff.url);
+          return grant === null
+            ? { result: 'handoff_unavailable' }
+            : { result: 'vendor_grant', grantUrl: grant };
+        }
+        const h = handoff ?? {};
         const url = str(h.url);
         if (url === null) return { result: 'handoff_unavailable' };
         if (h.method === 'POST-form') {
@@ -299,6 +367,7 @@ export class HttpPortalApi implements PortalApi {
       case 'flow_state':
       case 'method_not_allowed':
       case 'handoff_unavailable':
+      case 'vendor_unavailable':
         return { result: j.result };
       default:
         return r.status === 400 ? { result: 'rejected' } : { result: 'unavailable' };

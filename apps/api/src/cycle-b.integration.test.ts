@@ -83,7 +83,7 @@ await describeIntegration('@ecloud/api multi-vendor Cycle B (MikroTik / Teltonik
     identity: string;
   }
 
-  async function fixture(opts: { lab: boolean; quota?: bigint }): Promise<Fixture> {
+  async function fixture(opts: { lab: boolean; quota?: number }): Promise<Fixture> {
     const { orgId, siteId } = await createTenant(deps.dbPlatform);
     const nasIp = randomIp();
     const identity = unique('mt');
@@ -227,7 +227,7 @@ await describeIntegration('@ecloud/api multi-vendor Cycle B (MikroTik / Teltonik
   }
 
   it('full flow: redirect → portal → POST-form CHAP hand-off → authorize returns Mikrotik attributes (lab NAS)', async () => {
-    const f = await fixture({ lab: true, quota: 6_000_000_000n });
+    const f = await fixture({ lab: true, quota: 6_000_000_000 });
     const r = routerRedirect(f);
     const { handoff: h } = await handoff(f, r);
 
@@ -378,7 +378,7 @@ await describeIntegration('@ecloud/api multi-vendor Cycle B (MikroTik / Teltonik
 
   it('redirect refusals: unknown identity, public login target, malformed CHAP', async () => {
     const f = await fixture({ lab: false });
-    for (const over of [
+    const overrides: Record<string, string>[] = [
       // Review F1: a login target other than the registered hotspot address (attacker host on
       // the same LAN), for CHAP and for a PAP https target.
       { 'link-login-only': 'http://10.5.50.66/login' },
@@ -386,7 +386,8 @@ await describeIntegration('@ecloud/api multi-vendor Cycle B (MikroTik / Teltonik
       { identity: 'no-such-router' },
       { 'link-login-only': 'http://203.0.113.10/login' },
       { 'chap-id': 'abc' },
-    ]) {
+    ];
+    for (const over of overrides) {
       const res = await postRedirect(routerRedirect(f, over).query);
       expect(res.status).toBe(200);
       expect(res.body.kind).toBe('error');

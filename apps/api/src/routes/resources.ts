@@ -34,6 +34,8 @@ import { isPrivateIpv4 } from '@ecloud/adapters';
 import { ForbiddenError } from '@ecloud/shared';
 import { evaluate } from '../auth/authorize.js';
 import type { CrudHookContext } from './crud.js';
+import { VENDOR_API_ADAPTER_KEYS } from '@ecloud/vendor-api';
+import { resetNasInventoryTrust } from '../vendor-api/trust.js';
 import { releaseGlobalSlots } from '../global-slots.js';
 import { softDeleteAccessPointsOf } from './access-points.js';
 import { assertControllerFor, resolveDeploymentMode } from './controllers.js';
@@ -111,7 +113,12 @@ const NasCreate = z.strictObject({
     .refine((ip) => canonicalNasAddress(ip) !== null, { message: NAS_ADDRESS_RULE }),
   nas_identifier: z.string().trim().min(1).max(253).nullable().optional(),
   /** D-035: the @ecloud/adapters key; `adapter_type_key` is derived from it. */
-  adapter_key: z.enum(NAS_ADAPTER_KEYS),
+  /**
+   * Cycle D: the controller-API / signed-grant keys (UniFi, Omada API mode, Mist) are NAS rows
+   * too (AP MAC identity, tenant, site) but are never RADIUS engine adapters (no reply
+   * attributes, no CoA; `nasAdapter()` returns null for them).
+   */
+  adapter_key: z.enum([...NAS_ADAPTER_KEYS, ...VENDOR_API_ADAPTER_KEYS]),
   network_device_id: z.uuid().nullable().optional(),
   coa_port: z.number().int().min(1).max(65535).nullable().optional(),
   coa_supported: z.boolean().nullable().optional(),
@@ -526,6 +533,10 @@ export function resourceRoutes(deps: AppDeps): AnyRouteSpec[] {
             body.nas_identifier !== undefined ? body.nas_identifier : before.nas_identifier,
           adapterKey: body.adapter_key !== undefined ? body.adapter_key : before.adapter_key,
         });
+      }
+      // Cycle D review F1: APs of a NAS that changes controller lose inventory-based trust.
+      if (body.controller_id !== undefined && body.controller_id !== before.controller_id) {
+        await resetNasInventoryTrust(trx, before.id as string);
       }
       const next: Row =
         typeof body.adapter_key === 'string'

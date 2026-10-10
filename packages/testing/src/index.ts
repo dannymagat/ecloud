@@ -7,3 +7,4 @@ export * from './db-urls.js';
 export * from './probes.js';
 export * from './two-tenants.js';
 export * from './simulators/index.js';
+export * from './vendor-mock.js';

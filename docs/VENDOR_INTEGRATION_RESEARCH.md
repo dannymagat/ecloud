@@ -306,3 +306,44 @@ Vendor documentation (V) and vendor community (V-c):
 - Teltonika: wiki.teltonika-networks.com Hotspot pages (search extract only: "Hotspot service uses CoovaChilli", UAM port 3990, UAM secret); direct page not fetched → treat as REQUIRES_CLARIFICATION for parameter names.
 
 Fetch limitations: help.ui.com and arubanetworking.hpe.com returned HTTP 403 to the direct fetcher. Their content was read through a search/extract service, and the facts above are from that extract. The Ruckus app note is a 2009 ZoneDirector document. The context-mode fetch tool failed (missing module), so pages were fetched with curl/WebFetch and only derived facts were kept.
+
+## 8. Implementation status — multi-vendor Cycle D (2026-10-10, LOCAL ONLY)
+
+Built against mock controllers only (MULTI_VENDOR_INTEGRATION_PLAN.md §16). No device or vendor
+controller was contacted; every row below stays **DOCUMENTED**, lifecycle at most `implemented`.
+
+| Family | Status | Code |
+|---|---|---|
+| F5 `unifi-external-portal` | implemented (redirect parse, client lookup + `AUTHORIZE_GUEST_ACCESS` with limits, AP inventory verification); revoke not implemented | `packages/vendor-api/src/unifi.ts`, `redirects.ts` |
+| F6 `omada-api` (API mode, ≥ 6.2.10) | implemented for the documented 6.2.10 form; 5.x body not built | `packages/vendor-api/src/omada.ts` |
+| F7 `mist-guest-portal` | implemented (signed grant URL; vendor worked example reproduced in a unit test) | `packages/vendor-api/src/mist.ts` |
+| F8 `ruckus-wispr` NBI | documented stub, REQUIRES_CLARIFICATION | `packages/vendor-api/src/ruckus.ts` |
+| "API limits" contract gap (§3) | addressed: `translateApiLimits` | `packages/policy-engine/src/api-limits.ts` |
+| `HandoffSecrets` / vendor credential use (§3) | addressed outside the adapter contract: sealed secret opened in-process by `openVendorCredential` | `packages/vendor-api/src/credentials.ts` |
+
+Vendor facts re-read for Cycle D (vendor documentation, fetched 2026-10-10; derived facts only):
+
+- **Omada 6.2.10** (support.omadanetworks.com/us/document/132060): login `POST
+  https://CONTROLLER[:PORT]/CONTROLLER_ID/api/v2/hotspot/login` with a **Hotspot Operator**
+  (`{"name","password"}`) → `{"errorCode":0,"result":{"token":…}}` (the token is the `Csrf-Token`
+  header); the session cookie must be kept (`TPOMADA_SESSIONID` from v5.11, `TPEAP_SESSIONID`
+  before). Auth body EAP: `clientMac, clientIp, apMac, ssidName, radioId, time, authType "4",
+  originUrl, totalTrafficLimitBytes (bytes, upload + download), downloadRateLimitKbps,
+  uploadRateLimitKbps`; gateway: `clientMac, clientIp, gatewayMac, vid, time, authType, limits`.
+  `time` = "Authentication Expiration time, unit millisecond" — the 5.0.15–6.2.0 document (13080)
+  says **microsecond** and includes `site`; the PHP sample passes "the time allowed". Unit and
+  duration-vs-timestamp semantics: REQUIRES_DEVICE_TEST. Redirect (6.2.10): `clientMac, clientIp,
+  apMac, ssidName, t (ms since epoch), radioId, site, redirectUrl`; gateway `clientMac, gatewayMac,
+  vid, t, site, redirectUrl`. The vendor sample disables TLS verification; ECLOUD does not.
+- **Mist** (juniper.net guest-access-external-portal): inbound redirect `wlan_id, ap_mac,
+  client_mac, url, ap_name, site_name` (unsigned). Grant syntax `signature=…&expires=<epoch
+  s>&token=…&forward=…`, token `base64("wlan-id/ap-mac/client-mac/authorize_min/0/0/0")`,
+  signature `base64(hmac_sha1(secret, "expires=…&token=…[&forward=…]"))`, PHP `urlencode` of each
+  part; worked example with secret `test-secret` against `/authorize-test`. A **JWT (HS256)**
+  alternative is documented (`jwt=<token>`, payload `ap_mac, wlan_id, client_mac, minutes,
+  expires, forward, authorize_only`; required for wired captive portal) — resolves §6 item 9's
+  "JWT alternative" as DOCUMENTED; not implemented. The sample vendor client MAC `d58f6bb4c9d8`
+  has the group bit set; ECLOUD's strict unicast parser refuses such a MAC.
+- **UniFi**: help.ui.com remains Cloudflare-blocked to the fetcher; developer.ui.com documents
+  the `X-API-KEY` request header. The local Network API URL prefix and the devices list remain
+  REQUIRES_DEVICE_TEST (§6 item 7 unchanged).

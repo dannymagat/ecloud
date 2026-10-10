@@ -67,6 +67,7 @@ export const TENANT_GRAPH_TABLES: readonly string[] = Object.freeze([
   'vendor_api_credentials',
   'nas_clients',
   'nas_access_points',
+  'vendor_api_sessions',
   'identity_providers',
   'user_groups',
   'users',
@@ -296,6 +297,17 @@ export async function seedTenantGraph(
     ],
   );
   ref('vendor_api_credentials', vendorApiCredentialId);
+
+  // Cycle D (migration 031): an API-authorised session (no accounting, usage unknown).
+  const vendorApiSessionId = await insertReturning<string>(
+    db,
+    `INSERT INTO vendor_api_sessions (organization_id, site_id, nas_client_id, controller_id, adapter_key,
+                                      api_kind, client_mac, identity_kind, status)
+     VALUES ($1, $2, $3, $4, 'unifi-external-portal', 'unifi-network', $5, 'click_through', 'pending')
+     RETURNING id`,
+    [organizationId, siteId, nasClientId, controllerId, randomMac()],
+  );
+  ref('vendor_api_sessions', vendorApiSessionId);
 
   const identityProviderId = await insertReturning<string>(
     db,

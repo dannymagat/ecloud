@@ -109,6 +109,8 @@ export function accessPointRoutes(deps: AppDeps): AnyRouteSpec[] {
       if (nasChanged || (typeof body.mac === 'string' && body.mac !== before.mac)) {
         next.verified_at = null;
         next.verification_source = null;
+        next.inventory_seen_at = null; // Cycle D review F1
+        next.inventory_controller_id = null;
       }
       return next;
     },
@@ -183,5 +185,90 @@ export function accessPointPlatformRoutes(deps: AppDeps): AnyRouteSpec[] {
       };
     },
   });
-  return [release];
+  /**
+   * Cycle D review F1: controller-inventory verification needs a SECOND signal. The worker only
+   * marks a candidate (`inventory_seen_at`) when a PINNED on-prem controller managing the AP's
+   * NAS lists the MAC; a platform operator (not the tenant) confirms it here after checking
+   * ownership out of band. Refused unless the candidate marker is current (same controller as
+   * the NAS has now); audited in the owning organization with the reason.
+   */
+  const confirm = defineRoute({
+    method: 'post',
+    path: '/api/v1/platform/access-points/confirm-inventory',
+    summary: 'Confirm a controller-inventory AP MAC candidate (platform second signal, review F1)',
+    tags: ['platform'],
+    auth: 'principal',
+    permission: 'organization:update',
+    scope: 'platform',
+    body: ReleaseAccessPointBody,
+    responses: {
+      200: {
+        description: 'Verified',
+        schema: z.object({
+          mac: z.string(),
+          verified: z.literal(true),
+          organization_id: z.string(),
+        }),
+      },
+      ...problemResponses,
+    },
+    handler: async ({ body, req, ctx }) => {
+      if (requestIsImpersonating(req)) {
+        throw new ImpersonationForbiddenError('organization:update');
+      }
+      const row = await inPlatform(deps, ctx, 'confirm access point inventory', async (trx) => {
+        const ap = await trx
+          .selectFrom('nas_access_points as ap')
+          .innerJoin('nas_clients as n', 'n.id', 'ap.nas_client_id')
+          .select([
+            'ap.id',
+            'ap.organization_id',
+            'ap.inventory_seen_at',
+            'ap.inventory_controller_id',
+            'ap.verified_at',
+            'n.controller_id',
+          ])
+          .where('ap.mac', '=', body.mac)
+          .where('ap.deleted_at', 'is', null)
+          .forUpdate()
+          .executeTakeFirst();
+        if (ap === undefined) return null;
+        if (
+          ap.inventory_seen_at === null ||
+          ap.inventory_controller_id === null ||
+          ap.inventory_controller_id !== ap.controller_id
+        ) {
+          throw new ValidationError([
+            { path: 'body.mac', message: 'no current controller-inventory candidate for this MAC' },
+          ]);
+        }
+        const at = new Date();
+        if (ap.verified_at === null) {
+          await trx
+            .updateTable('nas_access_points')
+            .set({ verified_at: at, verification_source: 'controller-inventory' })
+            .where('id', '=', ap.id)
+            .execute();
+        }
+        await writeAudit(trx, ctx, {
+          organizationId: ap.organization_id,
+          action: 'access_point:verify',
+          targetType: 'access_point',
+          targetId: ap.id,
+          after: {
+            source: 'controller-inventory',
+            controller_id: ap.inventory_controller_id,
+            reason: body.reason,
+          },
+        });
+        return ap;
+      });
+      if (row === null) throw new NotFoundError('access_point', body.mac);
+      return {
+        status: 200,
+        body: { mac: body.mac, verified: true as const, organization_id: row.organization_id },
+      };
+    },
+  });
+  return [release, confirm];
 }

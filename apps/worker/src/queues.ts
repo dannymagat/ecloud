@@ -13,6 +13,8 @@ export const QUEUES = Object.freeze({
   webhooksDeliver: 'webhooks.deliver',
   coaDisconnect: 'coa.disconnect',
   coaChange: 'coa.change',
+  /** Cycle D: controller AP inventory → nas_access_points.verified_at (tenant-scoped). */
+  controllersInventory: 'controllers.inventory',
 } as const);
 
 export type QueueName = (typeof QUEUES)[keyof typeof QUEUES];
@@ -43,6 +45,8 @@ export const SCHEDULES: ReadonlyArray<{ queue: QueueName; schedule: Schedule; lo
       schedule: { pattern: '30 3 * * *', tz: 'UTC' },
       lockTtlMs: 1_800_000,
     },
+    // Cycle D: hourly; outbound calls only when WORKER_CONTROLLER_INVENTORY_ENABLED=true.
+    { queue: QUEUES.controllersInventory, schedule: { every: 3_600_000 }, lockTtlMs: 1_800_000 },
   ];
 
 const KEEP = { removeOnComplete: { count: 100 }, removeOnFail: { count: 1000 } } as const;
@@ -73,6 +77,7 @@ export const WORKER_CONCURRENCY: Readonly<Record<QueueName, number>> = {
   [QUEUES.webhooksDeliver]: 8,
   [QUEUES.coaDisconnect]: 2,
   [QUEUES.coaChange]: 2,
+  [QUEUES.controllersInventory]: 1,
 };
 
 export function coaJobId(sessionActionId: string): string {

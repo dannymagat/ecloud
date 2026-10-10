@@ -15,6 +15,7 @@ import { mountRoute, type AnyRouteSpec } from './http/route.js';
 import { createApiMetrics, httpMetrics, metricsHandler } from './metrics.js';
 import { authorizeHandler, internalTokenGuard, postAuthHandler } from './internal/aaa.js';
 import { portalInternalRouter } from './internal/portal.js';
+import { vendorPortalInternalRouter } from './vendor-api/portal.js';
 import { OPENAPI_PATH, buildOpenApiDocument } from './openapi.js';
 import { internalAssetHandler, portalAdminRoutes } from './portal-admin/routes.js';
 import { accessRoutes } from './routes/access.js';
@@ -220,6 +221,8 @@ export function createApp(appDeps: AppDeps): Apps {
   internalApp.post('/internal/aaa/authorize', authorizeHandler(deps));
   internalApp.post('/internal/aaa/post-auth', postAuthHandler(deps));
   internalApp.use('/internal/portal', portalInternalRouter(deps));
+  // Cycle D: UniFi / Omada (API mode) / Mist redirects (no UAM signature, verified AP MAC only).
+  internalApp.use('/internal/vendor-portal', vendorPortalInternalRouter(deps));
   // P6-B: branding bytes for the portal's public /a/{assetId} (the portal proxies this).
   internalApp.get('/internal/portal-assets/:assetId', internalAssetHandler(deps));
   internalApp.use(notFoundHandler());

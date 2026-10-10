@@ -1257,6 +1257,26 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/api/v1/platform/access-points/confirm-inventory': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Confirm a controller-inventory AP MAC candidate (platform second signal, review F1)
+     * @description Permission: `organization:update`
+     */
+    post: operations['post_api_v1_platform_access_points_confirm_inventory'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/api/v1/orgs/{orgId}/controllers': {
     parameters: {
       query?: never;
@@ -1352,6 +1372,26 @@ export interface paths {
      * @description Permission: `controller:secret:rotate`
      */
     delete: operations['delete_api_v1_orgs_orgId_controllers_id_api_credential'];
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/orgs/{orgId}/controllers/{id}/api-credential/test': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Test the controller API credential (outbound, SSRF-guarded, audited)
+     * @description Permission: `controller:update`
+     */
+    post: operations['post_api_v1_orgs_orgId_controllers_id_api_credential_test'];
+    delete?: never;
     options?: never;
     head?: never;
     patch?: never;
@@ -3063,9 +3103,27 @@ export interface components {
       external_site_id: string | null;
       /** @constant */
       has_secret: true;
+      inventory_checked_at: string | null;
+      inventory_matched: number | null;
+      inventory_result: string | null;
+      last_test_at: string | null;
+      last_test_result: string | null;
       rotated_at: string;
+      settings: {
+        [key: string]: unknown;
+      };
+      tls_fingerprint_sha256: string | null;
+      /** @enum {string} */
+      tls_trust: 'system' | 'ca' | 'fingerprint';
       updated_at: string;
       username: string | null;
+    };
+    VendorApiCredentialTest: {
+      code: string;
+      contacted: boolean;
+      detail: string;
+      ok: boolean;
+      tested_at: string;
     };
   };
   responses: never;
@@ -7417,7 +7475,10 @@ export interface operations {
             | 'coovachilli-uam'
             | 'generic-radius-8021x'
             | 'mikrotik-hotspot'
-            | 'external-portal-postback';
+            | 'external-portal-postback'
+            | 'unifi-external-portal'
+            | 'omada-api'
+            | 'mist-guest-portal';
           coa_port?: number | null;
           coa_supported?: boolean | null;
           controller_id?: string | null;
@@ -7632,7 +7693,10 @@ export interface operations {
             | 'coovachilli-uam'
             | 'generic-radius-8021x'
             | 'mikrotik-hotspot'
-            | 'external-portal-postback';
+            | 'external-portal-postback'
+            | 'unifi-external-portal'
+            | 'omada-api'
+            | 'mist-guest-portal';
           coa_port?: number | null;
           coa_supported?: boolean | null;
           controller_id?: string | null;
@@ -9648,6 +9712,74 @@ export interface operations {
       };
     };
   };
+  post_api_v1_platform_access_points_confirm_inventory: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: {
+      content: {
+        'application/json': {
+          mac: string;
+          reason: string;
+        };
+      };
+    };
+    responses: {
+      /** @description Verified */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            mac: string;
+            organization_id: string;
+            /** @constant */
+            verified: true;
+          };
+        };
+      };
+      /** @description Validation failed (application/problem+json) */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Authentication required */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Permission denied */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Not found (also returned for objects of other tenants) */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+    };
+  };
   get_api_v1_orgs_orgId_controllers: {
     parameters: {
       query?: {
@@ -10146,6 +10278,11 @@ export interface operations {
           external_org_id?: string | null;
           external_site_id?: string | null;
           secret: string;
+          settings?: {
+            [key: string]: unknown;
+          };
+          tls_ca_pem?: string | null;
+          tls_fingerprint_sha256?: string | null;
           username?: string | null;
         };
       };
@@ -10216,6 +10353,65 @@ export interface operations {
           [name: string]: unknown;
         };
         content?: never;
+      };
+      /** @description Validation failed (application/problem+json) */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Authentication required */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Permission denied */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Not found (also returned for objects of other tenants) */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+    };
+  };
+  post_api_v1_orgs_orgId_controllers_id_api_credential_test: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        orgId: string;
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Test outcome (codes only; the secret is never returned) */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['VendorApiCredentialTest'];
+        };
       };
       /** @description Validation failed (application/problem+json) */
       400: {

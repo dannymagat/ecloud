@@ -41,6 +41,7 @@ import {
 } from '@ecloud/adapters';
 import { withPlatform, withTenant, type DbTransaction } from '@ecloud/db';
 import { canonicalUnicastMac, isUuid, newId, type Logger } from '@ecloud/shared';
+import { isVendorApiAdapterKey } from '@ecloud/vendor-api';
 import express, { type Request, type Response, type Router } from 'express';
 import { isIP } from 'node:net';
 import { z } from 'zod';
@@ -48,6 +49,7 @@ import type { AppDeps } from '../context.js';
 import { Envelope, openSecretRef, sealSecretRef, sha256Hex } from '../crypto.js';
 import { logPortalSecurityEvent } from '../security-events.js';
 import { consumePortalLoginToken, issuePortalLoginToken } from './login-token-store.js';
+import { completeVendorApiAuthorization } from '../vendor-api/portal.js';
 import { findNasByIdentity } from './nas-lookup.js';
 import { registerPostbackRoutes } from './portal-postback.js';
 import {
@@ -794,7 +796,12 @@ export function portalInternalRouter(deps: AppDeps): Router {
         res.status(404).json({ result: 'flow_not_found' });
         return;
       }
-      if (flow.state === 'AUTHORIZED' || flow.state === 'ENDED') {
+      if (
+        flow.state === 'AUTHORIZED' ||
+        flow.state === 'ENDED' ||
+        // Cycle D review F5: a vendor flow (e.g. a Mist grant in LOGON_SENT) is never re-identified
+        (isVendorApiAdapterKey(flow.adapterKey) && flow.state !== 'ARRIVED')
+      ) {
         res.status(409).json({ result: 'flow_state' });
         return;
       }
@@ -953,6 +960,20 @@ export function portalInternalRouter(deps: AppDeps): Router {
           res.status(422).json({ result: 'handoff_unavailable' });
           return;
         }
+      }
+      // Cycle D: controller-API / signed-grant vendors take no portal credential; the API
+      // authorises the client at the controller (or signs the Mist grant) instead.
+      // Dispatch: post-back (below, by flow.postback) / MikroTik (token above) / vendor-API here.
+      if (flow.postback === undefined && isVendorApiAdapterKey(flow.adapterKey)) {
+        const done = await completeVendorApiAuthorization(
+          deps,
+          flow,
+          outcome.identity,
+          at,
+          req.log,
+        );
+        res.status(done.status).json(done.body);
+        return;
       }
 
       // Identity broker: a fresh single-use credential bound to NAS + MAC + sessionid.

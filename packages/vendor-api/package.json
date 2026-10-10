@@ -1,0 +1,31 @@
+{
+  "name": "@ecloud/vendor-api",
+  "version": "0.1.0",
+  "private": true,
+  "description": "ECLOUD outbound vendor controller API clients (UniFi, Omada, Mist signing, Ruckus NBI stub) behind an SSRF-safe, TLS-verifying HTTP client",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -b tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "clean": "rm -rf dist",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@ecloud/policy-engine": "*",
+    "@ecloud/shared": "*"
+  },
+  "devDependencies": {
+    "@ecloud/testing": "*"
+  }
+}

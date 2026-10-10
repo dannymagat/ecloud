@@ -15,6 +15,8 @@ export const WORKER_QUEUE_NAMES = Object.freeze([
   'webhooks.deliver',
   'coa.disconnect',
   'coa.change',
+  // Cycle D: controller AP inventory verification + API-session expiry
+  'controllers.inventory',
 ] as const);
 
 /** Dead-letter queues (exhausted jobs kept for inspection). */

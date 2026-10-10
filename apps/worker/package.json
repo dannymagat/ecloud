@@ -28,6 +28,7 @@
     "@ecloud/db": "*",
     "@ecloud/policy-engine": "*",
     "@ecloud/shared": "*",
+    "@ecloud/vendor-api": "*",
     "bullmq": "^6.3.11",
     "ioredis": "^5.11.1",
     "kysely": "^0.29.6",

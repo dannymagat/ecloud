@@ -1693,7 +1693,19 @@
           "external_org_id": { "type": ["string", "null"] },
           "external_site_id": { "type": ["string", "null"] },
           "has_secret": { "const": true, "type": "boolean" },
+          "inventory_checked_at": { "type": ["string", "null"] },
+          "inventory_matched": { "type": ["number", "null"] },
+          "inventory_result": { "type": ["string", "null"] },
+          "last_test_at": { "type": ["string", "null"] },
+          "last_test_result": { "type": ["string", "null"] },
           "rotated_at": { "type": "string" },
+          "settings": {
+            "additionalProperties": {},
+            "propertyNames": { "type": "string" },
+            "type": "object"
+          },
+          "tls_fingerprint_sha256": { "type": ["string", "null"] },
+          "tls_trust": { "enum": ["system", "ca", "fingerprint"], "type": "string" },
           "updated_at": { "type": "string" },
           "username": { "type": ["string", "null"] }
         },
@@ -1706,8 +1718,28 @@
           "external_site_id",
           "has_secret",
           "rotated_at",
-          "updated_at"
+          "updated_at",
+          "tls_trust",
+          "tls_fingerprint_sha256",
+          "settings",
+          "last_test_at",
+          "last_test_result",
+          "inventory_checked_at",
+          "inventory_result",
+          "inventory_matched"
         ],
+        "type": "object"
+      },
+      "VendorApiCredentialTest": {
+        "additionalProperties": false,
+        "properties": {
+          "code": { "type": "string" },
+          "contacted": { "type": "boolean" },
+          "detail": { "type": "string" },
+          "ok": { "type": "boolean" },
+          "tested_at": { "type": "string" }
+        },
+        "required": ["ok", "code", "contacted", "detail", "tested_at"],
         "type": "object"
       }
     },
@@ -7121,7 +7153,10 @@
                       "coovachilli-uam",
                       "generic-radius-8021x",
                       "mikrotik-hotspot",
-                      "external-portal-postback"
+                      "external-portal-postback",
+                      "unifi-external-portal",
+                      "omada-api",
+                      "mist-guest-portal"
                     ],
                     "type": "string"
                   },
@@ -7414,7 +7449,10 @@
                       "coovachilli-uam",
                       "generic-radius-8021x",
                       "mikrotik-hotspot",
-                      "external-portal-postback"
+                      "external-portal-postback",
+                      "unifi-external-portal",
+                      "omada-api",
+                      "mist-guest-portal"
                     ],
                     "type": "string"
                   },
@@ -9899,6 +9937,73 @@
         "tags": ["platform"]
       }
     },
+    "/api/v1/platform/access-points/confirm-inventory": {
+      "post": {
+        "description": "Permission: `organization:update`",
+        "operationId": "post_api_v1_platform_access_points_confirm_inventory",
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "mac": { "maxLength": 17, "type": "string" },
+                  "reason": { "maxLength": 500, "minLength": 10, "type": "string" }
+                },
+                "required": ["mac", "reason"],
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "mac": { "type": "string" },
+                    "organization_id": { "type": "string" },
+                    "verified": { "const": true, "type": "boolean" }
+                  },
+                  "required": ["mac", "verified", "organization_id"],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Verified"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Validation failed (application/problem+json)"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Authentication required"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Permission denied"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Not found (also returned for objects of other tenants)"
+          }
+        },
+        "summary": "Confirm a controller-inventory AP MAC candidate (platform second signal, review F1)",
+        "tags": ["platform"]
+      }
+    },
     "/api/v1/orgs/{orgId}/controllers": {
       "get": {
         "description": "Permission: `controller:read`",
@@ -10572,6 +10677,17 @@
                     ]
                   },
                   "secret": { "maxLength": 4096, "minLength": 1, "type": "string" },
+                  "settings": {
+                    "additionalProperties": {},
+                    "propertyNames": { "type": "string" },
+                    "type": "object"
+                  },
+                  "tls_ca_pem": {
+                    "anyOf": [{ "maxLength": 16384, "type": "string" }, { "type": "null" }]
+                  },
+                  "tls_fingerprint_sha256": {
+                    "anyOf": [{ "maxLength": 200, "type": "string" }, { "type": "null" }]
+                  },
                   "username": {
                     "anyOf": [
                       { "maxLength": 256, "minLength": 1, "type": "string" },
@@ -10620,6 +10736,70 @@
           }
         },
         "summary": "Set or rotate the controller API credential (write-only secret; refused while impersonating, D-027)",
+        "tags": ["controllers"]
+      }
+    },
+    "/api/v1/orgs/{orgId}/controllers/{id}/api-credential/test": {
+      "post": {
+        "description": "Permission: `controller:update`",
+        "operationId": "post_api_v1_orgs_orgId_controllers_id_api_credential_test",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "orgId",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/VendorApiCredentialTest" }
+              }
+            },
+            "description": "Test outcome (codes only; the secret is never returned)"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Validation failed (application/problem+json)"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Authentication required"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Permission denied"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Not found (also returned for objects of other tenants)"
+          }
+        },
+        "summary": "Test the controller API credential (outbound, SSRF-guarded, audited)",
         "tags": ["controllers"]
       }
     },

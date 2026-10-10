@@ -41,6 +41,10 @@ const EN = {
     'Your sign-in was accepted. Press Connect to finish connecting to the Wi-Fi network.',
   'handoff.submit': 'Connect',
   'success.status': 'View connection status',
+  // Cycle D review F6: the destination host is always shown; an unlisted host is never a button
+  'success.destination': 'Next page: {host}',
+  'success.unlisted':
+    'You were going to {host}. This site is not on this network’s list; check the address before opening it:',
   'error.generic':
     'We could not start sign-in on this network. Please reconnect to the Wi-Fi network and open any web page.',
   'error.failed': 'The network did not accept the sign-in.',

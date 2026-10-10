@@ -63,6 +63,10 @@ export const ADAPTER_KEYS = [
   'mikrotik-hotspot',
   // Cycle C (migration 030): external captive portal post-back engine (vendor profiles).
   'external-portal-postback',
+  // Cycle D (migration 031): controller-API / signed-grant portals (no RADIUS engine adapter)
+  'unifi-external-portal',
+  'omada-api',
+  'mist-guest-portal',
 ] as const;
 
 /** Human labels for the NAS adapter dropdown (the key stays visible for support). */
@@ -75,6 +79,9 @@ export const ADAPTER_LABELS: Readonly<Record<(typeof ADAPTER_KEYS)[number], stri
   'mikrotik-hotspot': 'MikroTik RouterOS Hotspot (ECLOUD login page)',
   'external-portal-postback':
     'External captive portal (Cambium, Aruba, Cisco, Fortinet, Ruckus, Omada, Huawei, any vendor)',
+  'unifi-external-portal': 'UniFi external portal (controller API, no RADIUS accounting)',
+  'omada-api': 'Omada external portal, API mode (no RADIUS accounting)',
+  'mist-guest-portal': 'Juniper Mist external guest portal (signed grant URL)',
 };
 
 export interface StatusPresentation {

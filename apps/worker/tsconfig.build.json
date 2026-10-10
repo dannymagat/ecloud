@@ -11,6 +11,7 @@
     { "path": "../../packages/shared/tsconfig.build.json" },
     { "path": "../../packages/db/tsconfig.build.json" },
     { "path": "../../packages/policy-engine/tsconfig.build.json" },
-    { "path": "../../packages/adapters/tsconfig.build.json" }
+    { "path": "../../packages/adapters/tsconfig.build.json" },
+    { "path": "../../packages/vendor-api/tsconfig.build.json" }
   ]
 }

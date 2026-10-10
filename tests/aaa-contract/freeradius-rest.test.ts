@@ -343,7 +343,7 @@ suite(title, () => {
     expect(reply.attributes['Idle-Timeout']).toEqual(['600']);
     const authorize = await stub.waitForRequest(forSession(AAA_AUTHORIZE_PATH, sessionId));
     // ECLOUD sees the CHAP request (presence) and the router identity, never a User-Password.
-    expect(authorize.body['CHAP-Password']).toBeDefined();
+    expect(authorize.body?.['CHAP-Password']).toBeDefined();
     expect(attributeValue(authorize.body, 'User-Password')).toBeUndefined();
     expect(attributeValue(authorize.body, 'NAS-Identifier')).toBe('lab-mikrotik');
     expect(attributeValue(authorize.body, 'Called-Station-Id')).toBe('hotspot1');

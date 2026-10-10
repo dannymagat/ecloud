@@ -4,6 +4,7 @@
 import type { Db } from '@ecloud/db';
 import type { Logger, PermissionScope } from '@ecloud/shared';
 import type { ObjectStorage } from '@ecloud/storage';
+import type { VendorHttpClient } from '@ecloud/vendor-api';
 import type { ApiConfig } from './config.js';
 import type { KvStore } from './kv.js';
 import type { ApiMetrics } from './metrics.js';
@@ -32,6 +33,17 @@ export interface AppDeps {
    * is held while it runs (B-3).
    */
   verifyPassword?: (hash: string, password: string) => Promise<boolean>;
+  /**
+   * Cycle D: SSRF-safe outbound client for vendor controller APIs (`@ecloud/vendor-api`).
+   * Defaults to one process-wide client (shared per-controller rate limits); tests inject one
+   * pointed at a local mock controller. Never used to fetch anything but a stored controller URL.
+   */
+  vendorHttp?: VendorHttpClient;
+  /**
+   * Cycle D review F2: minimum response time of a failed "Test connection" to a non-cloud
+   * controller (uniform latency, no port / host oracle). Default 10 000 ms; tests lower it.
+   */
+  vendorTestFloorMs?: number;
 }
 
 /** One effective role binding of a principal, with the permission keys of its role. */

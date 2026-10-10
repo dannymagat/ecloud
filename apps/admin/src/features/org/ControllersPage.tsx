@@ -4,6 +4,11 @@
  * The API credential is write-only: the form sets or rotates it as a whole (the secret is
  * always re-entered) and the page only ever shows metadata (`has_secret`, rotation time). No
  * outbound call is made with it in Cycle A; base URLs pass the server-side SSRF guard.
+ *
+ * Cycle D (migration 031): per-adapter settings (UniFi site name, Omada CONTROLLER_ID, Mist
+ * portal host + WLAN ids), TLS pinning for on-prem self-signed controllers (CA PEM or SHA-256
+ * fingerprint; there is no "insecure" option) and a permission-gated, audited "Test connection"
+ * (`controller:update`) whose outcome is a code, never vendor text.
  */
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
@@ -76,10 +81,99 @@ export const credentialFields: FieldDef[] = [
     hint: 'Write-only: sealed at rest and never shown again. Re-enter it to change any field.',
   },
   { name: 'external_org_id', label: 'Vendor org / controller id', type: 'text' },
-  { name: 'external_site_id', label: 'Vendor site id', type: 'text' },
+  {
+    name: 'external_site_id',
+    label: 'Vendor site id',
+    type: 'text',
+    hint: 'UniFi: the Network API site id (needed before ECLOUD can call the controller).',
+  },
+  {
+    name: 'unifi_site_name',
+    label: 'UniFi site name (redirect path)',
+    type: 'text',
+    placeholder: 'default',
+    hint: 'UniFi only: the <site> in /guest/s/<site>/; when set, redirects for other sites are refused.',
+  },
+  {
+    name: 'omada_controller_id',
+    label: 'Omada CONTROLLER_ID',
+    type: 'text',
+    hint: 'Omada only: the controller id path segment of https://CONTROLLER:PORT/CONTROLLER_ID/.',
+  },
+  {
+    name: 'mist_portal_host',
+    label: 'Mist portal host',
+    type: 'text',
+    placeholder: 'portal.mist.com',
+    hint: 'Mist only: portal.mist.com or portal.<region>.mist.com.',
+  },
+  {
+    name: 'mist_wlan_ids',
+    label: 'Mist guest WLAN ids',
+    type: 'list',
+    hint: 'Mist only: the WLAN UUIDs whose API secret this is; redirects for other WLANs are refused.',
+  },
+  {
+    name: 'tls_fingerprint_sha256',
+    label: 'Pinned TLS fingerprint (SHA-256)',
+    type: 'text',
+    hint: 'On-prem self-signed controller: the SHA-256 fingerprint of its certificate. Leave empty to use the system CAs or a pinned CA.',
+  },
+  {
+    name: 'tls_ca_pem',
+    label: 'Pinned CA certificate (PEM)',
+    type: 'textarea',
+    hint: 'Optional private CA for the controller certificate (certificate only, never a key). TLS is always verified.',
+  },
 ];
 
-function ApiCredential({ row, orgId }: { row: Row; orgId: string }) {
+/** Form fields that the API expects inside `settings` (not top-level). */
+export const SETTINGS_FIELDS = [
+  'unifi_site_name',
+  'omada_controller_id',
+  'mist_portal_host',
+  'mist_wlan_ids',
+] as const;
+
+/** Flat form body → API body (`settings` object for the per-adapter fields). */
+export function credentialBody(flat: Record<string, unknown>): Record<string, unknown> {
+  const body: Record<string, unknown> = {};
+  const settings: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(flat)) {
+    if ((SETTINGS_FIELDS as readonly string[]).includes(k)) settings[k] = v;
+    else body[k] = v;
+  }
+  body.settings = settings;
+  return body;
+}
+
+function TestConnection({ orgId, id, onDone }: { orgId: string; id: string; onDone: () => void }) {
+  const test = useMutation({
+    mutationFn: () =>
+      api('post', '/api/v1/orgs/{orgId}/controllers/{id}/api-credential/test', {
+        params: { orgId, id },
+      }),
+    onSuccess: onDone,
+  });
+  const result = test.data;
+  return (
+    <div className="space-y-2">
+      <Button size="sm" busy={test.isPending} onClick={() => test.mutate()}>
+        Test connection
+      </Button>
+      <ProblemAlert error={test.error} />
+      {result ? (
+        <p role="status">
+          <Badge tone={result.ok ? 'success' : 'danger'}>{result.ok ? 'ok' : result.code}</Badge>{' '}
+          {result.detail}
+          {result.contacted ? '' : ' (no network call was made)'}
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
+function ApiCredential({ row, orgId, canTest }: { row: Row; orgId: string; canTest: boolean }) {
   const [open, setOpen] = useState(false);
   const [key, setKey] = useState(newIdempotencyKey);
   const qc = useQueryClient();
@@ -146,6 +240,25 @@ function ApiCredential({ row, orgId }: { row: Row; orgId: string }) {
                 Username: {display(meta.username)} · org: {display(meta.external_org_id)} · site:{' '}
                 {display(meta.external_site_id)} · secret rotated {formatDateTime(meta.rotated_at)}
               </p>
+              <p className="mt-1 text-slate-600 dark:text-slate-300">
+                TLS: {meta.tls_trust} · last test:{' '}
+                {meta.last_test_at
+                  ? `${display(meta.last_test_result)} (${formatDateTime(meta.last_test_at)})`
+                  : 'never'}{' '}
+                · AP inventory:{' '}
+                {meta.inventory_checked_at
+                  ? `${display(meta.inventory_result)}, ${display(meta.inventory_matched)} verified`
+                  : 'not run'}
+              </p>
+              {canTest ? (
+                <div className="mt-2">
+                  <TestConnection
+                    orgId={orgId}
+                    id={id}
+                    onDone={() => void qc.invalidateQueries({ queryKey })}
+                  />
+                </div>
+              ) : null}
             </div>
           ) : current.isLoading ? (
             <p>Loading…</p>
@@ -168,13 +281,17 @@ function ApiCredential({ row, orgId }: { row: Row; orgId: string }) {
                     username: meta.username,
                     external_org_id: meta.external_org_id,
                     external_site_id: meta.external_site_id,
+                    tls_fingerprint_sha256: meta.tls_fingerprint_sha256,
+                    ...meta.settings,
                   }
                 : { base_url: row.base_url }
             }
             submitLabel={meta ? 'Rotate credential' : 'Set credential'}
             busy={save.isPending}
             problem={save.error ? problemOf(save.error) : null}
-            onSubmit={(values) => save.mutate(toBody(credentialFields, values, 'create'))}
+            onSubmit={(values) =>
+              save.mutate(credentialBody(toBody(credentialFields, values, 'create')))
+            }
             onCancel={() => setOpen(false)}
           />
           {meta ? (
@@ -209,7 +326,7 @@ export function ControllersPage() {
       type: 'text',
       required: true,
       placeholder: 'https://controller.example:8443/',
-      hint: 'https only; never fetched in this release.',
+      hint: 'https only. ECLOUD calls the controller only through the API credential below (SSRF-guarded, TLS verified).',
     },
     {
       name: 'site_id',
@@ -224,7 +341,7 @@ export function ControllersPage() {
     title: 'Controllers',
     singular: 'Controller',
     description:
-      'Vendor controllers (UniFi, Omada, Mist, Ruckus, Meraki, ...). The controller API credential is write-only; ECLOUD makes no call with it yet (Cycle A).',
+      'Vendor controllers (UniFi, Omada, Mist, Ruckus, Meraki, ...). The controller API credential is write-only; UniFi and Omada are called through the SSRF-guarded client, Mist grants are signed locally (Cycle D).',
     path: '/api/v1/orgs/{orgId}/controllers',
     siteFilter: true,
     permissions: {
@@ -263,7 +380,14 @@ export function ControllersPage() {
         organizationId: orgId,
         siteId: (row.site_id as string | null) ?? null,
       }) ? (
-        <ApiCredential row={row} orgId={orgId} />
+        <ApiCredential
+          row={row}
+          orgId={orgId}
+          canTest={can(me, 'controller:update', {
+            organizationId: orgId,
+            siteId: (row.site_id as string | null) ?? null,
+          })}
+        />
       ) : null,
   };
   return <ResourcePage config={config} />;
