@@ -14,3 +14,7 @@ var/
 /secrets/
 *.log
 .DS_Store
+
+# editor swap files
+*.swp
+*.swo
