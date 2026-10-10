@@ -275,11 +275,13 @@ services:
       DATABASE_URL_PLATFORM_FILE: /run/secrets/database_url_platform
       DATA_ENCRYPTION_KEY_FILE: /run/secrets/data_encryption_key
       RADIUS_CLIENTS_FILE: /var/lib/ecloud/radius-clients/ecloud-nas.conf
+      MERAKI_RADIUS_FILE: /var/lib/ecloud/radius-meraki/ecloud-meraki.conf
     secrets:
       - database_url_platform
       - data_encryption_key
     volumes:
       - radius_clients:/var/lib/ecloud/radius-clients
+      - radius_meraki:/var/lib/ecloud/radius-meraki
     deploy:
       resources:
         limits: { memory: 128M, cpus: '0.25', pids: 32 }
@@ -320,6 +322,12 @@ services:
         target: /etc/freeradius/clients.d
         read_only: true
         volume: { nocopy: true }
+      # Meraki listener file (Cycle E): comment-only while MERAKI_CLOUD_RADIUS_ENABLED is off.
+      - type: volume
+        source: radius_meraki
+        target: /etc/freeradius/meraki.d
+        read_only: true
+        volume: { nocopy: true }
     tmpfs:
       - /tmp:size=16m,mode=1777
       - /var/run/freeradius:size=1m,uid=101,gid=101
@@ -350,6 +358,7 @@ volumes:
   # Rendered FreeRADIUS clients (contains NAS shared secrets: excluded from backups, re-rendered
   # from the database on restore).
   radius_clients:
+  radius_meraki:
 
 secrets:
   postgres_password: { file: '${ECLOUD_SECRETS_DIR:-/opt/ecloud/secrets}/postgres_password' }
