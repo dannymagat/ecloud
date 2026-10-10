@@ -22,6 +22,7 @@ import { accessRoutes } from './routes/access.js';
 import { administratorRoutes } from './routes/administrators.js';
 import { authRoutes } from './routes/auth.js';
 import { accessPointPlatformRoutes, accessPointRoutes } from './routes/access-points.js';
+import { accessPointsPageRoutes } from './routes/access-points-page.js';
 import { controllerRoutes } from './routes/controllers.js';
 import { merakiPlatformRoutes, merakiRoutes } from './routes/meraki.js';
 import { setupGuideRoutes } from './routes/setup-guides.js';
@@ -60,6 +61,8 @@ export function allRoutes(deps: AppDeps): AnyRouteSpec[] {
     ...policyRoutes(deps),
     ...openwifiConfigRoutes(deps),
     ...importRoutes(deps),
+    // Before the access-point CRUD routes: `/access-points/overview` is not an `{id}`.
+    ...accessPointsPageRoutes(deps),
     ...resourceRoutes(deps),
     ...accessPointRoutes(deps),
     ...accessPointPlatformRoutes(deps),

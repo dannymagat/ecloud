@@ -373,7 +373,7 @@ MAC is spoofable on open SSIDs; `mac-auth` (uspot) / `mac-filter` (hostapd) prov
 | # | Control (PROPOSED) |
 |---|---|
 | 6.1 Password hashing | Argon2id `m=19456 (19 MiB), t=2, p=1` minimum, or `m=47104, t=1, p=1` (OWASP Password Storage Cheat Sheet — VERIFIED FROM OFFICIAL DOCUMENTATION https://cheatsheetseries.owasp.org/cheatsheets/Password_Storage_Cheat_Sheet.html); applies to `administrators.password_hash` and subscriber `users.password_hash`; pepper optional; rehash on login when params change. Pilot memory check: ≤ 20 concurrent logins × 19 MiB fits the api limit (384 MiB, A5 §2.2). |
-| 6.2 MFA | TOTP (RFC 6238, 30 s, ±1 step) **mandatory** for any administrator holding a `platform` binding; enforced per organization via `organizations.settings.require_mfa` (MULTITENANCY §3.1); 10 one-time recovery codes hashed; TOTP secret encrypted (same envelope as §4.1); precedent `totpService.ts` (VERIFIED FROM EXISTING CODE, A7 §0). WebAuthn in Phase 10. |
+| 6.2 MFA | **D-046 (2026-10-10): administrator MFA is switched off by default** (`ADMIN_MFA_MODE=off`); the text below describes `ADMIN_MFA_MODE=required`, which restores it exactly (see §6.2.1). TOTP (RFC 6238, 30 s, ±1 step) **mandatory** for any administrator holding a `platform` binding; enforced per organization via `organizations.settings.require_mfa` (MULTITENANCY §3.1); 10 one-time recovery codes hashed; TOTP secret encrypted (same envelope as §4.1); precedent `totpService.ts` (VERIFIED FROM EXISTING CODE, A7 §0). WebAuthn in Phase 10. |
 | 6.3 Sessions | Opaque 256-bit token, stored as `token_hash` (`admin_sessions`); cookie `__Host-ecloud_sid`, `HttpOnly; Secure; SameSite=Lax; Path=/`, no `Domain`; admin SPA served from `ezecloud.ezelink.ai` and calls **same-origin `/api/*`** (Caddy proxies — A5 §3.1 option kept); `api.ezecloud.ezelink.ai` accepts **Bearer API keys only, never cookies**; idle 30 min, absolute 12 h, re-auth for sensitive actions (secret reveal, admin/role changes); logout revokes server-side; "revoke all sessions" on password/MFA change. |
 | 6.4 CSRF | SameSite=Lax + mandatory `Origin`/`Sec-Fetch-Site` check on every state-changing request (reject when absent or foreign) + per-session CSRF token in a custom header (`X-CSRF-Token`) for defence in depth; portal forms carry a signed `state`/CSRF token (A7 §4). |
 | 6.5 RBAC | Deny-by-default `authorize()` (MULTITENANCY §4.4); permission strings are the only contract between UI and API (A7 §2 — **note**: A7 uses dotted names `policy.write` while A6 uses `policy:update`; both accepted by the parser for one release, canonical form `resource:action` — A5 to publish the catalogue). |
@@ -383,6 +383,20 @@ MAC is spoofable on open SSIDs; `mac-auth` (uspot) / `mac-filter` (hostapd) prov
 | 6.9 Dependency management | `package-lock.json` committed, `npm ci`; `npm audit`/Trivy/`osv-scanner` in CI, fail on high; Renovate weekly; base images by digest; SBOM (CycloneDX) per image; gitleaks pre-push (A5 §4.2). |
 | 6.10 Container hardening | `USER node` (precedent, VERIFIED FROM EXISTING CODE ezecontroller Dockerfile); `read_only: true` + `tmpfs: /tmp`; `cap_drop: [ALL]`; `security_opt: [no-new-privileges:true]`; default seccomp + AppArmor `docker-default` (enforcing — F-41 CONFIRMED); `pids_limit`; memory/cpu limits (A5 §2.2); no `NET_ADMIN` anywhere — WireGuard is host-native (A1 §7) and the peer reconciler runs as a **host-side** minimal systemd service reading desired state from the DB (PROPOSED change vs A1 §8 "worker via sudoers helper": keeps containers unprivileged and avoids `docker exec`/sudo bridges). FreeRADIUS image: run as `freerad` user if the official image permits (UNKNOWN — check `freeradius/freeradius-server` entrypoint in Phase 5); bind 1812/1813 needs no root. cAdvisor (docker.sock) deferred. |
 | 6.11 Secrets never in images/env/logs | Secrets via `/run/secrets/*` files (`*_FILE` vars); `docker inspect`/`env` show no values; logger redaction middleware for keys matching `/secret|password|token|key/i`; FreeRADIUS `auth_badpass/auth_goodpass = no`; portal never logs `password=`/`response=` query strings (Caddy access log for the portal vhost: `log { ... }` with request query redaction or `uri` path only — PROPOSED `format` filter). |
+
+### 6.2.1 MFA mode and the accepted risk (D-046)
+
+`ADMIN_MFA_MODE` (platform setting, `off` | `required`, default `off`) selects the administrator sign-in model:
+
+| | `off` (default) | `required` |
+|---|---|---|
+| Login | email + password (Argon2id) returns a full session; no `mfa_required` step, no forced enrolment (platform bindings included) | former behaviour: TOTP at login, enrolment forced for platform bindings / `mfa_enforced` / after an MFA reset |
+| `/auth/mfa/enrol`, `/confirm`, `/verify` | registered, answer `409 mfa-disabled` | active |
+| Stored TOTP enrolments | kept untouched in `mfa_credentials`, ignored | used |
+| NAS secret reveal (D-045) | one POST, no code | needs a fresh TOTP code (replay-protected, lockout) |
+| Kept in both modes | login rate limits and lockout, Argon2id, `nas:secret:reveal` permission and site scope, reveal refused while impersonating, audit of every reveal (never the value), per-administrator and per-NAS rate limit, `Cache-Control: no-store`, 30 s auto-hide in the UI | same |
+
+**Risk accepted by the owner (D-046):** with `off`, a stolen or guessed administrator password alone grants the session, including platform administrators and the ability to reveal NAS RADIUS secrets and to impersonate tenants. Compensating controls are the login rate limits and lockout, Argon2id, the audit trail, impersonation banners and the LAN-only exposure of the pilot (D-043). Setting `ADMIN_MFA_MODE=required` and restarting the API re-enables MFA with no data loss; administrators whose enrolment was kept sign in with it again, others enrol at next login. Supersedes the MFA requirements of this document and D-038 while the setting is `off`.
 
 ---
 

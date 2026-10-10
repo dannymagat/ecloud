@@ -475,7 +475,7 @@ not VERIFIED DEVICE CAPABILITY: everything device-facing below inherits the adap
   dummy hash, one generic 401; per-IP limit 30 / 5 min, per-account 10 failures / 5 min → 15 min
   lockout (429 + `Retry-After`); limits FAIL CLOSED (503) when Redis is down. Success / failure
   are audited (`auth:login`, `auth:login:failed`).
-- **MFA.** TOTP (otplib v13, ±30 s). Secret sealed AES-256-GCM with a key derived (HKDF) from
+- **MFA (D-046: `ADMIN_MFA_MODE=off` by default).** With `off`, `/auth/login` returns the session straight after a correct password (`mfa_required: false`, `mfa_enrolment_required: false`), `/auth/mfa/enrol|confirm|verify` answer `409 urn:ecloud:problem:mfa-disabled`, stored enrolments are ignored, no session is `mfaPending`, `/auth/me` reports `mfa.mode`, and `POST …/nas/{id}/secret/reveal` takes an empty body (permission, site scope, impersonation refusal, audit, per-administrator and per-NAS rate limits, `no-store` unchanged). The rest of this bullet is `ADMIN_MFA_MODE=required` (the former behaviour; the reveal then needs `{code}`, a fresh TOTP). TOTP (otplib v13, ±30 s). Secret sealed AES-256-GCM with a key derived (HKDF) from
   `MFA_ENCRYPTION_KEY` into `mfa_credentials.secret_enc`; 10 recovery codes stored SHA-256, shown
   once, single use. With a verified credential, login returns `{mfa_required, mfa_token}` (Redis,
   5 min, 5 attempts) and `/auth/mfa/verify` creates the session. **Enforced** (SECURITY §6.2):

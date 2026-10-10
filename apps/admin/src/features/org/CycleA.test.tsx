@@ -4,7 +4,6 @@ import { ADAPTER_KEYS, ADAPTER_LABELS } from '../../lib/adapterStatus';
 import { ORG_GROUPS } from '../../lib/nav';
 import { adminMe, orgScope, ORG_A } from '../../test/fixtures';
 import { mockFetch, renderRoutes } from '../../test/utils';
-import { AccessPointsPage, accessPointsConfig } from './AccessPointsPage';
 import { API_KINDS, ControllersPage, credentialFields } from './ControllersPage';
 
 const base = `/api/v1/orgs/${ORG_A}`;
@@ -25,15 +24,6 @@ describe('Cycle A admin screens', () => {
     );
   });
 
-  it('the access point form asks for the NAS and the AP MAC', () => {
-    expect(accessPointsConfig.path).toBe('/api/v1/orgs/{orgId}/access-points');
-    expect(accessPointsConfig.fields.map((f) => [f.name, f.required ?? false])).toEqual([
-      ['nas_client_id', true],
-      ['mac', true],
-      ['name', false],
-    ]);
-  });
-
   it('the API credential secret is a write-only password field; every API kind is offered', () => {
     const secret = credentialFields.find((f) => f.name === 'secret');
     expect(secret).toMatchObject({ type: 'password', required: true });
@@ -47,24 +37,8 @@ describe('Cycle A admin screens', () => {
     ]);
   });
 
-  it('renders the access point list', async () => {
-    mockFetch([
-      { method: 'GET', path: '/api/v1/auth/me', body: adminMe([orgScope(ORG_A, ['nas:read'])]) },
-      {
-        method: 'GET',
-        path: `${base}/access-points`,
-        body: {
-          data: [{ id: 'ap1', mac: 'aa:bb:cc:dd:ee:01', name: 'Lobby', status: 'active' }],
-          next_cursor: null,
-        },
-      },
-    ]);
-    renderRoutes(
-      [{ path: '/orgs/:orgId/access-points', element: <AccessPointsPage /> }],
-      `/orgs/${ORG_A}/access-points`,
-    );
-    expect(await screen.findByText('aa:bb:cc:dd:ee:01')).toBeInTheDocument();
-  });
+  // The access point screen moved to features/access-points (D-045 Access Points page) and is
+  // covered by AccessPointsPage.test.tsx.
 
   it('controller API credential: shows metadata only and posts a set/rotate with a key', async () => {
     const calls = mockFetch([

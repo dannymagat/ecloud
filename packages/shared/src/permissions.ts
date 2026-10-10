@@ -67,6 +67,7 @@ const ACTION_DESCRIPTIONS: Readonly<Record<string, string>> = {
   preview: 'Preview enforceability of {label}',
   revoke: 'Revoke {label}',
   reveal: 'Reveal the secret code of {label}',
+  'secret:reveal': 'Reveal the shared secret of {label} after a fresh MFA code (D-045, audited)',
   disconnect: 'Disconnect {label}',
   coa: 'Send RADIUS CoA to {label}',
   impersonate: 'Impersonate {label} (audited, time-limited)',
@@ -103,7 +104,8 @@ const RESOURCES: readonly ResourceSpec[] = [
     resource: 'nas',
     label: 'NAS entries',
     minScope: 'site',
-    actions: ['read', 'create', 'update', 'delete', 'secret:rotate'],
+    // secret:reveal (D-045): MFA step-up reveal of the stored RADIUS secret; org_admin + platform_super_admin.
+    actions: ['read', 'create', 'update', 'delete', 'secret:rotate', 'secret:reveal'],
   },
   {
     resource: 'wireguard_peer',

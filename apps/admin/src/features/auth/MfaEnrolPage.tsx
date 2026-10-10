@@ -52,6 +52,8 @@ export function MfaEnrolPage() {
 
   if (loading) return <Spinner label="Loading…" />;
   if (!me) return <Navigate to="/login" replace />;
+  // D-046: MFA switched off (ADMIN_MFA_MODE=off): the enrolment screen is unreachable.
+  if (me.kind === 'admin' && me.mfa.mode === 'off') return <Navigate to="/" replace />;
   if (!needsMfaEnrolment(me) && !enrolment && !recovery) {
     return (
       <AuthCard title="Two-factor authentication">

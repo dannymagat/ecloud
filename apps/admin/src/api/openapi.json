@@ -6167,6 +6167,418 @@
         "tags": ["users"]
       }
     },
+    "/api/v1/orgs/{orgId}/access-points/overview": {
+      "get": {
+        "description": "Permission: `nas:read`",
+        "operationId": "get_api_v1_orgs_orgId_access_points_overview",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "orgId",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "site_id",
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "access_points": {
+                      "items": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "activity": {
+                            "enum": ["active", "quiet", "silent", "never"],
+                            "type": "string"
+                          },
+                          "adapter_key": { "type": ["string", "null"] },
+                          "created_at": { "type": "string" },
+                          "id": { "type": "string" },
+                          "mac": { "type": "string" },
+                          "name": { "type": ["string", "null"] },
+                          "nas_client_id": { "type": "string" },
+                          "nas_name": { "type": "string" },
+                          "site_id": { "type": "string" },
+                          "status": { "type": "string" },
+                          "vendor_key": { "type": ["string", "null"] },
+                          "vendor_name": { "type": ["string", "null"] },
+                          "verification_source": { "type": ["string", "null"] },
+                          "verified": { "type": "boolean" },
+                          "verified_at": { "type": ["string", "null"] }
+                        },
+                        "required": [
+                          "id",
+                          "mac",
+                          "name",
+                          "status",
+                          "site_id",
+                          "nas_client_id",
+                          "nas_name",
+                          "adapter_key",
+                          "vendor_key",
+                          "vendor_name",
+                          "verified",
+                          "verified_at",
+                          "verification_source",
+                          "activity",
+                          "created_at"
+                        ],
+                        "type": "object"
+                      },
+                      "type": "array"
+                    },
+                    "activity_definition": { "type": "string" },
+                    "nas": {
+                      "items": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "access_points": { "type": "number" },
+                          "activity": {
+                            "enum": ["active", "quiet", "silent", "never"],
+                            "type": "string"
+                          },
+                          "adapter_key": { "type": ["string", "null"] },
+                          "has_secret": { "type": "boolean" },
+                          "id": { "type": "string" },
+                          "last_activity_at": { "type": ["string", "null"] },
+                          "name": { "type": "string" },
+                          "nas_ip": { "type": ["string", "null"] },
+                          "site_id": { "type": "string" },
+                          "site_name": { "type": "string" },
+                          "status": { "type": "string" },
+                          "vendor_key": { "type": ["string", "null"] },
+                          "vendor_name": { "type": ["string", "null"] }
+                        },
+                        "required": [
+                          "id",
+                          "name",
+                          "site_id",
+                          "site_name",
+                          "adapter_key",
+                          "vendor_key",
+                          "vendor_name",
+                          "nas_ip",
+                          "status",
+                          "has_secret",
+                          "activity",
+                          "last_activity_at",
+                          "access_points"
+                        ],
+                        "type": "object"
+                      },
+                      "type": "array"
+                    },
+                    "progress": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "completed": { "type": "number" },
+                        "steps": {
+                          "items": {
+                            "additionalProperties": false,
+                            "properties": {
+                              "done": { "type": "boolean" },
+                              "key": {
+                                "enum": [
+                                  "nas_added",
+                                  "radius_secret",
+                                  "ap_registered",
+                                  "radius_seen",
+                                  "guest_login"
+                                ],
+                                "type": "string"
+                              },
+                              "label": { "type": "string" }
+                            },
+                            "required": ["key", "label", "done"],
+                            "type": "object"
+                          },
+                          "type": "array"
+                        },
+                        "total": { "type": "number" }
+                      },
+                      "required": ["steps", "completed", "total"],
+                      "type": "object"
+                    },
+                    "support_email": { "type": ["string", "null"] },
+                    "truncated": { "type": "boolean" }
+                  },
+                  "required": [
+                    "progress",
+                    "support_email",
+                    "activity_definition",
+                    "nas",
+                    "access_points",
+                    "truncated"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Overview"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Validation failed (application/problem+json)"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Authentication required"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Permission denied"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Not found (also returned for objects of other tenants)"
+          }
+        },
+        "summary": "Access Points page: setup progress, NAS with vendor and observed activity, access points (D-045)",
+        "tags": ["nas"]
+      }
+    },
+    "/api/v1/orgs/{orgId}/nas/{id}/secret/reveal": {
+      "post": {
+        "description": "Permission: `nas:secret:reveal`",
+        "operationId": "post_api_v1_orgs_orgId_nas_id_secret_reveal",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "orgId",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": { "code": { "pattern": "^[0-9]{6}$", "type": "string" } },
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": { "secret": { "type": "string" } },
+                  "required": ["secret"],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "The secret (no-store)"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Validation failed (application/problem+json)"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Authentication required"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Permission denied"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Not found (also returned for objects of other tenants)"
+          }
+        },
+        "summary": "Reveal the RADIUS shared secret of a NAS after a fresh MFA code (D-045; audited, never cached)",
+        "tags": ["nas"]
+      }
+    },
+    "/api/v1/orgs/{orgId}/nas/{id}/mikrotik-script": {
+      "get": {
+        "description": "Permission: `nas:read`",
+        "operationId": "get_api_v1_orgs_orgId_nas_id_mikrotik_script",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "orgId",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": { "text/plain": { "schema": { "type": "string" } } },
+            "description": "RouterOS script (attachment)"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Validation failed (application/problem+json)"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Authentication required"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Permission denied"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Not found (also returned for objects of other tenants)"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Not a mikrotik-hotspot NAS (application/problem+json)"
+          }
+        },
+        "summary": "Download the RouterOS installation script of a MikroTik NAS (no secret inside; D-045)",
+        "tags": ["nas"]
+      }
+    },
+    "/api/v1/orgs/{orgId}/nas/{id}/mikrotik-login-html": {
+      "get": {
+        "description": "Permission: `nas:read`",
+        "operationId": "get_api_v1_orgs_orgId_nas_id_mikrotik_login_html",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "orgId",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": { "text/html": { "schema": { "type": "string" } } },
+            "description": "login.html (attachment)"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Validation failed (application/problem+json)"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Authentication required"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Permission denied"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Not found (also returned for objects of other tenants)"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "The portal origin is not https (application/problem+json)"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Not a mikrotik-hotspot NAS (application/problem+json)"
+          }
+        },
+        "summary": "Download the ECLOUD login.html of a MikroTik NAS HotSpot (Cycle B generator)",
+        "tags": ["nas"]
+      }
+    },
     "/api/v1/orgs/{orgId}/sites": {
       "get": {
         "description": "Permission: `site:read`",
@@ -7241,6 +7653,16 @@
                     "format": "uuid",
                     "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
                     "type": "string"
+                  },
+                  "vendor_key": {
+                    "anyOf": [
+                      {
+                        "maxLength": 64,
+                        "pattern": "^[a-z0-9](?:[a-z0-9-]{0,62}[a-z0-9])?$",
+                        "type": "string"
+                      },
+                      { "type": "null" }
+                    ]
                   }
                 },
                 "required": ["site_id", "name", "adapter_key"],
@@ -7547,7 +7969,17 @@
                     "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
                     "type": "string"
                   },
-                  "status": { "enum": ["active", "disabled"], "type": "string" }
+                  "status": { "enum": ["active", "disabled"], "type": "string" },
+                  "vendor_key": {
+                    "anyOf": [
+                      {
+                        "maxLength": 64,
+                        "pattern": "^[a-z0-9](?:[a-z0-9-]{0,62}[a-z0-9])?$",
+                        "type": "string"
+                      },
+                      { "type": "null" }
+                    ]
+                  }
                 },
                 "type": "object"
               }

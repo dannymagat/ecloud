@@ -3,7 +3,7 @@
  * per-account limits, lockout), TOTP enrol/confirm/verify, logout, /auth/me, invitation accept.
  */
 import { hashPassword, MIN_PASSWORD_LENGTH, verifyPassword, withPlatform } from '@ecloud/db';
-import { ConflictError, NotFoundError, UnauthorizedError, newId } from '@ecloud/shared';
+import { AppError, ConflictError, NotFoundError, UnauthorizedError, newId } from '@ecloud/shared';
 import { z } from 'zod';
 import { auditSnapshot, writeAudit } from '../audit.js';
 import { permissionsByScope } from '../auth/authorize.js';
@@ -85,6 +85,15 @@ export function authRoutes(deps: AppDeps): AnyRouteSpec[] {
   const now = deps.now ?? (() => new Date());
   const mfa = new MfaCodec(deps.config.mfaEncryptionKey);
   const ttl = deps.config.session.ttlSeconds;
+  const mfaOn = deps.config.adminMfaMode === 'required';
+  /** D-046: the MFA endpoints stay registered but refuse while ADMIN_MFA_MODE=off. */
+  const assertMfaEnabled = (): void => {
+    if (!mfaOn) {
+      throw new AppError(409, 'mfa-disabled', 'MFA is disabled', {
+        detail: 'Administrator MFA is switched off on this platform (ADMIN_MFA_MODE=off).',
+      });
+    }
+  };
 
   const login = defineRoute({
     method: 'post',
@@ -158,7 +167,9 @@ export function authRoutes(deps: AppDeps): AnyRouteSpec[] {
       }
       await clearFailures(deps, body.email);
 
-      if (admin.mfa_id !== null) {
+      // D-046: with ADMIN_MFA_MODE=off a correct password is a full session; stored TOTP
+      // enrolments are ignored (kept in the database for re-enabling).
+      if (mfaOn && admin.mfa_id !== null) {
         const token = randomToken(32);
         const challenge: MfaChallenge = { administratorId: admin.id, attempts: 0 };
         const stored = await deps.kv
@@ -204,7 +215,7 @@ export function authRoutes(deps: AppDeps): AnyRouteSpec[] {
           administrator: adminView(admin),
           // Until enrolment is confirmed the session holds no permissions (auth/principal.ts).
           mfa_enrolment_required:
-            admin.mfa_enforced || admin.mfa_reenrol_required || admin.platform_bound,
+            mfaOn && (admin.mfa_enforced || admin.mfa_reenrol_required || admin.platform_bound),
         },
       };
     },
@@ -222,6 +233,7 @@ export function authRoutes(deps: AppDeps): AnyRouteSpec[] {
       401: { description: 'Invalid or expired challenge / code' },
     },
     handler: async ({ body, res, ctx }) => {
+      assertMfaEnabled();
       await hitLimit(
         deps,
         `mfa:ip:${ctx.ip ?? 'unknown'}`,
@@ -346,6 +358,7 @@ export function authRoutes(deps: AppDeps): AnyRouteSpec[] {
       409: { description: 'TOTP already enrolled' },
     },
     handler: async ({ ctx }) => {
+      assertMfaEnabled();
       const principal = ctx.principal as Extract<Principal, { kind: 'admin' }>;
       const secret = mfa.newSecret();
       await withPlatform(deps.dbPlatform, AUTHN_ACCESS, async (trx) => {
@@ -406,6 +419,7 @@ export function authRoutes(deps: AppDeps): AnyRouteSpec[] {
       404: { description: 'No pending enrolment' },
     },
     handler: async ({ body, ctx }) => {
+      assertMfaEnabled();
       const principal = ctx.principal as Extract<Principal, { kind: 'admin' }>;
       const at = now();
       const codes = await withPlatform(deps.dbPlatform, AUTHN_ACCESS, async (trx) => {
@@ -548,12 +562,15 @@ export function authRoutes(deps: AppDeps): AnyRouteSpec[] {
             last_login_at: row.admin.last_login_at,
           },
           mfa: {
+            // D-046: `off` = password-only (nothing below applies); `required` = former behaviour.
+            mode: deps.config.adminMfaMode,
             enrolled: row.enrolled,
             // SECURITY_ARCHITECTURE.md §6.2: mandatory for platform bindings.
             required:
-              row.admin.mfa_enforced || row.admin.mfa_reenrol_required || hasPlatformBinding,
+              mfaOn &&
+              (row.admin.mfa_enforced || row.admin.mfa_reenrol_required || hasPlatformBinding),
             // D-038: set by an MFA reset until a new factor is confirmed.
-            reenrol_required: row.admin.mfa_reenrol_required,
+            reenrol_required: mfaOn && row.admin.mfa_reenrol_required,
             // true: this session holds no permissions until TOTP is confirmed / used at login.
             pending: principal.mfaPending,
           },

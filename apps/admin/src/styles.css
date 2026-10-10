@@ -35,6 +35,20 @@
   color-scheme: dark;
 }
 
+/*
+ * Vendor logo tiles (D-045): always a LIGHT tile, also in dark mode, so dark official logos stay
+ * visible; the wordmark fallback text keeps >= 4.5:1 on it in both themes.
+ */
+:root {
+  --c-logo-tile: 255 255 255;
+  --c-logo-ink: 23 28 38;
+}
+
+.dark {
+  --c-logo-tile: 236 239 244;
+  --c-logo-ink: 23 28 38;
+}
+
 html {
   -webkit-text-size-adjust: 100%;
 }

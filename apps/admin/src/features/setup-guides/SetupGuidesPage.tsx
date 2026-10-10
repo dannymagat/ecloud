@@ -1,7 +1,8 @@
 /**
  * "How to configure your access points" gallery (multi-vendor Cycle F; research §5). A grid of
- * text-only vendor tiles (names only: no vendor logos or trademark images), each with its
- * integration-family badge and an evidence status pill, filterable by family and searchable.
+ * vendor tiles with the vendor's official logo (D-045, self-hosted; a text wordmark when none),
+ * each with its integration-family badge and an evidence status pill, filterable by family and
+ * searchable.
  * A tile opens the vendor guide (`setup-guides/:vendorKey`).
  */
 import { useQuery } from '@tanstack/react-query';
@@ -14,6 +15,7 @@ import { Badge, Card, EmptyState, PageHeader, Spinner, cx } from '../../componen
 import { RequireOrgPermission } from '../../layout/guards';
 import { useOrgId } from '../../lib/org';
 import { SITE_PARAM, siteParam } from '../../lib/sites';
+import { LOGO_NOTICE, VendorLogo } from '../access-points/VendorLogo';
 import { STATUS_TONE, type Catalogue, type CatalogueEntry, type GalleryFamily } from './types';
 
 const PATH = '/api/v1/orgs/{orgId}/setup-guides';
@@ -51,7 +53,10 @@ function VendorTile({ entry, href }: { entry: CatalogueEntry; href: string }) {
         )}
       >
         <div className="min-w-0 space-y-2">
-          <Badge>{entry.family_label}</Badge>
+          <div className="flex items-start justify-between gap-2">
+            <VendorLogo vendorKey={entry.vendor_key} name={entry.display_name} decorative />
+            <Badge>{entry.family_label}</Badge>
+          </div>
           <h3 className="break-words text-lg font-semibold leading-snug tracking-tight text-fg">
             {entry.display_name}
           </h3>
@@ -176,7 +181,7 @@ function Gallery() {
       <p className="mt-4 text-xs text-subtle">
         Status comes from ECLOUD&apos;s own evidence: &quot;Tested on device&quot; appears only
         after a recorded lab or production device test. Vendor names are used for identification
-        only.
+        only. {LOGO_NOTICE}
       </p>
     </div>
   );

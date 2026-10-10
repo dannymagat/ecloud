@@ -205,7 +205,7 @@ describe('grouped sidebar', () => {
       'SSID rate-limit export',
       'Sites',
       'NAS clients (access points)',
-      'Access points (AP MAC)',
+      'Access Points',
       'Setup guides',
       'Controllers',
       'Network devices',

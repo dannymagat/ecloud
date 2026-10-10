@@ -22,6 +22,9 @@ export function testConfig(overrides: Record<string, string> = {}): ApiConfig {
     PUBLIC_ADMIN_ORIGIN: TEST_ORIGIN,
     INTERNAL_API_TOKEN: TEST_INTERNAL_TOKEN,
     ARGON2_MEMORY_KIB: '8192',
+    // D-046: the test suites exercise the MFA flows (the pre-D-046 behaviour); the production
+    // default is `off`. Tests of the off mode override this.
+    ADMIN_MFA_MODE: 'required',
     DATABASE_URL: 'postgres://nobody:nothing@127.0.0.1:1/none',
     DATABASE_URL_PLATFORM: 'postgres://nobody:nothing@127.0.0.1:1/none',
     ...overrides,

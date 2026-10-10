@@ -31,6 +31,12 @@ const boolEnv = (fallback: boolean) =>
 
 export const apiEnvSchema = z.object({
   MFA_ENCRYPTION_KEY: z.string().min(16).default(API_DEV_DEFAULTS.MFA_ENCRYPTION_KEY),
+  /**
+   * D-046: administrator MFA. `off` (default): password-only sign-in, no enrolment, secret reveal
+   * without a code; existing TOTP enrolments are kept but ignored. `required`: the former
+   * behaviour (login MFA, enrolment, fresh TOTP for a reveal).
+   */
+  ADMIN_MFA_MODE: z.enum(['off', 'required']).default('off'),
   DATA_ENCRYPTION_KEY: z.string().min(16).default(API_DEV_DEFAULTS.DATA_ENCRYPTION_KEY),
   VOUCHER_PEPPER: z.string().min(16).default(API_DEV_DEFAULTS.VOUCHER_PEPPER),
   /**
@@ -79,6 +85,16 @@ export const apiEnvSchema = z.object({
   /** Cycle F: RADIUS authentication / accounting ports shown in the setup guides. */
   RADIUS_ADVERTISED_AUTH_PORT: z.coerce.number().int().min(1).max(65_535).default(1812),
   RADIUS_ADVERTISED_ACCT_PORT: z.coerce.number().int().min(1).max(65_535).default(1813),
+  /**
+   * Access Points page (D-045): the "contact us" mailto address shown to tenant administrators.
+   * Unset or empty = the link is hidden. Never a secret.
+   */
+  PUBLIC_SUPPORT_EMAIL: z
+    .string()
+    .trim()
+    .transform((v) => (v === '' ? undefined : v))
+    .optional()
+    .pipe(z.email().max(254).optional()),
   /** Idle timeout of admin sessions (SECURITY_ARCHITECTURE.md §6.3: 30 min). */
   SESSION_IDLE_SECONDS: z.coerce.number().int().min(60).max(86_400).default(1_800),
   /** `Secure` cookie attribute; defaults to true in production. */
@@ -121,6 +137,8 @@ export const apiEnvSchema = z.object({
 export interface ApiConfig {
   base: AppConfig;
   mfaEncryptionKey: string;
+  /** ADMIN_MFA_MODE (D-046). */
+  adminMfaMode: 'off' | 'required';
   dataEncryptionKey: string;
   voucherPepper: string;
   /** Previous internal token accepted during a rotation window (null = none). */
@@ -162,6 +180,8 @@ export interface ApiConfig {
     acctPort: number;
     coaPort: number;
   };
+  /** PUBLIC_SUPPORT_EMAIL (D-045 Access Points page "contact us"); null = hidden. */
+  supportEmail: string | null;
 }
 
 export function loadApiConfig(
@@ -226,6 +246,7 @@ export function loadApiConfig(
   return {
     base,
     mfaEncryptionKey: raw.MFA_ENCRYPTION_KEY,
+    adminMfaMode: raw.ADMIN_MFA_MODE,
     dataEncryptionKey: raw.DATA_ENCRYPTION_KEY,
     voucherPepper: raw.VOUCHER_PEPPER,
     internalApiTokenPrevious: raw.INTERNAL_API_TOKEN_PREVIOUS ?? null,
@@ -256,5 +277,6 @@ export function loadApiConfig(
       acctPort: raw.RADIUS_ADVERTISED_ACCT_PORT,
       coaPort: base.radius.coaPort,
     },
+    supportEmail: raw.PUBLIC_SUPPORT_EMAIL ?? null,
   };
 }

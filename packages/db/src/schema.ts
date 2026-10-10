@@ -404,6 +404,11 @@ export interface NasClientsTable {
   cloud_radius_acct_port: number | null;
   /** Migration 032: Meraki dashboard host (`n<digits>.meraki.com`) receiving Disconnect on 3799. */
   das_host: string | null;
+  /**
+   * Migration 033 (D-045): setup-guide gallery vendor chosen in the Add Access Point wizard
+   * (display only); NULL = derived from adapter_key / post-back profile.
+   */
+  vendor_key: string | null;
 }
 
 /**

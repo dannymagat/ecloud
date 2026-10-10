@@ -4,7 +4,7 @@ import { AdministratorsPage } from './features/admins/AdministratorsPage';
 import { LoginPage } from './features/auth/LoginPage';
 import { MfaEnrolPage } from './features/auth/MfaEnrolPage';
 import { DashboardPage, SiteDashboardPage } from './features/dashboard/DashboardPage';
-import { AccessPointsPage } from './features/org/AccessPointsPage';
+import { AccessPointsPage } from './features/access-points/AccessPointsPage';
 import { ControllersPage } from './features/org/ControllersPage';
 import { NasPage } from './features/org/NasPage';
 import { SetupGuidesPage } from './features/setup-guides/SetupGuidesPage';

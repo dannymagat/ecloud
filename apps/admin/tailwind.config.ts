@@ -29,6 +29,8 @@ export default {
         success: token('success'),
         info: token('info'),
         'brand-ink': token('brand-ink'),
+        'logo-tile': token('logo-tile'),
+        'logo-ink': token('logo-ink'),
       },
     },
   },

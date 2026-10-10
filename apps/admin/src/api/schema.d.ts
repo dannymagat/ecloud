@@ -781,6 +781,86 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/api/v1/orgs/{orgId}/access-points/overview': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Access Points page: setup progress, NAS with vendor and observed activity, access points (D-045)
+     * @description Permission: `nas:read`
+     */
+    get: operations['get_api_v1_orgs_orgId_access_points_overview'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/orgs/{orgId}/nas/{id}/secret/reveal': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Reveal the RADIUS shared secret of a NAS after a fresh MFA code (D-045; audited, never cached)
+     * @description Permission: `nas:secret:reveal`
+     */
+    post: operations['post_api_v1_orgs_orgId_nas_id_secret_reveal'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/orgs/{orgId}/nas/{id}/mikrotik-script': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Download the RouterOS installation script of a MikroTik NAS (no secret inside; D-045)
+     * @description Permission: `nas:read`
+     */
+    get: operations['get_api_v1_orgs_orgId_nas_id_mikrotik_script'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/orgs/{orgId}/nas/{id}/mikrotik-login-html': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Download the ECLOUD login.html of a MikroTik NAS HotSpot (Cycle B generator)
+     * @description Permission: `nas:read`
+     */
+    get: operations['get_api_v1_orgs_orgId_nas_id_mikrotik_login_html'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/api/v1/orgs/{orgId}/sites': {
     parameters: {
       query?: never;
@@ -6757,6 +6837,327 @@ export interface operations {
       };
     };
   };
+  get_api_v1_orgs_orgId_access_points_overview: {
+    parameters: {
+      query?: {
+        site_id?: string;
+      };
+      header?: never;
+      path: {
+        orgId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Overview */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            access_points: {
+              /** @enum {string} */
+              activity: 'active' | 'quiet' | 'silent' | 'never';
+              adapter_key: string | null;
+              created_at: string;
+              id: string;
+              mac: string;
+              name: string | null;
+              nas_client_id: string;
+              nas_name: string;
+              site_id: string;
+              status: string;
+              vendor_key: string | null;
+              vendor_name: string | null;
+              verification_source: string | null;
+              verified: boolean;
+              verified_at: string | null;
+            }[];
+            activity_definition: string;
+            nas: {
+              access_points: number;
+              /** @enum {string} */
+              activity: 'active' | 'quiet' | 'silent' | 'never';
+              adapter_key: string | null;
+              has_secret: boolean;
+              id: string;
+              last_activity_at: string | null;
+              name: string;
+              nas_ip: string | null;
+              site_id: string;
+              site_name: string;
+              status: string;
+              vendor_key: string | null;
+              vendor_name: string | null;
+            }[];
+            progress: {
+              completed: number;
+              steps: {
+                done: boolean;
+                /** @enum {string} */
+                key:
+                  'nas_added' | 'radius_secret' | 'ap_registered' | 'radius_seen' | 'guest_login';
+                label: string;
+              }[];
+              total: number;
+            };
+            support_email: string | null;
+            truncated: boolean;
+          };
+        };
+      };
+      /** @description Validation failed (application/problem+json) */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Authentication required */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Permission denied */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Not found (also returned for objects of other tenants) */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+    };
+  };
+  post_api_v1_orgs_orgId_nas_id_secret_reveal: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        orgId: string;
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: {
+      content: {
+        'application/json': {
+          code?: string;
+        };
+      };
+    };
+    responses: {
+      /** @description The secret (no-store) */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            secret: string;
+          };
+        };
+      };
+      /** @description Validation failed (application/problem+json) */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Authentication required */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Permission denied */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Not found (also returned for objects of other tenants) */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+    };
+  };
+  get_api_v1_orgs_orgId_nas_id_mikrotik_script: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        orgId: string;
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description RouterOS script (attachment) */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'text/plain': string;
+        };
+      };
+      /** @description Validation failed (application/problem+json) */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Authentication required */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Permission denied */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Not found (also returned for objects of other tenants) */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Not a mikrotik-hotspot NAS (application/problem+json) */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+    };
+  };
+  get_api_v1_orgs_orgId_nas_id_mikrotik_login_html: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        orgId: string;
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description login.html (attachment) */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'text/html': string;
+        };
+      };
+      /** @description Validation failed (application/problem+json) */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Authentication required */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Permission denied */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Not found (also returned for objects of other tenants) */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description The portal origin is not https (application/problem+json) */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Not a mikrotik-hotspot NAS (application/problem+json) */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+    };
+  };
   get_api_v1_orgs_orgId_sites: {
     parameters: {
       query?: {
@@ -7577,6 +7978,7 @@ export interface operations {
           require_message_authenticator?: boolean;
           /** Format: uuid */
           site_id: string;
+          vendor_key?: string | null;
         };
       };
     };
@@ -7799,6 +8201,7 @@ export interface operations {
           site_id?: string;
           /** @enum {string} */
           status?: 'active' | 'disabled';
+          vendor_key?: string | null;
         };
       };
     };

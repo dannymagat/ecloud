@@ -117,7 +117,7 @@ const PAGES = [
 afterEach(() => vi.unstubAllGlobals());
 
 describe('Cycle F admin: setup-guide gallery', () => {
-  it('renders a text-only tile grid with family badges and status pills (no logos)', async () => {
+  it('renders a tile grid with self-hosted logos, family badges and status pills', async () => {
     mockFetch(routes());
     const view = renderRoutes(PAGES, `/orgs/${ORG_A}/setup-guides`);
     const grid = await screen.findByRole('list', { name: 'Vendors' });
@@ -129,8 +129,12 @@ describe('Cycle F admin: setup-guide gallery', () => {
       within(grid).getByText('Via generic profile: needs a captured redirect'),
     ).toBeInTheDocument();
     expect(within(grid).queryByText('Tested on device')).toBeNull();
-    // names only: no vendor logo / trademark image anywhere
-    expect(view.container.querySelectorAll('img')).toHaveLength(0);
+    // D-045: official logos, self-hosted only (a wordmark tile where no logo exists)
+    const imgs = [...view.container.querySelectorAll('img')];
+    expect(imgs.length).toBeGreaterThan(0);
+    for (const img of imgs)
+      expect(img.getAttribute('src')).toMatch(/^\/vendor-logos\/[a-z0-9-]+\.svg$/);
+    expect(screen.getByText(/Logos are trademarks of their respective owners/)).toBeInTheDocument();
     expect(tiles[0]).toHaveAttribute('href', `/orgs/${ORG_A}/setup-guides/cambium`);
   });
 

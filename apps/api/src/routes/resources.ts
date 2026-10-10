@@ -4,6 +4,7 @@
  */
 import {
   POSTBACK_ADAPTER_KEY,
+  getGalleryEntry,
   parsePostbackNasConfig,
   serializePostbackNasConfig,
 } from '@ecloud/adapters';
@@ -152,8 +153,39 @@ const NasCreate = z.strictObject({
   adapter_config: z.record(z.string(), z.unknown()).optional(),
   /** Cycle E (migration 032): Meraki dashboard host receiving Disconnect on UDP 3799. */
   das_host: z.string().trim().toLowerCase().max(64).nullable().optional(),
+  /**
+   * Migration 033 (D-045): the setup-guide gallery vendor chosen in the Add Access Point wizard
+   * (display only). Must be a gallery key whose adapter is this NAS's adapter.
+   */
+  vendor_key: z
+    .string()
+    .trim()
+    .max(64)
+    .regex(/^[a-z0-9](?:[a-z0-9-]{0,62}[a-z0-9])?$/)
+    .nullable()
+    .optional(),
 });
 const NasUpdate = NasCreate.partial().extend({ status: z.enum(['active', 'disabled']).optional() });
+
+/**
+ * D-045 (migration 033): `vendor_key` must name a setup-guide gallery entry served by the NAS's
+ * adapter (a MikroTik vendor on a post-back NAS would show a wrong logo and guide).
+ */
+export function assertNasVendor(vendorKey: unknown, adapterKey: unknown): void {
+  if (vendorKey === null || vendorKey === undefined) return;
+  const entry = typeof vendorKey === 'string' ? getGalleryEntry(vendorKey) : null;
+  if (entry === null) {
+    throw new ValidationError([{ path: 'body.vendor_key', message: 'unknown vendor' }]);
+  }
+  if (entry.adapterKey !== adapterKey) {
+    throw new ValidationError([
+      {
+        path: 'body.vendor_key',
+        message: `vendor ${entry.vendorKey} uses the ${entry.adapterKey} adapter`,
+      },
+    ]);
+  }
+}
 
 /**
  * Cycle C: the stored `adapter_config` for `adapterKey`. The post-back adapter needs a valid
@@ -484,6 +516,7 @@ export function resourceRoutes(deps: AppDeps): AnyRouteSpec[] {
         body.deployment_mode as 'native' | 'gateway' | undefined,
       );
       assertHotspotAddress(body.adapter_key, body.hotspot_address, body.hotspot_port);
+      assertNasVendor(body.vendor_key, body.adapter_key);
       if (body.device_test_attributes === true) assertLabModePermission(hook);
       // 32 random bytes → 43 base64url chars; RADIUS shared secrets ≤ 128 octets.
       const secret = randomToken(32);
@@ -555,6 +588,17 @@ export function resourceRoutes(deps: AppDeps): AnyRouteSpec[] {
         typeof body.adapter_key === 'string'
           ? { ...body, adapter_type_key: body.adapter_key }
           : { ...body };
+      // D-045: the chosen vendor must stay consistent with the adapter. An adapter change that
+      // does not name a vendor drops a vendor of the old adapter (derived again from the adapter).
+      if (body.vendor_key !== undefined) {
+        assertNasVendor(body.vendor_key, patched(body, before, 'adapter_key'));
+      } else if (
+        typeof body.adapter_key === 'string' &&
+        typeof before.vendor_key === 'string' &&
+        getGalleryEntry(before.vendor_key)?.adapterKey !== body.adapter_key
+      ) {
+        next.vendor_key = null;
+      }
       // Cycle C: re-validate the adapter config whenever it or the adapter changes.
       // Review L8: an adapter_key set to null (not accepted by the API schema today) clears too.
       if (body.adapter_config !== undefined || body.adapter_key !== undefined) {

@@ -101,7 +101,7 @@ export const ORG_GROUPS: readonly NavGroup[] = [
     items: [
       { path: 'sites', label: 'Sites', icon: MapPin, anyOf: ['site:read'] },
       { path: 'nas', label: 'NAS clients (access points)', icon: Server, anyOf: ['nas:read'] },
-      { path: 'access-points', label: 'Access points (AP MAC)', icon: Wifi, anyOf: ['nas:read'] },
+      { path: 'access-points', label: 'Access Points', icon: Wifi, anyOf: ['nas:read'] },
       // Cycle F: "How to configure your access points" gallery (vendor setup guides).
       { path: 'setup-guides', label: 'Setup guides', icon: BookOpen, anyOf: ['nas:read'] },
       { path: 'controllers', label: 'Controllers', icon: Cpu, anyOf: ['controller:read'] },

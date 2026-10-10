@@ -43,28 +43,60 @@ export function accountKey(email: string): string {
   return `login:acct:${email}`;
 }
 
-/** Throws 429 while the account is locked out. */
-export async function assertNotLocked(deps: AppDeps, email: string): Promise<void> {
+/** Throws 429 while `key` is locked out (login account, secret reveal, …). */
+export async function assertKeyNotLocked(deps: AppDeps, key: string): Promise<void> {
   if (deps.config.rateLimitDisabled) return;
-  const lock = await guard(() => deps.kv.ttl(`lock:${accountKey(email)}`));
+  const lock = await guard(() => deps.kv.ttl(`lock:${key}`));
   if (lock > 0) throw new TooManyRequestsError(lock, { detail: 'Too many failed attempts.' });
 }
 
-export async function recordFailure(deps: AppDeps, email: string): Promise<void> {
+/**
+ * Counts one failure of `key` in the login window; at `threshold` failures the key is locked
+ * for {@link LOGIN_LIMITS.lockoutSeconds} (the login lockout semantics).
+ */
+export async function recordKeyFailure(
+  deps: AppDeps,
+  key: string,
+  threshold: number,
+): Promise<void> {
   if (deps.config.rateLimitDisabled) return;
-  const failures = await guard(() =>
-    deps.kv.incr(`fail:${accountKey(email)}`, LOGIN_LIMITS.windowSeconds),
-  );
-  if (failures >= LOGIN_LIMITS.perAccountFailures) {
-    await guard(() => deps.kv.set(`lock:${accountKey(email)}`, '1', LOGIN_LIMITS.lockoutSeconds));
-    await guard(() => deps.kv.del(`fail:${accountKey(email)}`));
+  const failures = await guard(() => deps.kv.incr(`fail:${key}`, LOGIN_LIMITS.windowSeconds));
+  if (failures >= threshold) {
+    await guard(() => deps.kv.set(`lock:${key}`, '1', LOGIN_LIMITS.lockoutSeconds));
+    await guard(() => deps.kv.del(`fail:${key}`));
   }
 }
 
-export async function clearFailures(deps: AppDeps, email: string): Promise<void> {
+export async function clearKeyFailures(deps: AppDeps, key: string): Promise<void> {
   if (deps.config.rateLimitDisabled) return;
-  await guard(() => deps.kv.del(`fail:${accountKey(email)}`));
+  await guard(() => deps.kv.del(`fail:${key}`));
 }
+
+/** Throws 429 while the account is locked out. */
+export async function assertNotLocked(deps: AppDeps, email: string): Promise<void> {
+  await assertKeyNotLocked(deps, accountKey(email));
+}
+
+export async function recordFailure(deps: AppDeps, email: string): Promise<void> {
+  await recordKeyFailure(deps, accountKey(email), LOGIN_LIMITS.perAccountFailures);
+}
+
+export async function clearFailures(deps: AppDeps, email: string): Promise<void> {
+  await clearKeyFailures(deps, accountKey(email));
+}
+
+/**
+ * D-045 NAS secret reveal (MFA step-up): reveal attempts per administrator per window, and
+ * wrong MFA codes before the administrator's reveal is locked out (login lockout semantics:
+ * {@link LOGIN_LIMITS.lockoutSeconds}). Fails closed like authentication.
+ */
+export const SECRET_REVEAL_LIMITS = Object.freeze({
+  perAdministrator: 10,
+  /** Per NAS (D-046: the reveal may need no MFA code, so the NAS is limited as well). */
+  perNas: 20,
+  windowSeconds: LOGIN_LIMITS.windowSeconds,
+  mfaFailures: LOGIN_LIMITS.mfaAttempts,
+});
 
 /** API_ARCHITECTURE.md §3.1: export endpoints 10 per hour per principal. */
 export const EXPORT_LIMIT = Object.freeze({ perHour: 10, windowSeconds: 3600 });

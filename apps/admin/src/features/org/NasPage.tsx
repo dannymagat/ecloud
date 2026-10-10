@@ -29,7 +29,7 @@ const ADAPTER_OPTIONS = ADAPTER_KEYS.map((k) => ({
   label: `${ADAPTER_LABELS[k]} (${k})`,
 }));
 
-function RotateSecret({ row, orgId }: { row: Row; orgId: string }) {
+export function RotateSecret({ row, orgId }: { row: Row; orgId: string }) {
   const [open, setOpen] = useState(false);
   const [secret, setSecret] = useState<string | null>(null);
   const [key] = useState(newIdempotencyKey);
@@ -159,7 +159,7 @@ function selectsGenericProfile(value: string): boolean {
  * The post-back profile editor with the "Any vendor" portal URL taken from this ECLOUD
  * instance's configuration (the setup-guide values: PUBLIC_PORTAL_ORIGIN), not a constant.
  */
-function PostbackProfileField(props: {
+export function PostbackProfileField(props: {
   value: string;
   error?: string;
   onChange: (value: string) => void;

@@ -2,7 +2,11 @@
  * Organization administrators, role bindings, invitations and roles. Role names are shown as
  * labels only; what an administrator may do is decided by the permissions of the bound role.
  */
-import { Badge, PageHeader } from '../../components/ui';
+import { useQuery } from '@tanstack/react-query';
+import { useSearchParams } from 'react-router';
+import { buildUrl, request } from '../../api/client';
+import type { Page, Row } from '../../api/types';
+import { Badge, PageHeader, Spinner } from '../../components/ui';
 import { useAuth } from '../../lib/auth';
 import { display, formatDateTime, str } from '../../lib/format';
 import { useOrgId } from '../../lib/org';
@@ -163,9 +167,54 @@ const rolesConfig: ResourceConfig = {
   fields: [],
 };
 
+/**
+ * `?invite=1[&invite_role=<template key>]` (Access Points page "Invite IT Staff", D-045) opens the
+ * invitation form with that role template preselected at organization scope. Unknown keys leave
+ * the role empty (the inviter picks one); nothing is granted without submitting the form.
+ */
+function useInvitePreset(orgId: string) {
+  const [params, setParams] = useSearchParams();
+  const open = params.get('invite') === '1';
+  const roleKey = open ? params.get('invite_role') : null;
+  const roles = useQuery({
+    queryKey: ['org', orgId, 'invite-roles'],
+    enabled: roleKey !== null,
+    retry: false,
+    queryFn: ({ signal }) =>
+      request<Page<Row>>('get', buildUrl('/api/v1/orgs/{orgId}/roles', { orgId }, { limit: 100 }), {
+        signal,
+      }),
+  });
+  const roleId =
+    roleKey === null ? null : (roles.data?.data.find((r) => r.key === roleKey)?.id ?? null);
+  const config: ResourceConfig = {
+    ...invitationsConfig,
+    openCreate: open,
+    onCreateClosed: () =>
+      setParams(
+        (prev) => {
+          const next = new URLSearchParams(prev);
+          next.delete('invite');
+          next.delete('invite_role');
+          return next;
+        },
+        { replace: true },
+      ),
+    fields: invitationsConfig.fields.map((f) =>
+      f.name === 'role_id' && typeof roleId === 'string'
+        ? { ...f, defaultValue: roleId }
+        : f.name === 'scope_type' && open
+          ? { ...f, defaultValue: 'organization' }
+          : f,
+    ),
+  };
+  return { config, ready: roleKey === null || !roles.isPending };
+}
+
 export function AdministratorsPage() {
   const { me } = useAuth();
   const orgId = useOrgId();
+  const invite = useInvitePreset(orgId);
   return (
     <div className="space-y-6">
       <PageHeader
@@ -174,7 +223,11 @@ export function AdministratorsPage() {
       />
       <ResourcePage config={administratorsConfig} embedded />
       <ResourcePage config={bindingsConfig} embedded />
-      <ResourcePage config={invitationsConfig} embedded />
+      {invite.ready ? (
+        <ResourcePage config={invite.config} embedded />
+      ) : (
+        <Spinner label="Loading the invitation form" />
+      )}
       {can(me, 'role:read', { organizationId: orgId }) ? (
         <ResourcePage config={rolesConfig} embedded />
       ) : null}

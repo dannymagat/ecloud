@@ -58,7 +58,7 @@ describe('PERMISSION_CATALOGUE', () => {
       organization: 6,
       site: 4,
       network_device: 5,
-      nas: 5,
+      nas: 6, // + secret:reveal (D-045)
       wireguard_peer: 5,
       controller: 5, // migration 019 (MULTI_VENDOR_INTEGRATION_PLAN.md §8.2)
       compatibility: 1,
@@ -137,6 +137,17 @@ describe('ROLE_TEMPLATES', () => {
     expect(orgAdmin.permissions.some((k) => getPermission(k)?.platformOnly)).toBe(false);
     expect(orgAdmin.permissions).toContain('organization:read');
     expect(orgAdmin.permissions).not.toContain('organization:create');
+  });
+
+  it('D-045: nas:secret:reveal is held by org_admin and platform_super_admin only', () => {
+    expect(getPermission('nas:secret:reveal')).toMatchObject({
+      minScope: 'site',
+      platformOnly: false,
+    });
+    const holders = ROLE_TEMPLATES.filter((t) => t.permissions.includes('nas:secret:reveal')).map(
+      (t) => t.key,
+    );
+    expect(holders.sort()).toEqual(['org_admin', 'platform_super_admin']);
   });
 
   it('platform_support is read + support actions only', () => {

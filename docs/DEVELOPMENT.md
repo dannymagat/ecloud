@@ -138,7 +138,7 @@ curl -b /tmp/c localhost:3000/api/v1/auth/me
 ```
 
 API-only environment variables (validated in `apps/api/src/config.ts`; dev defaults are fake and
-rejected when `NODE_ENV=production`): `MFA_ENCRYPTION_KEY`, `DATA_ENCRYPTION_KEY` (NAS secrets),
+rejected when `NODE_ENV=production`): `ADMIN_MFA_MODE` (`off` default | `required`, D-046: `off` = password-only sign-in and one-click NAS secret reveal; the API test suites pin `required`), `MFA_ENCRYPTION_KEY`, `DATA_ENCRYPTION_KEY` (NAS secrets),
 `VOUCHER_PEPPER`, `SESSION_IDLE_SECONDS`, `SESSION_COOKIE_SECURE`, `TRUST_PROXY_HOPS`,
 `API_BIND_HOST`, `INTERNAL_BIND_HOST`, `KV_DRIVER` (`redis`|`memory`), `IMPERSONATION_ROLE_TEMPLATE`,
 `AAA_INTERIM_INTERVAL_S`, `AAA_SESSION_TIMEOUT_CAP_S` (Q44, default 1800 s, 0 = off, else ≥ 300; P7-A),

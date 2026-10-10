@@ -64,7 +64,7 @@ export function copyable(value: string): boolean {
   return value.replace(/<[^<>]+>/g, '').trim() !== '';
 }
 
-function EcloudValues({ guide }: { guide: VendorGuide }) {
+export function EcloudValues({ guide }: { guide: VendorGuide }) {
   const rows: ReactNode[] = [];
   if (guide.portal_url !== null)
     rows.push(<ValueRow key="portal" label="Portal URL" value={guide.portal_url} />);
@@ -91,7 +91,8 @@ function EcloudValues({ guide }: { guide: VendorGuide }) {
       <KeyRound aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0 text-subtle" />
       <p className="text-subtle">
         <span className="font-medium text-fg">Shared secret:</span> your NAS secret is shown once
-        when you add the NAS (or rotate its secret). It is never part of a guide.
+        when you add the NAS (or rotate its secret). It is never part of a guide; an organization
+        admin can reveal it later on the Access Points page.
       </p>
     </div>,
   );
@@ -102,7 +103,7 @@ function EcloudValues({ guide }: { guide: VendorGuide }) {
   );
 }
 
-function Steps({ guide }: { guide: VendorGuide }) {
+export function Steps({ guide }: { guide: VendorGuide }) {
   return (
     <ol aria-label="Setup steps" className="space-y-3">
       {guide.steps.map((s, i) => (

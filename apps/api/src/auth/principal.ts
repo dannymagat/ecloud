@@ -186,11 +186,13 @@ export async function resolveSession(
     // with mfa_enforced. Impersonation is only startable from a platform binding, so it always
     // requires it. Without a proved factor the session keeps no permissions at all.
     // D-038: after an MFA reset the administrator must enrol a new factor before any permission.
+    // D-046: with ADMIN_MFA_MODE=off nothing is pending (enrolments are ignored, not deleted).
     const mfaRequired =
-      row.mfa_enforced ||
-      row.mfa_reenrol_required ||
-      impersonation !== null ||
-      (await hasPlatformBinding(trx, row.administrator_id, now));
+      deps.config.adminMfaMode === 'required' &&
+      (row.mfa_enforced ||
+        row.mfa_reenrol_required ||
+        impersonation !== null ||
+        (await hasPlatformBinding(trx, row.administrator_id, now)));
     const mfaPending = mfaRequired && row.mfa_verified_at === null;
     return {
       tokenHash,

@@ -45,7 +45,13 @@ export interface AdminMe {
     status: string;
     last_login_at: string | null;
   };
-  mfa: { enrolled: boolean; required: boolean; pending: boolean };
+  mfa: {
+    /** ADMIN_MFA_MODE (D-046); absent = treated as `required`. */
+    mode?: 'off' | 'required';
+    enrolled: boolean;
+    required: boolean;
+    pending: boolean;
+  };
   bindings: Binding[];
   permissions_by_scope: ScopedPermissions[];
   impersonation: Impersonation | null;

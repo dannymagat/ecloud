@@ -97,7 +97,7 @@ function Screen() {
     <div>
       <PageHeader
         title="Platform administrators"
-        description="Accounts with platform bindings. MFA is mandatory for them (SECURITY_ARCHITECTURE.md §6.2)."
+        description="Accounts with platform bindings. MFA is mandatory for them only when ADMIN_MFA_MODE=required (D-046)."
       />
       {doc.isPending ? (
         <Spinner label="Loading…" />

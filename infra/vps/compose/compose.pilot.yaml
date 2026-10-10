@@ -177,6 +177,7 @@ services:
     environment:
       <<: *app-env
       MFA_ENCRYPTION_KEY_FILE: /run/secrets/mfa_encryption_key
+      ADMIN_MFA_MODE: ${ADMIN_MFA_MODE:-off} # D-046: off | required
       DATA_ENCRYPTION_KEY_FILE: /run/secrets/data_encryption_key
       VOUCHER_PEPPER_FILE: /run/secrets/voucher_pepper
       SESSION_COOKIE_NAME: __Host-ecloud_sid
