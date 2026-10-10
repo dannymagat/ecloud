@@ -8,8 +8,11 @@
 #
 set -eu
 
+# Note: `echo … | exec radclient` would run exec in a pipeline subshell and fall through to the
+# check below, so the file branch exits explicitly with radclient's status.
 if [ -n "${RADIUS_STATUS_SECRET_FILE:-}" ]; then
-	echo "Message-Authenticator = 0x00" | exec radclient -q -r 1 -t 3 -S "$RADIUS_STATUS_SECRET_FILE" 127.0.0.1:18121 status
+	echo "Message-Authenticator = 0x00" | radclient -q -r 1 -t 3 -S "$RADIUS_STATUS_SECRET_FILE" 127.0.0.1:18121 status
+	exit $?
 fi
 
 : "${RADIUS_STATUS_SECRET:?RADIUS_STATUS_SECRET or RADIUS_STATUS_SECRET_FILE must be set}"
