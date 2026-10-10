@@ -17,6 +17,8 @@ export const NAS_ADAPTER_KEYS: readonly string[] = Object.freeze([
   'mikrotik-hotspot',
   // Cycle C (D-044, migration 030): external captive portal post-back (vendor profiles).
   'external-portal-postback',
+  // Cycle E (D-044, migration 032): Meraki MR splash sign-on, cloud-sourced RADIUS.
+  'meraki-splash',
 ]);
 
 export function resolveAdapter(adapterKey: string | null): NasAdapter | null {

@@ -57,8 +57,13 @@ export type PortalMethod = 'password' | 'voucher' | 'click_through';
 export interface FormTarget {
   readonly action: string;
   readonly csrf: string;
-  /** Cycle C: single-use ECLOUD login token of a post-back flow (hidden field `lt`). */
-  readonly loginToken?: string;
+  /**
+   * Single-use ECLOUD login token: Cycle C post-back flow (hidden field `lt`) or Cycle E Meraki
+   * flow (hidden field `login_token`), bound to NAS + client + flow.
+   */
+  readonly loginToken?: string | null;
+  /** Hidden field name of `loginToken` (default `lt`; Meraki flows use `login_token`). */
+  readonly loginTokenName?: 'lt' | 'login_token';
 }
 
 export interface SessionStatus {
@@ -71,7 +76,7 @@ export type PageBody =
   | {
       readonly page: 'landing';
       readonly methods: readonly { readonly method: PortalMethod; readonly href: string | null }[];
-      readonly notice: 'session_expired' | null;
+      readonly notice: 'session_expired' | 'login_failed' | null;
     }
   | {
       readonly page: 'login';
@@ -117,14 +122,17 @@ export type PageBody =
        * AP / controller login URL, auto-submitted by a nonce'd script (`autoSubmit`); the visible
        * button is the no-JS fallback. Cycle B (MikroTik): POST to the router's
        * `$(link-login-only)`, a plain form the user submits (no script, ADMIN_UI §4); the router
-       * origin is in the CSP form-action.
+       * origin is in the CSP form-action. Cycle E (Meraki): auto-submitted POST to the
+       * allow-listed `login_url` (n<digits>.network-auth.com), its origin alone in form-action.
        */
       readonly page: 'handoff';
       readonly action: string;
       readonly fields: readonly (readonly [string, string])[];
       readonly autoSubmit: boolean;
       readonly scriptNonce: string | null;
-    };
+    }
+  /** Cycle E: Meraki `success_url` landing page. */
+  | { readonly page: 'connected' };
 
 export type PageName = PageBody['page'];
 
@@ -150,6 +158,7 @@ const TITLE_KEYS: Readonly<Record<PageName, MessageKey>> = {
   status: 'title.status',
   logout: 'title.logout',
   handoff: 'title.handoff',
+  connected: 'title.success',
 };
 
 function errorLine(message: string | null): string {
@@ -160,9 +169,9 @@ function errorLine(message: string | null): string {
 function formOpen(form: FormTarget | null): string {
   if (form === null) return '<form>';
   const lt =
-    form.loginToken === undefined
+    form.loginToken === undefined || form.loginToken === null
       ? ''
-      : `<input type="hidden" name="lt" value="${escapeHtml(form.loginToken)}">`;
+      : `<input type="hidden" name="${form.loginTokenName ?? 'lt'}" value="${escapeHtml(form.loginToken)}">`;
   return `<form method="post" action="${escapeHtml(form.action)}"><input type="hidden" name="csrf" value="${escapeHtml(form.csrf)}">${lt}`;
 }
 
@@ -197,7 +206,9 @@ function body(theme: PageTheme, b: PageBody): string {
       const notice =
         b.notice === 'session_expired'
           ? `<p class="notice" role="status">${escapeHtml(s.expired_text)}</p>`
-          : '';
+          : b.notice === 'login_failed'
+            ? `<p class="notice" role="status">${escapeHtml(t('notice.login_failed', {}, l))}</p>`
+            : '';
       const items = b.methods
         .map(
           (m) =>
@@ -278,6 +289,8 @@ function body(theme: PageTheme, b: PageBody): string {
           : `<script nonce="${escapeHtml(b.scriptNonce)}">document.getElementById('pb').submit();</script>`;
       return `<p role="status">${escapeHtml(t('handoff.text', {}, l))}</p><form id="pb" method="post" action="${escapeHtml(b.action)}">${hidden}<button type="submit">${escapeHtml(t('handoff.button', {}, l))}</button></form>${script}`;
     }
+    case 'connected':
+      return `<p role="status">${escapeHtml(t('meraki.connected', {}, l))}</p>`;
   }
 }
 

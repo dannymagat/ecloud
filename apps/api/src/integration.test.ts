@@ -613,7 +613,7 @@ await describeIntegration('@ecloud/api against ecloud_test', () => {
         'ECLOUD_SIDE_ONLY',
       ]).toContain(s);
     }
-    expect(adapters.body.adapters).toHaveLength(8); // + generic-radius-8021x (Cycle A), mikrotik-hotspot (Cycle B), external-portal-postback (Cycle C)
+    expect(adapters.body.adapters).toHaveLength(9); // + generic-radius-8021x (Cycle A), mikrotik-hotspot (Cycle B), external-portal-postback (Cycle C), meraki-splash (Cycle E)
   });
 
   // ---------------------------------------------------------------------------------- AAA

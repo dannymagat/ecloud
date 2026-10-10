@@ -179,10 +179,43 @@ anonymous`, and the outer Access-Accept carried `Session-Timeout`, `Tunnel-Type`
 `Tunnel-Medium-Type`, `Tunnel-Private-Group-Id` and `Class`. Device behaviour of any vendor NAS
 remains REQUIRES_DEVICE_TEST.
 
+## 8. Cisco Meraki cloud-sourced RADIUS listeners (Cycle E, D-044) -- OFF by default
+
+Meraki splash sign-on RADIUS comes from the Meraki Cloud (shared public addresses), so a Meraki
+NAS cannot be a `clients.d/` source-address client. `sites-enabled/ecloud-meraki` includes
+`meraki.d/`; the image ships only the comment file `meraki.d/00-disabled.conf`. The renderer
+(`node apps/api/dist/radius-clients-cli.js`) also writes `MERAKI_RADIUS_FILE` (default
+`/var/lib/ecloud/radius-meraki/ecloud-meraki.conf`), to be mounted read-only **over** `meraki.d/`:
+per Meraki NAS one `clients meraki_<id>` section (one client per `MERAKI_RADIUS_SOURCE_CIDRS`
+entry, that NAS's secret, `shortname` = NAS id) and an auth + acct `listen` with
+`clients = meraki_<id>` and `virtual_server = ecloud`. Nothing is rendered unless
+`MERAKI_CLOUD_RADIUS_ENABLED=true` and the source ranges and `MERAKI_RADIUS_PORT_RANGE` are set.
+Listeners, like clients, are read at start-up only: re-render, then restart the container.
+
+`queries.conf` writes `packet_client_shortname` (`%{client:shortname}`, migration 032): apply
+migration 032 before deploying an image built from this tree.
+
+Verified locally (2026-10-10, throw-away image/container, `--network none`, no shared container
+touched): `freeradius -XC` with a rendered file → "Configuration appears to be OK"; with a loopback
+copy of the rendered shape, radclient to the NAS port with the right secret was processed with
+`ECLOUD-Client-Shortname` = the NAS id, the wrong secret was dropped ("Shared secret is
+incorrect"), and the same source on 1812 was ignored as an unknown client. Live Meraki traffic:
+REQUIRES_DEVICE_TEST (needs public exposure, D-043).
+
+**Deploy order (Cycle E review F4): run migration 032 first, then start this image.** The entrypoint
+queries `information_schema.columns` (as the RADIUS SQL user, via the bundled `psql`) and refuses
+to start with "database schema is too old: radius.radacct_raw.packet_client_shortname is missing"
+until the column exists; it waits up to `RADIUS_SCHEMA_WAIT_S` (default 60 s) so the dev stack's
+`migrate` job can finish, and reports "cannot verify the database schema" when the database is not
+reachable in that time. `RADIUS_SCHEMA_CHECK=0` skips the check (database-less configuration tests
+only). Verified locally (throw-away image): migrated test DB → starts; DB without the column →
+refused; no database → refused. Meraki NAS listeners always carry
+`require_message_authenticator = yes` unless `MERAKI_ALLOW_RELAXED_MSGAUTH=true`; the Meraki file is
+written even when the NAS clients render fails (flag off always clears the listeners).
+
 ---
 
 # Appendix: contract (identical copy of docs/contracts/aaa-authorize.md)
-
 
 Status: M6 part 1 (infra/freeradius). Producer: FreeRADIUS 3.2.10 `rlm_rest` as configured in
 `infra/freeradius/raddb/mods-available/rest`, `sites-enabled/ecloud`, `policy.d/ecloud`.
@@ -254,7 +287,7 @@ Encoding rules (VERIFIED on 3.2.10):
 | `ECLOUD-Packet-Dst-Port` (1812) | server | listener telemetry |
 | `User-Name` | NAS | identity: portal credential (`pc-...`), MAC, voucher, subscriber username |
 | `User-Password` (cleartext, PAP) | NAS (decrypted by FreeRADIUS) | **never log, never persist.** Needed only when ECLOUD verifies itself (Argon2 subscriber password, voucher HMAC, MAC password) and answers `Auth-Type = Accept`. For broker credentials ECLOUD returns `Cleartext-Password` instead and lets `rlm_pap` compare. |
-| `CHAP-Password`, `CHAP-Challenge` (octets) | NAS | presence means CHAP: ECLOUD can only return `Cleartext-Password` (broker credential / reversible voucher) and `Auth-Type = CHAP`; otherwise reject with `Reply-Message`. |
+| `CHAP-Password`, `CHAP-Challenge` (octets) | NAS | presence means CHAP: ECLOUD can only return `Cleartext-Password` (broker credential / reversible voucher) and `Auth-Type = CHAP`; otherwise reject with `Reply-Message`. Cycle B: implemented for MikroTik HotSpot broker credentials issued for an HTTP-CHAP hand-off (`Auth-Type = CHAP` + `Cleartext-Password`); every other CHAP request is rejected (`chap_unsupported`). |
 | `Calling-Station-Id` | `rewrite_calling_station_id` | client MAC, normalised `AA-BB-CC-DD-EE-FF` (binding, MAC-auth, concurrency) |
 | `Called-Station-Id`, `Called-Station-SSID`, `Called-Station-MAC` | `rewrite_called_station_id` | when the NAS sent `mac:ssid` (TIP uspot) the id is reduced to the MAC and the SSID is split out; CoovaChilli sends only the MAC (no `Called-Station-SSID`) |
 | `Service-Type` | NAS | `Call-Check` => MAC authentication (uspot `mac-auth`); `Login-User`/`Framed-User` otherwise. Cycle A: on a `generic-radius-8021x` NAS a `User-Name` that is exactly the `Calling-Station-Id` MAC (password absent or the same MAC) is MAC authentication without `Call-Check` |
@@ -365,3 +398,21 @@ FreeRADIUS -> API  POST /internal/aaa/post-auth {..., "ECLOUD-Auth-Result":{"typ
 API -> FreeRADIUS  204
 FreeRADIUS -> NAS  Access-Accept Session-Timeout, Idle-Timeout, Acct-Interim-Interval, WISPr-*, ChilliSpot-*, Class, Message-Authenticator
 ```
+
+## Cycle E: Cisco Meraki cloud-sourced RADIUS (D-044, SECURITY_ARCHITECTURE.md §3.5)
+
+- A Meraki NAS (`adapter_key = meraki-splash`, no `nas_ip`) is reached only through its own
+  FreeRADIUS listener pair; the matched client's shortname is the NAS id. `resolveNas` resolves a
+  request whose `ECLOUD-Client-Shortname` names a Meraki NAS by that shortname **only**: the
+  (shared) `ECLOUD-Packet-Src-IP-Address` never selects a tenant for it.
+- Additional reject reasons (`auth_events` / decision facts): `meraki_cloud_radius_disabled`
+  (`MERAKI_CLOUD_RADIUS_ENABLED=false`), `nas_identifier_missing` (Meraki NAS: `NAS-Identifier`
+  absent), `nas_identifier_mismatch` (present and different; for Meraki NAS there is no "unset"
+  leniency).
+- The retransmit / decision cache keys include `ECLOUD-Client-Shortname` (Meraki source addresses
+  are shared by every tenant).
+- Accounting: `radius.radacct_raw.packet_client_shortname` = `%{client:shortname}` (queries.conf);
+  the drainer attributes a Meraki row by it and the registered NAS-Identifier, never by the source.
+
+- Review F2: an `ECLOUD-Client-Shortname` that is a UUID naming an unknown, disabled or deleted NAS
+  (stale client / listener file) is refused (`unknown_nas`); the source address is not consulted.

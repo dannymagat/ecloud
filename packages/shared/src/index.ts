@@ -11,3 +11,4 @@ export * from './net-guard.js';
 export * from './portal-theme.js';
 export * from './metrics.js';
 export * from './mac.js';
+export * from './meraki-cloud-radius.js';

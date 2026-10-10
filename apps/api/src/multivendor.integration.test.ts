@@ -579,7 +579,7 @@ await describeIntegration('@ecloud/api multi-vendor (controllers, registry)', ()
       disconnect: { evidence_level: string | null; device_enforced: boolean };
       attributes: { evidence_level: string; device_enforced: boolean }[];
     }[];
-    expect(adapters).toHaveLength(8); // + generic-radius-8021x (Cycle A), mikrotik-hotspot (Cycle B), external-portal-postback (Cycle C)
+    expect(adapters).toHaveLength(9); // + generic-radius-8021x (Cycle A), mikrotik-hotspot (Cycle B), external-portal-postback (Cycle C), meraki-splash (Cycle E)
     for (const a of adapters) {
       for (const f of a.fields) {
         expect(f.evidence_level, a.key).not.toBeNull();

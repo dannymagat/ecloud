@@ -61,7 +61,8 @@ export const PostbackRedirectBody = z.strictObject({
 });
 
 interface NasExtra {
-  nas_ip: string;
+  /** NULL only for `meraki-splash` rows (migration 032), never for a post-back NAS. */
+  nas_ip: string | null;
   adapter_key: string | null;
   adapter_config: Record<string, unknown>;
   hotspot_address: string | null;
@@ -146,7 +147,13 @@ export function registerPostbackRoutes(
           .where('organization_id', '=', n.organization_id)
           .where('deleted_at', 'is', null)
           .executeTakeFirst();
-        if (extra === undefined || extra.adapter_key !== POSTBACK_ADAPTER_KEY) return null;
+        if (
+          extra === undefined ||
+          extra.adapter_key !== POSTBACK_ADAPTER_KEY ||
+          extra.nas_ip === null
+        ) {
+          return null;
+        }
         const portals = (await trx
           .selectFrom('captive_portals')
           .select(['id', 'adapter_config'])

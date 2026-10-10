@@ -63,6 +63,9 @@ const EN = {
   'handoff.text': 'Connecting you to the Wi-Fi network. If nothing happens, select Continue.',
   'handoff.button': 'Continue',
   'form.token': 'This sign-in page needs to be refreshed. Please try again.',
+  // Cycle E (Meraki splash): the generic "previous attempt failed" notice and success page.
+  'notice.login_failed': 'The network did not accept the last sign-in. Please try again.',
+  'meraki.connected': 'You are connected. You can close this page.',
 } as const;
 
 export type MessageKey = keyof typeof EN;

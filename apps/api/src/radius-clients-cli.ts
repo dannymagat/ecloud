@@ -17,6 +17,7 @@ import { createDb } from '@ecloud/db';
 import { ConfigError } from '@ecloud/shared';
 import { parseArgs } from 'node:util';
 import { loadNasClientRows, resolveNasSecrets } from './radius-clients/load.js';
+import { loadMerakiEntries as loadMeraki } from './radius-clients/meraki.js';
 import {
   EXIT_SKIPPED,
   describeRenderError,
@@ -30,6 +31,15 @@ async function loadEntries(settings: RenderSettings) {
   try {
     const rows = await loadNasClientRows(db);
     return resolveNasSecrets(rows, settings.dataEncryptionKey);
+  } finally {
+    await db.destroy();
+  }
+}
+
+async function loadMerakiEntries(settings: RenderSettings) {
+  const db = createDb(settings.databaseUrlPlatform, { max: 1 });
+  try {
+    return await loadMeraki(db, settings.dataEncryptionKey);
   } finally {
     await db.destroy();
   }
@@ -56,11 +66,17 @@ async function main(): Promise<number> {
   try {
     const summary = await renderRadiusClients(
       settings,
-      { loadEntries },
+      { loadEntries, loadMerakiEntries },
       { checkOnly: values.check === true },
     );
     process.stdout.write(`${JSON.stringify(summary)}\n`);
-    if (summary.skipped.count > 0) {
+    const merakiSkipped = summary.meraki?.skipped.count ?? 0;
+    if (merakiSkipped > 0) {
+      process.stderr.write(
+        `radius-clients: ${String(merakiSkipped)} Meraki NAS row(s) skipped (see "meraki.skipped")\n`,
+      );
+    }
+    if (summary.skipped.count > 0 || merakiSkipped > 0) {
       process.stderr.write(
         `radius-clients: ${String(summary.skipped.count)} NAS row(s) skipped (see "skipped"); the file ${summary.checkOnly ? 'would hold' : 'holds'} the ${String(summary.clients)} valid client(s)\n`,
       );

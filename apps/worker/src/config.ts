@@ -3,7 +3,15 @@
  * define these yet; they are read here with zod and listed in the Phase 3 report so they can
  * be moved into the shared schema.
  */
-import { ConfigError, loadConfig, resolveSecretFiles, type AppConfig } from '@ecloud/shared';
+import {
+  ConfigError,
+  MerakiSettingsError,
+  loadConfig,
+  parseMerakiCloudRadiusSettings,
+  resolveSecretFiles,
+  type AppConfig,
+  type MerakiCloudRadiusSettings,
+} from '@ecloud/shared';
 import { z } from 'zod';
 
 const boolFlag = (fallback: boolean) =>
@@ -74,6 +82,8 @@ export interface WorkerConfig {
     masterKeyPresent: boolean;
     denyCidrs: string | null;
   };
+  /** Cycle E (D-044): Meraki Disconnect is sent only while MERAKI_CLOUD_RADIUS_ENABLED is true. */
+  merakiCloudRadius: MerakiCloudRadiusSettings;
 }
 
 export function loadWorkerConfig(
@@ -87,6 +97,13 @@ export function loadWorkerConfig(
     );
   }
   const raw = parsed.data;
+  let merakiCloudRadius: MerakiCloudRadiusSettings;
+  try {
+    merakiCloudRadius = parseMerakiCloudRadiusSettings(env);
+  } catch (error) {
+    if (error instanceof MerakiSettingsError) throw new ConfigError([...error.problems]);
+    throw error;
+  }
   return {
     app,
     health: { port: raw.WORKER_HEALTH_PORT, host: raw.WORKER_HEALTH_HOST },
@@ -110,5 +127,6 @@ export function loadWorkerConfig(
         (env.DATA_ENCRYPTION_KEY ?? '') !== '' || (env.DATA_ENCRYPTION_KEY_FILE ?? '') !== '',
       denyCidrs: raw.VENDOR_API_DENY_CIDRS ?? null,
     },
+    merakiCloudRadius,
   };
 }

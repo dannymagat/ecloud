@@ -185,6 +185,13 @@ Worker-only environment (read by `apps/worker/src/config.ts`, not yet in the sha
 | `WORKER_AUTHORIZATION_TTL_S` | `300` | D-036: unpromoted authorization expiry (30–86400) |
 | `WORKER_DRAIN_BATCH` | `500` | raw rows per drain tick |
 | `WORKER_COUNTER_WRAP_MAX_BPS` | `1000000000` | P7-A 32-bit wrap correction, rule W4: plausibility ceiling per counter direction (bit/s); an operator assumption, not a device fact |
+| `MERAKI_CLOUD_RADIUS_ENABLED` | `false` | Cycle E (D-044): Cisco Meraki cloud-sourced RADIUS. Read identically by the API, the worker and the FreeRADIUS renderer. While false no Meraki listener is rendered, AAA refuses Meraki NAS, the portal refuses Meraki flows and no Meraki Disconnect is sent. Build/test only (D-043: no public RADIUS) |
+| `MERAKI_RADIUS_SOURCE_CIDRS` | (empty) | Meraki Cloud source ranges (public IPv4 /16–/32, comma list) from Dashboard *Help > Firewall info*; empty = nothing rendered. REQUIRES_CLARIFICATION |
+| `MERAKI_RADIUS_PORT_RANGE` | (unset) | `min-max` UDP range for the per-NAS listener pairs (even auth port, acct = auth + 1, ≤ 4096 pairs, not overlapping 1812/1813). REQUIRES_CLARIFICATION |
+| `MERAKI_MAX_NAS_PER_ORG` | `50` | API: live Meraki NAS per organization (each opens a public listener pair) |
+| `MERAKI_ALLOW_RELAXED_MSGAUTH` | `false` | API + renderer: allow a Meraki NAS without Message-Authenticator (BlastRADIUS) |
+| `RADIUS_SCHEMA_WAIT_S` / `RADIUS_SCHEMA_CHECK` | `60` / `1` | FreeRADIUS entrypoint: wait for / skip the migration-032 schema check (skip only without a database) |
+| `MERAKI_RADIUS_FILE` | `/var/lib/ecloud/radius-meraki/ecloud-meraki.conf` | renderer only: Meraki listener file, mounted over FreeRADIUS `meraki.d/` |
 
 NAS / webhook secrets are resolved at use time from `secret_ref` values `env:<VAR>` or
 `file:/absolute/path`; other schemes (the future encrypted `secret_blobs`) resolve to nothing and

@@ -54,6 +54,8 @@ const EXPECTED_VERIFIED: Record<AdapterKey, PolicyField[]> = {
   'mikrotik-hotspot': [],
   // Cycle C (D-044): post-back family, no vendor source and no lab test → nothing VERIFIED.
   'external-portal-postback': [],
+  // Cycle E (D-044): Meraki documentation only, no lab test → nothing VERIFIED.
+  'meraki-splash': [],
 };
 
 /** Full per-field status table (the enforceability preview source), for cross-checking. */
@@ -127,6 +129,17 @@ const EXPECTED_STATUS: Record<AdapterKey, Partial<Record<PolicyField, AdapterFie
     valid_until: 'ECLOUD_SIDE_ONLY',
     vlan_id: 'UNSUPPORTED',
   },
+  // Cycle E: rates only via Dashboard group policy (Filter-Id) → arbitrary values UNSUPPORTED.
+  'meraki-splash': {
+    download_rate_kbps: 'UNSUPPORTED',
+    upload_rate_kbps: 'UNSUPPORTED',
+    quota_total_bytes: 'UNSUPPORTED',
+    session_timeout_s: 'REQUIRES_DEVICE_TEST',
+    idle_timeout_s: 'REQUIRES_DEVICE_TEST',
+    vlan_id: 'UNSUPPORTED',
+    max_concurrent_sessions: 'ECLOUD_SIDE_ONLY',
+    schedule_id: 'ECLOUD_SIDE_ONLY',
+  },
 };
 
 /** Attribute names exactly as in the FreeRADIUS dictionaries (AAA_ARCHITECTURE.md §4.3) plus the Gigawords additions. */
@@ -183,6 +196,7 @@ describe('adapter capability declarations (D-028)', () => {
       'generic-radius-8021x',
       'mikrotik-hotspot',
       'external-portal-postback',
+      'meraki-splash',
     ]);
   });
 

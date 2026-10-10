@@ -6,7 +6,12 @@
  * Operations the plan marks unsupported return an explicit `Unsupported` with a reason.
  */
 import { canonicalUnicastMac, type EvidenceRef } from '@ecloud/shared';
-import type { AdapterKey, EffectivePolicy, TranslationContext } from '@ecloud/policy-engine';
+import {
+  ADAPTER_KEYS,
+  type AdapterKey,
+  type EffectivePolicy,
+  type TranslationContext,
+} from '@ecloud/policy-engine';
 import { getAdapter } from '../registry.js';
 import { COMPATIBILITY_ROWS } from '../registry/compatibility.js';
 import { deriveCells, presentCells } from '../registry/derive.js';
@@ -14,6 +19,7 @@ import { DT_RESULTS } from '../registry/dt-results.js';
 import type { CompatibilityRow, DeploymentMode } from '../registry/types.js';
 import type { NasAdapter, SessionRef, Unsupported } from '../types.js';
 import { counterWrap32Quirks, normalizeAccounting, normalizeMacAddress } from './accounting.js';
+import { MERAKI_VENDOR_KEY, withMerakiSplash } from './meraki.js';
 import { createPostbackVendorAdapter } from './postback/engine.js';
 import type {
   AuthorizationHandoff,
@@ -327,6 +333,16 @@ const SPECS: readonly FirstPartySpec[] = [
     defaultDeployment: 'gateway',
     radius: true,
     setup: () => mikrotikSetupGuide(PORTAL_ORIGIN),
+  },
+  {
+    // Cycle E (D-044): Meraki MR splash sign-on with cloud-sourced RADIUS. The UAM pieces of the
+    // wrapper are replaced by `withMerakiSplash` (vendor/meraki.ts).
+    key: 'meraki-splash',
+    vendorKey: MERAKI_VENDOR_KEY,
+    uam: null,
+    defaultDeployment: 'native',
+    radius: true,
+    setup: () => [],
   },
 ];
 
@@ -644,7 +660,9 @@ function createFirstPartyVendorAdapter(spec: FirstPartySpec): VendorAdapter {
 /** Vendor-specific composition on top of the engine-backed wrapper (Cycle B+). */
 function composeVendor(spec: FirstPartySpec): VendorAdapter {
   const base = createFirstPartyVendorAdapter(spec);
-  return spec.key === 'mikrotik-hotspot' ? withMikrotikHotspot(base, PORTAL_ORIGIN) : base;
+  if (spec.key === 'mikrotik-hotspot') return withMikrotikHotspot(base, PORTAL_ORIGIN);
+  if (spec.key === 'meraki-splash') return withMerakiSplash(base);
+  return base;
 }
 
 const VENDOR_ADAPTERS: Readonly<Record<AdapterKey, VendorAdapter>> = Object.freeze({
@@ -665,7 +683,8 @@ export function getVendorAdapter(key: string): VendorAdapter {
 }
 
 export function listVendorAdapters(): VendorAdapter[] {
-  return [...SPECS.map((s) => VENDOR_ADAPTERS[s.key]), VENDOR_ADAPTERS['external-portal-postback']];
+  // Engine-registry order (ADAPTER_KEYS), whatever the cycle that added the key.
+  return ADAPTER_KEYS.map((key) => VENDOR_ADAPTERS[key]);
 }
 
 // ------------------------------------------------------------------------------------------

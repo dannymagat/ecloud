@@ -67,6 +67,8 @@ export const ADAPTER_KEYS = [
   'unifi-external-portal',
   'omada-api',
   'mist-guest-portal',
+  // Cycle E (D-044): Meraki MR splash sign-on; RADIUS from the Meraki Cloud (platform flag).
+  'meraki-splash',
 ] as const;
 
 /** Human labels for the NAS adapter dropdown (the key stays visible for support). */
@@ -82,6 +84,7 @@ export const ADAPTER_LABELS: Readonly<Record<(typeof ADAPTER_KEYS)[number], stri
   'unifi-external-portal': 'UniFi external portal (controller API, no RADIUS accounting)',
   'omada-api': 'Omada external portal, API mode (no RADIUS accounting)',
   'mist-guest-portal': 'Juniper Mist external guest portal (signed grant URL)',
+  'meraki-splash': 'Cisco Meraki MR splash: sign-on with RADIUS (cloud RADIUS)',
 };
 
 export interface StatusPresentation {

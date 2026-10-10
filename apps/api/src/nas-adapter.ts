@@ -19,6 +19,8 @@ export const NAS_ADAPTER_KEYS = [
   'mikrotik-hotspot',
   // Cycle C (D-044, migration 030): external captive portal post-back (vendor profiles).
   'external-portal-postback',
+  // Cycle E (D-044, migration 032): Meraki MR splash sign-on, cloud-sourced RADIUS.
+  'meraki-splash',
 ] as const;
 
 export type NasAdapterKey = (typeof NAS_ADAPTER_KEYS)[number];

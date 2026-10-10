@@ -1073,3 +1073,72 @@ REQUIRES_CLARIFICATION / REQUIRES_DEVICE_TEST raised or kept by Cycle D:
     fleet-wide cap.
   - Migration 031's CHECK-union regex assumes 029 / 030 produce simple `IN (...)` literal lists for
     `ck_nas_clients_adapter_key` (true today); re-check at merge.
+
+## 17. Multi-vendor Cycle E (Cisco Meraki) — IMPLEMENTED, build/test only (2026-10-10, D-044)
+
+Scope (D-044 "Meraki is supported"): `meraki-splash` adapter (splash "Sign-on with my RADIUS
+server", plus click-through), cloud-sourced RADIUS with per-NAS identity, Disconnect only. LOCAL
+only: no device, no server/VPS change, no call to any Meraki service. **OFF by default**:
+`MERAKI_CLOUD_RADIUS_ENABLED=false`; live use needs public RADIUS reachability, which the LAN-only
+pilot (D-043) does not allow. Trust model and residual risks: SECURITY_ARCHITECTURE.md §3.5.
+
+| # | Deliverable | Where | Notes |
+|---|---|---|---|
+| E1 | `meraki-splash` adapter | `packages/adapters/src/adapters/meraki-splash.ts` (engine record), `packages/adapters/src/vendor/meraki.ts` (redirect parser, URL allow-list, hand-off, grant URL, setup guide, `withMerakiSplash` VendorAdapter); registry row `cisco-meraki-mr-splash-signon` (implemented; roadmap row `cisco-meraki-planned` kept) | Only documented parameters are read: sign-on `login_url`, `continue_url`, `ap_mac`, `ap_name`, `ap_tags`, `client_ip`, `client_mac`, `error_message`; click-through `base_grant_url`, `user_continue_url`, `node_id`, `node_mac`, `gateway_id`, `client_ip`, `client_mac` (Meraki Developer Hub sign-on / click-through tables; Meraki custom-hosted splash doc). Completion: POST `username` / `password` / `success_url` to `login_url`; click-through GET `base_grant_url?continue_url=…`. `login_url` / `base_grant_url` must be `https://n<digits>.network-auth.com` (no userinfo / port / fragment / backslash), kept byte-for-byte, never fetched. Duplicates, both/neither modes, foreign hosts, bad client MAC → refused. Capabilities: Session-Timeout, Idle-Timeout, Class REQUIRES_DEVICE_TEST; rates/quotas/VLAN UNSUPPORTED (rates only via Dashboard group policy `Filter-Id`); CoA change UNSUPPORTED (documented); Disconnect `meraki-cloud-das` REQUIRES_DEVICE_TEST |
+| E2 | Portal flow | `apps/api/src/internal/portal-meraki.ts`, `portal.ts` (`flavour: 'meraki'`, `nasid`); `apps/portal` `GET /meraki/{nasid}/`, hand-off page, `GET /meraki-done` | Custom splash URL = `https://<portal>/meraki/<NAS-Identifier>/`. Unsigned redirect countered by: `login_url` as vendor nonce (replay store, consumed when AAA accepts), a single-use ECLOUD **login token** (Cycle A A3) required on every identify of a Meraki flow, and the NAS + MAC bound broker credential. The hand-off page auto-submits (one nonce'd script; button fallback) to the allow-listed origin; CSP `form-action 'self' https://n<digits>.network-auth.com`. Meraki `error_message` is never echoed (generic notice). Captive portal record type `external` pinned to the NAS |
+| E3 | Cloud-sourced RADIUS | migration **032**; `apps/api/src/radius-clients/meraki.ts` (+ `run.ts`, CLI); `infra/freeradius/raddb/sites-enabled/ecloud-meraki`, `meraki.d/`; `aaa.ts` `resolveNas` + NAS-Identifier binding; worker drain | **Per-NAS listener pair** (`clients = meraki_<id>`, Meraki source CIDRs with that NAS's secret and shortname = NAS id). Rendered only when the flag is on **and** `MERAKI_RADIUS_SOURCE_CIDRS` (public IPv4 /16–/32) **and** `MERAKI_RADIUS_PORT_RANGE` are set; otherwise a comment-only file. AAA resolves a Meraki NAS by shortname only (never the shared source IP), refuses while the flag is off, and requires the registered NAS-Identifier (`nas_identifier_missing` / `_mismatch`). Accounting attributed by `radacct_raw.packet_client_shortname` + NAS-Identifier |
+| E4 | Disconnect only | `apps/worker/src/coa/dispatcher.ts` `dispatchTarget` | `nas_clients.das_host` (`n<digits>.meraki.com`) UDP 3799, `Acct-Session-Id` + `Event-Timestamp` (+ Message-Authenticator); sent only with `ECLOUD_COA_ENABLED` and the flag; CoA change → unsupported. REQUIRES_DEVICE_TEST |
+| E5 | Platform flag + admin | `@ecloud/shared` `meraki-cloud-radius.ts` (API, worker, renderer parse identically); `GET /api/v1/orgs/{orgId}/meraki/cloud-radius`; `GET /api/v1/orgs/{orgId}/nas/{id}/setup-guide`; admin NAS page banner + "Setup guide" dialog, `meraki-splash` in the adapter list, NAS IP optional, "Meraki Disconnect host" field | The banner states OFF plainly ("RADIUS from the Meraki Cloud cannot reach ECLOUD"); when on it says "reachability not verified" (ECLOUD cannot observe it) |
+| E6 | Setup guide | `merakiSetupGuide()` (11 steps) | Platform flag; Access control → Splash page "Sign-on with my RADIUS server"; RADIUS servers / accounting servers (public address, this NAS's ports, secret placeholder); NAS-Identifier; custom splash URL; "Where should users go after the splash page"; walled garden; Help > Firewall info ranges; Disconnect host; Message-Authenticator. Placeholders resolved server-side except `<RADIUS_SECRET>` (shown once at create/rotate) and `<ECLOUD_RADIUS_PUBLIC_ADDRESS>` (REQUIRES_CLARIFICATION) |
+
+Test evidence (2026-10-10, MacBook, own DB `ecloud_test_e`, Redis db 5): unit — Meraki redirect
+parsing / allow-list / hand-off / grant / context validation / setup guide
+(`packages/adapters/src/vendor/meraki.test.ts`), settings parser
+(`packages/shared/src/meraki-cloud-radius.test.ts`), listener renderer flag on/off
+(`apps/api/src/radius-clients/meraki.test.ts`), Disconnect target and payload
+(`apps/worker/src/coa/meraki.test.ts`), portal entry / hand-off page / CSP
+(`apps/portal/src/meraki.test.ts`), admin banner + guide (`MerakiCloudRadius.test.tsx`);
+integration — `apps/api/src/cycle-e.integration.test.ts` (registration rules, honest OFF guide,
+full flow to Access-Accept, token single use, login_url replay, missing / forged NAS-Identifier from
+another tenant rejected, squatted shared source IP never selects a tenant, flag OFF → portal + AAA
+refused and no client rendered) and `apps/worker/src/meraki-attribution.integration.test.ts`.
+FreeRADIUS: a locally built image parsed the rendered file (`freeradius -XC` → "Configuration
+appears to be OK"); a throw-away container with a loopback copy of the rendered shape showed: right
+secret on the NAS port → processed with `ECLOUD-Client-Shortname` = NAS id; wrong secret → dropped
+("Shared secret is incorrect"); same source on 1812 → "unknown client".
+
+Open (REQUIRES_CLARIFICATION / REQUIRES_DEVICE_TEST): public RADIUS exposure + address and port
+range (D-043); authoritative Meraki source ranges (D-044 says "published ranges", Meraki publishes
+them per organization in the Dashboard only); NAS-Identifier content on splash Access-Requests;
+Message-Authenticator from the Meraki Cloud; Class echo; other `login_url` / dashboard host shapes
+(regional / government clouds); splash RADIUS accounting enablement (Meraki support);
+Disconnect from the RADIUS public address; Filter-Id group policy on splash.
+
+### 17.1 Review fixes (independent review: CONDITIONAL PASS, applied 2026-10-10)
+
+- **F1 merge order.** Migration 032 rebuilds `ck_nas_clients_adapter_key` from the LIVE constraint
+  (`pg_get_constraintdef`, quoted keys `[A-Za-z0-9_-]`, union `meraki-splash`, skip if present);
+  every other statement is `IF [NOT] EXISTS` / drop-then-add. Test
+  `packages/db/src/integration.test.ts` ("migration 032 preserves …", serial with the schema suite): an unknown pre-existing key survives and a
+  second run changes nothing (rolled-back transaction).
+- **F2 no source-IP fallback.** A UUID client shortname is looked up without status filters: a
+  Meraki NAS resolves by it only; an unknown, disabled or deleted NAS (stale listener / client file)
+  is refused in AAA (`unknown_nas`) and in the drainer (unattributed) — the source address is never
+  consulted. A non-Meraki NAS whose `nas_ip` lies inside `MERAKI_RADIUS_SOURCE_CIDRS` is refused on
+  create and patch.
+- **F3 identifier squatting / DoS.** The Meraki NAS-Identifier is generated server-side as
+  `ecloud-<16 hex>` (set as the custom NAS-ID in Meraki), read-only; the shape is reserved (CHECK
+  `ck_nas_clients_identifier_reserved` + API), so no other NAS can hold a Meraki identifier.
+  `POST /api/v1/platform/meraki/nas-identifiers/release` (platform `organization:update`, reason,
+  refused while impersonating, audited `nas:meraki_identifier:release`). `/meraki/<id>/` flows are
+  limited per client IP (20 / 10 min) before the per-NAS budget.
+- **F4 deploy order.** The FreeRADIUS image now carries `postgresql-client`; the entrypoint refuses
+  to start (clear error) while `radius.radacct_raw.packet_client_shortname` is missing, waiting up to
+  `RADIUS_SCHEMA_WAIT_S` (default 60 s) for the migrate job; `RADIUS_SCHEMA_CHECK=0` only for a
+  database-less configuration test. Order: **migrate 032, then FreeRADIUS**.
+- **F5** The Meraki file is rendered and written independently: a failing NAS-clients render still
+  writes it (flag off → listeners cleared; Meraki-only deployments get their listeners), then the
+  error is re-raised.
+- **F6** `MERAKI_MAX_NAS_PER_ORG` (default 50) live Meraki NAS per organization.
+- **F7** Meraki NAS always require Message-Authenticator (API refuses `false`, renderer forces
+  `yes`) unless `MERAKI_ALLOW_RELAXED_MSGAUTH=true`.

@@ -53,6 +53,17 @@ import { completeVendorApiAuthorization } from '../vendor-api/portal.js';
 import { findNasByIdentity } from './nas-lookup.js';
 import { registerPostbackRoutes } from './portal-postback.js';
 import {
+  MERAKI_ADAPTER_KEY,
+  MERAKI_PORTAL_TYPE,
+  consumeMerakiLoginToken,
+  isMerakiFlow,
+  merakiFlowView,
+  merakiGrantHandoff,
+  merakiMethods,
+  merakiMode,
+  merakiSuccessUrl,
+} from './portal-meraki.js';
+import {
   IdentityRejected,
   checkSubscriberLoginPassword,
   confirmSubscriberLogin,
@@ -106,6 +117,18 @@ export const UAM_FLAVOURS = Object.freeze({
 } as const);
 export type UamFlavour = keyof typeof UAM_FLAVOURS;
 
+/** Portal entry flavours: the UAM ones plus Meraki splash (Cycle E, `/meraki/<nasid>/`). */
+export type PortalFlavour = UamFlavour | 'meraki';
+
+function flavourSpec(flavour: PortalFlavour): {
+  adapterKeys: readonly string[];
+  portalType: 'uspot' | 'coovachilli' | 'mikrotik' | 'external';
+} {
+  return flavour === 'meraki'
+    ? { adapterKeys: [MERAKI_ADAPTER_KEY], portalType: MERAKI_PORTAL_TYPE }
+    : UAM_FLAVOURS[flavour];
+}
+
 /** Methods the pilot portal implements (Q64: no social IdP providers; MAC-auth has no page). */
 export const PORTAL_METHODS: readonly PortalMethod[] = ['password', 'voucher', 'click_through'];
 
@@ -129,6 +152,11 @@ export const PORTAL_LIMITS = Object.freeze({
   attemptsPerSite: { max: 2000, windowS: 600 },
   redirectsPerIp: { max: 60, windowS: 60 },
   flowsPerNas: { max: 300, windowS: 3600 },
+  /**
+   * Cycle E (review F3): Meraki flows per client IP, counted BEFORE the per-NAS budget so
+   * anonymous traffic to `/meraki/<id>/` cannot exhaust a NAS's flow budget.
+   */
+  merakiFlowsPerIp: { max: 20, windowS: 600 },
 });
 
 class RateLimited extends Error {
@@ -191,7 +219,7 @@ function openUamSecret(deps: AppDeps, ref: string | null): string | null {
  */
 async function resolvePortal(
   deps: AppDeps,
-  flavour: UamFlavour,
+  flavour: PortalFlavour,
   identity: { nasid: string | undefined; apMac: string | null },
   logger: Logger,
 ): Promise<ResolvedPortal | null> {
@@ -206,7 +234,8 @@ async function resolvePortal(
   }
   const n = found.nas;
   return withPlatform(deps.dbPlatform, PORTAL_ACCESS, async (trx) => {
-    if (!(UAM_FLAVOURS[flavour].adapterKeys as readonly string[]).includes(n.adapter_key ?? '')) {
+    const spec = flavourSpec(flavour);
+    if (!spec.adapterKeys.includes(n.adapter_key ?? '')) {
       return null;
     }
     const portals = (await trx
@@ -226,7 +255,7 @@ async function resolvePortal(
       .where('site_id', '=', n.site_id)
       .where('organization_id', '=', n.organization_id)
       .where('status', '=', 'active')
-      .where('portal_type', '=', UAM_FLAVOURS[flavour].portalType)
+      .where('portal_type', '=', spec.portalType)
       .execute()) as PortalRow[];
     const portal = pickPortal(portals, n.id);
     if (portal === null) return null;
@@ -241,7 +270,8 @@ async function resolvePortal(
         adapterKey: n.adapter_key,
         controllerId: n.controller_id,
         deploymentMode,
-        uamServerUrl: uamServerUrl(deps, flavour, portal.adapter_config),
+        uamServerUrl:
+          flavour === 'meraki' ? null : uamServerUrl(deps, flavour, portal.adapter_config),
         uamSecret: openUamSecret(deps, portal.uam_secret_ref),
         hotspotAddress: n.hotspot_address ?? null,
         hotspotPort: n.hotspot_port ?? null,
@@ -455,12 +485,20 @@ function postbackView(
 }
 
 const RedirectBody = z.object({
-  flavour: z.enum(['uspot', 'chilli', 'mikrotik']),
+  flavour: z.enum(['uspot', 'chilli', 'mikrotik', 'meraki']),
   raw_query: z.string().max(8192),
   client_ip: z.string().max(64).optional(),
+  /** Meraki only: the `/meraki/<nasid>/` path segment (= the NAS-Identifier registered in ECLOUD). */
+  nasid: z
+    .string()
+    .regex(/^[A-Za-z0-9._:-]{3,128}$/)
+    .optional(),
 });
 
-/** Cycle C: ECLOUD login token of a post-back flow (required there, ignored for UAM flows). */
+/**
+ * ECLOUD login token of a Cycle C post-back flow or a Cycle E Meraki flow (required there,
+ * ignored for UAM flows).
+ */
 const LoginTokenField = z.string().min(1).max(1024).optional();
 
 const IdentifyBody = z.discriminatedUnion('method', [
@@ -493,6 +531,85 @@ export function portalInternalRouter(deps: AppDeps): Router {
   const now = deps.now ?? (() => new Date());
   const router = express.Router();
 
+  /**
+   * Cycle E: Meraki splash entry (`/meraki/<nasid>/`). Same contract as the UAM entry
+   * (parseRedirect → validateContext → flow), but the NAS comes from the path segment, the
+   * freshness value is `login_url`, and the feature is refused while MERAKI_CLOUD_RADIUS_ENABLED
+   * is false (build/test only, D-043/D-044). Every refusal is the same generic error.
+   */
+  async function merakiRedirect(
+    raw: string,
+    nasid: string | undefined,
+    clientIp: string | null,
+    at: Date,
+  ): Promise<
+    { kind: 'flow'; flow_id: string; expires_at: string } | { refused: string; detail?: string }
+  > {
+    if (!deps.config.merakiCloudRadius.enabled) return { refused: 'meraki_cloud_radius_disabled' };
+    if (nasid === undefined) return { refused: 'malformed', detail: 'no NAS path segment' };
+    const adapter = getVendorAdapter(MERAKI_ADAPTER_KEY);
+    const parsed = adapter.parseRedirect({ url: `/?${raw}`, method: 'GET' });
+    if ('unsupported' in parsed) return { refused: 'malformed', detail: parsed.reason };
+    const apMac = canonicalUnicastMac(parsed.params.ap_mac ?? parsed.params.node_mac);
+    const resolved = await resolvePortal(deps, 'meraki', { nasid, apMac }, deps.logger);
+    const lookup: NasLookup = {
+      findNas: () => Promise.resolve(resolved?.nas ?? null),
+      expectedOrganizationId: null,
+      isReplay: (k) => isReplayed(deps.kv, k),
+      now: () => at,
+    };
+    // `ecloud_nasid` is ECLOUD-internal (from the path); the Meraki query parser ignores
+    // undocumented names, so the query itself can never supply it.
+    const validation = await adapter.validateContext(
+      { ...parsed, params: { ...parsed.params, ecloud_nasid: nasid } },
+      lookup,
+    );
+    if (!validation.ok || resolved === null) {
+      return validation.ok
+        ? { refused: 'unknown_nas' }
+        : { refused: validation.reason, detail: validation.detail };
+    }
+    const ctx = validation.context;
+    if (clientIp !== null) {
+      const ipl = PORTAL_LIMITS.merakiFlowsPerIp;
+      await counter(deps, `pf:rl:mflows:${clientIp}`, ipl.max, ipl.windowS);
+    }
+    const l = PORTAL_LIMITS.flowsPerNas;
+    await counter(deps, `pf:rl:flows:${ctx.nas.id}`, l.max, l.windowS);
+    const fields = ctx.vendorOpaque.fields;
+    const flow: PortalFlow = {
+      id: newId(),
+      organizationId: ctx.organizationId,
+      siteId: ctx.siteId,
+      nasId: ctx.nas.id,
+      nasIdentifier: ctx.nas.identifier,
+      adapterKey: MERAKI_ADAPTER_KEY,
+      vendorKey: ctx.vendorKey,
+      deploymentMode: ctx.deploymentMode,
+      controllerId: ctx.controllerId,
+      captivePortalId: resolved.captivePortalId,
+      clientMac: ctx.clientMac,
+      apMac: ctx.apMac,
+      clientIp: ctx.clientIp ?? clientIp,
+      ssid: null,
+      sessionId: null,
+      // The vendor nonce: marked consumed when AAA accepts the credential of this flow.
+      challenge: fields.login_url ?? '',
+      fields,
+      createdAt: at.toISOString(),
+      expiresAt: new Date(at.getTime() + FLOW_TTL_S * 1000).toISOString(),
+      state: 'ARRIVED',
+      credentialUsername: null,
+      previousSessionExpired: await previousSessionExpired(deps, resolved.nas, ctx.clientMac, at),
+    };
+    await saveFlow(deps.kv, flow, at);
+    deps.logger.info(
+      { flowId: flow.id, organizationId: flow.organizationId, nasClientId: flow.nasId },
+      'portal meraki flow started',
+    );
+    return { kind: 'flow', flow_id: flow.id, expires_at: flow.expiresAt };
+  }
+
   // ------------------------------------------------------------------ UAM entry + callbacks
   router.post('/redirects', async (req: Request, res: Response) => {
     const parsedBody = RedirectBody.safeParse(req.body);
@@ -511,6 +628,15 @@ export function portalInternalRouter(deps: AppDeps): Router {
       if (clientIp !== null) {
         const l = PORTAL_LIMITS.redirectsPerIp;
         await counter(deps, `pf:rl:redir:${clientIp}`, l.max, l.windowS);
+      }
+      if (flavour === 'meraki') {
+        const result = await merakiRedirect(raw, parsedBody.data.nasid, clientIp, at);
+        if ('refused' in result) {
+          generic(result.refused, result.detail);
+          return;
+        }
+        res.json(result);
+        return;
       }
       // MikroTik: NAS identity = router identity (RADIUS NAS-Identifier); no AP MAC variable.
       const identity =
@@ -765,6 +891,22 @@ export function portalInternalRouter(deps: AppDeps): Router {
                 ? safeUserUrl(flow.fields['link-orig'], null)
                 : safeUserUrl(flow.fields.userurl, flow.fields.uamip ?? null)) ?? fallback,
           notice: flow.previousSessionExpired ? 'session_expired' : null,
+          // Cycle E: Meraki flows add the hand-off origin, a fresh login token and their methods.
+          ...(isMerakiFlow(flow)
+            ? (() => {
+                const m = merakiFlowView(deps, flow, now());
+                return {
+                  methods: merakiMethods(flow, enabledMethods(portal)),
+                  meraki: {
+                    mode: m.mode,
+                    handoff_origin: m.handoff_origin,
+                    login_token: m.login_token,
+                  },
+                  continue_url: m.continue_url ?? fallback,
+                  notice: m.notice ?? (flow.previousSessionExpired ? 'session_expired' : null),
+                };
+              })()
+            : {}),
         };
       });
       if (view === null) {
@@ -804,6 +946,22 @@ export function portalInternalRouter(deps: AppDeps): Router {
       ) {
         res.status(409).json({ result: 'flow_state' });
         return;
+      }
+      if (isMerakiFlow(flow)) {
+        // Cycle E: platform flag first (build/test-only feature), then the single-use login token.
+        if (!deps.config.merakiCloudRadius.enabled) {
+          res.status(422).json({ result: 'handoff_unavailable' });
+          return;
+        }
+        if (!(await consumeMerakiLoginToken(deps, flow, input.login_token, at))) {
+          req.log.info({ flowId: flow.id, reason: 'login_token' }, 'portal identify refused');
+          res.status(403).json({ result: 'login_token_invalid' });
+          return;
+        }
+        if (merakiMode(flow) === 'click-through' && method !== 'click_through') {
+          res.status(403).json({ result: 'method_not_allowed' });
+          return;
+        }
       }
       const counters = failureCounters(flow, input);
       await assertNotLocked(deps, counters);
@@ -976,6 +1134,20 @@ export function portalInternalRouter(deps: AppDeps): Router {
         return;
       }
 
+      if (isMerakiFlow(flow) && merakiMode(flow) === 'click-through') {
+        // Meraki click-through: no RADIUS, no credential; the grant URL is the whole hand-off.
+        const grant = merakiGrantHandoff(flow);
+        if (grant === null) {
+          res.status(422).json({ result: 'handoff_unavailable' });
+          return;
+        }
+        flow.state = 'AUTHORIZED';
+        await saveFlow(deps.kv, flow, at);
+        req.log.info({ flowId: flow.id, method }, 'portal meraki grant issued');
+        res.json({ result: 'ok', handoff: { method: 'GET-302', url: grant, fields: {} } });
+        return;
+      }
+
       // Identity broker: a fresh single-use credential bound to NAS + MAC + sessionid.
       if (flow.credentialUsername !== null) {
         await revokeCredential(deps.kv, flow.credentialUsername);
@@ -988,10 +1160,23 @@ export function portalInternalRouter(deps: AppDeps): Router {
         res.status(422).json({ result: 'handoff_unavailable' });
         return;
       }
+      // Cycle E: the Meraki sign-on hand-off carries ECLOUD's success URL as `success_url`.
+      const handoffCtx = isMerakiFlow(flow)
+        ? (() => {
+            const c = contextOf(flow, at);
+            return {
+              ...c,
+              vendorOpaque: {
+                ...c.vendorOpaque,
+                fields: { ...flow.fields, ecloud_success_url: merakiSuccessUrl(deps) },
+              },
+            };
+          })()
+        : contextOf(flow, at);
       const handoff = (
         postbackAdapter?.adapter ?? getVendorAdapter(flow.adapterKey)
       ).authorizeSession(
-        contextOf(flow, at),
+        handoffCtx,
         {
           username: pair.username,
           password: pair.password,
@@ -1021,12 +1206,17 @@ export function portalInternalRouter(deps: AppDeps): Router {
         replayKey: replayKey(
           flow.postback === undefined
             ? {
-                // UAM challenge, or Cycle B (MikroTik): the CHAP challenge as the vendor nonce.
+                // UAM challenge, Cycle B (MikroTik): the CHAP challenge as the vendor nonce, or
+                // Cycle E (Meraki): its `login_url` freshness value (vendor nonce namespace).
                 nasId: flow.nasId,
                 sessionId: flow.sessionId,
                 challenge: flow.challenge,
                 clientMac: flow.clientMac,
-                ...(flow.nonceKind !== undefined ? { nonceKind: flow.nonceKind } : {}),
+                ...(flow.nonceKind !== undefined
+                  ? { nonceKind: flow.nonceKind }
+                  : isMerakiFlow(flow)
+                    ? { nonceKind: 'vendor-nonce' as const }
+                    : {}),
               }
             : flow.postback.vendorNonce !== null
               ? {
@@ -1065,7 +1255,7 @@ export function portalInternalRouter(deps: AppDeps): Router {
         handoff: {
           method: handoff.browser.method,
           url: handoff.browser.url,
-          // POST-form hand-offs (MikroTik, Cycle C post-back) carry the fields the browser
+          // POST-form hand-offs (MikroTik, Cycle C post-back, Meraki) carry the fields the browser
           // submits, including the single-use credential (rendered into an auto-submitting form,
           // never logged); GET-302 ones have them in the URL already.
           ...(handoff.browser.method === 'POST-form' ? { fields: handoff.browser.fields } : {}),

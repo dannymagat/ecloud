@@ -17,6 +17,7 @@ import { can, canPlatform } from '../../lib/permissions';
 import type { FieldDef } from '../resource/form';
 import { ResourcePage, type ResourceConfig } from '../resource/ResourcePage';
 import { PostbackProfileEditor } from './PostbackProfileEditor';
+import { MERAKI_ADAPTER_KEY, MerakiCloudRadiusNotice, SetupGuideButton } from './MerakiCloudRadius';
 
 const ADAPTER_OPTIONS = ADAPTER_KEYS.map((k) => ({
   value: k,
@@ -142,7 +143,7 @@ export function NasPage() {
     type: 'select',
     required: true,
     options: ADAPTER_OPTIONS,
-    hint: 'The engine adapter that translates policies for this NAS (D-035). Third-party APs on an 802.1X or MAC-auth SSID use the generic adapter; third-party captive portals (Cambium, Aruba, Cisco, …) use the external captive portal adapter; register their AP MACs under Access points.',
+    hint: 'The engine adapter that translates policies for this NAS (D-035). Third-party APs on an 802.1X or MAC-auth SSID use the generic adapter; third-party captive portals (Cambium, Aruba, Cisco, …) use the external captive portal adapter; register their AP MACs under Access points. Cisco Meraki splash sign-on uses meraki-splash (RADIUS from the Meraki Cloud; leave NAS IP empty).',
   };
 
   const fields: FieldDef[] = [
@@ -158,10 +159,23 @@ export function NasPage() {
       name: 'nas_ip',
       label: 'NAS IP',
       type: 'text',
-      required: true,
-      hint: 'Source IP of RADIUS packets.',
+      nullable: true,
+      hint: 'Source IP of RADIUS packets. Required for every adapter except Cisco Meraki (meraki-splash), whose RADIUS comes from the Meraki Cloud: leave it empty there.',
     },
-    { name: 'nas_identifier', label: 'NAS-Identifier', type: 'text', nullable: true },
+    {
+      name: 'nas_identifier',
+      label: 'NAS-Identifier',
+      type: 'text',
+      nullable: true,
+      hint: 'Cisco Meraki: leave empty. ECLOUD generates ecloud-<16 hex> (read-only); set it as the custom NAS-ID in Meraki. Requests with another NAS-Identifier are rejected.',
+    },
+    {
+      name: 'das_host',
+      label: 'Meraki Disconnect host',
+      type: 'text',
+      nullable: true,
+      hint: 'Cisco Meraki only: the nNNN.meraki.com host from your Dashboard URL (Disconnect, UDP 3799; REQUIRES_DEVICE_TEST).',
+    },
     adapterField,
     // Cycle C: post-back profile editor, only for the external captive portal adapter.
     {
@@ -245,8 +259,15 @@ export function NasPage() {
     title: 'NAS clients',
     siteFilter: true,
     singular: 'NAS client',
-    description:
-      'RADIUS clients (access points / gateways). The shared secret is shown once when the NAS is created or its secret rotated.',
+    description: (
+      <div className="space-y-2">
+        <p>
+          RADIUS clients (access points / gateways). The shared secret is shown once when the NAS is
+          created or its secret rotated.
+        </p>
+        <MerakiCloudRadiusNotice />
+      </div>
+    ),
     path: '/api/v1/orgs/{orgId}/nas',
     permissions: {
       read: 'nas:read',
@@ -281,7 +302,12 @@ export function NasPage() {
     },
     rowActions: (row, { orgId }) => (
       <>
-        <SetupGuide row={row} orgId={orgId} />
+        {/* Cycle E: Meraki rows get the guide with the cloud-RADIUS state and warnings. */}
+        {row.adapter_key === MERAKI_ADAPTER_KEY ? (
+          <SetupGuideButton row={row} orgId={orgId} />
+        ) : (
+          <SetupGuide row={row} orgId={orgId} />
+        )}
         {can(me, 'nas:secret:rotate', {
           organizationId: orgId,
           siteId: (row.site_id as string) ?? null,

@@ -4,9 +4,7 @@
  */
 import {
   POSTBACK_ADAPTER_KEY,
-  getVendorAdapter,
   parsePostbackNasConfig,
-  postbackAdapterForNas,
   serializePostbackNasConfig,
 } from '@ecloud/adapters';
 import { hashPassword, withPlatform } from '@ecloud/db';
@@ -40,6 +38,7 @@ import { releaseGlobalSlots } from '../global-slots.js';
 import { softDeleteAccessPointsOf } from './access-points.js';
 import { assertControllerFor, resolveDeploymentMode } from './controllers.js';
 import { crudRoutes, loose, type Row } from './crud.js';
+import { checkNasPatch, prepareNasCreate } from './meraki.js';
 
 const MAC_RE = /^([0-9A-Fa-f]{2}[:-]?){5}[0-9A-Fa-f]{2}$/;
 
@@ -108,9 +107,12 @@ const NasCreate = z.strictObject({
   site_id: z.uuid(),
   name,
   /** F-P10-07 review: a single unicast host (no mapped / loopback / link-local / multicast). */
+  /** Required except for `meraki-splash` (Cycle E: cloud-sourced RADIUS, must be absent/null). */
   nas_ip: z
     .union([z.ipv4(), z.ipv6()])
-    .refine((ip) => canonicalNasAddress(ip) !== null, { message: NAS_ADDRESS_RULE }),
+    .refine((ip) => canonicalNasAddress(ip) !== null, { message: NAS_ADDRESS_RULE })
+    .nullable()
+    .optional(),
   nas_identifier: z.string().trim().min(1).max(253).nullable().optional(),
   /** D-035: the @ecloud/adapters key; `adapter_type_key` is derived from it. */
   /**
@@ -148,6 +150,8 @@ const NasCreate = z.strictObject({
    * profile, login hosts, generic parameter names). Validated by `parsePostbackNasConfig`.
    */
   adapter_config: z.record(z.string(), z.unknown()).optional(),
+  /** Cycle E (migration 032): Meraki dashboard host receiving Disconnect on UDP 3799. */
+  das_host: z.string().trim().toLowerCase().max(64).nullable().optional(),
 });
 const NasUpdate = NasCreate.partial().extend({ status: z.enum(['active', 'disabled']).optional() });
 
@@ -191,6 +195,9 @@ export function nasAdapterConfigFor(adapterKey: string | null, input: unknown): 
 export const PUBLIC_NAS_IDENTIFIER_ADAPTERS: ReadonlySet<string> = new Set([
   POSTBACK_ADAPTER_KEY,
   'mikrotik-hotspot',
+  // Cycle E: `/meraki/<nasid>/` (identifier server-generated `ecloud-<16 hex>`, reserved for
+  // Meraki in both directions by checkNonMeraki / prepareNasCreate in meraki.ts).
+  'meraki-splash',
 ]);
 
 const IDENTIFIER_CHECK_ACCESS = Object.freeze({ reason: 'nas-identifier-check', audit: false });
@@ -453,6 +460,9 @@ export function resourceRoutes(deps: AppDeps): AnyRouteSpec[] {
     serialize: (row) => withoutKeys(row, ['secret_ref']),
     prepareCreate: async (body, hook) => {
       await assertRef(hook.trx, 'sites', body.site_id as string, 'site');
+      // Cycle E (D-044): Meraki NAS rules + listener port pair; nas_ip required for the others.
+      // Runs before the cross-org identifier check so a supplied Meraki identifier is a 422.
+      const merakiColumns = await prepareNasCreate(deps, body, hook.trx);
       await assertNasIdentifierAvailable(deps, {
         orgId: hook.orgId,
         identifier: body.nas_identifier,
@@ -488,6 +498,7 @@ export function resourceRoutes(deps: AppDeps): AnyRouteSpec[] {
           ? { coa_port: defaultCoaPort }
           : {}),
         adapter_config: nasAdapterConfigFor(body.adapter_key as string, body.adapter_config),
+        ...merakiColumns,
         deployment_mode: deploymentMode,
         adapter_type_key: body.adapter_key,
         secret_ref: sealSecretRef(dataEnvelope, secret),
@@ -508,6 +519,8 @@ export function resourceRoutes(deps: AppDeps): AnyRouteSpec[] {
         await assertRef(trx, 'network_devices', body.network_device_id, 'network_device');
       }
       await assertControllerOnPatch(trx, body, before);
+      // Cycle E (D-044): Meraki patch rules (no adapter-family switch, read-only identifier).
+      checkNasPatch(deps, body, before);
       assertHotspotAddress(
         patched(body, before, 'adapter_key'),
         patched(body, before, 'hotspot_address'),
@@ -629,64 +642,6 @@ export function resourceRoutes(deps: AppDeps): AnyRouteSpec[] {
         return before;
       });
       return { status: 200, body: { id: row.id, secret } };
-    },
-  });
-
-  /**
-   * Cycle C: "how to configure your device" steps for a NAS (docs/VENDOR_INTEGRATION_RESEARCH.md
-   * §5): ECLOUD wording, values filled from the NAS (portal URL with its identifier), every
-   * secret a placeholder. Read-only; never returns a secret.
-   */
-  const nasSetupGuide = defineRoute({
-    method: 'get',
-    path: '/api/v1/orgs/:orgId/nas/:id/setup-guide',
-    summary: 'Setup guide steps for a NAS (filled values; secrets as placeholders)',
-    tags: ['nas'],
-    auth: 'principal',
-    permission: 'nas:read',
-    scope: 'any-site',
-    params: OrgIdParams,
-    responses: {
-      200: { description: 'Setup guide', schema: ResourceSchema },
-      ...problemResponses,
-    },
-    handler: async ({ params, ctx }) => {
-      const row = await inTenant(deps, params.orgId, async (trx) => {
-        const r = await loose(trx)
-          .selectFrom('nas_clients')
-          .select(['id', 'site_id', 'nas_identifier', 'nas_ip', 'adapter_key', 'adapter_config'])
-          .where('id', '=', params.id)
-          .where('deleted_at', 'is', null)
-          .executeTakeFirst();
-        if (r === undefined) throw new NotFoundError('nas_client', params.id);
-        requireOnSite(ctx, 'nas:read', params.orgId, r.site_id as string, 'nas_client', 'nas:read');
-        return r;
-      });
-      const adapterKey = row.adapter_key as string | null;
-      const site = {
-        siteId: row.site_id as string,
-        nasId: (row.nas_identifier as string | null) ?? '<NAS_IDENTIFIER>',
-      };
-      let profile: string | null = null;
-      let steps: readonly unknown[] = [];
-      if (adapterKey === POSTBACK_ADAPTER_KEY) {
-        const built = postbackAdapterForNas({
-          adapterConfig: row.adapter_config as Record<string, unknown>,
-          nasIp: String(row.nas_ip),
-        });
-        profile = built?.profile.key ?? null;
-        steps = built === null ? [] : built.adapter.buildSetupGuide(site);
-      } else if (adapterKey !== null) {
-        try {
-          steps = getVendorAdapter(adapterKey).buildSetupGuide(site);
-        } catch {
-          steps = [];
-        }
-      }
-      return {
-        status: 200,
-        body: { id: row.id as string, adapter_key: adapterKey, profile, steps },
-      };
     },
   });
 
@@ -824,7 +779,6 @@ export function resourceRoutes(deps: AppDeps): AnyRouteSpec[] {
     ...networkDevices,
     ...nas,
     rotateNasSecret,
-    nasSetupGuide,
     ...users,
     ...userGroups,
     ...clientDevices,

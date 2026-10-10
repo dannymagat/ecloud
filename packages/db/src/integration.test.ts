@@ -20,8 +20,10 @@ import {
 } from '@ecloud/testing';
 import { sql } from 'kysely';
 import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import pg from 'pg';
 import { afterAll, beforeAll, expect, it } from 'vitest';
+import { DEFAULT_MIGRATIONS_DIR } from './migrate.js';
 import {
   ALL_TABLES,
   PARTITIONED_TABLES,
@@ -594,12 +596,13 @@ await describeIntegration('@ecloud/db schema', () => {
           .execute(),
       ),
     ).toBe('23514');
-    // the reconciled catalogue holds exactly the engine keys on a fresh database (+ 028..031 adapters)
+    // the reconciled catalogue holds exactly the engine keys on a fresh database (+ 028..032 adapters)
     const keys = await platform.selectFrom('adapter_types').select('key').orderBy('key').execute();
     expect(keys.map((k) => k.key)).toEqual([
       'coovachilli-uam',
       'external-portal-postback',
       'generic-radius-8021x',
+      'meraki-splash', // 032
       'mikrotik-hotspot',
       'mist-guest-portal', // 031
       'omada-api', // 031
@@ -855,5 +858,40 @@ await describeIntegration('@ecloud/db schema', () => {
     expect(await sqlState(sql`DELETE FROM vendors`.execute(app))).toBe('42501');
     // no tenant context -> no controller rows, and inserts for another org fail WITH CHECK
     expect((await app.selectFrom('controllers').select('id').execute()).length).toBe(0);
+  });
+  // Review F1 (Cycle E): migration 032 rebuilds ck_nas_clients_adapter_key from the LIVE
+  // constraint (union with meraki-splash), so a key added by another cycle survives any merge
+  // order, and re-running the file is a no-op. Rolled-back transaction: nothing changes.
+  it('migration 032 preserves an unknown pre-existing adapter key and is idempotent', async () => {
+    const file = join(DEFAULT_MIGRATIONS_DIR, '032_meraki_cloud_radius.sql');
+    const sqlText = readFileSync(file, 'utf8');
+    const client = await platformPool.connect();
+    const adapterCheck = async (): Promise<string> => {
+      const r = await client.query<{ def: string }>(
+        `SELECT pg_get_constraintdef(oid) AS def FROM pg_constraint
+          WHERE conrelid = 'nas_clients'::regclass AND conname = 'ck_nas_clients_adapter_key'`,
+      );
+      return r.rows[0]?.def ?? '';
+    };
+    try {
+      await client.query('BEGIN');
+      try {
+        await client.query('ALTER TABLE nas_clients DROP CONSTRAINT ck_nas_clients_adapter_key');
+        await client.query(`ALTER TABLE nas_clients ADD CONSTRAINT ck_nas_clients_adapter_key CHECK (
+          adapter_key IS NULL OR adapter_key IN ('coovachilli-uam', 'zz-future_adapter-9'))`);
+        await client.query(sqlText);
+        const first = await adapterCheck();
+        expect(first).toContain("'zz-future_adapter-9'");
+        expect(first).toContain("'coovachilli-uam'");
+        expect(first).toContain("'meraki-splash'");
+        await client.query(sqlText);
+        expect(await adapterCheck()).toBe(first);
+      } finally {
+        await client.query('ROLLBACK');
+      }
+      expect(await adapterCheck()).toContain("'meraki-splash'");
+    } finally {
+      client.release();
+    }
   });
 });

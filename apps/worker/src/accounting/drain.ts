@@ -69,6 +69,8 @@ interface NasInfo {
   network_device_id: string | null;
   timezone: string;
   adapter_key: string | null;
+  /** Cycle E: only loaded for Meraki NAS (NAS-Identifier binding of their accounting). */
+  nas_identifier?: string | null;
 }
 
 interface SessionRow {
@@ -130,6 +132,7 @@ export async function drainOnce(deps: DrainDeps): Promise<DrainResult> {
       'acctdelaytime',
       'received_at',
       'packet_src_ip',
+      'packet_client_shortname',
     ])
     .where('radacctid', '>', cursor)
     .orderBy('radacctid')
@@ -210,6 +213,55 @@ async function lookupNas(
   const value = nas ?? null;
   cache.set(nasIp, value);
   return value;
+}
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+
+/**
+ * Cycle E (D-044, SECURITY §3.5; review F2): the matched client shortname of a rendered client is
+ * a NAS id. A Meraki NAS is identified by it (the source address is shared by every Meraki
+ * customer) and must carry the registered NAS-Identifier. Returns the NAS; `refused` when the
+ * shortname names a Meraki NAS with another NAS-Identifier, or an unknown / inactive / deleted NAS
+ * (stale client or listener file) — the source address is then NEVER used; null when the
+ * shortname is not a NAS id or names an active non-Meraki NAS (source-address path as before).
+ */
+type ShortnameNas = NasInfo & { status: string; deleted_at: Date | null };
+
+async function lookupMerakiNas(
+  trx: DbTransaction,
+  shortname: string | null | undefined,
+  nasIdentifier: string | null,
+  cache: Map<string, NasInfo | null>,
+): Promise<NasInfo | 'refused' | null> {
+  if (shortname === null || shortname === undefined || !UUID_RE.test(shortname)) return null;
+  const key = `shortname:${shortname}`;
+  let nas = cache.get(key) as ShortnameNas | null | undefined;
+  if (!cache.has(key)) {
+    nas =
+      (await trx
+        .selectFrom('nas_clients as n')
+        .innerJoin('sites as s', 's.id', 'n.site_id')
+        .select([
+          'n.id',
+          'n.organization_id',
+          'n.site_id',
+          'n.network_device_id',
+          's.timezone',
+          'n.adapter_key',
+          'n.nas_identifier',
+          'n.status',
+          'n.deleted_at',
+        ])
+        .where('n.id', '=', shortname)
+        .executeTakeFirst()) ?? null;
+    cache.set(key, nas);
+  }
+  if (nas === null || nas === undefined) return 'refused';
+  if (nas.status !== 'active' || nas.deleted_at !== null) return 'refused';
+  if (nas.adapter_key !== 'meraki-splash') return null;
+  if (nasIdentifier === null || nasIdentifier !== nas.nas_identifier) return 'refused';
+  const { status: _s, deleted_at: _d, ...info } = nas;
+  return info;
 }
 
 function sessionQuery(trx: DbTransaction) {
@@ -588,7 +640,13 @@ export async function processRecord(
 ): Promise<RecordResult> {
   // Tenant attribution comes from the authenticated packet source only (migration 014):
   // NAS-IP-Address is NAS-supplied and could name another tenant's NAS.
-  const nas = rec.packetSrcIp === null ? null : await lookupNas(trx, rec.packetSrcIp, nasCache);
+  // Cycle E: a Meraki listener's shortname wins and never falls back to the shared source IP.
+  const meraki = await lookupMerakiNas(trx, rec.packetClientShortname, rec.nasIdentifier, nasCache);
+  const nas =
+    meraki === 'refused'
+      ? null
+      : (meraki ??
+        (rec.packetSrcIp === null ? null : await lookupNas(trx, rec.packetSrcIp, nasCache)));
 
   const prior = await trx
     .selectFrom('accounting_records')

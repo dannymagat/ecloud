@@ -44,8 +44,10 @@ describe('registry', () => {
       'generic-radius-8021x',
       'mikrotik-hotspot',
       'external-portal-postback',
+      'meraki-splash',
     ]);
     expect(listCapabilities().map((c) => c.version)).toEqual([
+      '0.1.0',
       '0.1.0',
       '0.1.0',
       '0.1.0',

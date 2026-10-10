@@ -46,6 +46,8 @@ describe('compatibility registry data', () => {
       ['mikrotik-routeros-hotspot', 'mikrotik-hotspot', 'implemented'],
       ['teltonika-rutos-hotspot', 'coovachilli-uam', 'implemented'],
       ['external-portal-postback', 'external-portal-postback', 'implemented'],
+      // Cycle E (D-044): Cisco Meraki MR splash sign-on, build/test only (flag default OFF).
+      ['cisco-meraki-mr-splash-signon', 'meraki-splash', 'implemented'],
     ]);
     const tip = row('ezelink-eze-ap1832-r32912-tip-uspot');
     expect([tip.deploymentModes, tip.enforcementPoint, tip.sourceVersionMatchesDevice]).toEqual([
@@ -206,7 +208,7 @@ describe('compatibility registry data', () => {
       expect(v.docLinks).toEqual([]);
   });
 
-  it('third-party rows use engine adapters only where a cycle implemented them (Cycle B: mikrotik, teltonika; Cycle C: generic-postback)', () => {
+  it('third-party rows use engine adapters only where a cycle implemented them (Cycle B: mikrotik, teltonika; Cycle C: generic-postback; Cycle E: cisco-meraki)', () => {
     const keys = new Set(COMPATIBILITY_ROWS.map((r) => r.adapterKey).filter((k) => k !== null));
     expect([...keys].sort()).toEqual([...ADAPTER_KEYS].sort());
     for (const r of COMPATIBILITY_ROWS)
@@ -219,9 +221,21 @@ describe('compatibility registry data', () => {
           'mikrotik',
           'teltonika',
           'generic-postback',
+          'cisco-meraki',
         ].includes(r.vendorKey)
       )
         expect(r.adapterKey).toBeNull();
+    // Cycle E: only the MR splash row has an adapter; the roadmap row stays planned.
+    expect(
+      COMPATIBILITY_ROWS.filter((r) => r.vendorKey === 'cisco-meraki').map((r) => [
+        r.key,
+        r.adapterKey,
+        r.lifecycle,
+      ]),
+    ).toEqual([
+      ['cisco-meraki-mr-splash-signon', 'meraki-splash', 'implemented'],
+      ['cisco-meraki-planned', null, 'planned'],
+    ]);
   });
 
   it('the generic 802.1X / MAC-auth row claims no device: nothing VERIFIED, no model/firmware', () => {

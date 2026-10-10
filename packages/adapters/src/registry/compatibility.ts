@@ -1103,6 +1103,85 @@ const postbackRow: CompatibilityRow = {
 };
 
 // ------------------------------------------------------------------------------------------
+// Cisco Meraki MR splash sign-on row (Cycle E, D-044) — cloud-sourced RADIUS, no device test
+// ------------------------------------------------------------------------------------------
+
+const MERAKI_ROW_ID = 'cisco-meraki-mr-splash-signon';
+const F4_DOC = doc('docs/VENDOR_INTEGRATION_RESEARCH.md §2 F4, §3.5');
+const SEC36_DOC = doc('SECURITY_ARCHITECTURE.md §3.5');
+
+const merakiSplashRow: CompatibilityRow = {
+  key: MERAKI_ROW_ID,
+  vendorKey: 'cisco-meraki',
+  hardwareModel: 'UNKNOWN',
+  firmware: 'UNKNOWN',
+  controller: null,
+  lifecycle: 'implemented',
+  deploymentModes: ['native'],
+  enforcementPoint: 'UNKNOWN',
+  adapterKey: 'meraki-splash',
+  sourceVersionMatchesDevice: null,
+  identity: [],
+  profile: {
+    ...allUnknownProfile(),
+    redirectProtocol: fact(
+      'Meraki custom-hosted splash: GET to the ECLOUD portal with login_url, continue_url, ap_mac, ap_name, ap_tags, client_ip, client_mac (sign-on) or base_grant_url, user_continue_url, node_mac, client_mac (click-through)',
+      'DOCUMENTED',
+      [F4_DOC],
+    ),
+    authorizationMethod: fact(
+      'browser POST username / password / success_url to the Meraki-hosted login_url (https://n<digits>.network-auth.com only); click-through: GET base_grant_url',
+      'DOCUMENTED',
+      [F4_DOC],
+    ),
+    radiusAuth: fact(
+      'PAP Access-Request from the Meraki Cloud (shared public ranges): per-NAS listener + per-NAS secret, NAS-Identifier must match (MERAKI_CLOUD_RADIUS_ENABLED, default OFF)',
+      'DOCUMENTED',
+      [F4_DOC, SEC36_DOC],
+    ),
+    radiusAccounting: fact(
+      'Start / Stop from the Meraki Cloud (splash accounting may need Meraki support); attributed by the per-NAS listener client shortname',
+      'DOCUMENTED',
+      [F4_DOC],
+    ),
+    disconnectCoa: fact(
+      'Disconnect only (RFC 5176) to the dashboard host n<digits>.meraki.com:3799 with Acct-Session-Id + Event-Timestamp; CoA changes unsupported by Meraki: REQUIRES_DEVICE_TEST',
+      'DOCUMENTED',
+      [F4_DOC],
+    ),
+    bandwidthAttributes: fact(
+      'none pushable: Meraki applies rates only via Filter-Id → Dashboard group policy',
+      'DOCUMENTED',
+      [F4_DOC],
+    ),
+    sessionTimeout: fact(
+      'Session-Timeout (overrides splash frequency), Idle-Timeout: REQUIRES_DEVICE_TEST',
+      'DOCUMENTED',
+      [F4_DOC],
+    ),
+  },
+  capabilities: deriveCells(getAdapter('meraki-splash').capabilities(), {
+    rowKey: MERAKI_ROW_ID,
+    sourceVersionMatchesDevice: null,
+    deviceFirmware: 'UNKNOWN',
+    dtResults: DT_RESULTS,
+  }),
+  configurationKind: 'vendor-ui',
+  openItems: [
+    {
+      id: 'CE-1',
+      label: 'REQUIRES_CLARIFICATION',
+      text: 'Public RADIUS exposure for the Meraki Cloud (conflicts with the LAN-only pilot, D-043): public address, listener port range, Meraki source ranges (Dashboard Help > Firewall info).',
+    },
+    {
+      id: 'CE-2',
+      label: 'REQUIRES_DEVICE_TEST',
+      text: 'NAS-Identifier content on splash Access-Requests, Message-Authenticator, Class echo, Session-Timeout / Idle-Timeout honouring, Disconnect from the RADIUS public address.',
+    },
+  ],
+};
+
+// ------------------------------------------------------------------------------------------
 // Roadmap rows — planned, everything UNKNOWN (plan §7.4)
 // ------------------------------------------------------------------------------------------
 
@@ -1138,6 +1217,7 @@ export const COMPATIBILITY_ROWS: readonly CompatibilityRow[] = Object.freeze([
   mikrotikRow,
   teltonikaRow,
   postbackRow,
+  merakiSplashRow,
   ...roadmapRows,
 ]);
 

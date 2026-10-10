@@ -5,7 +5,15 @@
  * rejected when NODE_ENV=production, and error messages that name variables, never values.
  */
 import { parseDenyCidrs } from '@ecloud/vendor-api';
-import { ConfigError, loadConfig, resolveSecretFiles, type AppConfig } from '@ecloud/shared';
+import {
+  ConfigError,
+  MerakiSettingsError,
+  loadConfig,
+  parseMerakiCloudRadiusSettings,
+  resolveSecretFiles,
+  type AppConfig,
+  type MerakiCloudRadiusSettings,
+} from '@ecloud/shared';
 import { z } from 'zod';
 
 /** Dev-only key material (obviously fake, rejected in production — D-033). */
@@ -123,6 +131,11 @@ export interface ApiConfig {
   rateLimitDisabled: boolean;
   /** Cycle D review F2: VENDOR_API_DENY_CIDRS (undefined = vendor-api default list). */
   vendorApiDenyCidrs?: string;
+  /**
+   * Cycle E (D-044): MERAKI_CLOUD_RADIUS_ENABLED (default false), MERAKI_RADIUS_SOURCE_CIDRS,
+   * MERAKI_RADIUS_PORT_RANGE (`@ecloud/shared` meraki-cloud-radius.ts).
+   */
+  merakiCloudRadius: MerakiCloudRadiusSettings;
 }
 
 export function loadApiConfig(
@@ -170,7 +183,14 @@ export function loadApiConfig(
       problems.push('SESSION_COOKIE_NAME: must start with __Host- when NODE_ENV=production');
     }
   }
-  if (problems.length > 0) throw new ConfigError(problems);
+  let merakiCloudRadius: MerakiCloudRadiusSettings | null = null;
+  try {
+    merakiCloudRadius = parseMerakiCloudRadiusSettings(env);
+  } catch (error) {
+    if (!(error instanceof MerakiSettingsError)) throw error;
+    problems.push(...error.problems);
+  }
+  if (problems.length > 0 || merakiCloudRadius === null) throw new ConfigError(problems);
 
   const secureCookie =
     raw.SESSION_COOKIE_SECURE === undefined
@@ -203,5 +223,6 @@ export function loadApiConfig(
     ...(raw.VENDOR_API_DENY_CIDRS !== undefined
       ? { vendorApiDenyCidrs: raw.VENDOR_API_DENY_CIDRS }
       : {}),
+    merakiCloudRadius,
   };
 }

@@ -28,12 +28,19 @@ export interface FlowView {
   /** `http://uamip:uamport` (private address, validated by the API). */
   nasOrigin: string | null;
   continueUrl: string | null;
-  notice: 'session_expired' | null;
+  notice: 'session_expired' | 'login_failed' | null;
   /**
    * Cycle C: post-back flows only. `loginOrigin` = validated AP / controller login origin (the
    * only extra form-action allowed), `loginToken` = single-use ECLOUD login token for the forms.
    */
   postback?: { loginOrigin: string; loginToken: string } | null;
+  /** Cycle E: Meraki splash flow details (null / absent for UAM flows). */
+  meraki?: {
+    mode: 'sign-on' | 'click-through';
+    /** `https://n<digits>.network-auth.com`, allow-listed by the API (null = refuse hand-off). */
+    handoffOrigin: string | null;
+    loginToken: string;
+  } | null;
 }
 
 export type IdentifyInput =
@@ -53,9 +60,11 @@ export type IdentifyOutcome =
       handoffUrl: string;
       /** Cycle B (MikroTik): POST-form hand-off fields; absent = GET-302 hand-off. */
       handoffForm?: Readonly<Record<string, string>>;
-      /** Cycle C: `POST-form` hand-offs carry the form fields (single-use credential). */
+      /** Cycle C / E: `POST-form` hand-offs carry the form fields (single-use credential). */
       handoffMethod?: 'GET-302' | 'POST-form';
       fields?: Record<string, string>;
+      /** Cycle E (Meraki `login_url`): same POST-form fields under E's name. */
+      handoffFields?: Record<string, string>;
     }
   | { result: 'login_token_invalid' }
   | { result: 'rejected' }
@@ -103,9 +112,11 @@ export interface AssetResponse {
 
 export interface PortalApi {
   redirect(input: {
-    flavour: 'uspot' | 'chilli' | 'mikrotik';
+    flavour: 'uspot' | 'chilli' | 'mikrotik' | 'meraki';
     rawQuery: string;
     clientIp: string | null;
+    /** Meraki only: the `/meraki/<nasid>/` path segment. */
+    nasid?: string;
   }): Promise<RedirectOutcome>;
   /** Cycle C: external captive portal post-back entry (`/pb/<profile>[/<nasid>]/`). */
   postbackRedirect?(input: {
@@ -120,6 +131,8 @@ export interface PortalApi {
     path: string;
     rawQuery: string;
     clientIp: string | null;
+    /** Meraki only: the `/meraki/<nasid>/` path segment. */
+    nasid?: string;
   }): Promise<RedirectOutcome>;
   flow(flowId: string): Promise<FlowView | null | 'unavailable'>;
   identify(flowId: string, input: IdentifyInput): Promise<IdentifyOutcome>;
@@ -175,14 +188,16 @@ export class HttpPortalApi implements PortalApi {
   }
 
   async redirect(input: {
-    flavour: 'uspot' | 'chilli' | 'mikrotik';
+    flavour: 'uspot' | 'chilli' | 'mikrotik' | 'meraki';
     rawQuery: string;
     clientIp: string | null;
+    nasid?: string;
   }): Promise<RedirectOutcome> {
     const r = await this.call('POST', '/internal/portal/redirects', {
       flavour: input.flavour,
       raw_query: input.rawQuery,
       ...(input.clientIp === null ? {} : { client_ip: input.clientIp }),
+      ...(input.nasid === undefined ? {} : { nasid: input.nasid }),
     });
     if (r === null) return { kind: 'unavailable' };
     const j = r.json;
@@ -269,6 +284,7 @@ export class HttpPortalApi implements PortalApi {
     const terms = j.terms as Json | null;
     const nas = j.nas as Json | null;
     const pb = j.postback as Json | null | undefined;
+    const meraki = j.meraki as Json | null | undefined;
     const methods = Array.isArray(j.methods)
       ? (j.methods as unknown[]).filter(
           (m): m is 'password' | 'voucher' | 'click_through' =>
@@ -299,13 +315,21 @@ export class HttpPortalApi implements PortalApi {
           : { version: String(terms.version), text: String(terms.text) },
       nasOrigin: nas === null || typeof nas !== 'object' ? null : str(nas.origin),
       continueUrl: str(j.continue_url),
-      notice: j.notice === 'session_expired' ? 'session_expired' : null,
+      notice: j.notice === 'session_expired' || j.notice === 'login_failed' ? j.notice : null,
       postback:
         pb === null || pb === undefined || typeof pb !== 'object'
           ? null
           : str(pb.login_origin) !== null && str(pb.login_token) !== null
             ? { loginOrigin: str(pb.login_origin) ?? '', loginToken: str(pb.login_token) ?? '' }
             : null,
+      meraki:
+        meraki === null || meraki === undefined || typeof meraki !== 'object'
+          ? null
+          : {
+              mode: meraki.mode === 'click-through' ? 'click-through' : 'sign-on',
+              handoffOrigin: str(meraki.handoff_origin),
+              loginToken: str(meraki.login_token) ?? '',
+            },
     };
   }
 
@@ -347,16 +371,18 @@ export class HttpPortalApi implements PortalApi {
             if (typeof v !== 'string') return { result: 'handoff_unavailable' };
             fields[k] = v;
           }
-          // Cycle C reads `handoffMethod` + `fields`; Cycle B (MikroTik) reads `handoffForm`.
+          // Cycle C reads `handoffMethod` + `fields`; Cycle B (MikroTik) reads `handoffForm`;
+          // Cycle E (Meraki) reads `handoffFields`.
           return {
             result: 'ok',
             handoffUrl: url,
             handoffMethod: 'POST-form',
             fields,
             handoffForm: fields,
+            handoffFields: fields,
           };
         }
-        return { result: 'ok', handoffUrl: url, handoffMethod: 'GET-302' };
+        return { result: 'ok', handoffUrl: url, handoffMethod: 'GET-302', handoffFields: {} };
       }
       case 'login_token_invalid':
         return { result: 'login_token_invalid' };

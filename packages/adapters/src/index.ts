@@ -23,6 +23,7 @@ export { capabilities as coovachilliUamCapabilities } from './adapters/coovachil
 export { capabilities as openwifiConfigCapabilities } from './adapters/openwifi-config.js';
 export { capabilities as genericRadius8021xCapabilities } from './adapters/generic-radius-8021x.js';
 export { capabilities as externalPortalPostbackCapabilities } from './adapters/external-portal-postback.js';
+export { capabilities as merakiSplashCapabilities, MERAKI_DOCS } from './adapters/meraki-splash.js';
 export * from './openwifi/ucentral-fragment.js';
 export {
   capabilities as mikrotikHotspotCapabilities,
