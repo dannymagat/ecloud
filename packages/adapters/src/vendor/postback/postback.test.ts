@@ -842,7 +842,11 @@ describe('setup guides', () => {
   it('every profile has filled ECLOUD values and placeholders only for secrets', () => {
     for (const p of [...BUILTIN_POSTBACK_PROFILES]) {
       const steps = postbackSetupGuide(p, { siteId: SITE, nasId: 'site1-ap' });
-      expect(steps[0]?.value).toBe(`https://portal.ezecloud.ezelink.ai/pb/${p.key}/site1-ap/`);
+      const url = `https://portal.ezecloud.ezelink.ai/pb/${p.key}/site1-ap/`;
+      // the portal URL is shown exactly once, at the vendor step, noting the NAS identifier
+      const urlSteps = steps.filter((s) => s.value === url);
+      expect(urlSteps, p.key).toHaveLength(1);
+      expect(urlSteps[0]?.title, p.key).toMatch(/NAS/);
       expect(steps.length).toBeGreaterThan(6);
       for (const s of steps) {
         expect(s.evidenceRefs.length).toBeGreaterThan(0);
@@ -851,6 +855,6 @@ describe('setup guides', () => {
       }
     }
     const bad = postbackSetupGuide(profile('aruba-ecp'), { siteId: SITE, nasId: 'has space' });
-    expect(bad[0]?.value).toContain('<NAS_IDENTIFIER>');
+    expect(bad.some((s) => s.value.includes('/pb/aruba-ecp/<NAS_IDENTIFIER>/'))).toBe(true);
   });
 });

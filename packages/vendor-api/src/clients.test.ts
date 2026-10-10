@@ -380,7 +380,19 @@ describe('sealed store + credential wiring', () => {
     expect(ref.startsWith('enc:v1.')).toBe(true);
     expect(openSealedSecret(DEK, ref)).toBe('api-key-value');
     expect(() => openSealedSecret(`${DEK}x`, ref)).toThrow(SealedSecretError);
-    expect(() => openSealedSecret(DEK, `${ref.slice(0, -2)}AA`)).toThrow(SealedSecretError);
+    // Deterministic tampering: flip one bit of a decoded byte (a base64url character swap may
+    // be a no-op when it already holds the new value or only touches the padding bits).
+    const flip = (segment: number): string => {
+      const parts = ref.split('.');
+      const bytes = Buffer.from(parts[segment] ?? '', 'base64url');
+      bytes[0] = (bytes[0] ?? 0) ^ 0x01;
+      parts[segment] = bytes.toString('base64url');
+      return parts.join('.');
+    };
+    const segments = ref.split('.').length;
+    expect(flip(segments - 1)).not.toBe(ref); // auth tag
+    expect(() => openSealedSecret(DEK, flip(segments - 1))).toThrow(SealedSecretError);
+    expect(() => openSealedSecret(DEK, flip(segments - 2))).toThrow(SealedSecretError); // ciphertext
     expect(() => openSealedSecret(DEK, 'env:FOO')).toThrow(SealedSecretError);
     expect(new SealedSecretError().message).not.toContain('api-key');
   });

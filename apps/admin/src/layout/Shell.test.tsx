@@ -206,6 +206,7 @@ describe('grouped sidebar', () => {
       'Sites',
       'NAS clients (access points)',
       'Access points (AP MAC)',
+      'Setup guides',
       'Controllers',
       'Network devices',
       'Online sessions',

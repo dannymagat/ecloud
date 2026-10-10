@@ -43,6 +43,8 @@ services:
   api:
     environment:
       <<: *lan-origins
+      # Cycle F: the RADIUS address the setup-guide gallery shows (ports default 1812/1813).
+      RADIUS_ADVERTISED_ADDRESS: ${ECLOUD_LAN_IP:?ECLOUD_LAN_IP is required}
     # Only reachable through `edge` on the Compose network.
     ports: !reset []
 

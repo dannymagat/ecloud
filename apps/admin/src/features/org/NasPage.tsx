@@ -3,8 +3,10 @@
  * the API and shown exactly once after create / rotate.
  */
 import { useMutation, useQuery } from '@tanstack/react-query';
+import { BookOpen } from 'lucide-react';
 import { useState } from 'react';
-import { api, newIdempotencyKey } from '../../api/client';
+import { Link, useSearchParams } from 'react-router';
+import { api, buildUrl, newIdempotencyKey, request } from '../../api/client';
 import type { Row } from '../../api/types';
 import { Dialog } from '../../components/Dialog';
 import { ProblemAlert } from '../../components/ProblemAlert';
@@ -14,9 +16,12 @@ import { ADAPTER_KEYS, ADAPTER_LABELS } from '../../lib/adapterStatus';
 import { useAuth } from '../../lib/auth';
 import { display, formatDateTime, str } from '../../lib/format';
 import { can, canPlatform } from '../../lib/permissions';
+import { useOrgId } from '../../lib/org';
+import { siteParam } from '../../lib/sites';
 import type { FieldDef } from '../resource/form';
 import { ResourcePage, type ResourceConfig } from '../resource/ResourcePage';
-import { PostbackProfileEditor } from './PostbackProfileEditor';
+import { POSTBACK_PROFILES, PostbackProfileEditor } from './PostbackProfileEditor';
+import type { VendorGuide } from '../setup-guides/types';
 import { MERAKI_ADAPTER_KEY, MerakiCloudRadiusNotice, SetupGuideButton } from './MerakiCloudRadius';
 
 const ADAPTER_OPTIONS = ADAPTER_KEYS.map((k) => ({
@@ -135,14 +140,89 @@ function SetupGuide({ row, orgId }: { row: Row; orgId: string }) {
   );
 }
 
+const GUIDE_PATH = '/api/v1/orgs/{orgId}/setup-guides/{vendorKey}';
+
+function selectsGenericProfile(value: string): boolean {
+  try {
+    const v: unknown = JSON.parse(value);
+    return (
+      typeof v === 'object' &&
+      v !== null &&
+      (v as { profile?: unknown }).profile === 'postback-generic'
+    );
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * The post-back profile editor with the "Any vendor" portal URL taken from this ECLOUD
+ * instance's configuration (the setup-guide values: PUBLIC_PORTAL_ORIGIN), not a constant.
+ */
+function PostbackProfileField(props: {
+  value: string;
+  error?: string;
+  onChange: (value: string) => void;
+}) {
+  const orgId = useOrgId();
+  const generic = selectsGenericProfile(props.value);
+  const guide = useQuery({
+    queryKey: ['org', orgId, 'setup-guides', 'generic-portal', null],
+    enabled: generic,
+    retry: false,
+    staleTime: 5 * 60_000,
+    queryFn: () =>
+      request<VendorGuide>(
+        'get',
+        buildUrl(GUIDE_PATH, { orgId, vendorKey: 'generic-portal' }, undefined),
+        {
+          pathTemplate: GUIDE_PATH,
+        },
+      ),
+  });
+  return <PostbackProfileEditor {...props} genericPortalUrl={guide.data?.portal_url ?? null} />;
+}
+
+/**
+ * Cycle F: "Add this access point" from a setup guide opens the create form with the adapter
+ * (and post-back profile / site) preselected: `?new=1&adapter_key=…[&profile=…][&site_id=…]`.
+ * Unknown values are ignored (the operator picks them in the form as usual).
+ */
+export function nasCreatePreset(params: URLSearchParams): {
+  open: boolean;
+  adapterKey: string | null;
+  adapterConfig: string | null;
+  siteId: string | null;
+} {
+  const adapter = params.get('adapter_key');
+  const adapterKey =
+    adapter !== null && (ADAPTER_KEYS as readonly string[]).includes(adapter) ? adapter : null;
+  const profile = params.get('profile');
+  const adapterConfig =
+    adapterKey === 'external-portal-postback' &&
+    profile !== null &&
+    POSTBACK_PROFILES.some((p) => p.key === profile)
+      ? JSON.stringify({ profile })
+      : null;
+  return {
+    open: params.get('new') === '1',
+    adapterKey,
+    adapterConfig,
+    siteId: siteParam(params),
+  };
+}
+
 export function NasPage() {
   const { me } = useAuth();
+  const [params, setParams] = useSearchParams();
+  const preset = nasCreatePreset(params);
   const adapterField: FieldDef = {
     name: 'adapter_key',
     label: 'Adapter',
     type: 'select',
     required: true,
     options: ADAPTER_OPTIONS,
+    ...(preset.adapterKey !== null ? { defaultValue: preset.adapterKey } : {}),
     hint: 'The engine adapter that translates policies for this NAS (D-035). Third-party APs on an 802.1X or MAC-auth SSID use the generic adapter; third-party captive portals (Cambium, Aruba, Cisco, …) use the external captive portal adapter; register their AP MACs under Access points. Cisco Meraki splash sign-on uses meraki-splash (RADIUS from the Meraki Cloud; leave NAS IP empty).',
   };
 
@@ -154,6 +234,7 @@ export function NasPage() {
       type: 'select',
       required: true,
       optionsFrom: { path: '/api/v1/orgs/{orgId}/sites', label: (r) => str(r.name ?? r.id) },
+      ...(preset.siteId !== null ? { defaultValue: preset.siteId } : {}),
     },
     {
       name: 'nas_ip',
@@ -183,8 +264,9 @@ export function NasPage() {
       label: 'External captive portal profile',
       type: 'custom',
       visibleWhen: (v) => v.adapter_key === 'external-portal-postback',
+      ...(preset.adapterConfig !== null ? { defaultValue: preset.adapterConfig } : {}),
       render: ({ value, error, onChange }) => (
-        <PostbackProfileEditor value={value} error={error} onChange={onChange} />
+        <PostbackProfileField value={value} error={error} onChange={onChange} />
       ),
     },
     {
@@ -295,6 +377,25 @@ export function NasPage() {
     ],
     fields,
     editFields,
+    openCreate: preset.open,
+    onCreateClosed: () =>
+      setParams(
+        (prev) => {
+          const next = new URLSearchParams(prev);
+          for (const k of ['new', 'adapter_key', 'profile']) next.delete(k);
+          return next;
+        },
+        { replace: true },
+      ),
+    headerActions: ({ orgId }) => (
+      <Link
+        to={`/orgs/${orgId}/setup-guides`}
+        className="inline-flex items-center gap-1.5 rounded-md border border-border bg-surface px-3.5 py-2 text-sm font-medium text-fg hover:bg-muted focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+      >
+        <BookOpen aria-hidden="true" className="h-4 w-4" />
+        How to configure your access points
+      </Link>
+    ),
     secretOnCreate: {
       key: 'secret',
       title: 'RADIUS shared secret',

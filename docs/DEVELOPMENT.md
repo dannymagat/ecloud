@@ -188,6 +188,8 @@ Worker-only environment (read by `apps/worker/src/config.ts`, not yet in the sha
 | `MERAKI_CLOUD_RADIUS_ENABLED` | `false` | Cycle E (D-044): Cisco Meraki cloud-sourced RADIUS. Read identically by the API, the worker and the FreeRADIUS renderer. While false no Meraki listener is rendered, AAA refuses Meraki NAS, the portal refuses Meraki flows and no Meraki Disconnect is sent. Build/test only (D-043: no public RADIUS) |
 | `MERAKI_RADIUS_SOURCE_CIDRS` | (empty) | Meraki Cloud source ranges (public IPv4 /16–/32, comma list) from Dashboard *Help > Firewall info*; empty = nothing rendered. REQUIRES_CLARIFICATION |
 | `MERAKI_RADIUS_PORT_RANGE` | (unset) | `min-max` UDP range for the per-NAS listener pairs (even auth port, acct = auth + 1, ≤ 4096 pairs, not overlapping 1812/1813). REQUIRES_CLARIFICATION |
+| `RADIUS_ADVERTISED_ADDRESS` | (unset) | Cycle F: the RADIUS address (IP or host name) the setup-guide gallery tells access points to use; unset = the guides keep `<ECLOUD_RADIUS_ADDRESS>` and warn. vps-local: `ECLOUD_LAN_IP` |
+| `RADIUS_ADVERTISED_AUTH_PORT` / `RADIUS_ADVERTISED_ACCT_PORT` | `1812` / `1813` | Cycle F: RADIUS ports shown in the setup guides |
 | `MERAKI_MAX_NAS_PER_ORG` | `50` | API: live Meraki NAS per organization (each opens a public listener pair) |
 | `MERAKI_ALLOW_RELAXED_MSGAUTH` | `false` | API + renderer: allow a Meraki NAS without Message-Authenticator (BlastRADIUS) |
 | `RADIUS_SCHEMA_WAIT_S` / `RADIUS_SCHEMA_CHECK` | `60` / `1` | FreeRADIUS entrypoint: wait for / skip the migration-032 schema check (skip only without a database) |

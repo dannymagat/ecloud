@@ -301,9 +301,10 @@ await describeIntegration('@ecloud/api multi-vendor Cycle C (post-back engine)',
     const guide = await f.agent.get(`/api/v1/orgs/${f.orgId}/nas/${f.nasId}/setup-guide`);
     expect(guide.status).toBe(200);
     expect(guide.body.profile).toBe('cambium-hotspot');
-    expect(guide.body.steps[0].value).toBe(
-      `https://portal.ezecloud.ezelink.ai/pb/cambium-hotspot/${f.nasIdentifier}/`,
-    );
+    const portalUrl = `https://portal.ezecloud.ezelink.ai/pb/cambium-hotspot/${f.nasIdentifier}/`;
+    expect(
+      (guide.body.steps as { value: string }[]).filter((s) => s.value === portalUrl),
+    ).toHaveLength(1);
     expect(JSON.stringify(guide.body)).toContain('<RADIUS_SECRET>');
 
     // RADIUS from the NAS verified the AP MAC (Cycle A observeAccessPoint)

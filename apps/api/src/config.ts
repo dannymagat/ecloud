@@ -63,6 +63,22 @@ export const apiEnvSchema = z.object({
       },
       { message: 'comma-separated CIDR list' },
     ),
+  /**
+   * Cycle F (setup-guide gallery): the RADIUS address access points are told to use (an IP
+   * address or a host name). Unset = the guides keep the <ECLOUD_RADIUS_ADDRESS> placeholder and
+   * say it is not configured. vps-local sets it to ECLOUD_LAN_IP (compose.vps-local.yaml).
+   */
+  RADIUS_ADVERTISED_ADDRESS: z
+    .string()
+    .trim()
+    .transform((v) => (v === '' ? undefined : v))
+    .optional()
+    .refine((v) => v === undefined || /^[A-Za-z0-9](?:[A-Za-z0-9.:-]{0,252})$/.test(v), {
+      message: 'an IP address or host name',
+    }),
+  /** Cycle F: RADIUS authentication / accounting ports shown in the setup guides. */
+  RADIUS_ADVERTISED_AUTH_PORT: z.coerce.number().int().min(1).max(65_535).default(1812),
+  RADIUS_ADVERTISED_ACCT_PORT: z.coerce.number().int().min(1).max(65_535).default(1813),
   /** Idle timeout of admin sessions (SECURITY_ARCHITECTURE.md §6.3: 30 min). */
   SESSION_IDLE_SECONDS: z.coerce.number().int().min(60).max(86_400).default(1_800),
   /** `Secure` cookie attribute; defaults to true in production. */
@@ -136,6 +152,16 @@ export interface ApiConfig {
    * MERAKI_RADIUS_PORT_RANGE (`@ecloud/shared` meraki-cloud-radius.ts).
    */
   merakiCloudRadius: MerakiCloudRadiusSettings;
+  /**
+   * Cycle F: values the setup-guide gallery fills in (RADIUS_ADVERTISED_ADDRESS / _AUTH_PORT /
+   * _ACCT_PORT; the default NAS CoA port is RADIUS_COA_PORT). Never a secret.
+   */
+  setupGuide: {
+    radiusAddress: string | null;
+    authPort: number;
+    acctPort: number;
+    coaPort: number;
+  };
 }
 
 export function loadApiConfig(
@@ -224,5 +250,11 @@ export function loadApiConfig(
       ? { vendorApiDenyCidrs: raw.VENDOR_API_DENY_CIDRS }
       : {}),
     merakiCloudRadius,
+    setupGuide: {
+      radiusAddress: raw.RADIUS_ADVERTISED_ADDRESS ?? null,
+      authPort: raw.RADIUS_ADVERTISED_AUTH_PORT,
+      acctPort: raw.RADIUS_ADVERTISED_ACCT_PORT,
+      coaPort: base.radius.coaPort,
+    },
   };
 }

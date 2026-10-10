@@ -36,6 +36,7 @@ describe('permission-driven navigation', () => {
       'sites',
       'nas',
       'access-points',
+      'setup-guides',
     ]);
     expect(visibleOrgNav(me, ORG_B)).toEqual([]);
     expect(visiblePlatformNav(me)).toEqual([]);
@@ -108,7 +109,10 @@ describe('permission-driven navigation', () => {
   it('groups follow the approved sidebar; empty groups are hidden', () => {
     expect(ORG_GROUPS.map((g) => [g.label, g.items.map((i) => i.path)])).toEqual([
       ['Bandwidth Management', ['policies', 'policy-assignments', 'ssid-rate-limit-export']],
-      ['Network', ['sites', 'nas', 'access-points', 'controllers', 'network-devices']],
+      [
+        'Network',
+        ['sites', 'nas', 'access-points', 'setup-guides', 'controllers', 'network-devices'],
+      ],
       ['Clients', ['sessions', 'users', 'user-groups', 'client-devices', 'vouchers']],
       ['Reports', ['usage', 'accounting', 'reports']],
       ['Login Page', ['portals']],
@@ -116,7 +120,7 @@ describe('permission-driven navigation', () => {
     ]);
     const me = adminMe([orgScope(ORG_A, ['nas:read', 'accounting:read'])]);
     expect(visibleOrgGroups(me, ORG_A).map((g) => [g.key, g.items.map((i) => i.path)])).toEqual([
-      ['network', ['nas', 'access-points']],
+      ['network', ['nas', 'access-points', 'setup-guides']],
       ['reports', ['usage', 'accounting']],
     ]);
     expect(visibleOrgGroups(me, ORG_B)).toEqual([]);
@@ -154,6 +158,8 @@ describe('permission-driven navigation', () => {
       'audit-log',
       'administrators',
       'api-keys',
+      // Cycle F: setup-guide gallery
+      'setup-guides',
     ];
     expect(ORG_NAV.map((i) => i.path).sort()).toEqual([...previous].sort());
     expect(PLATFORM_NAV.map((i) => i.path)).toEqual([

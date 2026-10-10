@@ -15461,6 +15461,364 @@
         "tags": ["platform"]
       }
     },
+    "/api/v1/orgs/{orgId}/setup-guides": {
+      "get": {
+        "description": "Permission: `nas:read`",
+        "operationId": "get_api_v1_orgs_orgId_setup_guides",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "orgId",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "data": {
+                      "items": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "adapter_key": { "type": "string" },
+                          "display_name": { "type": "string" },
+                          "family": {
+                            "enum": [
+                              "uam",
+                              "router-hotspot",
+                              "external-portal",
+                              "cloud-splash",
+                              "controller-api",
+                              "radius-8021x"
+                            ],
+                            "type": "string"
+                          },
+                          "family_label": { "type": "string" },
+                          "lifecycle": { "type": ["string", "null"] },
+                          "product_line": { "type": "string" },
+                          "profile": { "type": ["string", "null"] },
+                          "status": {
+                            "enum": ["tested_on_device", "documented", "generic_profile"],
+                            "type": "string"
+                          },
+                          "status_label": { "type": "string" },
+                          "vendor_key": { "type": "string" }
+                        },
+                        "required": [
+                          "vendor_key",
+                          "display_name",
+                          "product_line",
+                          "adapter_key",
+                          "profile",
+                          "family",
+                          "family_label",
+                          "status",
+                          "status_label",
+                          "lifecycle"
+                        ],
+                        "type": "object"
+                      },
+                      "type": "array"
+                    },
+                    "families": {
+                      "items": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "key": {
+                            "enum": [
+                              "uam",
+                              "router-hotspot",
+                              "external-portal",
+                              "cloud-splash",
+                              "controller-api",
+                              "radius-8021x"
+                            ],
+                            "type": "string"
+                          },
+                          "label": { "type": "string" }
+                        },
+                        "required": ["key", "label"],
+                        "type": "object"
+                      },
+                      "type": "array"
+                    }
+                  },
+                  "required": ["data", "families"],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Catalogue"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Validation failed (application/problem+json)"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Authentication required"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Permission denied"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Not found (also returned for objects of other tenants)"
+          }
+        },
+        "summary": "Setup-guide gallery: vendor catalogue (Cycle F)",
+        "tags": ["nas"]
+      }
+    },
+    "/api/v1/orgs/{orgId}/setup-guides/{vendorKey}": {
+      "get": {
+        "description": "Permission: `nas:read`",
+        "operationId": "get_api_v1_orgs_orgId_setup_guides_vendorKey",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "orgId",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "vendorKey",
+            "required": true,
+            "schema": { "pattern": "^[a-z0-9-]{1,64}$", "type": "string" }
+          },
+          {
+            "in": "query",
+            "name": "site_id",
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "adapter_key": { "type": "string" },
+                    "add_nas": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "adapter_key": { "type": "string" },
+                        "profile": { "type": ["string", "null"] }
+                      },
+                      "required": ["adapter_key", "profile"],
+                      "type": "object"
+                    },
+                    "display_name": { "type": "string" },
+                    "family": {
+                      "enum": [
+                        "uam",
+                        "router-hotspot",
+                        "external-portal",
+                        "cloud-splash",
+                        "controller-api",
+                        "radius-8021x"
+                      ],
+                      "type": "string"
+                    },
+                    "family_label": { "type": "string" },
+                    "lifecycle": { "type": ["string", "null"] },
+                    "meraki": {
+                      "anyOf": [
+                        {
+                          "additionalProperties": false,
+                          "properties": {
+                            "das_port": { "type": "number" },
+                            "enabled": { "type": "boolean" },
+                            "message": { "type": "string" },
+                            "port_range": {
+                              "anyOf": [
+                                {
+                                  "additionalProperties": false,
+                                  "properties": {
+                                    "max": { "type": "number" },
+                                    "min": { "type": "number" }
+                                  },
+                                  "required": ["min", "max"],
+                                  "type": "object"
+                                },
+                                { "type": "null" }
+                              ]
+                            },
+                            "radius_reachable_from_meraki": { "type": "string" },
+                            "source_cidrs": { "items": { "type": "string" }, "type": "array" },
+                            "state": { "type": "string" }
+                          },
+                          "required": [
+                            "enabled",
+                            "state",
+                            "message",
+                            "source_cidrs",
+                            "port_range",
+                            "das_port",
+                            "radius_reachable_from_meraki"
+                          ],
+                          "type": "object"
+                        },
+                        { "type": "null" }
+                      ]
+                    },
+                    "portal_url": { "type": ["string", "null"] },
+                    "preflight": { "items": { "type": "string" }, "type": "array" },
+                    "product_line": { "type": "string" },
+                    "profile": { "type": ["string", "null"] },
+                    "radius": {
+                      "anyOf": [
+                        {
+                          "additionalProperties": false,
+                          "properties": {
+                            "acct_port": { "type": "number" },
+                            "address": { "type": ["string", "null"] },
+                            "auth_port": { "type": "number" },
+                            "coa_port": { "type": "number" }
+                          },
+                          "required": ["address", "auth_port", "acct_port", "coa_port"],
+                          "type": "object"
+                        },
+                        { "type": "null" }
+                      ]
+                    },
+                    "secret_note": { "type": "string" },
+                    "site": {
+                      "anyOf": [
+                        {
+                          "additionalProperties": false,
+                          "properties": {
+                            "id": { "type": "string" },
+                            "name": { "type": "string" }
+                          },
+                          "required": ["id", "name"],
+                          "type": "object"
+                        },
+                        { "type": "null" }
+                      ]
+                    },
+                    "status": {
+                      "enum": ["tested_on_device", "documented", "generic_profile"],
+                      "type": "string"
+                    },
+                    "status_label": { "type": "string" },
+                    "steps": {
+                      "items": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "evidence": { "items": { "type": "string" }, "type": "array" },
+                          "id": { "type": "string" },
+                          "secret": { "type": "boolean" },
+                          "setting": { "type": "string" },
+                          "title": { "type": "string" },
+                          "value": { "type": "string" }
+                        },
+                        "required": ["id", "title", "setting", "value", "evidence", "secret"],
+                        "type": "object"
+                      },
+                      "type": "array"
+                    },
+                    "vendor_key": { "type": "string" },
+                    "vendor_notes": { "items": { "type": "string" }, "type": "array" },
+                    "walled_garden": { "items": { "type": "string" }, "type": "array" },
+                    "warnings": {
+                      "items": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "code": { "type": "string" },
+                          "message": { "type": "string" }
+                        },
+                        "required": ["code", "message"],
+                        "type": "object"
+                      },
+                      "type": "array"
+                    }
+                  },
+                  "required": [
+                    "vendor_key",
+                    "display_name",
+                    "product_line",
+                    "adapter_key",
+                    "profile",
+                    "family",
+                    "family_label",
+                    "status",
+                    "status_label",
+                    "lifecycle",
+                    "site",
+                    "portal_url",
+                    "walled_garden",
+                    "radius",
+                    "preflight",
+                    "vendor_notes",
+                    "steps",
+                    "warnings",
+                    "secret_note",
+                    "add_nas",
+                    "meraki"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Guide"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Validation failed (application/problem+json)"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Authentication required"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Permission denied"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Not found (also returned for objects of other tenants)"
+          }
+        },
+        "summary": "Setup guide of a vendor, ECLOUD values filled in, secrets never shown (Cycle F)",
+        "tags": ["nas"]
+      }
+    },
     "/healthz": {
       "get": {
         "responses": { "200": { "description": "OK" } },

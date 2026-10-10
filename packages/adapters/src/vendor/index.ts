@@ -92,3 +92,21 @@ export {
   type MerakiRedirect,
   type MerakiRedirectResult,
 } from './meraki.js';
+export {
+  GALLERY_ENTRIES,
+  GALLERY_FAMILIES,
+  GALLERY_FAMILY_LABELS,
+  GALLERY_STATUSES,
+  GALLERY_STATUS_LABELS,
+  SECRET_PLACEHOLDERS,
+  buildGalleryGuide,
+  galleryRows,
+  galleryStatus,
+  getGalleryEntry,
+  type GalleryEntry,
+  type GalleryFamily,
+  type GalleryGuide,
+  type GalleryStatus,
+  type GalleryStep,
+  type GuideValues,
+} from './gallery.js';

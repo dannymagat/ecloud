@@ -656,15 +656,29 @@ export function postbackSetupGuide(
 ): readonly SetupStep[] {
   const ev = profile.evidence;
   const nasId = POSTBACK_NASID_SEGMENT_RE.test(site.nasId) ? site.nasId : '<NAS_IDENTIFIER>';
+  const portalUrl = postbackPortalUrl(profile.key, nasId);
+  // The portal URL is shown once: at the vendor step that names the device setting it goes in
+  // (with the note that it carries this NAS identifier); the generic step only when no vendor
+  // step does.
+  const vendor = vendorSteps(profile, nasId).map((st) =>
+    st.value === portalUrl && !/\bNAS\b/.test(st.title)
+      ? { ...st, title: `${st.title}; the URL includes this NAS identifier` }
+      : st,
+  );
+  const vendorHasUrl = vendor.some((st) => st.value === portalUrl);
   return [
-    guideStep(
-      'portal-url',
-      'External portal URL (ECLOUD; includes this NAS identifier)',
-      'External portal URL',
-      postbackPortalUrl(profile.key, nasId),
-      ev,
-    ),
-    ...vendorSteps(profile, nasId),
+    ...(vendorHasUrl
+      ? []
+      : [
+          guideStep(
+            'portal-url',
+            'External portal URL (ECLOUD; includes this NAS identifier)',
+            'External portal URL',
+            portalUrl,
+            ev,
+          ),
+        ]),
+    ...vendor,
     guideStep(
       'radius-auth',
       'RADIUS authentication server (PAP)',

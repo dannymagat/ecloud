@@ -45,6 +45,10 @@ export interface ResourceConfig {
   rowActions?: (row: Row, ctx: { orgId: string; refresh: () => void }) => ReactNode;
   headerActions?: (ctx: { orgId: string; refresh: () => void }) => ReactNode;
   emptyHint?: ReactNode;
+  /** Open the create form on arrival (e.g. "Add this access point" from a setup guide). */
+  openCreate?: boolean;
+  /** Called when the create dialog closes (e.g. to drop the URL parameters that opened it). */
+  onCreateClosed?: () => void;
 }
 
 export function ResourcePage({
@@ -83,7 +87,7 @@ function ResourceScreen({ config, embedded }: { config: ResourceConfig; embedded
   const canUpdate = config.permissions.update ? can(me, config.permissions.update, target) : false;
   const canDelete = config.permissions.delete ? can(me, config.permissions.delete, target) : false;
 
-  const [creating, setCreating] = useState(false);
+  const [creating, setCreating] = useState(() => config.openCreate === true && canCreate);
   const [editing, setEditing] = useState<Row | null>(null);
   const [deleting, setDeleting] = useState<Row | null>(null);
   const [secret, setSecret] = useState<string | null>(null);
@@ -239,6 +243,7 @@ function ResourceScreen({ config, embedded }: { config: ResourceConfig; embedded
         onClose={() => {
           setCreating(false);
           setSecret(null);
+          config.onCreateClosed?.();
         }}
         wide
       >
@@ -250,6 +255,7 @@ function ResourceScreen({ config, embedded }: { config: ResourceConfig; embedded
             onDone={() => {
               setSecret(null);
               setCreating(false);
+              config.onCreateClosed?.();
             }}
           />
         ) : (
@@ -260,7 +266,10 @@ function ResourceScreen({ config, embedded }: { config: ResourceConfig; embedded
             submitLabel="Create"
             busy={create.isPending}
             problem={problem}
-            onCancel={() => setCreating(false)}
+            onCancel={() => {
+              setCreating(false);
+              config.onCreateClosed?.();
+            }}
             onSubmit={(values: FormValues) => {
               setProblem(null);
               create.mutate(toBody(config.fields, values, 'create'));

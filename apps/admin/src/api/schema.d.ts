@@ -2277,6 +2277,46 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/api/v1/orgs/{orgId}/setup-guides': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Setup-guide gallery: vendor catalogue (Cycle F)
+     * @description Permission: `nas:read`
+     */
+    get: operations['get_api_v1_orgs_orgId_setup_guides'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/orgs/{orgId}/setup-guides/{vendorKey}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Setup guide of a vendor, ECLOUD values filled in, secrets never shown (Cycle F)
+     * @description Permission: `nas:read`
+     */
+    get: operations['get_api_v1_orgs_orgId_setup_guides_vendorKey'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/healthz': {
     parameters: {
       query?: never;
@@ -14173,6 +14213,219 @@ export interface operations {
             nas_identifier: string;
             organization_id: string | null;
             released: boolean;
+          };
+        };
+      };
+      /** @description Validation failed (application/problem+json) */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Authentication required */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Permission denied */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Not found (also returned for objects of other tenants) */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+    };
+  };
+  get_api_v1_orgs_orgId_setup_guides: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        orgId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Catalogue */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            data: {
+              adapter_key: string;
+              display_name: string;
+              /** @enum {string} */
+              family:
+                | 'uam'
+                | 'router-hotspot'
+                | 'external-portal'
+                | 'cloud-splash'
+                | 'controller-api'
+                | 'radius-8021x';
+              family_label: string;
+              lifecycle: string | null;
+              product_line: string;
+              profile: string | null;
+              /** @enum {string} */
+              status: 'tested_on_device' | 'documented' | 'generic_profile';
+              status_label: string;
+              vendor_key: string;
+            }[];
+            families: {
+              /** @enum {string} */
+              key:
+                | 'uam'
+                | 'router-hotspot'
+                | 'external-portal'
+                | 'cloud-splash'
+                | 'controller-api'
+                | 'radius-8021x';
+              label: string;
+            }[];
+          };
+        };
+      };
+      /** @description Validation failed (application/problem+json) */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Authentication required */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Permission denied */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Not found (also returned for objects of other tenants) */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+    };
+  };
+  get_api_v1_orgs_orgId_setup_guides_vendorKey: {
+    parameters: {
+      query?: {
+        site_id?: string;
+      };
+      header?: never;
+      path: {
+        orgId: string;
+        vendorKey: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Guide */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            adapter_key: string;
+            add_nas: {
+              adapter_key: string;
+              profile: string | null;
+            };
+            display_name: string;
+            /** @enum {string} */
+            family:
+              | 'uam'
+              | 'router-hotspot'
+              | 'external-portal'
+              | 'cloud-splash'
+              | 'controller-api'
+              | 'radius-8021x';
+            family_label: string;
+            lifecycle: string | null;
+            meraki: {
+              das_port: number;
+              enabled: boolean;
+              message: string;
+              port_range: {
+                max: number;
+                min: number;
+              } | null;
+              radius_reachable_from_meraki: string;
+              source_cidrs: string[];
+              state: string;
+            } | null;
+            portal_url: string | null;
+            preflight: string[];
+            product_line: string;
+            profile: string | null;
+            radius: {
+              acct_port: number;
+              address: string | null;
+              auth_port: number;
+              coa_port: number;
+            } | null;
+            secret_note: string;
+            site: {
+              id: string;
+              name: string;
+            } | null;
+            /** @enum {string} */
+            status: 'tested_on_device' | 'documented' | 'generic_profile';
+            status_label: string;
+            steps: {
+              evidence: string[];
+              id: string;
+              secret: boolean;
+              setting: string;
+              title: string;
+              value: string;
+            }[];
+            vendor_key: string;
+            vendor_notes: string[];
+            walled_garden: string[];
+            warnings: {
+              code: string;
+              message: string;
+            }[];
           };
         };
       };

@@ -65,7 +65,9 @@ export function initialValues(
     else if (f.type === 'custom')
       values[f.name] =
         v === null || v === undefined || (typeof v === 'object' && Object.keys(v).length === 0)
-          ? ''
+          ? row === undefined && typeof f.defaultValue === 'string'
+            ? f.defaultValue
+            : ''
           : JSON.stringify(v);
     else if (v === null || v === undefined)
       values[f.name] = typeof f.defaultValue === 'string' ? f.defaultValue : '';

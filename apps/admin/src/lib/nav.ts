@@ -5,6 +5,7 @@
 import {
   Activity,
   BarChart3,
+  BookOpen,
   Building,
   Database,
   Cpu,
@@ -101,6 +102,8 @@ export const ORG_GROUPS: readonly NavGroup[] = [
       { path: 'sites', label: 'Sites', icon: MapPin, anyOf: ['site:read'] },
       { path: 'nas', label: 'NAS clients (access points)', icon: Server, anyOf: ['nas:read'] },
       { path: 'access-points', label: 'Access points (AP MAC)', icon: Wifi, anyOf: ['nas:read'] },
+      // Cycle F: "How to configure your access points" gallery (vendor setup guides).
+      { path: 'setup-guides', label: 'Setup guides', icon: BookOpen, anyOf: ['nas:read'] },
       { path: 'controllers', label: 'Controllers', icon: Cpu, anyOf: ['controller:read'] },
       {
         path: 'network-devices',

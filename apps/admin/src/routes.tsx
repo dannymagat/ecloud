@@ -7,6 +7,8 @@ import { DashboardPage, SiteDashboardPage } from './features/dashboard/Dashboard
 import { AccessPointsPage } from './features/org/AccessPointsPage';
 import { ControllersPage } from './features/org/ControllersPage';
 import { NasPage } from './features/org/NasPage';
+import { SetupGuidesPage } from './features/setup-guides/SetupGuidesPage';
+import { VendorGuidePage } from './features/setup-guides/VendorGuidePage';
 import {
   ApiKeysPage,
   ClientDevicesPage,
@@ -79,6 +81,8 @@ export const routes: RouteObject[] = [
                   { path: 'network-devices', element: <NetworkDevicesPage /> },
                   { path: 'nas', element: <NasPage /> },
                   { path: 'access-points', element: <AccessPointsPage /> },
+                  { path: 'setup-guides', element: <SetupGuidesPage /> },
+                  { path: 'setup-guides/:vendorKey', element: <VendorGuidePage /> },
                   { path: 'controllers', element: <ControllersPage /> },
                   { path: 'users', element: <UsersPage /> },
                   { path: 'user-groups', element: <UserGroupsPage /> },
