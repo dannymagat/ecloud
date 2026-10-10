@@ -9,6 +9,7 @@
  */
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
+import { useSearchParams } from 'react-router';
 import { buildUrl, downloadFile, request, saveBlob } from '../../api/client';
 import { DataTable } from '../../components/DataTable';
 import { FreshnessLine } from '../../components/Freshness';
@@ -51,6 +52,7 @@ import { useAuth } from '../../lib/auth';
 import { display, formatBytes, formatDateTime, formatDuration } from '../../lib/format';
 import { useOrgId } from '../../lib/org';
 import { can } from '../../lib/permissions';
+import { siteParam, useSiteName } from '../../lib/sites';
 
 export const TOP_N_OPTIONS = [10, 25, 50] as const;
 
@@ -332,7 +334,17 @@ function UsageScreen() {
   const [limit, setLimit] = useState<number>(10);
   /** `YYYY-MM-DD` (daily) or `YYYY-MM` (monthly); empty = the current period. */
   const [periodStart, setPeriodStart] = useState('');
-  const [selection, setSelection] = useState<Selection | null>(null);
+  // A `?site_id=` (dashboard tile, top-bar site chip) opens that site's usage card.
+  const [params] = useSearchParams();
+  const urlSite = siteParam(params);
+  const urlSiteName = useSiteName(me, orgId, urlSite);
+  const [selection, setSelection] = useState<Selection | null>(() =>
+    urlSite ? { subject_type: 'site', subject_id: urlSite, label: 'Selected site' } : null,
+  );
+  const shown =
+    selection && selection.subject_id === urlSite && urlSiteName
+      ? { ...selection, label: urlSiteName }
+      : selection;
   const usageAvailable = hasOperation(doc.data, 'get', USAGE_PATH);
   const topAvailable = hasOperation(doc.data, 'get', USAGE_TOP_PATH);
   const top = useQuery({
@@ -393,10 +405,10 @@ function UsageScreen() {
           ) : (
             <Unavailable endpoint={`GET ${USAGE_PATH}`} />
           )}
-          {selection && usageAvailable ? (
+          {shown && usageAvailable ? (
             <SubjectCard
               orgId={orgId}
-              selection={selection}
+              selection={shown}
               period={period}
               onClose={() => setSelection(null)}
             />
@@ -526,9 +538,10 @@ function UsageScreen() {
 }
 
 export function UsagePage() {
+  const [params] = useSearchParams();
   return (
     <RequireOrgPermission permission="accounting:read">
-      <UsageScreen />
+      <UsageScreen key={siteParam(params) ?? ''} />
     </RequireOrgPermission>
   );
 }

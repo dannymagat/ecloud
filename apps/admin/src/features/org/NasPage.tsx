@@ -141,6 +141,7 @@ export function NasPage() {
 
   const config: ResourceConfig = {
     title: 'NAS clients',
+    siteFilter: true,
     singular: 'NAS client',
     description:
       'RADIUS clients (access points / gateways). The shared secret is shown once when the NAS is created or its secret rotated.',

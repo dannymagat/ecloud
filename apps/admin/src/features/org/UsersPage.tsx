@@ -139,6 +139,7 @@ export function UsersPage() {
   const { me } = useAuth();
   const config: ResourceConfig = {
     title: 'Users',
+    siteFilter: true,
     singular: 'User',
     description:
       'Subscribers who authenticate on the hotspot (password, MAC, voucher or identity provider).',

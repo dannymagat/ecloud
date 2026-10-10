@@ -7,6 +7,7 @@
  */
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { useState, type FormEvent } from 'react';
+import { useSearchParams } from 'react-router';
 import { buildUrl, downloadFile, request, saveBlob } from '../../api/client';
 import type { Page, Row } from '../../api/types';
 import { DataTable } from '../../components/DataTable';
@@ -46,6 +47,7 @@ import {
 import { display, formatBytes, formatDateTime, formatDuration } from '../../lib/format';
 import { useOrgId } from '../../lib/org';
 import { can } from '../../lib/permissions';
+import { siteParam } from '../../lib/sites';
 
 const PERIOD_LABEL: Record<string, string> = {
   daily: 'Day (site time)',
@@ -257,7 +259,11 @@ function ReportsScreen() {
     : null;
   const defs = definitions.data?.data ?? [];
   const [key, setKey] = useState('');
-  const [values, setValues] = useState<Record<string, string>>({});
+  // A `?site_id=` (dashboard tile, top-bar site chip) pre-fills the site parameter.
+  const [params] = useSearchParams();
+  const urlSite = siteParam(params);
+  const initialValues = (): Record<string, string> => (urlSite ? { site_id: urlSite } : {});
+  const [values, setValues] = useState<Record<string, string>>(initialValues);
   const [run, setRun] = useState<Run | null>(null);
   const selected = defs.find((d) => d.key === key) ?? defs[0];
   const period =
@@ -304,7 +310,7 @@ function ReportsScreen() {
                   value={selected.key}
                   onChange={(e) => {
                     setKey(e.target.value);
-                    setValues({});
+                    setValues(initialValues());
                     setRun(null);
                   }}
                   options={defs.map((d) => ({ value: d.key, label: d.title }))}
@@ -361,9 +367,10 @@ function ReportsScreen() {
 }
 
 export function ReportsPage() {
+  const [params] = useSearchParams();
   return (
     <RequireOrgPermission permission={DASHBOARD_PERMISSION}>
-      <ReportsScreen />
+      <ReportsScreen key={siteParam(params) ?? ''} />
     </RequireOrgPermission>
   );
 }

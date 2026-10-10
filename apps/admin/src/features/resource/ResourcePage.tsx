@@ -4,6 +4,7 @@
  */
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useState, type ReactNode } from 'react';
+import { useSearchParams } from 'react-router';
 import { buildUrl, newIdempotencyKey, request } from '../../api/client';
 import { problemOf, type Problem } from '../../api/problem';
 import type { Page, Row } from '../../api/types';
@@ -11,11 +12,12 @@ import { DataTable, type Column } from '../../components/DataTable';
 import { Dialog } from '../../components/Dialog';
 import { ProblemAlert } from '../../components/ProblemAlert';
 import { SecretOnce } from '../../components/SecretOnce';
-import { Button, Card, PageHeader } from '../../components/ui';
+import { Button, Card, Notice, PageHeader } from '../../components/ui';
 import { useAuth } from '../../lib/auth';
 import { useOrgId } from '../../lib/org';
 import { can } from '../../lib/permissions';
 import { useCursorList } from '../../lib/queries';
+import { SITE_PARAM, siteParam, useSiteName } from '../../lib/sites';
 import { RequireOrgPermission } from '../../layout/guards';
 import { toBody, type FieldDef, type FormValues } from './form';
 import type { OrgCollectionPath } from './paths';
@@ -35,6 +37,11 @@ export interface ResourceConfig {
   /** Response key holding a value shown once after create (e.g. `secret`, `key`, `token`). */
   secretOnCreate?: { key: string; title: string; description?: string };
   query?: Record<string, string>;
+  /**
+   * The list endpoint accepts `site_id`: a `?site_id=` in the page URL (dashboard tiles, the
+   * top-bar site chip) filters the list to that site.
+   */
+  siteFilter?: boolean;
   rowActions?: (row: Row, ctx: { orgId: string; refresh: () => void }) => ReactNode;
   headerActions?: (ctx: { orgId: string; refresh: () => void }) => ReactNode;
   emptyHint?: ReactNode;
@@ -58,16 +65,16 @@ function ResourceScreen({ config, embedded }: { config: ResourceConfig; embedded
   const orgId = useOrgId();
   const { me } = useAuth();
   const qc = useQueryClient();
-  const key = ['org', orgId, config.path, config.query];
+  const [params, setParams] = useSearchParams();
+  const siteId = config.siteFilter ? siteParam(params) : null;
+  const siteName = useSiteName(me, orgId, siteId);
+  const query = siteId ? { ...config.query, [SITE_PARAM]: siteId } : config.query;
+  const key = ['org', orgId, config.path, query];
   const list = useCursorList<Row>(key, (cursor, signal) =>
-    request<Page<Row>>(
-      'get',
-      buildUrl(config.path, { orgId }, { limit: 50, cursor, ...config.query }),
-      {
-        signal,
-        pathTemplate: config.path,
-      },
-    ),
+    request<Page<Row>>('get', buildUrl(config.path, { orgId }, { limit: 50, cursor, ...query }), {
+      signal,
+      pathTemplate: config.path,
+    }),
   );
   const refresh = () => void qc.invalidateQueries({ queryKey: ['org', orgId] });
 
@@ -187,6 +194,29 @@ function ResourceScreen({ config, embedded }: { config: ResourceConfig; embedded
       >
         {embedded && config.description ? (
           <p className="mb-3 text-sm text-subtle">{config.description}</p>
+        ) : null}
+        {siteId ? (
+          <div className="mb-3" data-site-filter>
+            <Notice tone="info">
+              Showing {config.title.toLowerCase()} of {siteName ?? 'one site'} only.{' '}
+              <button
+                type="button"
+                className="font-medium underline hover:no-underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
+                onClick={() =>
+                  setParams(
+                    (prev) => {
+                      const next = new URLSearchParams(prev);
+                      next.delete(SITE_PARAM);
+                      return next;
+                    },
+                    { replace: true },
+                  )
+                }
+              >
+                Show all sites
+              </button>
+            </Notice>
+          </div>
         ) : null}
         <DataTable
           caption={config.title}

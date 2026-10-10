@@ -13,6 +13,8 @@ import { z } from 'zod';
 import { freshnessOf } from '../accounting-views.js';
 import type { AppDeps } from '../context.js';
 import {
+  ACTIVE_USERS_DAYS,
+  activeUsersSince,
   activityCounts,
   anomalyCounts,
   boundsValues,
@@ -34,6 +36,7 @@ import {
   siteFilter,
   toCount,
   topRejectReasons,
+  usersCreatedSince,
   type CounterSums,
   type OutcomeRow,
   type ReportScope,
@@ -118,6 +121,16 @@ const DashboardSchema = z
       active: z.number(),
       started_today: z.number(),
       started_today_basis: z.string(),
+      open_users: z.number(),
+      open_devices: z.number(),
+      open_distinct_basis: z.string(),
+    }),
+    users: z.object({
+      active_window_days: z.number(),
+      active: z.number(),
+      active_basis: z.string(),
+      new_today: z.number(),
+      new_today_basis: z.string(),
     }),
     usage: z.object({
       today: CountersSchema,
@@ -413,6 +426,17 @@ export function dashboardRoutes(deps: AppDeps): AnyRouteSpec[] {
         }));
         const open = await openSessionCounts(trx, scope);
         const startedToday = await sessionsStartedSince(trx, scope.orgId, todays);
+        const activeUsers = await activeUsersSince(
+          trx,
+          scope,
+          new Date(at.getTime() - ACTIVE_USERS_DAYS * 86_400_000),
+        );
+        const newUsers = await usersCreatedSince(
+          trx,
+          scope,
+          todays,
+          new Date(`${at.toISOString().slice(0, 10)}T00:00:00Z`),
+        );
         const usageToday = await siteCountersAt(
           trx,
           scope.orgId,
@@ -446,6 +470,18 @@ export function dashboardRoutes(deps: AppDeps): AnyRouteSpec[] {
             started_today: startedToday,
             started_today_basis:
               "sessions (not expired authorizations) started since each site's local midnight (Q65)",
+            open_users: open.users,
+            open_devices: open.devices,
+            open_distinct_basis:
+              'distinct live (not deleted) subscriber records (open_users) and client MAC addresses (open_devices) of the open sessions; sessions without a subscriber record or MAC are not counted',
+          },
+          users: {
+            active_window_days: ACTIVE_USERS_DAYS,
+            active: activeUsers,
+            active_basis: `distinct live (not deleted) subscriber records with a session started in the last ${String(ACTIVE_USERS_DAYS)} days (rolling) or still open`,
+            new_today: newUsers,
+            new_today_basis:
+              "subscriber records created since their site's local midnight (Q65); subscribers without a site count from UTC midnight, in the organization-wide view only",
           },
           usage: {
             today: usageToday.sums,

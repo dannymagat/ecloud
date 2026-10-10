@@ -216,19 +216,131 @@ export function localDateOf(ts: string): RawBuilder<string> {
 
 // ------------------------------------------------------------------ sessions
 
+/**
+ * Open sessions of the scope (partial index 026) with the distinct live subscribers and client
+ * MACs among them. Subscribers are joined by primary key (1:1, so the session counts are
+ * unchanged); soft-deleted subscribers are not counted. Exported so tests EXPLAIN the real SQL.
+ */
+export function openSessionCountsQuery(
+  scope: ReportScope,
+): RawBuilder<{ authorized: string; active: string; users: string; devices: string }> {
+  return sql<{ authorized: string; active: string; users: string; devices: string }>`
+    SELECT count(*) FILTER (WHERE s.status = 'authorized') AS authorized,
+           count(*) FILTER (WHERE s.status = 'active') AS active,
+           count(DISTINCT u.id) AS users,
+           count(DISTINCT s.mac) AS devices
+    FROM sessions s
+    LEFT JOIN users u ON u.id = s.user_id AND u.deleted_at IS NULL
+    WHERE s.organization_id = ${scope.orgId}
+      AND s.status IN ('authorized', 'active')
+      AND ${siteFilter(scope, 's.site_id')}
+  `;
+}
+
 export async function openSessionCounts(
   trx: DbExecutor,
   scope: ReportScope,
-): Promise<{ authorized: number; active: number }> {
-  const r = await sql<{ authorized: string; active: string }>`
-    SELECT count(*) FILTER (WHERE status = 'authorized') AS authorized,
-           count(*) FILTER (WHERE status = 'active') AS active
-    FROM sessions
-    WHERE organization_id = ${scope.orgId}
-      AND status IN ('authorized', 'active')
-      AND ${siteFilter(scope, 'site_id')}
-  `.execute(trx);
-  return { authorized: n(r.rows[0]?.authorized), active: n(r.rows[0]?.active) };
+): Promise<{ authorized: number; active: number; users: number; devices: number }> {
+  const r = await openSessionCountsQuery(scope).execute(trx);
+  const row = r.rows[0];
+  return {
+    authorized: n(row?.authorized),
+    active: n(row?.active),
+    users: n(row?.users),
+    devices: n(row?.devices),
+  };
+}
+
+// ------------------------------------------------------------------ subscribers (users)
+
+/** Rolling window of the "active users" figure. */
+export const ACTIVE_USERS_DAYS = 30;
+
+/**
+ * Distinct live subscriber records (`sessions.user_id`, not soft-deleted) with a session started
+ * in `[since, now]` or still open: two index-supported branches (org + site + started_at,
+ * migration 024; the open partial index, migration 026), then a primary-key join to `users`.
+ * Expired authorizations are not sessions (D-036); sessions without a subscriber record are not
+ * counted.
+ */
+export function activeUsersQuery(scope: ReportScope, since: Date): RawBuilder<{ n: string }> {
+  return sql<{ n: string }>`
+    SELECT count(DISTINCT x.user_id) AS n FROM (
+      SELECT user_id FROM sessions
+      WHERE organization_id = ${scope.orgId}
+        AND started_at >= ${since.toISOString()}::timestamptz
+        AND status <> 'expired'
+        AND user_id IS NOT NULL
+        AND ${siteFilter(scope, 'site_id')}
+      UNION ALL
+      SELECT user_id FROM sessions
+      WHERE organization_id = ${scope.orgId}
+        AND status IN ('authorized', 'active')
+        AND user_id IS NOT NULL
+        AND ${siteFilter(scope, 'site_id')}
+    ) x
+    JOIN users u ON u.id = x.user_id AND u.deleted_at IS NULL
+  `;
+}
+
+export async function activeUsersSince(
+  trx: DbExecutor,
+  scope: ReportScope,
+  since: Date,
+): Promise<number> {
+  const r = await activeUsersQuery(scope, since).execute(trx);
+  return n(r.rows[0]?.n);
+}
+
+/**
+ * Live subscriber records created since their site's local midnight (Q65, as
+ * `sessionsStartedSince`). Subscribers without a site belong to the whole organization: they are
+ * counted only for an organization-level scope, from UTC midnight (the convention for rows
+ * without a site, see `dayWindow`). Bounded by the organization (RLS + `organization_id`
+ * prefix of the users indexes) and the creation instant. Null when nothing can match.
+ */
+export function usersCreatedQuery(
+  scope: ReportScope,
+  starts: readonly { site_id: string; since: Date }[],
+  utcMidnight: Date,
+): RawBuilder<{ n: string }> | null {
+  const includeSiteless = scope.allSites;
+  if (starts.length === 0 && !includeSiteless) return null;
+  const minSince = new Date(
+    Math.min(
+      ...starts.map((s) => s.since.getTime()),
+      ...(includeSiteless ? [utcMidnight.getTime()] : []),
+    ),
+  );
+  const values =
+    starts.length === 0
+      ? sql`(VALUES (NULL::uuid, NULL::timestamptz)) AS v(site_id, since)`
+      : sql`(VALUES ${sql.join(
+          starts.map((t) => sql`(${t.site_id}::uuid, ${t.since.toISOString()}::timestamptz)`),
+        )}) AS v(site_id, since)`;
+  return sql<{ n: string }>`
+    SELECT count(*) AS n
+    FROM users u
+    LEFT JOIN ${values} ON v.site_id = u.site_id
+    WHERE u.organization_id = ${scope.orgId}
+      AND u.deleted_at IS NULL
+      AND u.created_at >= ${minSince.toISOString()}::timestamptz
+      AND ((v.site_id IS NOT NULL AND u.created_at >= v.since)
+        OR (${includeSiteless} AND u.site_id IS NULL
+            AND u.created_at >= ${utcMidnight.toISOString()}::timestamptz))
+  `;
+}
+
+export async function usersCreatedSince(
+  trx: DbExecutor,
+  scope: ReportScope,
+  starts: readonly { site_id: string; since: Date }[],
+  utcMidnight: Date,
+): Promise<number> {
+  const q = usersCreatedQuery(scope, starts, utcMidnight);
+  if (q === null) return 0;
+  const r = await q.execute(trx);
+  return n(r.rows[0]?.n);
 }
 
 /** Sessions (not mere expired authorizations) started since each site's local midnight. */

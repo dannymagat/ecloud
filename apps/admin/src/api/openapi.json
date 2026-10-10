@@ -410,10 +410,22 @@
               "active": { "type": "number" },
               "authorized": { "type": "number" },
               "open": { "type": "number" },
+              "open_devices": { "type": "number" },
+              "open_distinct_basis": { "type": "string" },
+              "open_users": { "type": "number" },
               "started_today": { "type": "number" },
               "started_today_basis": { "type": "string" }
             },
-            "required": ["open", "authorized", "active", "started_today", "started_today_basis"],
+            "required": [
+              "open",
+              "authorized",
+              "active",
+              "started_today",
+              "started_today_basis",
+              "open_users",
+              "open_devices",
+              "open_distinct_basis"
+            ],
             "type": "object"
           },
           "site_id": { "type": ["string", "null"] },
@@ -489,6 +501,24 @@
             ],
             "type": "object"
           },
+          "users": {
+            "additionalProperties": false,
+            "properties": {
+              "active": { "type": "number" },
+              "active_basis": { "type": "string" },
+              "active_window_days": { "type": "number" },
+              "new_today": { "type": "number" },
+              "new_today_basis": { "type": "string" }
+            },
+            "required": [
+              "active_window_days",
+              "active",
+              "active_basis",
+              "new_today",
+              "new_today_basis"
+            ],
+            "type": "object"
+          },
           "window": {
             "additionalProperties": false,
             "properties": {
@@ -507,6 +537,7 @@
           "timezone",
           "window",
           "sessions",
+          "users",
           "usage",
           "auth",
           "enforcement",

@@ -5,7 +5,7 @@
  * (D-006, V12).
  */
 import { useState } from 'react';
-import { Link } from 'react-router';
+import { Link, useSearchParams } from 'react-router';
 import { buildUrl, request } from '../../api/client';
 import type { Page } from '../../api/types';
 import { DataTable } from '../../components/DataTable';
@@ -37,6 +37,7 @@ import {
 import { useOrgId } from '../../lib/org';
 import { can } from '../../lib/permissions';
 import { useCursorList } from '../../lib/queries';
+import { SITE_PARAM, siteParam } from '../../lib/sites';
 import { useOptions } from '../resource/useOptions';
 import { OperationButton } from './SessionOperations';
 import { useOperationGates } from './useOperationGates';
@@ -98,7 +99,19 @@ function SessionsScreen() {
   const { me } = useAuth();
   const doc = useApiDocument();
   const [state, setState] = useState<StateFilter>('open');
-  const [siteId, setSiteId] = useState('');
+  // The site filter lives in the URL (`?site_id=`): dashboard tiles and the top-bar site chip set it.
+  const [params, setParams] = useSearchParams();
+  const siteId = siteParam(params) ?? '';
+  const setSiteId = (id: string) =>
+    setParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        if (id) next.set(SITE_PARAM, id);
+        else next.delete(SITE_PARAM);
+        return next;
+      },
+      { replace: true },
+    );
   const [nasId, setNasId] = useState('');
   const [user, setUser] = useState('');
   const [mac, setMac] = useState('');

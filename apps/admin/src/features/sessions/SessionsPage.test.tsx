@@ -273,6 +273,20 @@ describe('SessionsPage', () => {
     });
   });
 
+  it('takes the site filter from the URL (dashboard tiles, site chip) and clears it', async () => {
+    const calls = mockFetch(mocks(['session:read', 'site:read']));
+    renderRoutes(routes, `/orgs/${ORG_A}/sessions?site_id=${SITE}`);
+    await screen.findByRole('table', { name: 'Sessions' });
+    const listCall = calls.find((c) => c.url.startsWith(`${base}/sessions?`))!;
+    expect(new URL(listCall.url, 'http://x').searchParams.get('site_id')).toBe(SITE);
+    await waitFor(() => expect(screen.getByLabelText('Site')).toHaveValue(SITE));
+    fireEvent.change(screen.getByLabelText('Site'), { target: { value: '' } });
+    await waitFor(() => {
+      const last = calls.filter((c) => c.url.startsWith(`${base}/sessions?`)).at(-1)!;
+      expect(new URL(last.url, 'http://x').searchParams.get('site_id')).toBeNull();
+    });
+  });
+
   it('degrades against an API without the P8 filters', async () => {
     const calls = mockFetch(mocks(['session:read'], { full: false }));
     renderRoutes(routes, `/orgs/${ORG_A}/sessions`);

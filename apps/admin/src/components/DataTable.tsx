@@ -51,7 +51,7 @@ export function DataTable<T>({
   return (
     <div className="space-y-3">
       {error ? <ProblemAlert error={error} /> : null}
-      <div className="overflow-x-auto rounded-md border border-border">
+      <div className="relative overflow-x-auto rounded-md border border-border">
         <table className="min-w-full divide-y divide-border text-sm">
           <caption className="sr-only">{caption}</caption>
           <thead className="bg-muted/60">

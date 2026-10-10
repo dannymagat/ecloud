@@ -8,6 +8,7 @@ import {
   type SelectHTMLAttributes,
   type TextareaHTMLAttributes,
 } from 'react';
+import { Breadcrumb } from './Breadcrumb';
 
 export function cx(...parts: (string | false | null | undefined)[]): string {
   return parts.filter(Boolean).join(' ');
@@ -267,22 +268,34 @@ export function Card({
   );
 }
 
+/**
+ * Page title with an optional small subtitle, actions at the right, the breadcrumb bar (inside
+ * the shell) and an optional description.
+ */
 export function PageHeader({
   title,
+  subtitle,
   description,
   actions,
 }: {
   title: string;
+  subtitle?: string;
   description?: ReactNode;
   actions?: ReactNode;
 }) {
   return (
-    <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
-      <div>
-        <h1 className="text-xl font-semibold tracking-tight">{title}</h1>
-        {description ? <p className="mt-1 max-w-3xl text-sm text-subtle">{description}</p> : null}
+    <div className="mb-4">
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div className="flex min-w-0 flex-wrap items-baseline gap-x-3 gap-y-1">
+          <h1 className="text-2xl font-light tracking-tight">{title}</h1>
+          {subtitle ? <span className="text-sm text-subtle">{subtitle}</span> : null}
+        </div>
+        {actions ? <div className="flex flex-wrap gap-2">{actions}</div> : null}
       </div>
-      {actions ? <div className="flex flex-wrap gap-2">{actions}</div> : null}
+      <div className="mt-3">
+        <Breadcrumb current={title} />
+      </div>
+      {description ? <p className="-mt-1 max-w-3xl text-sm text-subtle">{description}</p> : null}
     </div>
   );
 }

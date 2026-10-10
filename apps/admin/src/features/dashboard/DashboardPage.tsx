@@ -15,6 +15,7 @@
  */
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { useState, type ReactNode } from 'react';
+import { ArrowRight } from 'lucide-react';
 import { Link, useNavigate, useParams } from 'react-router';
 import { buildUrl, request } from '../../api/client';
 import { ApiError } from '../../api/problem';
@@ -42,6 +43,7 @@ import {
   formatCount,
   formatExact,
   formatPercent,
+  formatSeconds,
   isNasActivityStatus,
   NAS_ACTIVITY_EXPLAINER,
   NAS_ACTIVITY_LABEL,
@@ -49,6 +51,7 @@ import {
   nasActivityDefinitions,
   nasActivityTone,
   num,
+  numOrNull,
   pollUnlessError,
   USAGE_SERIES_PATH,
   type AuthSeries,
@@ -63,6 +66,7 @@ import {
 import { display, formatBytes, formatDateTime } from '../../lib/format';
 import { useOrgId } from '../../lib/org';
 import { can, type PermissionTarget } from '../../lib/permissions';
+import { siteQuery } from '../../lib/sites';
 import type { OrgCollectionPath } from '../resource/paths';
 
 const poll = pollUnlessError;
@@ -173,21 +177,11 @@ function KpiTiles({ d }: { d: OrgDashboard }) {
   const p = d.auth.portal;
   const windowText = DASHBOARD_WINDOW_LABEL[d.window.key] ?? d.window.key;
   return (
-    <dl className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6" aria-label="Key figures">
+    <dl className="grid grid-cols-2 gap-3 xl:grid-cols-4" aria-label="Key figures">
       <Tile
         label="Open sessions"
         value={formatCount(d.sessions.open)}
         hint={`${formatCount(d.sessions.active)} with accounting · ${formatCount(d.sessions.authorized)} awaiting first accounting`}
-      />
-      <Tile
-        label="Sessions started today"
-        value={formatCount(d.sessions.started_today)}
-        hint={d.sessions.started_today_basis}
-      />
-      <Tile
-        label="Usage today"
-        value={usageValue(d.usage.today)}
-        hint={`${formatCount(d.usage.today?.session_count)} sessions`}
       />
       <Tile
         label="Usage this month"
@@ -205,6 +199,192 @@ function KpiTiles({ d }: { d: OrgDashboard }) {
         hint={`of ${formatCount(p.total)} attempts · ${formatCount(p.lockouts)} lockouts · ${windowText}`}
       />
     </dl>
+  );
+}
+
+// ---------------------------------------------------------------------------------------------
+// Statistics tiles (admin redesign cycle 1: "User Statistics" / "Network Statistics")
+// ---------------------------------------------------------------------------------------------
+
+/** Tile colours: CSS variables in styles.css (white text ≥ 4.5:1 in light and dark mode). */
+export type TileColor = 'teal' | 'rose' | 'blue' | 'gold' | 'red' | 'green' | 'violet';
+
+export interface StatTileDef {
+  key: string;
+  label: string;
+  value: string;
+  /** Route below `/orgs/:orgId/`, with the site filter when the target screen supports it. */
+  to: string;
+  cta: string;
+  color: TileColor;
+  /** What the number counts (the link's accessible description). */
+  definition: string;
+}
+
+/** "24 h" rather than "1 d" for the NAS thresholds (the API gives seconds). */
+function thresholdText(seconds: number): string {
+  return seconds > 0 && seconds % 3600 === 0 && seconds <= 72 * 3600
+    ? `${String(seconds / 3600)} h`
+    : formatSeconds(seconds);
+}
+
+export function statTiles(
+  d: OrgDashboard,
+  siteId?: string,
+): { users: StatTileDef[]; network: StatTileDef[] } {
+  const site = siteQuery(siteId);
+  const t = d.nas_activity.thresholds;
+  const c = d.nas_activity.counts;
+  // Optional at runtime: an API before cycle 1 has no `users` block (tiles then show "—").
+  const users = d.users as OrgDashboard['users'] | undefined;
+  const days = numOrNull(users?.active_window_days) ?? 30;
+  const active = thresholdText(num(t.active_within_s));
+  const quiet = thresholdText(num(t.quiet_within_s));
+  const silent =
+    numOrNull(c.silent) === null && numOrNull(c.never) === null
+      ? null
+      : num(c.silent) + num(c.never);
+  return {
+    users: [
+      {
+        key: 'online-users',
+        label: 'Online Users',
+        value: formatCount(d.sessions.open_users),
+        to: `sessions${site}`,
+        cta: 'View sessions',
+        color: 'teal',
+        definition: 'Distinct subscribers with an open session now.',
+      },
+      {
+        key: 'active-users',
+        label: `Active Users (${String(days)} days)`,
+        value: formatCount(users?.active),
+        to: `users${site}`,
+        cta: 'View users',
+        color: 'rose',
+        definition:
+          users?.active_basis ??
+          `Distinct subscribers with a session in the last ${String(days)} days.`,
+      },
+      {
+        key: 'new-users',
+        label: 'New Users Today',
+        value: formatCount(users?.new_today),
+        to: `users${site}`,
+        cta: 'View users',
+        color: 'blue',
+        definition: users?.new_today_basis ?? 'Subscribers created today (site-local day).',
+      },
+      {
+        key: 'sessions-today',
+        label: 'Sessions Started Today',
+        value: formatCount(d.sessions.started_today),
+        to: `reports${site}`,
+        cta: 'View report',
+        color: 'gold',
+        definition: `Sessions started today, site-local day (${d.sessions.started_today_basis}).`,
+      },
+    ],
+    network: [
+      {
+        key: 'active-nas',
+        label: `Active NAS (last ${active})`,
+        value: formatCount(c.active),
+        to: `nas${site}`,
+        cta: 'View NAS',
+        color: 'blue',
+        definition: `NAS whose newest RADIUS request or accounting record is at most ${active} old.`,
+      },
+      {
+        key: 'silent-nas',
+        label: `Silent NAS (no RADIUS ${quiet})`,
+        value: formatCount(silent),
+        to: `nas${site}`,
+        cta: 'View NAS',
+        color: 'red',
+        definition: `NAS with no RADIUS / accounting activity for more than ${quiet}, or none ever seen.`,
+      },
+      {
+        key: 'connected-devices',
+        label: 'Connected Devices',
+        value: formatCount(d.sessions.open_devices),
+        // The client-device list has no site filter in the API: the link opens the full list.
+        to: 'client-devices',
+        cta: 'View devices',
+        color: 'green',
+        definition: 'Distinct client MAC addresses with an open session now.',
+      },
+      {
+        key: 'data-today',
+        label: 'Data Today',
+        value: d.usage.today ? formatBytes(bytesTotal(d.usage.today)) : '—',
+        to: `usage${site}`,
+        cta: 'View usage',
+        color: 'violet',
+        definition: `Upload + download today (${d.usage.label_basis}).`,
+      },
+    ],
+  };
+}
+
+function StatTile({ tile, orgId }: { tile: StatTileDef; orgId: string }) {
+  const descId = `tile-${tile.key}-def`;
+  return (
+    <li>
+      <Link
+        to={`/orgs/${orgId}/${tile.to}`}
+        aria-label={`${tile.label}: ${tile.value}. ${tile.cta}`}
+        aria-describedby={descId}
+        data-tile={tile.key}
+        className="group flex h-28 flex-col justify-between overflow-hidden rounded text-white shadow-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+        style={{ backgroundColor: `var(--tile-${tile.color})` }}
+      >
+        <span className="px-4 pt-3 text-right">
+          <span className="block text-3xl font-light leading-none tabular-nums">{tile.value}</span>
+          <span className="mt-1.5 block truncate text-sm">{tile.label}</span>
+        </span>
+        <span className="flex items-center justify-between bg-black/15 px-4 py-1.5 text-xs uppercase tracking-wider group-hover:bg-black/25">
+          {tile.cta}
+          <ArrowRight aria-hidden="true" className="h-3.5 w-3.5" />
+        </span>
+        <span id={descId} className="sr-only">
+          {tile.definition}
+        </span>
+      </Link>
+    </li>
+  );
+}
+
+function StatTiles({ d, orgId, siteId }: { d: OrgDashboard; orgId: string; siteId?: string }) {
+  const rows = statTiles(d, siteId);
+  return (
+    <div className="space-y-4">
+      <section aria-labelledby="user-stats">
+        <h2 id="user-stats" className="mb-2 text-xl font-light">
+          User Statistics
+        </h2>
+        <ul className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          {rows.users.map((t) => (
+            <StatTile key={t.key} tile={t} orgId={orgId} />
+          ))}
+        </ul>
+      </section>
+      <section aria-labelledby="network-stats">
+        <h2 id="network-stats" className="mb-2 text-xl font-light">
+          Network Statistics
+        </h2>
+        <ul className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          {rows.network.map((t) => (
+            <StatTile key={t.key} tile={t} orgId={orgId} />
+          ))}
+        </ul>
+        <p className="mt-2 text-xs text-subtle">
+          NAS status comes from the RADIUS activity ECLOUD observes (active / quiet / silent /
+          never); it says nothing about the state of an access point. Figures follow the scope and
+          time zone shown below.
+        </p>
+      </section>
+    </div>
   );
 }
 
@@ -722,7 +902,8 @@ function DashboardView({ orgId, siteId }: { orgId: string; siteId?: string }) {
       <div
         className={dash.isFetching && dash.isPlaceholderData ? 'space-y-4 opacity-60' : 'space-y-4'}
       >
-        <div className="flex flex-wrap items-end justify-between gap-3">
+        <StatTiles d={d} orgId={orgId} siteId={siteId} />
+        <div className="flex flex-wrap items-end justify-between gap-3 border-t border-border pt-4">
           <div className="space-y-1">
             <FreshnessLine freshness={d.usage} />
             <p className="text-xs text-subtle">
@@ -762,6 +943,7 @@ function DashboardView({ orgId, siteId }: { orgId: string; siteId?: string }) {
     <div className="space-y-4">
       <PageHeader
         title={siteId ? `Site dashboard${siteName ? ` · ${siteName}` : ''}` : 'Dashboard'}
+        subtitle={siteId ? 'site dashboard' : 'organization dashboard'}
         description="Sessions, usage and authentication outcomes as observed by ECLOUD from RADIUS, accounting and the captive portal. Days and months follow each site's time zone."
         actions={
           allowed && available ? (

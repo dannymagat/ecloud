@@ -28,6 +28,7 @@ export default {
         warning: token('warning'),
         success: token('success'),
         info: token('info'),
+        'brand-ink': token('brand-ink'),
       },
     },
   },

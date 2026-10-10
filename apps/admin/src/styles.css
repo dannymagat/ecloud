@@ -68,3 +68,31 @@ body {
   --viz-grid: #2a303c;
   --viz-axis: #3b4352;
 }
+
+/*
+ * EZECLOUD chrome and dashboard tiles (admin redesign, cycle 1). The tile shades are the owner's
+ * reference palette darkened until white text reaches at least 4.5:1 (WCAG 1.4.3, normal text);
+ * dark mode uses deeper shades of the same hues (white text 6.4:1 or more). Asserted by
+ * src/lib/tiles.test.ts, which reads this file.
+ */
+:root {
+  --c-brand-ink: 29 79 168;
+  --tile-teal: #357f76;
+  --tile-rose: #b9474f;
+  --tile-blue: #2f6fd6;
+  --tile-gold: #8e6e18;
+  --tile-red: #c04646;
+  --tile-green: #398334;
+  --tile-violet: #6a56a5;
+}
+
+.dark {
+  --c-brand-ink: 170 200 245;
+  --tile-teal: #2b6861;
+  --tile-rose: #983a41;
+  --tile-blue: #275baf;
+  --tile-gold: #745a14;
+  --tile-red: #9d3939;
+  --tile-green: #2f6b2b;
+  --tile-violet: #574787;
+}

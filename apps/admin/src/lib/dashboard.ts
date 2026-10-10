@@ -190,7 +190,9 @@ export const NAS_ACTIVITY_EXPLAINER =
  * assert none appears in the rendered dashboard / reports / platform summary.
  */
 export const FORBIDDEN_DEVICE_WORDS: readonly RegExp[] = [
-  /\bonline\b/i,
+  // "Online Users" / "Online sessions" (owner-approved, admin redesign cycle 1) describe
+  // subscriber sessions ECLOUD holds, not device state; every other "online" stays forbidden.
+  /\bonline\b(?!\s+(users?|sessions?)\b)/i,
   /\boffline\b/i,
   /\bapplied on (the )?device\b/i,
   /\benforced (on|by) (the )?device\b/i,

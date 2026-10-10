@@ -15,7 +15,17 @@ import {
   POLICY_FIELDS,
   presentStatus,
 } from './adapterStatus';
-import { ORG_NAV, PLATFORM_NAV, visibleOrgNav, visiblePlatformNav } from './nav';
+import {
+  groupKeyOf,
+  navLabel,
+  ORG_GROUPS,
+  ORG_NAV,
+  PLATFORM_NAV,
+  visibleOrgGroups,
+  visibleOrgNav,
+  visiblePlatformGroup,
+  visiblePlatformNav,
+} from './nav';
 import { can, canPlatform, organizationIdsOf } from './permissions';
 
 describe('permission-driven navigation', () => {
@@ -88,6 +98,65 @@ describe('permission-driven navigation', () => {
       ),
     ).toBe(false);
     expect(organizationIdsOf(me)).toEqual([ORG_A]);
+  });
+
+  it('groups follow the approved sidebar; empty groups are hidden', () => {
+    expect(ORG_GROUPS.map((g) => [g.label, g.items.map((i) => i.path)])).toEqual([
+      ['Bandwidth Management', ['policies', 'policy-assignments', 'ssid-rate-limit-export']],
+      ['Network', ['sites', 'nas', 'network-devices']],
+      ['Clients', ['sessions', 'users', 'user-groups', 'client-devices', 'vouchers']],
+      ['Reports', ['usage', 'accounting', 'reports']],
+      ['Login Page', ['portals']],
+      ['Management', ['administrators', 'api-keys', 'audit-log']],
+    ]);
+    const me = adminMe([orgScope(ORG_A, ['nas:read', 'accounting:read'])]);
+    expect(visibleOrgGroups(me, ORG_A).map((g) => [g.key, g.items.map((i) => i.path)])).toEqual([
+      ['network', ['nas']],
+      ['reports', ['usage', 'accounting']],
+    ]);
+    expect(visibleOrgGroups(me, ORG_B)).toEqual([]);
+    expect(visiblePlatformGroup(me)).toBeNull();
+    expect(
+      visiblePlatformGroup(adminMe([platformScope(['tenant:list'])]))?.items.map((i) => i.path),
+    ).toEqual(['organizations']);
+    expect(groupKeyOf(ORG_GROUPS, 'vouchers')).toBe('clients');
+    expect(groupKeyOf(ORG_GROUPS, 'dashboard')).toBeNull();
+    expect(navLabel('org', 'sessions')).toBe('Online sessions');
+    expect(navLabel('platform', 'audit-log')).toBe('Platform audit log');
+  });
+
+  it('every organization route of the previous menu is still reachable (no entry lost)', () => {
+    const previous = [
+      'dashboard',
+      'sites',
+      'network-devices',
+      'nas',
+      'users',
+      'user-groups',
+      'client-devices',
+      'vouchers',
+      'policies',
+      'policy-assignments',
+      'ssid-rate-limit-export',
+      'portals',
+      'sessions',
+      'usage',
+      'accounting',
+      'reports',
+      'audit-log',
+      'administrators',
+      'api-keys',
+    ];
+    expect(ORG_NAV.map((i) => i.path).sort()).toEqual([...previous].sort());
+    expect(PLATFORM_NAV.map((i) => i.path)).toEqual([
+      'summary',
+      'organizations',
+      'administrators',
+      'role-templates',
+      'adapters',
+      'audit-log',
+      'impersonate',
+    ]);
   });
 
   it('every navigation permission exists in the shared catalogue (drift guard)', () => {

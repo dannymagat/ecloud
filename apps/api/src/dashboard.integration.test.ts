@@ -10,13 +10,21 @@
 import { withTenant } from '@ecloud/db';
 import { newId } from '@ecloud/shared';
 import { describeIntegration, migrateTestDatabase } from '@ecloud/testing';
-import { sql } from 'kysely';
+import { sql, type RawBuilder } from 'kysely';
 import { generate } from 'otplib';
 import request from 'supertest';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { createApp } from './app.js';
 import type { AppDeps } from './context.js';
-import { localHourStart } from './dashboard-views.js';
+import {
+  activeUsersQuery,
+  activeUsersSince,
+  openSessionCountsQuery,
+  usersCreatedQuery,
+  usersCreatedSince,
+  type ReportScope,
+} from './dashboard-queries.js';
+import { localHourStart, siteTodayStarts } from './dashboard-views.js';
 import { MemoryKv } from './kv.js';
 import { REPORTS } from './routes/reports.js';
 import {
@@ -462,6 +470,234 @@ await describeIntegration('@ecloud/api P9-A dashboard & reports against ecloud_t
     });
   });
 
+  describe('subscriber aggregates (active users, new users today)', () => {
+    /**
+     * Org X: site A (Asia/Dubai, local midnight 2026-10-07T20:00Z) and site B (UTC). Org Y holds
+     * look-alike rows that must never be counted for org X (RLS + organization filter).
+     */
+    async function subscribers() {
+      const db = deps.dbPlatform;
+      const x = await createTenant(db);
+      const y = await createTenant(db);
+      const at = (iso: string) => new Date(iso);
+      const user = (
+        orgId: string,
+        siteId: string | null,
+        createdAt: Date,
+        deleted: boolean = false,
+      ) => ({
+        id: newId(),
+        organization_id: orgId,
+        site_id: siteId,
+        username: unique('sub').toLowerCase(),
+        created_at: createdAt,
+        deleted_at: deleted ? ago(MIN) : null,
+      });
+      const uA1 = user(x.orgId, x.siteId, ago(2 * HOUR));
+      const uA2 = user(x.orgId, x.siteId, at('2026-10-07T21:00:00Z')); // after Dubai midnight
+      const uA3 = user(x.orgId, x.siteId, at('2026-10-07T19:00:00Z')); // before Dubai midnight
+      const uB1 = user(x.orgId, x.siteId2, at('2026-10-07T21:00:00Z')); // before UTC midnight
+      const uB2 = user(x.orgId, x.siteId2, ago(HOUR));
+      const uOrg = user(x.orgId, null, ago(HOUR)); // organization-wide subscriber
+      const uDel = user(x.orgId, x.siteId, ago(HOUR), true);
+      const yUsers = [
+        user(y.orgId, y.siteId, ago(HOUR)),
+        user(y.orgId, y.siteId2, ago(HOUR)),
+        user(y.orgId, null, ago(HOUR)),
+      ];
+      await db
+        .insertInto('users')
+        .values([uA1, uA2, uA3, uB1, uB2, uOrg, uDel, ...yUsers])
+        .execute();
+      const nasRow = (orgId: string, siteId: string) => ({
+        id: newId(),
+        organization_id: orgId,
+        site_id: siteId,
+        name: unique('nas'),
+        nas_ip: randomIp(),
+        adapter_type_key: 'openwifi-hostapd-radius',
+        adapter_key: 'openwifi-hostapd-radius',
+        secret_ref: 'env:ECLOUD_API_IT_NAS_SECRET',
+      });
+      const nasA = nasRow(x.orgId, x.siteId);
+      const nasB = nasRow(x.orgId, x.siteId2);
+      const nasY = nasRow(y.orgId, y.siteId);
+      await db.insertInto('nas_clients').values([nasA, nasB, nasY]).execute();
+      const session = (
+        orgId: string,
+        siteId: string,
+        nasId: string,
+        userId: string | null,
+        status: 'authorized' | 'active' | 'stopped' | 'expired',
+        startedAt: Date,
+        mac: string,
+      ) => ({
+        id: newId(),
+        organization_id: orgId,
+        site_id: siteId,
+        nas_client_id: nasId,
+        user_id: userId,
+        acct_session_id: unique('as'),
+        acct_unique_id: unique('au'),
+        username_raw: 'subscriber',
+        mac,
+        started_at: startedAt,
+        stopped_at: status === 'stopped' ? ago(HOUR) : null,
+        status,
+      });
+      await db
+        .insertInto('sessions')
+        .values([
+          session(
+            x.orgId,
+            x.siteId,
+            nasA.id,
+            uA1.id,
+            'stopped',
+            ago(5 * 24 * HOUR),
+            '02:aa:00:00:00:01',
+          ),
+          // open for 40 days: still an active user
+          session(
+            x.orgId,
+            x.siteId,
+            nasA.id,
+            uA2.id,
+            'active',
+            ago(40 * 24 * HOUR),
+            '02:aa:00:00:00:02',
+          ),
+          // a session without a subscriber record: a device, not a user
+          session(x.orgId, x.siteId, nasA.id, null, 'active', ago(HOUR), '02:aa:00:00:00:03'),
+          // expired authorization: not a session (D-036)
+          session(x.orgId, x.siteId, nasA.id, uA3.id, 'expired', ago(HOUR), '02:aa:00:00:00:04'),
+          // a soft-deleted subscriber's open session: a device, never an (active / open) user
+          session(x.orgId, x.siteId, nasA.id, uDel.id, 'active', ago(HOUR), '02:aa:00:00:00:07'),
+          // last session 40 days ago: not active
+          session(
+            x.orgId,
+            x.siteId2,
+            nasB.id,
+            uB1.id,
+            'stopped',
+            ago(40 * 24 * HOUR),
+            '02:aa:00:00:00:05',
+          ),
+          // two sessions of one subscriber count once
+          session(x.orgId, x.siteId2, nasB.id, uB2.id, 'active', ago(HOUR), '02:aa:00:00:00:06'),
+          session(
+            x.orgId,
+            x.siteId2,
+            nasB.id,
+            uB2.id,
+            'stopped',
+            ago(48 * HOUR),
+            '02:aa:00:00:00:06',
+          ),
+          // org Y: open sessions of its own subscribers
+          session(
+            y.orgId,
+            y.siteId,
+            nasY.id,
+            yUsers[0]!.id,
+            'active',
+            ago(HOUR),
+            '02:bb:00:00:00:01',
+          ),
+          session(
+            y.orgId,
+            y.siteId,
+            nasY.id,
+            yUsers[1]!.id,
+            'active',
+            ago(HOUR),
+            '02:bb:00:00:00:02',
+          ),
+        ])
+        .execute();
+      const a = apps();
+      const adminX = await createAdmin(db, [
+        { template: 'org_admin', scope: 'organization', orgId: x.orgId },
+      ]);
+      const adminY = await createAdmin(db, [
+        { template: 'org_admin', scope: 'organization', orgId: y.orgId },
+      ]);
+      return { a, x, y, agentX: await login(a, adminX), agentY: await login(a, adminY) };
+    }
+
+    let s: Awaited<ReturnType<typeof subscribers>>;
+    beforeAll(async () => {
+      s = await subscribers();
+    }, 60_000);
+
+    it('counts distinct active and new subscribers of the organization, site-local today', async () => {
+      const res = await s.agentX.get(`/api/v1/orgs/${s.x.orgId}/dashboard`);
+      expect(res.status).toBe(200);
+      expect(res.body.users).toMatchObject({ active_window_days: 30, active: 3, new_today: 4 });
+      expect(res.body.users.new_today_basis).toMatch(/local midnight/);
+      expect(res.body.sessions).toMatchObject({ open: 4, open_users: 2, open_devices: 4 });
+    });
+
+    it('honours the site filter (site-less subscribers only organization-wide)', async () => {
+      const a = await s.agentX.get(`/api/v1/orgs/${s.x.orgId}/dashboard?site_id=${s.x.siteId}`);
+      expect(a.status).toBe(200);
+      expect(a.body.users).toMatchObject({ active: 2, new_today: 2 });
+      expect(a.body.sessions).toMatchObject({ open_users: 1, open_devices: 3 });
+      const b = await s.agentX.get(`/api/v1/orgs/${s.x.orgId}/dashboard?site_id=${s.x.siteId2}`);
+      expect(b.body.users).toMatchObject({ active: 1, new_today: 1 });
+      expect(b.body.sessions).toMatchObject({ open_users: 1, open_devices: 1 });
+    });
+
+    it("one organization never counts another organization's subscribers (RLS isolation)", async () => {
+      const y = await s.agentY.get(`/api/v1/orgs/${s.y.orgId}/dashboard`);
+      expect(y.status).toBe(200);
+      expect(y.body.users).toMatchObject({ active: 2, new_today: 3 });
+      expect(y.body.sessions).toMatchObject({ open_users: 2, open_devices: 2 });
+      // X's administrator cannot read Y's figures at all
+      expect((await s.agentX.get(`/api/v1/orgs/${s.y.orgId}/dashboard`)).status).toBe(403);
+
+      // The queries themselves, run in Y's tenant transaction with a scope naming X: RLS hides
+      // every X row (second lock, MULTITENANCY.md G6), so the counts are 0, not X's figures.
+      const scopeX: ReportScope = {
+        orgId: s.x.orgId,
+        siteId: null,
+        sites: [
+          { id: s.x.siteId, name: 'Site A', timezone: 'Asia/Dubai' },
+          { id: s.x.siteId2, name: 'Site B', timezone: 'UTC' },
+        ],
+        allSites: true,
+        timezone: 'mixed',
+      };
+      const utcMidnight = new Date('2026-10-08T00:00:00Z');
+      const since = ago(30 * 24 * HOUR);
+      const counts = (orgId: string) =>
+        withTenant(deps.db, orgId, async (trx) => ({
+          active: await activeUsersSince(trx, scopeX, since),
+          created: await usersCreatedSince(
+            trx,
+            scopeX,
+            siteTodayStarts(scopeX.sites, NOW),
+            utcMidnight,
+          ),
+        }));
+      expect(await counts(s.y.orgId)).toEqual({ active: 0, created: 0 });
+      expect(await counts(s.x.orgId)).toEqual({ active: 3, created: 4 });
+    });
+
+    it('a site-bound administrator counts only subscribers of their site', async () => {
+      const siteAdmin = await login(
+        s.a,
+        await createAdmin(deps.dbPlatform, [
+          { template: 'site_admin', scope: 'site', orgId: s.x.orgId, siteId: s.x.siteId2 },
+        ]),
+      );
+      const res = await siteAdmin.get(`/api/v1/orgs/${s.x.orgId}/dashboard`);
+      expect(res.status).toBe(200);
+      // site B only: the organization-wide subscriber is not part of a site scope
+      expect(res.body.users).toMatchObject({ active: 1, new_today: 1 });
+    });
+  });
+
   describe('chart series', () => {
     it('hourly auth outcomes are zero-filled local hours and need one timezone', async () => {
       const mixed = await f.agent.get(`/api/v1/orgs/${f.orgId}/dashboard/series/auth`);
@@ -865,7 +1101,7 @@ await describeIntegration('@ecloud/api P9-A dashboard & reports against ecloud_t
   });
 
   describe('performance evidence (EXPLAIN)', () => {
-    async function plan(query: ReturnType<typeof sql>): Promise<string> {
+    async function plan(query: RawBuilder<unknown>): Promise<string> {
       return withTenant(deps.db, f.orgId, async (trx) => {
         await sql`SET LOCAL enable_seqscan = off`.execute(trx);
         const r = await sql<{ 'QUERY PLAN': string }>`EXPLAIN ${query}`.execute(trx);
@@ -900,6 +1136,47 @@ await describeIntegration('@ecloud/api P9-A dashboard & reports against ecloud_t
         await plan(sql`SELECT result, count(*) FROM auth_events WHERE organization_id = ${org}
           AND created_at >= ${since}::timestamptz GROUP BY result`),
       ).toMatch(/Index|Bitmap/);
+    });
+
+    it('subscriber and open-session aggregates (the real query builders) are index-supported', async () => {
+      const sites = [
+        { id: f.siteA, name: 'Site A', timezone: 'Asia/Dubai' },
+        { id: f.siteB, name: 'Site B', timezone: 'UTC' },
+      ];
+      // organization-wide: `site_id IN (SELECT id FROM sites … live)`; site: `site_id IN ($1)`
+      const orgWide: ReportScope = {
+        orgId: f.orgId,
+        siteId: null,
+        sites,
+        allSites: true,
+        timezone: 'mixed',
+      };
+      const oneSite: ReportScope = {
+        orgId: f.orgId,
+        siteId: f.siteA,
+        sites: [sites[0]!],
+        allSites: false,
+        timezone: 'Asia/Dubai',
+      };
+      const since = ago(30 * 24 * HOUR);
+      const utcMidnight = new Date('2026-10-08T00:00:00Z');
+      for (const scope of [orgWide, oneSite]) {
+        const open = await plan(openSessionCountsQuery(scope));
+        // a partial index over open sessions (016 / 026), whichever the planner prefers
+        expect(open).toMatch(/idx_sessions_open_(org_site_nas|user|device)/);
+        // the live-subscriber join reads users through an index (primary key or organization)
+        expect(open).toMatch(/Index Scan using (users_pkey|\w*users_org\w*) on users/);
+        const active = await plan(activeUsersQuery(scope, since));
+        expect(active).toMatch(/idx_sessions_org_site_started|idx_sessions_org_user_started/);
+        expect(active).toMatch(/idx_sessions_open_(org_site_nas|user|device)/);
+        expect(active).toMatch(/Index Scan using (users_pkey|\w*users_org\w*) on users/);
+        // the VALUES (site_id, local midnight) LEFT JOIN form
+        const created = usersCreatedQuery(scope, siteTodayStarts(scope.sites, NOW), utcMidnight);
+        expect(created).not.toBeNull();
+        expect(await plan(created!)).toMatch(/users_org/);
+      }
+      // a site-bound caller without sites: nothing to count, no query at all
+      expect(usersCreatedQuery({ ...oneSite, sites: [] }, [], utcMidnight)).toBeNull();
     });
   });
 });

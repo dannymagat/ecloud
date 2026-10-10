@@ -51,6 +51,16 @@ const DASH: OrgDashboard = {
     active: 10,
     started_today: 31,
     started_today_basis: "since each site's local midnight",
+    open_users: 9,
+    open_devices: 11,
+    open_distinct_basis: 'distinct subscribers and MACs of the open sessions',
+  },
+  users: {
+    active_window_days: 30,
+    active: 1284,
+    active_basis: 'distinct subscribers with a session in the last 30 days or still open',
+    new_today: 17,
+    new_today_basis: "created since their site's local midnight",
   },
   usage: {
     today: counters(2 * 1024 ** 3),
@@ -224,9 +234,10 @@ describe('DashboardPage', () => {
 
     const kpis = await screen.findByLabelText('Key figures');
     expect(within(kpis).getByText('12')).toBeInTheDocument();
-    expect(within(kpis).getByText('31')).toBeInTheDocument();
-    expect(within(kpis).getByText('2.0 GB')).toBeInTheDocument();
     expect(within(kpis).getByText('40.0 GB')).toBeInTheDocument();
+    // "Sessions started today" and "Usage today" moved to the statistics tiles
+    expect(within(kpis).queryByText('31')).not.toBeInTheDocument();
+    expect(within(kpis).queryByText('2.0 GB')).not.toBeInTheDocument();
     expect(within(kpis).getByText(/90% of 200 requests/)).toBeInTheDocument();
     expect(screen.getAllByText('Last accounting 2 min ago').length).toBeGreaterThan(0);
     expect(screen.getByText(/usage periods: site-local calendar dates/)).toBeInTheDocument();
@@ -279,6 +290,82 @@ describe('DashboardPage', () => {
     expect(new URL(series.url, 'http://x').searchParams.get('granularity')).toBe('hour');
 
     expectNoDeviceStateWords();
+  });
+
+  it('shows the user and network statistics tiles linking to their screens', async () => {
+    mockFetch(mocks([orgScope(ORG_A, ['report:read', 'site:read'])]));
+    renderRoutes(routes, `/orgs/${ORG_A}/dashboard`);
+    const users = await screen.findByRole('region', { name: 'User Statistics' });
+    const network = screen.getByRole('region', { name: 'Network Statistics' });
+    const tile = (region: HTMLElement, name: RegExp) => within(region).getByRole('link', { name });
+
+    const expected: [HTMLElement, RegExp, string, string][] = [
+      [users, /^Online Users: 9\. View sessions$/, 'sessions', '9'],
+      [users, /^Active Users \(30 days\): 1,284\. View users$/, 'users', '1,284'],
+      [users, /^New Users Today: 17\. View users$/, 'users', '17'],
+      [users, /^Sessions Started Today: 31\. View report$/, 'reports', '31'],
+      [network, /^Active NAS \(last 20 min\): 1\. View NAS$/, 'nas', '1'],
+      [network, /^Silent NAS \(no RADIUS 24 h\): 1\. View NAS$/, 'nas', '1'],
+      [network, /^Connected Devices: 11\. View devices$/, 'client-devices', '11'],
+      [network, /^Data Today: 2\.0 GB\. View usage$/, 'usage', '2.0 GB'],
+    ];
+    for (const [region, name, path, value] of expected) {
+      const link = tile(region, name);
+      expect(link).toHaveAttribute('href', `/orgs/${ORG_A}/${path}`);
+      // visible text: big number, label and the call to action (not colour alone)
+      expect(link).toHaveTextContent(value);
+      expect(link.getAttribute('aria-describedby')).toBeTruthy();
+      expect(link.style.backgroundColor).toMatch(/^var\(--tile-/);
+    }
+    expect(within(users).getAllByRole('link')).toHaveLength(4);
+    expect(within(network).getAllByRole('link')).toHaveLength(4);
+    expect(screen.getByRole('link', { name: /^Online Users/ })).toHaveAccessibleDescription(
+      'Distinct subscribers with an open session now.',
+    );
+    expectNoDeviceStateWords();
+  });
+
+  it('site dashboard tiles keep the site filter in their links', async () => {
+    mockFetch(mocks([orgScope(ORG_A, ['report:read'])], { dash: { ...DASH, site_id: SITE } }));
+    renderRoutes(routes, `/orgs/${ORG_A}/sites/${SITE}/dashboard`);
+    await screen.findByRole('region', { name: 'User Statistics' });
+    const href = (name: RegExp) => screen.getByRole('link', { name }).getAttribute('href');
+    const q = `?site_id=${SITE}`;
+    expect(href(/^Online Users/)).toBe(`/orgs/${ORG_A}/sessions${q}`);
+    expect(href(/^Active Users/)).toBe(`/orgs/${ORG_A}/users${q}`);
+    expect(href(/^New Users Today/)).toBe(`/orgs/${ORG_A}/users${q}`);
+    expect(href(/^Sessions Started Today/)).toBe(`/orgs/${ORG_A}/reports${q}`);
+    expect(href(/^Active NAS/)).toBe(`/orgs/${ORG_A}/nas${q}`);
+    expect(href(/^Silent NAS/)).toBe(`/orgs/${ORG_A}/nas${q}`);
+    expect(href(/^Data Today/)).toBe(`/orgs/${ORG_A}/usage${q}`);
+    // the client-device list has no site filter in the API
+    expect(href(/^Connected Devices/)).toBe(`/orgs/${ORG_A}/client-devices`);
+  });
+
+  it('shows "—" on tiles an older API does not provide, never a made-up 0', async () => {
+    const { users: _omit, ...older } = DASH;
+    void _omit;
+    mockFetch(
+      mocks([orgScope(ORG_A, ['report:read'])], {
+        dash: {
+          ...older,
+          sessions: {
+            open: 12,
+            authorized: 2,
+            active: 10,
+            started_today: 31,
+            started_today_basis: 'x',
+          },
+        },
+      }),
+    );
+    renderRoutes(routes, `/orgs/${ORG_A}/dashboard`);
+    expect(
+      await screen.findByRole('link', { name: /^Active Users \(30 days\): —/ }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /^New Users Today: —/ })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /^Online Users: —/ })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /^Sessions Started Today: 31/ })).toBeInTheDocument();
   });
 
   it('switches the chart window to daily buckets with site-local date labels', async () => {

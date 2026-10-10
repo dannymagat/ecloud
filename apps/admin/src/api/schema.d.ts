@@ -2381,6 +2381,9 @@ export interface components {
         active: number;
         authorized: number;
         open: number;
+        open_devices: number;
+        open_distinct_basis: string;
+        open_users: number;
         started_today: number;
         started_today_basis: string;
       };
@@ -2412,6 +2415,13 @@ export interface components {
           session_count: number;
           session_time_s: number;
         };
+      };
+      users: {
+        active: number;
+        active_basis: string;
+        active_window_days: number;
+        new_today: number;
+        new_today_basis: string;
       };
       window: {
         from: string;
