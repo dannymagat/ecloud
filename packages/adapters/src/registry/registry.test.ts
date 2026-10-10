@@ -42,6 +42,7 @@ describe('compatibility registry data', () => {
       ['openwrt-uspot-upstream', 'uspot-upstream-uam', 'implemented'],
       ['coova-chilli-1.2.9-ezegate', 'coovachilli-uam', 'implemented'],
       ['coova-chilli-master', 'coovachilli-uam', 'implemented'],
+      ['generic-radius-8021x', 'generic-radius-8021x', 'implemented'],
     ]);
     const tip = row('ezelink-eze-ap1832-r32912-tip-uspot');
     expect([tip.deploymentModes, tip.enforcementPoint, tip.sourceVersionMatchesDevice]).toEqual([
@@ -200,10 +201,25 @@ describe('compatibility registry data', () => {
       expect(v.docLinks).toEqual([]);
   });
 
-  it('no third-party adapter exists (only the five engine keys have adapters)', () => {
+  it('no third-party vendor adapter exists (engine keys only; generic-radius is vendor-neutral)', () => {
     const keys = new Set(COMPATIBILITY_ROWS.map((r) => r.adapterKey).filter((k) => k !== null));
     expect([...keys].sort()).toEqual([...ADAPTER_KEYS].sort());
     for (const r of COMPATIBILITY_ROWS)
-      if (!['ezelink', 'coova', 'openwrt'].includes(r.vendorKey)) expect(r.adapterKey).toBeNull();
+      if (!['ezelink', 'coova', 'openwrt', 'generic-radius'].includes(r.vendorKey))
+        expect(r.adapterKey).toBeNull();
+  });
+
+  it('the generic 802.1X / MAC-auth row claims no device: nothing VERIFIED, no model/firmware', () => {
+    const g = row('generic-radius-8021x');
+    expect([g.vendorKey, g.hardwareModel, g.firmware, g.deploymentModes]).toEqual([
+      'generic-radius',
+      'UNKNOWN',
+      'UNKNOWN',
+      ['native'],
+    ]);
+    const cells = Object.values(g.capabilities).flat();
+    expect(cells.length).toBeGreaterThan(0);
+    expect(cells.filter((c) => c.status === 'VERIFIED_SUPPORTED')).toEqual([]);
+    expect(cells.filter((c) => c.evidenceLevel === 'LAB_VALIDATED')).toEqual([]);
   });
 });

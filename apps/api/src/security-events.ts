@@ -22,3 +22,19 @@ export function logAuthFailure(
 ): void {
   logger.warn({ event, ip: ip ?? 'unknown', request_id: requestId }, `security: ${event}`);
 }
+
+/**
+ * Portal / NAS-identity security events (Cycle A review M1). No organization, site or NAS id:
+ * the event is logged on a pre-tenant path and must not reveal who registered what.
+ */
+export const PORTAL_SECURITY_EVENTS = Object.freeze(['ap_mac_claimed_elsewhere'] as const);
+
+export type PortalSecurityEvent = (typeof PORTAL_SECURITY_EVENTS)[number];
+
+export function logPortalSecurityEvent(
+  logger: Logger,
+  event: PortalSecurityEvent,
+  detail: { readonly apMac: string | null; readonly requestId?: string },
+): void {
+  logger.warn({ event, ap_mac: detail.apMac, request_id: detail.requestId }, `security: ${event}`);
+}

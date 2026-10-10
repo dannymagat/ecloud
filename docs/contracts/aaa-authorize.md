@@ -73,13 +73,18 @@ Encoding rules (VERIFIED on 3.2.10):
 | `CHAP-Password`, `CHAP-Challenge` (octets) | NAS | presence means CHAP: ECLOUD can only return `Cleartext-Password` (broker credential / reversible voucher) and `Auth-Type = CHAP`; otherwise reject with `Reply-Message`. |
 | `Calling-Station-Id` | `rewrite_calling_station_id` | client MAC, normalised `AA-BB-CC-DD-EE-FF` (binding, MAC-auth, concurrency) |
 | `Called-Station-Id`, `Called-Station-SSID`, `Called-Station-MAC` | `rewrite_called_station_id` | when the NAS sent `mac:ssid` (TIP uspot) the id is reduced to the MAC and the SSID is split out; CoovaChilli sends only the MAC (no `Called-Station-SSID`) |
-| `Service-Type` | NAS | `Call-Check` => MAC authentication (uspot `mac-auth`); `Login-User`/`Framed-User` otherwise |
+| `Service-Type` | NAS | `Call-Check` => MAC authentication (uspot `mac-auth`); `Login-User`/`Framed-User` otherwise. Cycle A: on a `generic-radius-8021x` NAS a `User-Name` that is exactly the `Calling-Station-Id` MAC (password absent or the same MAC) is MAC authentication without `Call-Check` |
+| `ECLOUD-EAP-Inner` (string, `ttls`), `ECLOUD-Outer-User-Name` (string) | server, `sites-available/ecloud-inner` only (Cycle A, opt-in 802.1X) | marks an EAP-TTLS **inner** request: `User-Name` / `User-Password` are the inner identity; NAS facts and `ECLOUD-Packet-*` are re-copied from the outer packet. Accepted only for 802.1X adapters (`generic-radius-8021x`, `openwifi-hostapd-radius`); never MAC auth, never a portal credential. The outer server deletes both attributes from every packet. |
 | `Acct-Session-Id`, `Framed-IP-Address` | NAS | correlation with the UAM `sessionid` and the portal binding (CAPTIVE_PORTAL §3.4) |
 | `Message-Authenticator` (presence) | NAS | per-NAS BlastRADIUS posture telemetry (`nas_clients.require_message_authenticator`) |
 | `WISPr-*`, `ChilliSpot-*` request VSAs | NAS | adapter fingerprinting (uspot vs CoovaChilli) |
 
 Not present in this milestone: `Stripped-User-Name` / `Realm` (no realm splitting on the wire,
-AAA §7), EAP attributes (802.1X not enabled), `Chargeable-User-Identity` unless the NAS sends it.
+AAA §7; an inner identity `user@realm` is matched as the whole username), `Chargeable-User-Identity`
+unless the NAS sends it. EAP (Cycle A): the outer request with `EAP-Message` is never posted to
+`/authorize` (anonymous outer identity); with `RADIUS_EAP_ENABLED` unset FreeRADIUS rejects it
+locally, otherwise ECLOUD decides on the inner request (`ECLOUD-EAP-Inner`). The `/post-auth` body
+drops `EAP-Message`.
 
 ## 3. Response to `/internal/aaa/authorize`
 

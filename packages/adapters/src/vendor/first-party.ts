@@ -1,10 +1,11 @@
 /**
- * `VendorAdapter` wrappers for the five first-party engine adapters (plan §6.1, §6.3). Each
+ * `VendorAdapter` wrappers for the engine adapters (plan §6.1, §6.3): the five first-party ones
+ * and the vendor-neutral `generic-radius-8021x` (Cycle A, D-044). Each
  * wrapper delegates to the unchanged engine object (`vendor.engine === getAdapter(key)`); the
  * engine's translation, reply attributes and Disconnect output are passed through by reference.
  * Operations the plan marks unsupported return an explicit `Unsupported` with a reason.
  */
-import type { EvidenceRef } from '@ecloud/shared';
+import { canonicalUnicastMac, type EvidenceRef } from '@ecloud/shared';
 import type { AdapterKey, EffectivePolicy, TranslationContext } from '@ecloud/policy-engine';
 import { getAdapter } from '../registry.js';
 import { COMPATIBILITY_ROWS } from '../registry/compatibility.js';
@@ -38,6 +39,9 @@ import {
   uamResult,
   verifyUamSignature,
 } from './uam.js';
+
+/** Registry vendor of the vendor-neutral 802.1X / MAC-auth adapter (registry/vendors.ts). */
+export const GENERIC_RADIUS_VENDOR_KEY = 'generic-radius';
 
 /** Portal host per CAPTIVE_PORTAL_ARCHITECTURE.md §7.4 (not live until the D-031 gate). */
 export const PORTAL_ORIGIN = 'https://portal.ezecloud.ezelink.ai';
@@ -132,6 +136,91 @@ function uspotSetup(nasId: string): readonly SetupStep[] {
   ];
 }
 
+const F9: EvidenceRef = {
+  kind: 'doc-section',
+  ref: 'docs/VENDOR_INTEGRATION_RESEARCH.md §3.1, §5 (generic-radius-8021x)',
+};
+const AAA24: EvidenceRef = { kind: 'doc-section', ref: 'AAA_ARCHITECTURE.md §2.4 (802.1X / EAP)' };
+
+/**
+ * Vendor-neutral 802.1X / MAC-auth guide (Cycle A). Menu names differ per vendor, so `setting`
+ * names the RADIUS concept, not a vendor UI path; every secret is a placeholder.
+ */
+function genericRadiusSetup(): readonly SetupStep[] {
+  return [
+    step(
+      'radius-auth',
+      'RADIUS authentication server (802.1X / MAC authentication)',
+      'RADIUS auth server {address, port, shared secret}',
+      '<ECLOUD_RADIUS_ADDRESS>, 1812, <RADIUS_SECRET>',
+      [F9],
+    ),
+    step(
+      'radius-acct',
+      'RADIUS accounting server (Start / Interim-Update / Stop)',
+      'RADIUS accounting server {address, port, shared secret}',
+      '<ECLOUD_RADIUS_ADDRESS>, 1813, <RADIUS_SECRET>',
+      [F9],
+    ),
+    step(
+      'nas-source',
+      'Send RADIUS from the address registered as the NAS IP (ECLOUD identifies the NAS by packet source)',
+      'RADIUS source interface / NAS-IP',
+      '<REGISTERED_NAS_IP>',
+      [F9],
+    ),
+    step(
+      'nas-identifier',
+      'NAS-Identifier: leave unset or use the value registered in ECLOUD (a different value is rejected)',
+      'NAS-Identifier',
+      '<REGISTERED_NAS_IDENTIFIER>',
+      [F9],
+    ),
+    step(
+      'message-authenticator',
+      'Message-Authenticator on every Access-Request (BlastRADIUS mitigation)',
+      'Message-Authenticator',
+      'enabled',
+      [F9],
+    ),
+    step(
+      'interim',
+      'Accounting interim interval',
+      'Acct-Interim-Interval / accounting update interval',
+      '<INTERIM_SECONDS>',
+      [F9],
+    ),
+    step(
+      'eap-method',
+      'WPA2/WPA3-Enterprise EAP method: EAP-TTLS with inner PAP (ECLOUD stores only one-way password hashes, so PEAP-MSCHAPv2 cannot be verified)',
+      'EAP method / inner method',
+      'EAP-TTLS / PAP',
+      [F9, AAA24],
+    ),
+    step(
+      'eap-ca',
+      'Client trust: the CA that signed the ECLOUD RADIUS server certificate (production certificate REQUIRES_CLARIFICATION)',
+      'Server certificate validation / CA',
+      '<ECLOUD_RADIUS_CA_CERT>',
+      [F9, AAA24],
+    ),
+    step(
+      'mac-auth',
+      'MAC authentication (MAB): User-Name = client MAC; enable "MAC auth" on the client device in ECLOUD',
+      'MAC authentication username format',
+      '<CLIENT_MAC> (any of aa:bb:cc:dd:ee:ff, AA-BB-CC-DD-EE-FF, aabbccddeeff)',
+      [F9],
+    ),
+    step(
+      'das',
+      'Dynamic authorization (Disconnect: REQUIRES_DEVICE_TEST, D-006); port = the NAS CoA port registered in ECLOUD',
+      'RADIUS dynamic authorization / CoA {client, port, secret}',
+      '<ECLOUD_COA_SOURCE>, <DAS_PORT>, <RADIUS_SECRET>',
+      [F9],
+    ),
+  ];
+}
+
 const SPECS: readonly FirstPartySpec[] = [
   {
     key: 'openwifi-hostapd-radius',
@@ -216,6 +305,15 @@ const SPECS: readonly FirstPartySpec[] = [
     radius: false,
     // Config-only: ECLOUD pushes per-SSID keys through the EZE controller; nothing to set by hand.
     setup: () => [],
+  },
+  {
+    // Cycle A (D-044): any vendor's 802.1X / MAC-auth SSID; no portal (plan §6.3).
+    key: 'generic-radius-8021x',
+    vendorKey: GENERIC_RADIUS_VENDOR_KEY,
+    uam: null,
+    defaultDeployment: 'native',
+    radius: true,
+    setup: () => genericRadiusSetup(),
   },
 ];
 
@@ -364,7 +462,11 @@ function createFirstPartyVendorAdapter(spec: FirstPartySpec): VendorAdapter {
       if (clientMac === null)
         return { ok: false, reason: 'malformed', detail: 'client MAC is not a MAC address' };
 
-      const nas = await lookup.findNas({ nasid: p.nasid ?? null, called: p.called ?? null });
+      const nas = await lookup.findNas({
+        nasid: p.nasid ?? null,
+        called: p.called ?? null,
+        apMac: canonicalUnicastMac(p.called),
+      });
       if (!nas)
         return { ok: false, reason: 'unknown_nas', detail: 'no registered NAS for this redirect' };
       if (nas.adapterKey !== spec.key)

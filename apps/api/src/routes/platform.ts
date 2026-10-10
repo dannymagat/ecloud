@@ -34,6 +34,7 @@ import {
 import { ImpersonationForbiddenError } from '../http/errors.js';
 import { defineRoute, type AnyRouteSpec } from '../http/route.js';
 import { inPlatform, inTenant } from '../tenant.js';
+import { releaseGlobalSlots } from '../global-slots.js';
 
 const TAG = ['platform'];
 
@@ -249,12 +250,14 @@ export function platformRoutes(deps: AppDeps): AnyRouteSpec[] {
             .returningAll()
             .executeTakeFirst();
           if (before === undefined) throw new NotFoundError('organization', params.id);
+          // Review M2: an archived organization frees its globally unique slots.
+          const released = await releaseGlobalSlots(trx, { organizationId: params.id }, now());
           await writeAudit(trx, ctx, {
             organizationId: params.id,
             action: 'organization:delete',
             targetType: 'organization',
             targetId: params.id,
-            after: { status: 'archived' },
+            after: { status: 'archived', released },
           });
         },
         params.id,

@@ -1,0 +1,12 @@
+# Cycle A (D-044) -- generic-radius-8021x MAC authentication (MAB) as many vendors send it:
+# User-Name = User-Password = client MAC, NO Service-Type = Call-Check. The exact spelling per
+# vendor is REQUIRES_DEVICE_TEST (docs/VENDOR_INTEGRATION_RESEARCH.md §3.1). Placeholders only.
+User-Name = "aabbccddee01"
+User-Password = "aabbccddee01"
+Calling-Station-Id = "AA-BB-CC-DD-EE-01"
+Called-Station-Id = "00-11-22-33-44-66:lab-8021x"
+NAS-Identifier = "<nasid-placeholder>"
+NAS-IP-Address = 192.0.2.11
+NAS-Port-Type = Wireless-802.11
+Acct-Session-Id = "<mab-sessionid-placeholder>"
+Message-Authenticator = 0x00

@@ -4,12 +4,18 @@
  * stored response, a different body under the same key is 422, a concurrent duplicate is 409.
  * Fields marked secret (API key plaintext, voucher codes, NAS secrets) are removed before the
  * response is stored: they are shown exactly once and a replay says so.
+ *
+ * The body fingerprint is a KEYED hash (HMAC-SHA256 with a key derived from DATA_ENCRYPTION_KEY,
+ * purpose `ecloud:idempotency:fingerprint:v1`), never a plain hash: request bodies may carry
+ * secrets (vendor API secrets, controller credentials, passwords) and an unsalted SHA-256 in
+ * Redis would allow offline guessing of low-entropy values. Rolling this out invalidates stored
+ * fingerprints of keys still inside their 24 h window (a replay then answers 422; clients retry
+ * with a new key).
  */
 import { ConflictError, isUuid } from '@ecloud/shared';
 import type { Request } from 'express';
 import type { AppDeps } from '../context.js';
-import { createHash } from 'node:crypto';
-import { sha256Hex } from '../crypto.js';
+import { createHmac, hkdfSync } from 'node:crypto';
 import { canonicalJson } from '@ecloud/policy-engine';
 import {
   IdempotencyConflictError,
@@ -19,6 +25,40 @@ import {
 import type { AnyRouteSpec, HandlerResult } from './route.js';
 
 export const IDEMPOTENCY_TTL_SECONDS = 24 * 3600;
+
+/** HKDF purpose of the fingerprint key (a label, not a secret). */
+export const IDEMPOTENCY_FINGERPRINT_PURPOSE = 'ecloud:idempotency:fingerprint:v1'; // check-no-secrets: allow
+
+const fingerprintKeys = new Map<string, Buffer>();
+
+function fingerprintKey(dataEncryptionKey: string): Buffer {
+  let key = fingerprintKeys.get(dataEncryptionKey);
+  if (key === undefined) {
+    key = Buffer.from(
+      hkdfSync(
+        'sha256',
+        Buffer.from(dataEncryptionKey, 'utf8'),
+        Buffer.alloc(0),
+        IDEMPOTENCY_FINGERPRINT_PURPOSE,
+        32,
+      ),
+    );
+    fingerprintKeys.clear();
+    fingerprintKeys.set(dataEncryptionKey, key);
+  }
+  return key;
+}
+
+/**
+ * Keyed fingerprint of a request body: `hmac:` + HMAC-SHA256 over the canonical JSON (or the raw
+ * bytes of a binary body). Equal bodies give equal fingerprints under one deployment key only.
+ */
+export function requestFingerprint(dataEncryptionKey: string, body: unknown): string {
+  const mac = createHmac('sha256', fingerprintKey(dataEncryptionKey));
+  if (Buffer.isBuffer(body)) mac.update('bin:').update(body);
+  else mac.update('json:').update(canonicalJson(body ?? null), 'utf8');
+  return `hmac:${mac.digest('hex')}`;
+}
 const LOCK_TTL_SECONDS = 60;
 
 interface StoredResponse {
@@ -65,10 +105,9 @@ export async function withIdempotency(
     throw new IdempotencyConflictError('Idempotency-Key must be a UUID.');
   }
   const scope = `idem:${principalKey(req)}:${spec.method}:${req.path}:${key}`;
-  // Binary bodies (branding uploads) are fingerprinted by their bytes, JSON bodies canonically.
-  const fingerprint = Buffer.isBuffer(req.body)
-    ? `bin:${createHash('sha256').update(req.body).digest('hex')}`
-    : sha256Hex(canonicalJson(req.body ?? null));
+  // Binary bodies (branding uploads) are fingerprinted by their bytes, JSON bodies canonically;
+  // always keyed (bodies may carry secrets).
+  const fingerprint = requestFingerprint(deps.config.dataEncryptionKey, req.body);
 
   let existing: string | null;
   try {

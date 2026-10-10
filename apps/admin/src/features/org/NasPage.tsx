@@ -10,14 +10,17 @@ import { Dialog } from '../../components/Dialog';
 import { ProblemAlert } from '../../components/ProblemAlert';
 import { SecretOnce } from '../../components/SecretOnce';
 import { Badge, Button } from '../../components/ui';
-import { ADAPTER_KEYS } from '../../lib/adapterStatus';
+import { ADAPTER_KEYS, ADAPTER_LABELS } from '../../lib/adapterStatus';
 import { useAuth } from '../../lib/auth';
 import { display, formatDateTime, str } from '../../lib/format';
 import { can } from '../../lib/permissions';
 import type { FieldDef } from '../resource/form';
 import { ResourcePage, type ResourceConfig } from '../resource/ResourcePage';
 
-const ADAPTER_OPTIONS = ADAPTER_KEYS.map((k) => ({ value: k, label: k }));
+const ADAPTER_OPTIONS = ADAPTER_KEYS.map((k) => ({
+  value: k,
+  label: `${ADAPTER_LABELS[k]} (${k})`,
+}));
 
 function RotateSecret({ row, orgId }: { row: Row; orgId: string }) {
   const [open, setOpen] = useState(false);
@@ -86,7 +89,7 @@ export function NasPage() {
     type: 'select',
     required: true,
     options: ADAPTER_OPTIONS,
-    hint: 'The engine adapter that translates policies for this NAS (D-035).',
+    hint: 'The engine adapter that translates policies for this NAS (D-035). Third-party APs on an 802.1X or MAC-auth SSID use the generic adapter; register their AP MACs under Access points.',
   };
 
   const fields: FieldDef[] = [

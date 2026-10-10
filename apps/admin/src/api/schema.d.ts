@@ -1165,6 +1165,78 @@ export interface paths {
     patch: operations['patch_api_v1_orgs_orgId_schedules_id'];
     trace?: never;
   };
+  '/api/v1/orgs/{orgId}/access-points': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * List access_points
+     * @description Permission: `nas:read`
+     */
+    get: operations['get_api_v1_orgs_orgId_access_points'];
+    put?: never;
+    /**
+     * Create a access_point
+     * @description Permission: `nas:create`
+     */
+    post: operations['post_api_v1_orgs_orgId_access_points'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/orgs/{orgId}/access-points/{id}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Get a access_point
+     * @description Permission: `nas:read`
+     */
+    get: operations['get_api_v1_orgs_orgId_access_points_id'];
+    put?: never;
+    post?: never;
+    /**
+     * Delete a access_point
+     * @description Permission: `nas:delete`
+     */
+    delete: operations['delete_api_v1_orgs_orgId_access_points_id'];
+    options?: never;
+    head?: never;
+    /**
+     * Update a access_point (If-Match supported)
+     * @description Permission: `nas:update`
+     */
+    patch: operations['patch_api_v1_orgs_orgId_access_points_id'];
+    trace?: never;
+  };
+  '/api/v1/platform/access-points/release': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Release an AP MAC registered by any organization (squatting support path)
+     * @description Permission: `organization:update`
+     */
+    post: operations['post_api_v1_platform_access_points_release'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/api/v1/orgs/{orgId}/controllers': {
     parameters: {
       query?: never;
@@ -1232,6 +1304,34 @@ export interface paths {
      */
     post: operations['post_api_v1_orgs_orgId_controllers_id_rotate_credential'];
     delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/orgs/{orgId}/controllers/{id}/api-credential': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Controller API credential metadata (the secret is never returned)
+     * @description Permission: `controller:read`
+     */
+    get: operations['get_api_v1_orgs_orgId_controllers_id_api_credential'];
+    put?: never;
+    /**
+     * Set or rotate the controller API credential (write-only secret; refused while impersonating, D-027)
+     * @description Permission: `controller:secret:rotate`
+     */
+    post: operations['post_api_v1_orgs_orgId_controllers_id_api_credential'];
+    /**
+     * Remove the controller API credential (refused while impersonating, D-027)
+     * @description Permission: `controller:secret:rotate`
+     */
+    delete: operations['delete_api_v1_orgs_orgId_controllers_id_api_credential'];
     options?: never;
     head?: never;
     patch?: never;
@@ -2926,6 +3026,26 @@ export interface components {
       roadmap_phase: string;
     } & {
       [key: string]: unknown;
+    };
+    /** @description Controller API credential metadata; the secret is write-only (never returned). */
+    VendorApiCredential: {
+      /** @enum {string} */
+      api_kind:
+        | 'unifi-network'
+        | 'omada-controller'
+        | 'mist'
+        | 'ruckus-nbi'
+        | 'ruckus-one'
+        | 'meraki-dashboard';
+      base_url: string;
+      controller_id: string;
+      external_org_id: string | null;
+      external_site_id: string | null;
+      /** @constant */
+      has_secret: true;
+      rotated_at: string;
+      updated_at: string;
+      username: string | null;
     };
   };
   responses: never;
@@ -5687,7 +5807,8 @@ export interface operations {
           | 'openwifi-uspot-uam'
           | 'uspot-upstream-uam'
           | 'coovachilli-uam'
-          | 'openwifi-config';
+          | 'openwifi-config'
+          | 'generic-radius-8021x';
       };
       header?: never;
       path: {
@@ -7268,7 +7389,8 @@ export interface operations {
             | 'openwifi-hostapd-radius'
             | 'openwifi-uspot-uam'
             | 'uspot-upstream-uam'
-            | 'coovachilli-uam';
+            | 'coovachilli-uam'
+            | 'generic-radius-8021x';
           coa_port?: number | null;
           coa_supported?: boolean | null;
           controller_id?: string | null;
@@ -7474,7 +7596,8 @@ export interface operations {
             | 'openwifi-hostapd-radius'
             | 'openwifi-uspot-uam'
             | 'uspot-upstream-uam'
-            | 'coovachilli-uam';
+            | 'coovachilli-uam'
+            | 'generic-radius-8021x';
           coa_port?: number | null;
           coa_supported?: boolean | null;
           controller_id?: string | null;
@@ -9010,6 +9133,420 @@ export interface operations {
       };
     };
   };
+  get_api_v1_orgs_orgId_access_points: {
+    parameters: {
+      query?: {
+        limit?: number;
+        cursor?: string;
+        nas_client_id?: string;
+        status?: 'active' | 'disabled';
+        site_id?: string;
+      };
+      header?: never;
+      path: {
+        orgId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description access_point page */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            data: {
+              [key: string]: unknown;
+            }[];
+            next_cursor: string | null;
+          };
+        };
+      };
+      /** @description Validation failed (application/problem+json) */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Authentication required */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Permission denied */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Not found (also returned for objects of other tenants) */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+    };
+  };
+  post_api_v1_orgs_orgId_access_points: {
+    parameters: {
+      query?: never;
+      header?: {
+        'Idempotency-Key'?: string;
+      };
+      path: {
+        orgId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: {
+      content: {
+        'application/json': {
+          mac: string;
+          name?: string | null;
+          /** Format: uuid */
+          nas_client_id: string;
+          /** @enum {string} */
+          status?: 'active' | 'disabled';
+        };
+      };
+    };
+    responses: {
+      /** @description Created */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            id: string;
+          } & {
+            [key: string]: unknown;
+          };
+        };
+      };
+      /** @description Validation failed (application/problem+json) */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Authentication required */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Permission denied */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Not found (also returned for objects of other tenants) */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+    };
+  };
+  get_api_v1_orgs_orgId_access_points_id: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        orgId: string;
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description access_point */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            id: string;
+          } & {
+            [key: string]: unknown;
+          };
+        };
+      };
+      /** @description Validation failed (application/problem+json) */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Authentication required */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Permission denied */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Not found (also returned for objects of other tenants) */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+    };
+  };
+  delete_api_v1_orgs_orgId_access_points_id: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        orgId: string;
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Deleted */
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Validation failed (application/problem+json) */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Authentication required */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Permission denied */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Not found (also returned for objects of other tenants) */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+    };
+  };
+  patch_api_v1_orgs_orgId_access_points_id: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        orgId: string;
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: {
+      content: {
+        'application/json': {
+          mac?: string;
+          name?: string | null;
+          /** Format: uuid */
+          nas_client_id?: string;
+          /** @enum {string} */
+          status?: 'active' | 'disabled';
+        };
+      };
+    };
+    responses: {
+      /** @description Updated */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            id: string;
+          } & {
+            [key: string]: unknown;
+          };
+        };
+      };
+      /** @description Validation failed (application/problem+json) */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Authentication required */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Permission denied */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Not found (also returned for objects of other tenants) */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description If-Match mismatch */
+      412: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+    };
+  };
+  post_api_v1_platform_access_points_release: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: {
+      content: {
+        'application/json': {
+          mac: string;
+          reason: string;
+        };
+      };
+    };
+    responses: {
+      /** @description Released */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            mac: string;
+            organization_id: string | null;
+            released: boolean;
+          };
+        };
+      };
+      /** @description Validation failed (application/problem+json) */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Authentication required */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Permission denied */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Not found (also returned for objects of other tenants) */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+    };
+  };
   get_api_v1_orgs_orgId_controllers: {
     parameters: {
       query?: {
@@ -9383,6 +9920,201 @@ export interface operations {
             id: string;
           };
         };
+      };
+      /** @description Validation failed (application/problem+json) */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Authentication required */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Permission denied */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Not found (also returned for objects of other tenants) */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+    };
+  };
+  get_api_v1_orgs_orgId_controllers_id_api_credential: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        orgId: string;
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Credential metadata */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['VendorApiCredential'];
+        };
+      };
+      /** @description Validation failed (application/problem+json) */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Authentication required */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Permission denied */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Not found (also returned for objects of other tenants) */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+    };
+  };
+  post_api_v1_orgs_orgId_controllers_id_api_credential: {
+    parameters: {
+      query?: never;
+      header: {
+        'Idempotency-Key': string;
+      };
+      path: {
+        orgId: string;
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: {
+      content: {
+        'application/json': {
+          /** @enum {string} */
+          api_kind:
+            | 'unifi-network'
+            | 'omada-controller'
+            | 'mist'
+            | 'ruckus-nbi'
+            | 'ruckus-one'
+            | 'meraki-dashboard';
+          base_url: string;
+          external_org_id?: string | null;
+          external_site_id?: string | null;
+          secret: string;
+          username?: string | null;
+        };
+      };
+    };
+    responses: {
+      /** @description Credential stored (metadata only) */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['VendorApiCredential'];
+        };
+      };
+      /** @description Validation failed (application/problem+json) */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Authentication required */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Permission denied */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Not found (also returned for objects of other tenants) */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+    };
+  };
+  delete_api_v1_orgs_orgId_controllers_id_api_credential: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        orgId: string;
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Removed */
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
       };
       /** @description Validation failed (application/problem+json) */
       400: {

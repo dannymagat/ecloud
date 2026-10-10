@@ -36,7 +36,7 @@ import {
   toJsonValue,
   type Subject,
 } from '@ecloud/policy-engine';
-import { isUuid, newId } from '@ecloud/shared';
+import { canonicalMacStrict, isUuid, newId } from '@ecloud/shared';
 import type { Request, RequestHandler, Response } from 'express';
 import type { AppDeps } from '../context.js';
 import { normalizeVoucherCode, safeEqual, sha256Hex } from '../crypto.js';
@@ -45,6 +45,7 @@ import { nasAdapter } from '../nas-adapter.js';
 import { AUTHN_ACCESS } from '../auth/principal.js';
 import { loadResolutionInput } from '../policy-data.js';
 import { voucherHash } from '../routes/vouchers.js';
+import { observeAccessPoint } from './nas-lookup.js';
 import { identifyPortalCredential, type PortalAuthMethod } from './portal-credential.js';
 import {
   IdentityRejected,
@@ -189,17 +190,66 @@ interface Identity {
 }
 
 /**
+ * NAS adapters whose 802.1X EAP inner identities ECLOUD decides on (Cycle A). FreeRADIUS marks
+ * an inner-tunnel request with `ECLOUD-EAP-Inner` (sites-available/ecloud-inner); any other
+ * adapter (captive portals) never authenticates through EAP.
+ */
+export const EAP_ADAPTER_KEYS: ReadonlySet<string> = new Set([
+  'generic-radius-8021x',
+  'openwifi-hostapd-radius',
+]);
+
+/**
+ * Adapters on which a `User-Name` that IS the client MAC is MAC authentication even without
+ * `Service-Type = Call-Check` (AAA_ARCHITECTURE.md §2.3: many vendors send MAB as
+ * User-Name = User-Password = MAC). Limited to the vendor-neutral adapter so the first-party
+ * paths keep their verified request shapes.
+ */
+export const MAC_USERNAME_ADAPTER_KEYS: ReadonlySet<string> = new Set(['generic-radius-8021x']);
+
+/** True for an EAP inner-tunnel request (server-side marker; never set from a packet). */
+export function isEapInner(body: RadiusRequestBody): boolean {
+  return (attr(body, 'ECLOUD-EAP-Inner') ?? '') !== '';
+}
+
+/**
+ * How a request is MAC authentication, or null:
+ *  - `call-check`: `Service-Type = Call-Check` (any adapter, unchanged behaviour);
+ *  - `username`: generic 802.1X / MAC-auth NAS, `User-Name` is exactly one MAC address (strict
+ *    spelling) equal to `Calling-Station-Id`, no CHAP, and the password is absent or the same
+ *    MAC. A user name that merely looks like a MAC but carries another password is NOT MAC auth
+ *    (it continues as a subscriber / voucher login).
+ * EAP inner identities are never MAC authentication.
+ */
+export function macAuthKind(
+  body: RadiusRequestBody,
+  adapterKey: string | null,
+): 'call-check' | 'username' | null {
+  if (isEapInner(body)) return null;
+  if (attr(body, 'Service-Type') === 'Call-Check') return 'call-check';
+  if (adapterKey === null || !MAC_USERNAME_ADAPTER_KEYS.has(adapterKey)) return null;
+  if (hasAttr(body, 'CHAP-Password')) return null;
+  const userMac = canonicalMacStrict(attr(body, 'User-Name'));
+  const stationMac = canonicalMacStrict(attr(body, 'Calling-Station-Id'));
+  if (userMac === null || stationMac === null || userMac !== stationMac) return null;
+  const password = attr(body, 'User-Password');
+  if (password !== undefined && canonicalMacStrict(password) !== userMac) return null;
+  return 'username';
+}
+
+/**
  * True when `identify` would take the subscriber-password branch (the only one that runs
  * Argon2id). Mirrors its early exits: empty User-Name, CHAP, portal credential, MAC auth
- * (Call-Check) and a missing User-Password never reach the `users` lookup.
+ * (Call-Check or generic MAC-as-username) and a missing User-Password never reach the `users`
+ * lookup.
  */
-function takesPasswordPath(body: RadiusRequestBody): boolean {
+function takesPasswordPath(body: RadiusRequestBody, adapterKey: string | null): boolean {
   const userName = attr(body, 'User-Name') ?? '';
   return (
     userName !== '' &&
     !hasAttr(body, 'CHAP-Password') &&
     !isPortalCredentialUsername(userName) &&
-    attr(body, 'Service-Type') !== 'Call-Check' &&
+    macAuthKind(body, adapterKey) === null &&
     attr(body, 'User-Password') !== undefined
   );
 }
@@ -218,7 +268,7 @@ async function precheckPassword(
   body: RadiusRequestBody,
   nas: NasRow,
 ): Promise<PasswordCheck | null> {
-  if (!takesPasswordPath(body)) return null;
+  if (!takesPasswordPath(body, nas.adapter_key)) return null;
   const userName = attr(body, 'User-Name') ?? '';
   const password = attr(body, 'User-Password') ?? '';
   const user = await withTenant(deps.db, nas.organization_id, async (trx) => {
@@ -267,11 +317,21 @@ async function identify(
 ): Promise<Identity> {
   const userName = attr(body, 'User-Name') ?? '';
   const password = attr(body, 'User-Password');
-  const serviceType = attr(body, 'Service-Type');
   if (userName === '') throw new Reject('missing_username', 'Access denied');
   if (hasAttr(body, 'CHAP-Password')) {
     // ECLOUD stores only one-way hashes: CHAP cannot be verified (contract §2.1).
     throw new Reject('chap_unsupported', 'Authentication method not supported');
+  }
+
+  if (isEapInner(body)) {
+    // Cycle A: 802.1X inner identity (EAP-TTLS/PAP). Only 802.1X NAS adapters, never a portal
+    // broker credential (those are bound to a UAM hand-off), never MAC auth (macAuthKind).
+    if (nas.adapter_key === null || !EAP_ADAPTER_KEYS.has(nas.adapter_key)) {
+      throw new Reject('eap_adapter_not_allowed', 'Access denied');
+    }
+    if (isPortalCredentialUsername(userName)) {
+      throw new Reject('eap_portal_credential', 'Access denied');
+    }
   }
 
   if (isPortalCredentialUsername(userName)) {
@@ -286,9 +346,27 @@ async function identify(
     }
   }
 
-  if (serviceType === 'Call-Check') {
-    const mac = macFrom(userName) ?? macFrom(attr(body, 'Calling-Station-Id'));
-    if (mac === null) throw new Reject('mac_invalid', 'Access denied');
+  const macKind = macAuthKind(body, nas.adapter_key);
+  if (macKind !== null) {
+    if (
+      macKind === 'call-check' &&
+      nas.adapter_key !== null &&
+      MAC_USERNAME_ADAPTER_KEYS.has(nas.adapter_key)
+    ) {
+      // Generic NAS: a MAC user name must be the calling station (no MAB for another device).
+      const userMac = canonicalMacStrict(userName);
+      const stationMac = canonicalMacStrict(attr(body, 'Calling-Station-Id'));
+      if (userMac !== null && stationMac !== null && userMac !== stationMac) {
+        throw new Reject('mac_mismatch', 'Access denied', { auth_method: 'mac' });
+      }
+    }
+    // Strict parsing only (review L5): a value that merely contains 12 hex digits is not a MAC.
+    // Call-Check: the MAC user name, else the (normalised) Calling-Station-Id; neither -> reject.
+    const mac =
+      macKind === 'username'
+        ? canonicalMacStrict(userName)
+        : (canonicalMacStrict(userName) ?? canonicalMacStrict(attr(body, 'Calling-Station-Id')));
+    if (mac === null) throw new Reject('mac_invalid', 'Access denied', { auth_method: 'mac' });
     const device = await trx
       .selectFrom('client_devices')
       .select(['id', 'user_id', 'blocked', 'mac_auth_enabled'])
@@ -487,6 +565,18 @@ async function decide(deps: AppDeps, body: RadiusRequestBody, now: Date): Promis
       facts: { ...baseFacts, reason: 'nas_identifier_mismatch' },
     };
   }
+
+  // Review M1b: an authenticated packet of this NAS naming an AP MAC proves that AP (best effort,
+  // never part of the decision; only rows of THIS NAS that are not yet verified are touched).
+  await observeAccessPoint(
+    deps,
+    {
+      organizationId: nas.organization_id,
+      nasId: nas.id,
+      calledStationId: attr(body, 'Called-Station-Id'),
+    },
+    now,
+  ).catch(() => false);
 
   try {
     // B-3: Argon2id first, with no connection held; the decision transaction re-checks.

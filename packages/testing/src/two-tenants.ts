@@ -64,7 +64,9 @@ export const TENANT_GRAPH_TABLES: readonly string[] = Object.freeze([
   'network_devices',
   'wireguard_peers',
   'controllers',
+  'vendor_api_credentials',
   'nas_clients',
+  'nas_access_points',
   'identity_providers',
   'user_groups',
   'users',
@@ -271,6 +273,29 @@ export async function seedTenantGraph(
     [organizationId, siteId, `NAS ${slug}`, nasIp, `secret://test/${slug}`, controllerId],
   );
   ref('nas_clients', nasClientId);
+
+  // Cycle A (migration 028): an access point behind the NAS (globally unique unicast MAC) and a
+  // sealed vendor-API credential of the controller (envelope-shaped placeholder, not a secret).
+  const accessPointId = await insertReturning<string>(
+    db,
+    `INSERT INTO nas_access_points (organization_id, site_id, nas_client_id, mac, name)
+     VALUES ($1, $2, $3, $4, $5) RETURNING id`,
+    [organizationId, siteId, nasClientId, randomMac(), `AP ${slug}`],
+  );
+  ref('nas_access_points', accessPointId);
+
+  const vendorApiCredentialId = await insertReturning<string>(
+    db,
+    `INSERT INTO vendor_api_credentials (organization_id, controller_id, api_kind, base_url, secret_ref)
+     VALUES ($1, $2, 'unifi-network', $3, $4) RETURNING id`,
+    [
+      organizationId,
+      controllerId,
+      `https://controller-${token}.example.test`,
+      `enc:v1.test.${token}.placeholder`,
+    ],
+  );
+  ref('vendor_api_credentials', vendorApiCredentialId);
 
   const identityProviderId = await insertReturning<string>(
     db,

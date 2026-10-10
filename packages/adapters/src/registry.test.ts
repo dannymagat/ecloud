@@ -34,15 +34,17 @@ function plan(
 }
 
 describe('registry', () => {
-  it('lists the five adapters in §3.1 order and resolves by key', () => {
+  it('lists the five adapters in §3.1 order (+ generic-radius-8021x) and resolves by key', () => {
     expect(listAdapters().map((a) => a.key)).toEqual([
       'openwifi-hostapd-radius',
       'openwifi-uspot-uam',
       'uspot-upstream-uam',
       'coovachilli-uam',
       'openwifi-config',
+      'generic-radius-8021x',
     ]);
     expect(listCapabilities().map((c) => c.version)).toEqual([
+      '0.1.0',
       '0.1.0',
       '0.1.0',
       '0.1.0',

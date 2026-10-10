@@ -91,12 +91,45 @@ export function flowIndexKey(nasId: string, clientMac: string, sessionId: string
 }
 
 /** Replay identity of a redirect (MULTI_VENDOR_INTEGRATION_PLAN.md §6.2 `isReplay` key). */
-export function replayKey(k: {
+export interface ReplayIdentity {
   nasId: string;
   sessionId: string | null;
   challenge: string;
   clientMac: string;
-}): string {
+  /** Cycle A: vendor / ECLOUD nonces get their own namespace. */
+  nonceKind?: 'uam-challenge' | 'vendor-nonce' | 'ecloud-login-token';
+}
+
+function isUamKind(k: ReplayIdentity): boolean {
+  return k.nonceKind === undefined || k.nonceKind === 'uam-challenge';
+}
+
+/**
+ * Unambiguous replay key (Cycle A review L4): SHA-256 over the JSON array
+ * `[kind, nasId, sessionId, challenge, clientMac]`, so no field value (a NAS-chosen `sessionid`
+ * may contain anything) can shift into another field. UAM challenges are hex and compared
+ * case-insensitively; vendor / ECLOUD nonces exactly.
+ */
+export function replayKey(k: ReplayIdentity): string {
+  const uam = isUamKind(k);
+  const fields = [
+    uam ? 'uam-challenge' : k.nonceKind,
+    k.nasId,
+    k.sessionId,
+    uam ? k.challenge.toLowerCase() : k.challenge,
+    k.clientMac,
+  ];
+  return `pf:replay:v2:${sha256Hex(JSON.stringify(fields))}`;
+}
+
+/**
+ * Pre-Cycle-A UAM key (`|`-joined). Read-only migration aid: markers written before the upgrade
+ * live at most REPLAY_TTL_S (24 h); `isReplayed` also checks this key for UAM identities so a
+ * redirect consumed just before the upgrade stays consumed. Remove 24 h after every portal API
+ * replica runs the v2 code (nothing writes legacy keys any more).
+ */
+export function legacyReplayKey(k: ReplayIdentity): string | null {
+  if (!isUamKind(k)) return null;
   return `pf:replay:${sha256Hex([k.nasId, k.sessionId ?? '', k.challenge.toLowerCase(), k.clientMac].join('|'))}`;
 }
 
@@ -139,8 +172,11 @@ export async function findIndexedFlow(
   return id === null ? null : loadFlow(kv, id, now);
 }
 
-export async function isReplayed(kv: KvStore, key: string): Promise<boolean> {
-  return (await kv.get(key)) !== null;
+/** True when the identity was consumed (v2 key, or a legacy UAM key inside its TTL). */
+export async function isReplayed(kv: KvStore, identity: ReplayIdentity): Promise<boolean> {
+  if ((await kv.get(replayKey(identity))) !== null) return true;
+  const legacy = legacyReplayKey(identity);
+  return legacy !== null && (await kv.get(legacy)) !== null;
 }
 
 export async function markReplayed(kv: KvStore, key: string): Promise<void> {

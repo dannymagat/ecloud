@@ -613,7 +613,7 @@ await describeIntegration('@ecloud/api against ecloud_test', () => {
         'ECLOUD_SIDE_ONLY',
       ]).toContain(s);
     }
-    expect(adapters.body.adapters).toHaveLength(5);
+    expect(adapters.body.adapters).toHaveLength(6); // + generic-radius-8021x (Cycle A)
   });
 
   // ---------------------------------------------------------------------------------- AAA

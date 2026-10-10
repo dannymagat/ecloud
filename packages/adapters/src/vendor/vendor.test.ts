@@ -95,6 +95,7 @@ describe('first-party VendorAdapter wrappers (AC1, AC2)', () => {
       'uspot-upstream-uam',
       'coovachilli-uam',
       'openwifi-config',
+      'generic-radius-8021x',
     ]);
     for (const v of all) {
       expect(v.engine).toBe(getAdapter(v.key));
@@ -488,5 +489,83 @@ describe('setup guide, health', () => {
     expect(cfg.signals).toEqual([
       { name: 'wireguard-handshake', state: 'unknown', lastSeenAt: null },
     ]);
+  });
+});
+
+describe('generic-radius-8021x vendor adapter (Cycle A)', () => {
+  const generic = getVendorAdapter('generic-radius-8021x');
+
+  it('is vendor-neutral, has no portal and wraps the engine record', () => {
+    expect(generic.vendorKey).toBe('generic-radius');
+    expect(generic.engine).toBe(getAdapter('generic-radius-8021x'));
+    expect(generic.strategies).toEqual([]);
+    expect(generic.parseRedirect({ url: 'https://x/?a=b', method: 'GET' })).toMatchObject({
+      unsupported: true,
+    });
+    expect(generic.authorizeSession(context as never, credential)).toMatchObject({
+      unsupported: true,
+    });
+  });
+
+  it('setup guide covers RADIUS auth/acct, EAP-TTLS/PAP, MAC auth and DAS with placeholders', () => {
+    const steps = generic.buildSetupGuide({ siteId: 'site-a', nasId: 'nas-1' });
+    expect(steps.map((s) => s.id)).toEqual([
+      'radius-auth',
+      'radius-acct',
+      'nas-source',
+      'nas-identifier',
+      'message-authenticator',
+      'interim',
+      'eap-method',
+      'eap-ca',
+      'mac-auth',
+      'das',
+    ]);
+    expect(steps.find((s) => s.id === 'eap-method')?.value).toBe('EAP-TTLS / PAP');
+    for (const s of steps) expect(s.value).not.toMatch(/ecloud_dev|secret=/i);
+  });
+
+  it('capability report presents nothing as device-enforced (V12)', () => {
+    const engineOnly = generic.discoverCapabilities({});
+    expect(engineOnly.rowKey).toBeNull();
+    const report = generic.discoverCapabilities({ modelKey: 'UNKNOWN', firmware: 'UNKNOWN' });
+    expect(report.rowKey).toBe('generic-radius-8021x');
+    expect(report.lifecycle).toBe('implemented');
+    for (const r of [engineOnly, report]) {
+      expect(r.cells.some((c) => c.deviceEnforced)).toBe(false);
+      expect(r.cells.some((c) => c.status === 'VERIFIED_SUPPORTED')).toBe(false);
+    }
+  });
+
+  it('Disconnect is built for the NAS DAS and needs Calling-Station-Id', () => {
+    const ok = generic.revokeSession({
+      sessionId: 's',
+      callingStationId: 'AA-BB-CC-DD-EE-02',
+      userName: 'alice',
+    });
+    expect(ok).toMatchObject({
+      kind: 'disconnect',
+      target: 'rfc5176-das',
+      status: 'REQUIRES_DEVICE_TEST',
+    });
+    expect(generic.revokeSession({ sessionId: 's', userName: 'alice' })).toMatchObject({
+      unsupported: true,
+    });
+  });
+});
+
+describe('NasLookup carries the AP MAC (Cycle A contract gap)', () => {
+  it('UAM validation passes the canonical AP MAC from `called` to findNas', async () => {
+    const findNas = vi.fn(() => Promise.resolve(NAS_USPOT));
+    const v = await uspot.validateContext(
+      parse(signed(USPOT_SERVER, USPOT_T_QUERY)),
+      lookup(NAS_USPOT, { findNas }),
+    );
+    expect(v.ok).toBe(true);
+    expect(findNas).toHaveBeenCalledWith({
+      nasid: 'nas-uspot-1',
+      called: '00-11-22-33-44-55',
+      apMac: '00:11:22:33:44:55',
+    });
   });
 });

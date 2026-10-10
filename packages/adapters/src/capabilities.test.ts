@@ -48,6 +48,8 @@ const EXPECTED_VERIFIED: Record<AdapterKey, PolicyField[]> = {
     'session_timeout_s',
     'idle_timeout_s',
   ],
+  // Cycle A (D-044): vendor-neutral, no vendor source and no lab test → nothing VERIFIED.
+  'generic-radius-8021x': [],
 };
 
 /** Full per-field status table (the enforceability preview source), for cross-checking. */
@@ -86,6 +88,18 @@ const EXPECTED_STATUS: Record<AdapterKey, Partial<Record<PolicyField, AdapterFie
     vlan_id: 'REQUIRES_DEVICE_TEST',
     burst_upload_kbps: 'UNSUPPORTED',
   },
+  'generic-radius-8021x': {
+    download_rate_kbps: 'REQUIRES_DEVICE_TEST',
+    upload_rate_kbps: 'REQUIRES_DEVICE_TEST',
+    burst_download_kbps: 'UNSUPPORTED',
+    quota_total_bytes: 'UNSUPPORTED',
+    session_timeout_s: 'REQUIRES_DEVICE_TEST',
+    idle_timeout_s: 'REQUIRES_DEVICE_TEST',
+    max_concurrent_sessions: 'ECLOUD_SIDE_ONLY',
+    valid_until: 'ECLOUD_SIDE_ONLY',
+    schedule_id: 'ECLOUD_SIDE_ONLY',
+    vlan_id: 'REQUIRES_DEVICE_TEST',
+  },
 };
 
 /** Attribute names exactly as in the FreeRADIUS dictionaries (AAA_ARCHITECTURE.md §4.3) plus the Gigawords additions. */
@@ -122,12 +136,12 @@ const KNOWN_ATTRIBUTES = new Set([
 ]);
 
 const DOC_CITATION =
-  /(POLICY_ENGINE|NETWORK_INTEGRATION|CAPTIVE_PORTAL_ARCHITECTURE|AAA_ARCHITECTURE)\.md §/;
+  /(POLICY_ENGINE|NETWORK_INTEGRATION|CAPTIVE_PORTAL_ARCHITECTURE|AAA_ARCHITECTURE|VENDOR_INTEGRATION_RESEARCH)\.md §/;
 
 describe('adapter capability declarations (D-028)', () => {
   const all = listCapabilities();
 
-  it('ships exactly the five adapters of POLICY_ENGINE.md §3', () => {
+  it('ships the five adapters of POLICY_ENGINE.md §3 plus generic-radius-8021x (Cycle A)', () => {
     expect(all.map((a) => a.key)).toEqual([...ADAPTER_KEYS]);
     expect(ADAPTER_KEYS).toEqual([
       'openwifi-hostapd-radius',
@@ -135,6 +149,7 @@ describe('adapter capability declarations (D-028)', () => {
       'uspot-upstream-uam',
       'coovachilli-uam',
       'openwifi-config',
+      'generic-radius-8021x',
     ]);
   });
 

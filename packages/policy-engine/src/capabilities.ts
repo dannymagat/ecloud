@@ -17,6 +17,8 @@ export const ADAPTER_KEYS = [
   'uspot-upstream-uam',
   'coovachilli-uam',
   'openwifi-config',
+  /** Cycle A (D-044): vendor-neutral 802.1X / MAC-auth NAS (no portal). */
+  'generic-radius-8021x',
 ] as const;
 
 export type AdapterKey = (typeof ADAPTER_KEYS)[number];
@@ -28,9 +30,13 @@ export type PortalType =
   | 'uam-chillispot+wispr+json'
   | 'config-only';
 
-export type RateUnit = 'bps' | 'kbps' | 'mbps-int';
-export type RateAttrFamily = 'wispr' | 'chillispot';
-export type RadiusVendor = 'WISPr' | 'ChilliSpot' | 'CoovaChilli';
+/**
+ * `mikrotik-rate-string`: one combined `rx/tx` string attribute (Mikrotik-Rate-Limit, rendered by
+ * `renderMikrotikRateLimit`), not two numeric attributes.
+ */
+export type RateUnit = 'bps' | 'kbps' | 'mbps-int' | 'mikrotik-rate-string';
+export type RateAttrFamily = 'wispr' | 'chillispot' | 'mikrotik';
+export type RadiusVendor = 'WISPr' | 'ChilliSpot' | 'CoovaChilli' | 'Mikrotik';
 
 /** A labelled claim about one mechanism (flag) of the adapter. */
 export interface AdapterFlag {
@@ -51,9 +57,15 @@ export interface AttributeDeclaration extends AdapterFlag {
 export interface RateFamilyDeclaration {
   readonly family: RateAttrFamily;
   readonly unit: RateUnit;
+  /** Download attribute; for a combined family (`combined` set) the same name as `up`. */
   readonly down: string;
   readonly up: string;
   readonly vendor: RadiusVendor;
+  /**
+   * Combined family: both directions travel in ONE attribute of this name (MikroTik
+   * `Mikrotik-Rate-Limit = "rx/tx"`). Absent for the two-attribute families.
+   */
+  readonly combined?: string;
 }
 
 export interface QuotaAttributes {
@@ -66,7 +78,8 @@ export interface QuotaAttributes {
 }
 
 export interface DisconnectCapability extends AdapterFlag {
-  readonly target: 'hostapd-das' | 'uspot-das' | 'coaport' | 'none';
+  /** `rfc5176-das`: the NAS's own RFC 5176 DAS (vendor-neutral 802.1X / MAC-auth NAS). */
+  readonly target: 'hostapd-das' | 'uspot-das' | 'coaport' | 'rfc5176-das' | 'none';
   /** Identification attributes the NAS needs in the Disconnect-Request. */
   readonly identifyBy: readonly string[];
   readonly acctStopEmitted: boolean | 'unknown';

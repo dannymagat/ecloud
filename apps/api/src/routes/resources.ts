@@ -22,6 +22,8 @@ import { ImpersonationForbiddenError } from '../http/errors.js';
 import { defineRoute, type AnyRouteSpec } from '../http/route.js';
 import { assertRef, inTenant, requireOnSite } from '../tenant.js';
 import { NAS_ADAPTER_KEYS } from '../nas-adapter.js';
+import { releaseGlobalSlots } from '../global-slots.js';
+import { softDeleteAccessPointsOf } from './access-points.js';
 import { assertControllerFor, resolveDeploymentMode } from './controllers.js';
 import { crudRoutes, loose, type Row } from './crud.js';
 
@@ -242,6 +244,10 @@ export function resourceRoutes(deps: AppDeps): AnyRouteSpec[] {
     updateSchema: SiteUpdate,
     serialize: (row) => withoutKeys(row, ['geo']),
     prepareCreate: (body) => Promise.resolve({ ...body, settings: body.settings ?? {} }),
+    // Review M2: a deleted site frees its globally unique slots (AP MACs, NAS IPs, devices).
+    beforeDelete: async (before, { trx, orgId }) => {
+      await releaseGlobalSlots(trx, { organizationId: orgId, siteId: before.id as string });
+    },
   });
 
   const networkDevices = crudRoutes(deps, {
@@ -318,6 +324,8 @@ export function resourceRoutes(deps: AppDeps): AnyRouteSpec[] {
       };
     },
     afterCreate: (row, hook) => Promise.resolve({ ...row, secret: hook.scratch.secret }),
+    // Cycle A (migration 028): a deleted NAS takes its access points along (frees their MACs).
+    beforeDelete: (before, { trx }) => softDeleteAccessPointsOf(trx, before.id as string),
     preparePatch: async (body, before, { trx }) => {
       if (typeof body.site_id === 'string') await assertRef(trx, 'sites', body.site_id, 'site');
       if (typeof body.network_device_id === 'string') {

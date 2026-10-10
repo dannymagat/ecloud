@@ -286,4 +286,73 @@ suite(title, () => {
     const retransmit = await sendAccounting('acct-start.txt', replacements, 2);
     expect(retransmit.code, retransmit.output).toBe('Accounting-Response');
   });
+
+  // ------------------------------------------------------------ Cycle A (D-044)
+
+  it('Cycle A: Mikrotik-Rate-Limit "rx/tx" passes through (stock dictionary.mikrotik is loaded)', async () => {
+    const sessionId = uniqueSessionId();
+    const { packet, password } = accessRequest(sessionId);
+    stub.setMode({
+      kind: 'accept',
+      policy: buildAcceptPolicy({
+        cleartextPassword: password,
+        reply: { 'Mikrotik-Rate-Limit': '2M/10M', Class: classFor().ascii },
+      }),
+    });
+    const reply = await radclient(packet, { type: 'auth' });
+    expect(reply.code, reply.output).toBe('Access-Accept');
+    expect(reply.attributes['Mikrotik-Rate-Limit']).toEqual(['2M/10M']);
+  });
+
+  it('Cycle A: generic MAB (User-Name = MAC, no Call-Check) reaches ECLOUD unchanged; VLAN triplet returned', async () => {
+    const sessionId = uniqueSessionId();
+    const packet = fixture('access-request-generic-mab.txt', {
+      '<mab-sessionid-placeholder>': sessionId,
+      '<nasid-placeholder>': 'lab-generic',
+    });
+    stub.setMode({
+      kind: 'accept',
+      policy: buildAcceptPolicy({
+        authType: 'Accept',
+        reply: {
+          'Tunnel-Type': 'VLAN',
+          'Tunnel-Medium-Type': 'IEEE-802',
+          'Tunnel-Private-Group-Id': '42',
+          'Session-Timeout': 3600,
+          Class: classFor().ascii,
+        },
+      }),
+    });
+    const reply = await radclient(packet, { type: 'auth' });
+    expect(reply.code, reply.output).toBe('Access-Accept');
+    expect(reply.attributes['Tunnel-Private-Group-Id']?.[0], reply.output).toMatch(/42/);
+    expect(reply.attributes['Tunnel-Type']?.[0]).toMatch(/VLAN/);
+    const authorize = await stub.waitForRequest(forSession(AAA_AUTHORIZE_PATH, sessionId));
+    // rewrite_calling_station_id normalises the station; User-Name is forwarded as sent
+    expect(attributeValue(authorize.body, 'User-Name')).toBe('aabbccddee01');
+    expect(attributeValue(authorize.body, 'Calling-Station-Id')).toBe('AA-BB-CC-DD-EE-01');
+    expect(attributeValue(authorize.body, 'Service-Type')).toBeUndefined();
+    expect(attributeValue(authorize.body, 'ECLOUD-EAP-Inner')).toBeUndefined();
+  });
+
+  it('Cycle A: an EAP-Message is rejected without asking ECLOUD while 802.1X is not enabled', async () => {
+    const sessionId = uniqueSessionId();
+    const packet = fixture('access-request-eap-identity.txt', {
+      '<eap-sessionid-placeholder>': sessionId,
+      '<nasid-placeholder>': 'lab-generic',
+    });
+    stub.setMode({ kind: 'accept', policy: buildAcceptPolicy({ authType: 'Accept' }) });
+    const eapEnabled = containerEnv('RADIUS_EAP_ENABLED') === '1';
+    const reply = await radclient(packet, { type: 'auth' });
+    if (eapEnabled) {
+      // EAP on: the outer identity is challenged (TLS start), still never sent to ECLOUD
+      expect(reply.code, reply.output).toBe('Access-Challenge');
+    } else {
+      expect(reply.code, reply.output).toBe('Access-Reject');
+      expect(reply.attributes['Reply-Message']?.[0]).toMatch(/802\.1X is not enabled/);
+    }
+    // give a (wrong) rest call time to show up, then assert there was none
+    await new Promise((r) => setTimeout(r, 300));
+    expect(stub.requests.filter(forSession(AAA_AUTHORIZE_PATH, sessionId))).toEqual([]);
+  });
 });

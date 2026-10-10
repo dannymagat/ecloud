@@ -128,7 +128,8 @@ export function replayKey(
   challenge: string,
   mac: string,
 ): string {
-  return `${nasId}|${sessionId}|${challenge}|${mac}`;
+  // JSON, not `|`-joined: field values cannot shift into each other (mirrors portal-store v2).
+  return JSON.stringify([nasId, sessionId, challenge, mac]);
 }
 
 export function parse(t: SimTarget, url: string): ParsedRedirect {

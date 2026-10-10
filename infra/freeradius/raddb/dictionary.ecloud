@@ -78,3 +78,8 @@ ATTRIBUTE	ECLOUD-Decision			3004	string
 ATTRIBUTE	ECLOUD-Auth-Result		3005	string
 ATTRIBUTE	ECLOUD-Reply-Class		3006	string
 ATTRIBUTE	ECLOUD-Reply-Message		3007	string
+#  Cycle A (D-044): set ONLY by sites-available/ecloud-inner (EAP-TTLS inner
+#  request) so /internal/aaa/authorize knows User-Name is an inner identity;
+#  the outer server deletes them (policy.d/ecloud ecloud_request_context).
+ATTRIBUTE	ECLOUD-EAP-Inner		3008	string
+ATTRIBUTE	ECLOUD-Outer-User-Name		3009	string

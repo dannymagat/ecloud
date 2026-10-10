@@ -1,0 +1,12 @@
+# Cycle A (D-044) -- first round of an 802.1X exchange: EAP-Response/Identity "anonymous"
+# (EAP code 2, id 1, length 14, type 1 Identity). With RADIUS_EAP_ENABLED unset (default) the
+# ECLOUD outer server must reject it WITHOUT asking /internal/aaa/authorize.
+User-Name = "anonymous"
+EAP-Message = 0x0201000e01616e6f6e796d6f7573
+Calling-Station-Id = "AA-BB-CC-DD-EE-02"
+Called-Station-Id = "00-11-22-33-44-66:lab-8021x"
+NAS-Identifier = "<nasid-placeholder>"
+NAS-IP-Address = 192.0.2.11
+NAS-Port-Type = Wireless-802.11
+Acct-Session-Id = "<eap-sessionid-placeholder>"
+Message-Authenticator = 0x00

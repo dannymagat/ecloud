@@ -13,6 +13,8 @@ export const NAS_ADAPTER_KEYS = [
   'openwifi-uspot-uam',
   'uspot-upstream-uam',
   'coovachilli-uam',
+  // Cycle A (D-044, migration 028): vendor-neutral 802.1X / MAC-auth NAS.
+  'generic-radius-8021x',
 ] as const;
 
 export type NasAdapterKey = (typeof NAS_ADAPTER_KEYS)[number];

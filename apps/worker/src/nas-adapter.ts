@@ -11,6 +11,8 @@ export const NAS_ADAPTER_KEYS: readonly string[] = Object.freeze([
   'openwifi-uspot-uam',
   'uspot-upstream-uam',
   'coovachilli-uam',
+  // Cycle A (D-044, migration 028): vendor-neutral 802.1X / MAC-auth NAS.
+  'generic-radius-8021x',
 ]);
 
 export function resolveAdapter(adapterKey: string | null): NasAdapter | null {

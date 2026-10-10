@@ -12,6 +12,15 @@
 #
 set -eu
 
+#  Runs a check as the service user (the container may start as root, see below).
+as_freerad() {
+	if [ "$(id -u)" = "0" ]; then
+		setpriv --reuid=freerad --regid=freerad --init-groups "$@"
+	else
+		"$@"
+	fi
+}
+
 file_env() {
 	var="$1"
 	file_var="${var}_FILE"
@@ -31,7 +40,7 @@ file_env() {
 	fi
 }
 
-for v in RADIUS_SQL_PASSWORD RADIUS_STATUS_SECRET RADIUS_DEV_CLIENT_SECRET INTERNAL_API_TOKEN; do
+for v in RADIUS_SQL_PASSWORD RADIUS_STATUS_SECRET RADIUS_DEV_CLIENT_SECRET INTERNAL_API_TOKEN RADIUS_EAP_KEY_PASSWORD; do
 	file_env "$v"
 done
 
@@ -67,7 +76,7 @@ if [ -n "${RADIUS_CLIENTS_RENDERED:-}" ]; then
 		echo "freeradius: RADIUS_CLIENTS_RENDERED is set but $clients_dir/dev.conf is visible; mount the rendered-clients volume over $clients_dir" >&2
 		exit 1
 	fi
-	if [ ! -s "$rendered" ] || [ ! -r "$rendered" ]; then
+	if [ ! -s "$rendered" ] || ! as_freerad test -r "$rendered"; then
 		echo "freeradius: rendered clients file $rendered is missing, empty or unreadable; run the radius-clients renderer first" >&2
 		exit 1
 	fi
@@ -77,10 +86,50 @@ if [ -n "${RADIUS_CLIENTS_RENDERED:-}" ]; then
 	fi
 fi
 
+#  802.1X / EAP-TTLS (Cycle A, D-044): opt-in. The ECLOUD eap module and the
+#  ecloud-inner site are linked only when RADIUS_EAP_ENABLED=1 AND the mounted
+#  certificate set is readable BY freerad; otherwise they are unlinked (a
+#  restarted container keeps its filesystem) and every EAP-Message is rejected
+#  by the outer server. Linking happens here as root (mods-enabled/ and
+#  sites-enabled/ are root-owned); privileges are dropped below. Certificates
+#  are never in the image (production: REQUIRES_CLARIFICATION; dev:
+#  scripts/dev-eap-certs.sh).
+raddb=/etc/freeradius
+export RADIUS_EAP_CERT_DIR="${RADIUS_EAP_CERT_DIR:-$raddb/eap-certs}"
+export RADIUS_EAP_KEY_PASSWORD="${RADIUS_EAP_KEY_PASSWORD:-}"
+eap_linked() {
+	[ -L "$raddb/mods-enabled/eap" ] && [ -L "$raddb/sites-enabled/ecloud-inner" ]
+}
+if [ "${RADIUS_EAP_ENABLED:-}" = "1" ]; then
+	for f in server.pem server.key ca.pem; do
+		if ! as_freerad test -r "$RADIUS_EAP_CERT_DIR/$f"; then
+			echo "freeradius: RADIUS_EAP_ENABLED=1 but $RADIUS_EAP_CERT_DIR/$f is missing or unreadable by freerad" >&2
+			exit 1
+		fi
+	done
+	if [ "$(id -u)" = "0" ]; then
+		ln -sfn ../mods-available/eap "$raddb/mods-enabled/eap"
+		ln -sfn ../sites-available/ecloud-inner "$raddb/sites-enabled/ecloud-inner"
+	elif ! eap_linked; then
+		echo "freeradius: RADIUS_EAP_ENABLED=1 needs the container to start as root (it links the EAP configuration, then drops to freerad)" >&2
+		exit 1
+	fi
+elif [ "$(id -u)" = "0" ]; then
+	rm -f "$raddb/mods-enabled/eap" "$raddb/sites-enabled/ecloud-inner"
+elif eap_linked; then
+	echo "freeradius: EAP configuration is linked but RADIUS_EAP_ENABLED is not 1; start the container as root to unlink it" >&2
+	exit 1
+fi
+
 case "$INTERNAL_API_TOKEN" in
 	*[%\"\\]*)
 		echo "freeradius: INTERNAL_API_TOKEN must not contain %, \" or \\ (it is embedded in an xlat string)" >&2
 		exit 1 ;;
 esac
 
+#  Drop root before anything parses configuration or opens a socket.
+if [ "$(id -u)" = "0" ]; then
+	exec setpriv --reuid=freerad --regid=freerad --init-groups --no-new-privs \
+		--bounding-set=-all /docker-entrypoint.sh "$@"
+fi
 exec /docker-entrypoint.sh "$@"

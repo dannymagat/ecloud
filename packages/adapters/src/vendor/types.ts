@@ -137,10 +137,20 @@ export interface RegisteredNas {
 
 /** Injected lookup (keeps this package free of DB / network). */
 export interface NasLookup {
-  /** Registered NAS for the redirect's NAS identity fields, or null (→ `unknown_nas`). */
+  /**
+   * Registered NAS for the redirect's NAS identity fields, or null (→ `unknown_nas`).
+   *
+   * Cycle A (research "contract gaps"): third-party portals identify the AP by MAC
+   * (`ap_mac`, `apmac`, `mac`, `ga_ap_mac`, `apMac`), so the query also carries `apMac`
+   * (canonical `aa:bb:cc:dd:ee:ff`, unicast) and, for controller-based vendors, the registered
+   * `controllerId`. Implementations MUST fail closed (null) when the fields resolve to no NAS,
+   * to more than one NAS, or to different NAS (e.g. `nasid` → A, `apMac` → B).
+   */
   findNas(query: {
     readonly nasid: string | null;
     readonly called: string | null;
+    readonly apMac?: string | null;
+    readonly controllerId?: string | null;
   }): Promise<RegisteredNas | null>;
   /**
    * Required. Organization the portal request is already bound to (e.g. by a signed flow or a
@@ -153,12 +163,18 @@ export interface NasLookup {
   /**
    * Required. True when this (NAS, sessionid, challenge, client MAC) was already consumed.
    * Validation fails closed (`replayed`) if no replay check is supplied at runtime.
+   *
+   * `challenge` is the freshness value of the redirect: the UAM challenge, a vendor nonce
+   * (`magic`, `ga_Qv`, `login_url`, `t`) or, for post-back vendors that send none, the id of an
+   * ECLOUD-issued login token (`vendor/login-token.ts`). `nonceKind` says which (default
+   * `uam-challenge`) so the replay namespaces never collide.
    */
   isReplay(key: {
     readonly nasId: string;
     readonly sessionId: string | null;
     readonly challenge: string;
     readonly clientMac: string;
+    readonly nonceKind?: 'uam-challenge' | 'vendor-nonce' | 'ecloud-login-token';
   }): Promise<boolean>;
   now?(): Date;
 }

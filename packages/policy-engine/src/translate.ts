@@ -13,6 +13,7 @@ import {
   type RateFamilyDeclaration,
 } from './capabilities.js';
 import { MIN_TIMEOUT_S, RADIUS_UINT32_MAX } from './intent.js';
+import { renderMikrotikRateLimit } from './mikrotik.js';
 import type { IntentColumn } from './intent.js';
 import type { Clip, EcloudSideControl, EffectivePolicy, Provenance } from './resolve.js';
 
@@ -139,6 +140,11 @@ class PlanBuilder {
     readonly ctx: TranslationContext,
   ) {}
 
+  /** Records that `name` carries (part of) `field` (combined attributes, e.g. MikroTik). */
+  noteField(field: PlanField, name: string): void {
+    this.note(field, name);
+  }
+
   private note(field: PlanField, name: string): void {
     const list = this.emittedFor.get(field) ?? [];
     list.push(name);
@@ -247,6 +253,10 @@ function translateRates(b: PlanBuilder, eff: EffectivePolicy, degradation: Degra
     ['upload_rate_kbps', eff.fields.upload_rate_kbps, 'up'],
   ];
   const family = chooseRateFamily(adapter, b.ctx.preferredRateAttrFamily ?? 'wispr');
+  if (family?.combined !== undefined && adapter.granularity === 'per-client') {
+    translateCombinedRate(b, eff, family, family.combined);
+    return;
+  }
   for (const [field, kbps, dir] of pairs) {
     if (kbps === null) continue;
     const decl = adapter.fields[field];
@@ -312,6 +322,56 @@ function translateRates(b: PlanBuilder, eff: EffectivePolicy, degradation: Degra
         decl.status,
       );
     }
+  }
+}
+
+/**
+ * One attribute carries both directions (MikroTik `Mikrotik-Rate-Limit = "rx/tx"`, rx = client
+ * upload). Each set rate field must itself be declared VERIFIED or (with
+ * `includeDeviceTestAttributes`) REQUIRES_DEVICE_TEST; the attribute gate (`emit`) then decides.
+ * Burst is never rendered here (engine has none, `translateBurst` flags it).
+ */
+function translateCombinedRate(
+  b: PlanBuilder,
+  eff: EffectivePolicy,
+  family: RateFamilyDeclaration,
+  name: string,
+): void {
+  const down = eff.fields.download_rate_kbps;
+  const up = eff.fields.upload_rate_kbps;
+  if (down === null && up === null) return;
+  const set: IntentColumn[] = [];
+  if (down !== null) set.push('download_rate_kbps');
+  if (up !== null) set.push('upload_rate_kbps');
+  const blocked = set.filter((f) => {
+    const decl = b.adapter.fields[f];
+    return decl.status !== 'VERIFIED_SUPPORTED' && decl.status !== 'REQUIRES_DEVICE_TEST';
+  });
+  for (const f of blocked) {
+    const decl = b.adapter.fields[f];
+    b.flag(f, 'unsupported', decl.note ?? decl.evidence);
+  }
+  if (blocked.length > 0) return;
+  let value: string | null;
+  try {
+    value = renderMikrotikRateLimit({ downloadKbps: down, uploadKbps: up });
+  } catch (error) {
+    for (const f of set) b.flag(f, 'unsupported', (error as Error).message);
+    return;
+  }
+  if (value === null) return;
+  const [first, ...rest] = set;
+  if (first === undefined) return;
+  // Gate once (one attribute); mirror the outcome onto the other direction's field.
+  const before = b.unenforceable.length;
+  const emitted = b.emit(name, value, first, family.vendor);
+  const flags = b.unenforceable.slice(before).filter((u) => u.field === first);
+  for (const f of rest) {
+    if (emitted) b.noteField(f, name);
+    else if (b.ctx.includeDeviceTestAttributes === true && b.attrs.some((a) => a.name === name)) {
+      b.noteField(f, name);
+    }
+    for (const u of flags) b.flag(f, u.reason, u.detail, u.status);
   }
 }
 

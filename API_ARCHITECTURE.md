@@ -1331,3 +1331,40 @@ are not backfilled.
    row. *NAS IP reuse*: `accounting_records` carry no NAS id, so a NAS's last accounting is
    matched by organization + NAS IP **and only from that NAS row's `created_at` on**; activity of
    an earlier (deleted) NAS with the same IP is never inherited. Auth activity is matched by NAS id.
+
+### Implementation notes (multi-vendor Cycle A, 2026-10-10, D-044)
+
+Endpoints added (all tenant-scoped, RLS, audited in the tenant transaction):
+
+| Path | Method | Permission | Notes |
+|---|---|---|---|
+| `/api/v1/orgs/{orgId}/access-points` (+ `/{id}`) | GET, POST, PATCH, DELETE | `nas:read` / `nas:create` / `nas:update` / `nas:delete` | Access points behind a NAS (migration 028). Body `{nas_client_id, mac, name?, status?}`; `mac` any common spelling → `aa:bb:cc:dd:ee:ff`, unicast only; `site_id` always copied from the NAS. Live MACs are **globally** unique: a MAC registered by any organization answers the generic 409 (`uq_nas_access_points_mac`). Soft delete; deleting a NAS soft-deletes its APs. List filters `site_id`, `nas_client_id`, `status` |
+| `/api/v1/orgs/{orgId}/controllers/{id}/api-credential` | GET | `controller:read` | Metadata only: `api_kind`, `base_url`, `username`, `external_org_id`, `external_site_id`, `has_secret`, `rotated_at`; 404 when none |
+| same | POST | `controller:secret:rotate` | Set / rotate (whole record, `secret` required, `Idempotency-Key` required, refused while impersonating, D-027). `api_kind` must match the controller's registry vendor; `base_url` through `normalizeControllerBaseUrl` for the controller kind (SSRF guard); Omada needs `username`. Sealed with purpose `ecloud:vendor-api:secret:v1`; audit `controller:secret:rotate` with `{api_credential: set|rotated, api_kind, base_url_host, has_username}` only |
+| same | DELETE | `controller:secret:rotate` | Removes the credential (audited, refused while impersonating). Deleting the controller removes it too; changing the controller's vendor (or its kind to one the stored URL does not satisfy) is a 409 while a credential exists |
+
+Internal behaviour changes:
+
+- `/internal/portal/redirects`: the NAS is resolved by `findNasByIdentity` (`internal/nas-lookup.ts`)
+  from `nasid` **and** the AP MAC in `called`: exactly one active NAS, else the generic error; a
+  registered AP of another NAS than `nasid` is a conflict; a disabled AP refuses the redirect. The
+  UAM `md` check is unchanged. Replay keys now have namespaces (`nonceKind`); UAM keys are byte-identical
+  to before.
+- `/internal/aaa/authorize`: NAS adapter `generic-radius-8021x` (engine adapter, migration 028 CHECK).
+  MAC authentication = `Service-Type = Call-Check` (all adapters, unchanged) or, on the generic
+  adapter only, `User-Name` that is exactly the `Calling-Station-Id` MAC with no password or the same
+  MAC; a Call-Check MAC user name of another station is `mac_mismatch`. EAP-TTLS inner requests
+  (`ECLOUD-EAP-Inner`, set only by FreeRADIUS `ecloud-inner`) are accepted only for
+  `generic-radius-8021x` / `openwifi-hostapd-radius` (`eap_adapter_not_allowed`), never as a portal
+  credential (`eap_portal_credential`) and never as MAC auth; the inner `User-Name` is the session
+  username.
+- Not added: no outbound controller call, no post-back portal flow, no `HandoffSecrets` change (the
+  login token and the vendor credential are consumed from Cycle C/D on).
+
+Review fixes (same day): `POST /api/v1/platform/access-points/release` (`organization:update`,
+platform scope; body `{mac, reason}`; soft-deletes the live registration of the MAC in whichever
+organization holds it; audited there; refused while impersonating). Access points expose
+`verified_at` / `verification_source` (read-only; set by `/internal/aaa/authorize` when the AP's
+own NAS sends the MAC in `Called-Station-Id`). Site delete / organization archive soft-delete
+the scope's access points, NAS clients and network devices. Idempotency fingerprints are keyed
+HMACs. 409s of cross-tenant unique indexes omit `constraint`.

@@ -114,7 +114,8 @@ export function parseRadclient(output: string): Pick<RadclientReply, 'code' | 'a
     }
     if (/^\s*Sent /.test(line) || /^\(\d+\) -: Expected/.test(line)) inReply = false;
     if (!inReply) continue;
-    const attr = /^\s+([A-Za-z0-9-]+) = (.*)$/.exec(line);
+    // Tagged attributes (RFC 2868 Tunnel-*) print as `Name:<tag> = value`.
+    const attr = /^\s+([A-Za-z0-9-]+)(?::\d+)? = (.*)$/.exec(line);
     if (attr?.[1] !== undefined && attr[2] !== undefined) {
       const value = attr[2].replace(/^"(.*)"$/, '$1');
       (attributes[attr[1]] ??= []).push(value);

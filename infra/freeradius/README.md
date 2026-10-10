@@ -12,6 +12,8 @@ infra/freeradius/
   healthcheck.sh             Status-Server probe against 127.0.0.1:18121 (secret from env or file)
   raddb/                     ONLY the files that differ from the image defaults (/etc/freeradius)
     sites-enabled/ecloud       virtual server: auth 1812 / acct 1813, authorize -> rest, accounting -> sql
+    sites-available/ecloud-inner  EAP-TTLS inner server (opt-in, linked by the entrypoint, §7)
+    mods-available/eap         ECLOUD EAP module: TTLS/PAP only, certs from RADIUS_EAP_CERT_DIR (opt-in)
     sites-enabled/status       Status-Server listener on 127.0.0.1:18121 (health)
     mods-available/rest        rlm_rest -> ${ECLOUD_INTERNAL_URL}/internal/aaa/{authorize,post-auth}
     mods-available/sql         rlm_sql_postgresql -> radius.radacct_raw (role ecloud_radius)
@@ -30,7 +32,7 @@ infra/freeradius/
 | §0/§4 `rlm_rest` authorize -> `POST /internal/aaa/authorize`, `control:Auth-Type` chosen by ECLOUD | `sites-enabled/ecloud` `authorize { ... rest ... }`, `mods-available/rest` | done, verified with a stub API (§5 below) |
 | §2.1 pipeline `filter_username`, `rewrite_calling_station_id`, `rewrite_called_station_id`, `Message-Authenticator := 0x00` in every reply | `sites-enabled/ecloud` | done (stock policies from the image) |
 | §2.2/§2.6 PAP / CHAP / MS-CHAP against `control:Cleartext-Password`; `Accept` when ECLOUD verified itself | `authenticate { Auth-Type PAP/CHAP/MS-CHAP }` | done |
-| §2.4 802.1X EAP-TTLS / PEAP, inner-tunnel | -- | **not in this milestone**; `eap` module and `inner-tunnel` site removed in the Dockerfile |
+| §2.4 802.1X EAP-TTLS (inner PAP), inner-tunnel | `mods-available/eap`, `sites-available/ecloud-inner`, outer `sites-enabled/ecloud` `-eap` | **Cycle A, opt-in** (`RADIUS_EAP_ENABLED=1` + mounted certificate, §7). Stock `eap` module / `inner-tunnel` site stay removed. PEAP-MSCHAPv2 is not offered (ECLOUD stores Argon2id only). Default: every `EAP-Message` is rejected without asking ECLOUD |
 | §3 clients rendered from `nas_clients`; one secret per NAS; `read_clients` later | `clients.conf` → `$INCLUDE clients.d/`; dev: `clients.d/dev.conf`; production: `ecloud-nas.conf` rendered by `node apps/api/dist/radius-clients-cli.js` (api image) into a volume mounted read-only over `clients.d/` | done (F-P10-07, docs/SECURITY_REVIEW_P10.md §4.3). FreeRADIUS 3.2 reads clients only at start-up (SIGHUP reloads modules, not clients; verified) → re-render + `docker compose restart freeradius` |
 | §4.2 HTTP code mapping, no fail-open | `authorize` block: `fail/invalid -> reject "AAA backend unavailable"`, `401/403/404 -> reject` | done, verified |
 | §4.3 dictionary gap: ChilliSpot Gigawords 21-23 | `dictionary.ecloud` (+ Session-State 15, VLAN-Id 24) | done; `CoovaChilli-*` aliases intentionally NOT defined (see file header) |
@@ -115,8 +117,13 @@ the object form with `"do_xlat": false` for every attribute (contract §3 rule 1
   CoovaChilli file. FreeRADIUS 3.x cannot alias names and a duplicate `VENDOR` number changes how vendor
   14559 is *decoded*, so no `CoovaChilli-*` names exist; adapters use `ChilliSpot-*` for both NAS types.
 - TIP vendor `0x0000e608` request TLV: **REQUIRES DEVICE TEST, not defined** (DT-03 dumps the bytes).
-- `ECLOUD-*` attributes 3000-3007 are internal (never on the wire) and only exist so rlm_rest can post
-  server-side facts (`ECLOUD-Packet-Src-IP-Address`, `ECLOUD-Client-Shortname`, outcome fields).
+- `ECLOUD-*` attributes 3000-3009 are internal (never on the wire) and only exist so rlm_rest can post
+  server-side facts (`ECLOUD-Packet-Src-IP-Address`, `ECLOUD-Client-Shortname`, outcome fields;
+  3008/3009 `ECLOUD-EAP-Inner` / `ECLOUD-Outer-User-Name`, set only by `ecloud-inner`).
+- MikroTik (Cycle A): `Mikrotik-Rate-Limit` (vendor 14988, attr 8, string) needs **no** ECLOUD
+  addition: the stock `/usr/share/freeradius/dictionary` already has `$INCLUDE dictionary.mikrotik`
+  (verified in `freeradius/freeradius-server:3.2.10`, line 261). The aaa-contract suite proves a
+  `reply:Mikrotik-Rate-Limit = "2M/10M"` from the API reaches the Access-Accept.
 
 ## 5. Smoke verification performed (2026-10-07, Docker Desktop, image 3.2.10)
 
@@ -146,10 +153,31 @@ the object form with `"do_xlat": false` for every attribute (contract §3 rule 1
 2. ~~`radius.radacct_raw` has no column for the UDP source address.~~ Done (M8): migration 014 adds
    `packet_src_ip`, written by `queries.conf` from `Packet-Src-IP(v6)-Address`; the drainer resolves the
    NAS / tenant from it only. `nasipaddress` / `nasidentifier` stay NAS-supplied display fields.
-3. 802.1X (EAP) and RadSec listeners, `read_clients`, `radius.radpostauth_raw` and the `linelog` audit
-   lines are outside this milestone.
+3. RadSec listeners, `read_clients`, `radius.radpostauth_raw` and the `linelog` audit lines are outside
+   this milestone. 802.1X: opt-in since Cycle A (§7); the production EAP certificate / CA is
+   **REQUIRES_CLARIFICATION**.
 4. `-X` must never be used in production (config dump includes secrets); use
    `radmin debug condition` per AAA §9.
+
+## 7. 802.1X / EAP-TTLS (Cycle A, D-044) -- opt-in
+
+| Item | Value |
+|---|---|
+| Enable | `RADIUS_EAP_ENABLED=1`; the entrypoint then links `mods-available/eap` and `sites-available/ecloud-inner` (and unlinks them otherwise, also after a restart). The container starts as **root only for this step**: `mods-enabled/` stays root-owned, and the entrypoint drops to `freerad` (`setpriv --reuid/--regid freerad --init-groups --no-new-privs --bounding-set=-all`) before `freeradius` starts; verified: radiusd runs as uid 101 with no effective capabilities. Certificate readability is checked as `freerad` |
+| Certificates | mounted read-only at `RADIUS_EAP_CERT_DIR` (default `/etc/freeradius/eap-certs`): `server.pem`, `server.key`, `ca.pem`; optional `RADIUS_EAP_KEY_PASSWORD` / `_FILE`. Missing / unreadable files stop the container with a message naming the file. **Never in the image or the repository.** Production certificate / CA: **REQUIRES_CLARIFICATION**. Dev: `bash scripts/dev-eap-certs.sh` (throw-away CA + server cert under `var/freeradius-eap-certs/`, 30 days, CA key discarded) |
+| Methods | EAP-TTLS with inner PAP only (TLS 1.2). The image's stock test certificates in `/etc/freeradius/certs` are expired (2026-08-02) and root-only, so they are not usable and not used |
+| Decision | inner request -> the same `rest` authorize call, with `ECLOUD-EAP-Inner = ttls`, `ECLOUD-Outer-User-Name`; `Calling-Station-Id`, `Called-Station-Id`, `NAS-Identifier`, `NAS-IP-Address`, `NAS-Port-Id`, `Acct-Session-Id` are deleted from the tunnel and re-copied from the outer packet (a supplicant cannot spoof them); `ECLOUD-Packet-*` / `ECLOUD-Client-Shortname` come from the outer packet |
+| Reply | inner reply promoted to the outer Access-Accept via `outer.session-state` (Session-Timeout, Tunnel-*, Class, ...); outer post-auth notifies `/internal/aaa/post-auth` with `ECLOUD-Reply-Class` |
+| Build check | the Dockerfile runs `freeradius -C` twice: default config, and with EAP linked + a throw-away self-signed cert created and deleted in the same `RUN` |
+
+Verified locally 2026-10-10 (not in CI; `eapol_test` is not in the image): a throw-away container
+`ubuntu:24.04` + `eapoltest` ran EAP-TTLS/PAP (`identity=alice`, `anonymous_identity=anonymous`,
+`-M 02:11:22:33:44:55`) against this image with `RADIUS_EAP_ENABLED=1` and a dev certificate:
+`EAP-SUCCESS`; the AAA stub received exactly one `/authorize` for the inner identity with
+`Calling-Station-Id = 02-11-22-33-44-55`, `ECLOUD-EAP-Inner = ttls`, `ECLOUD-Outer-User-Name =
+anonymous`, and the outer Access-Accept carried `Session-Timeout`, `Tunnel-Type`,
+`Tunnel-Medium-Type`, `Tunnel-Private-Group-Id` and `Class`. Device behaviour of any vendor NAS
+remains REQUIRES_DEVICE_TEST.
 
 ---
 
@@ -229,13 +257,18 @@ Encoding rules (VERIFIED on 3.2.10):
 | `CHAP-Password`, `CHAP-Challenge` (octets) | NAS | presence means CHAP: ECLOUD can only return `Cleartext-Password` (broker credential / reversible voucher) and `Auth-Type = CHAP`; otherwise reject with `Reply-Message`. |
 | `Calling-Station-Id` | `rewrite_calling_station_id` | client MAC, normalised `AA-BB-CC-DD-EE-FF` (binding, MAC-auth, concurrency) |
 | `Called-Station-Id`, `Called-Station-SSID`, `Called-Station-MAC` | `rewrite_called_station_id` | when the NAS sent `mac:ssid` (TIP uspot) the id is reduced to the MAC and the SSID is split out; CoovaChilli sends only the MAC (no `Called-Station-SSID`) |
-| `Service-Type` | NAS | `Call-Check` => MAC authentication (uspot `mac-auth`); `Login-User`/`Framed-User` otherwise |
+| `Service-Type` | NAS | `Call-Check` => MAC authentication (uspot `mac-auth`); `Login-User`/`Framed-User` otherwise. Cycle A: on a `generic-radius-8021x` NAS a `User-Name` that is exactly the `Calling-Station-Id` MAC (password absent or the same MAC) is MAC authentication without `Call-Check` |
+| `ECLOUD-EAP-Inner` (string, `ttls`), `ECLOUD-Outer-User-Name` (string) | server, `sites-available/ecloud-inner` only (Cycle A, opt-in 802.1X) | marks an EAP-TTLS **inner** request: `User-Name` / `User-Password` are the inner identity; NAS facts and `ECLOUD-Packet-*` are re-copied from the outer packet. Accepted only for 802.1X adapters (`generic-radius-8021x`, `openwifi-hostapd-radius`); never MAC auth, never a portal credential. The outer server deletes both attributes from every packet. |
 | `Acct-Session-Id`, `Framed-IP-Address` | NAS | correlation with the UAM `sessionid` and the portal binding (CAPTIVE_PORTAL §3.4) |
 | `Message-Authenticator` (presence) | NAS | per-NAS BlastRADIUS posture telemetry (`nas_clients.require_message_authenticator`) |
 | `WISPr-*`, `ChilliSpot-*` request VSAs | NAS | adapter fingerprinting (uspot vs CoovaChilli) |
 
 Not present in this milestone: `Stripped-User-Name` / `Realm` (no realm splitting on the wire,
-AAA §7), EAP attributes (802.1X not enabled), `Chargeable-User-Identity` unless the NAS sends it.
+AAA §7; an inner identity `user@realm` is matched as the whole username), `Chargeable-User-Identity`
+unless the NAS sends it. EAP (Cycle A): the outer request with `EAP-Message` is never posted to
+`/authorize` (anonymous outer identity); with `RADIUS_EAP_ENABLED` unset FreeRADIUS rejects it
+locally, otherwise ECLOUD decides on the inner request (`ECLOUD-EAP-Inner`). The `/post-auth` body
+drops `EAP-Message`.
 
 ## 3. Response to `/internal/aaa/authorize`
 

@@ -128,6 +128,17 @@ function isPgError(error: unknown): error is Error & PgLikeError {
 }
 
 /**
+ * Unique indexes that span ALL organizations (a slot another tenant may hold): their 409 carries
+ * no constraint name, so a tenant learns nothing beyond "already in use" (Cycle A review L2).
+ */
+export const GLOBAL_UNIQUE_CONSTRAINTS: ReadonlySet<string> = new Set([
+  'uq_nas_access_points_mac',
+  'uq_nas_clients_ip',
+  'uq_network_devices_mac',
+  'uq_network_devices_serial',
+]);
+
+/**
  * Maps database errors that callers can cause to client problems. Constraint names are safe
  * to expose (schema names, no data); messages are not (they may echo values).
  */
@@ -138,7 +149,9 @@ export function mapDatabaseError(error: unknown): AppError | undefined {
     case '23505':
       return new ConflictError({
         detail: 'A resource with the same unique attributes already exists.',
-        ...(constraint ? { extensions: { constraint } } : {}),
+        ...(constraint && !GLOBAL_UNIQUE_CONSTRAINTS.has(constraint)
+          ? { extensions: { constraint } }
+          : {}),
       });
     case '23503':
       return new UnprocessableError('A referenced resource does not exist or is still in use.', {

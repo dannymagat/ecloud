@@ -18,6 +18,8 @@
 #
 ecloud_request_context {
 	update request {
+		&ECLOUD-EAP-Inner !* ANY
+		&ECLOUD-Outer-User-Name !* ANY
 		&ECLOUD-Packet-Src-IP-Address := "%{%{Packet-Src-IP-Address}:-%{Packet-Src-IPv6-Address}}"
 		&ECLOUD-Packet-Src-Port := "%{Packet-Src-Port}"
 		&ECLOUD-Packet-Dst-Port := "%{Packet-Dst-Port}"
@@ -56,6 +58,7 @@ ecloud_post_auth_context {
 		&MS-CHAP-Response !* ANY
 		&MS-CHAP2-Response !* ANY
 		&MS-CHAP-Challenge !* ANY
+		&EAP-Message !* ANY
 	}
 	if (&reply:Class) {
 		update request {

@@ -116,6 +116,10 @@ services:
       RADIUS_SQL_PASSWORD: ${RADIUS_SQL_PASSWORD:-ecloud_dev_password}
       ECLOUD_INTERNAL_URL: ${ECLOUD_INTERNAL_URL:-http://host.docker.internal:3001}
       INTERNAL_API_TOKEN: ${INTERNAL_API_TOKEN:-ecloud_dev_internal_token_change_me}
+      # 802.1X / EAP-TTLS (Cycle A, opt-in): set RADIUS_EAP_ENABLED=1 AND mount the dev set from
+      # `bash scripts/dev-eap-certs.sh` at /etc/freeradius/eap-certs (infra/freeradius/README.md §7):
+      #   volumes: ['./var/freeradius-eap-certs:/etc/freeradius/eap-certs:ro']
+      RADIUS_EAP_ENABLED: ${RADIUS_EAP_ENABLED:-}
     extra_hosts:
       - 'host.docker.internal:host-gateway'
     ports:

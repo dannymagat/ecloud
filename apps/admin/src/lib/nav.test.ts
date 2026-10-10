@@ -31,7 +31,12 @@ import { can, canPlatform, organizationIdsOf } from './permissions';
 describe('permission-driven navigation', () => {
   it('shows only entries whose permission is granted in that organization', () => {
     const me = adminMe([orgScope(ORG_A, ['site:read', 'nas:read'])]);
-    expect(visibleOrgNav(me, ORG_A).map((i) => i.path)).toEqual(['dashboard', 'sites', 'nas']);
+    expect(visibleOrgNav(me, ORG_A).map((i) => i.path)).toEqual([
+      'dashboard',
+      'sites',
+      'nas',
+      'access-points',
+    ]);
     expect(visibleOrgNav(me, ORG_B)).toEqual([]);
     expect(visiblePlatformNav(me)).toEqual([]);
   });
@@ -103,7 +108,7 @@ describe('permission-driven navigation', () => {
   it('groups follow the approved sidebar; empty groups are hidden', () => {
     expect(ORG_GROUPS.map((g) => [g.label, g.items.map((i) => i.path)])).toEqual([
       ['Bandwidth Management', ['policies', 'policy-assignments', 'ssid-rate-limit-export']],
-      ['Network', ['sites', 'nas', 'network-devices']],
+      ['Network', ['sites', 'nas', 'access-points', 'controllers', 'network-devices']],
       ['Clients', ['sessions', 'users', 'user-groups', 'client-devices', 'vouchers']],
       ['Reports', ['usage', 'accounting', 'reports']],
       ['Login Page', ['portals']],
@@ -111,7 +116,7 @@ describe('permission-driven navigation', () => {
     ]);
     const me = adminMe([orgScope(ORG_A, ['nas:read', 'accounting:read'])]);
     expect(visibleOrgGroups(me, ORG_A).map((g) => [g.key, g.items.map((i) => i.path)])).toEqual([
-      ['network', ['nas']],
+      ['network', ['nas', 'access-points']],
       ['reports', ['usage', 'accounting']],
     ]);
     expect(visibleOrgGroups(me, ORG_B)).toEqual([]);
@@ -131,6 +136,9 @@ describe('permission-driven navigation', () => {
       'sites',
       'network-devices',
       'nas',
+      // Cycle A (D-044)
+      'access-points',
+      'controllers',
       'users',
       'user-groups',
       'client-devices',

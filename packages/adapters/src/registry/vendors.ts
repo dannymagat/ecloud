@@ -149,6 +149,21 @@ export const VENDORS: readonly VendorEntry[] = Object.freeze([
       'Vendor key added in L2 for the generic `openwrt-uspot-upstream` row (plan §7.2); no device in inventory.',
   },
   {
+    key: 'generic-radius',
+    name: 'Any vendor: 802.1X / MAC-auth (generic RADIUS NAS)',
+    lifecycle: 'implemented',
+    roadmapPhase: 'pilot',
+    docLinks: [
+      {
+        kind: 'doc-section',
+        ref: 'docs/VENDOR_INTEGRATION_RESEARCH.md §2 F9, §3.1 (generic-radius-8021x)',
+      },
+      { kind: 'doc-section', ref: 'DECISIONS.md D-044 (Cycle A)' },
+    ],
+    notes:
+      'Pseudo-vendor for the vendor-neutral 802.1X / MAC-auth adapter (Cycle A). Not a hardware claim: every capability stays DOCUMENTED / REQUIRES_DEVICE_TEST until a lab test per vendor (D-028).',
+  },
+  {
     key: 'cambium',
     name: 'Cambium Networks',
     lifecycle: 'researched',

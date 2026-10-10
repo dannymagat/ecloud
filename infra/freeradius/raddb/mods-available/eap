@@ -1,0 +1,60 @@
+# -*- text -*-
+######################################################################
+#
+#  ECLOUD EAP module (Cycle A, D-044; AAA_ARCHITECTURE.md §2.4). Replaces the
+#  stock mods-available/eap of the image. OPT-IN: docker-entrypoint.sh links
+#  it into mods-enabled/ only when RADIUS_EAP_ENABLED=1.
+#
+#  Only EAP-TTLS (inner PAP, decided by ECLOUD in sites-available/ecloud-inner).
+#  PEAP-MSCHAPv2 / EAP-MD5 / LEAP are NOT offered: ECLOUD stores one-way
+#  Argon2id hashes and cannot verify challenge-response methods (AAA §2.6).
+#  EAP-TLS (client certificates) is out of scope (REQUIRES_CLARIFICATION).
+#
+#  Certificates are NEVER part of the image or the repository. They are
+#  mounted read-only at $RADIUS_EAP_CERT_DIR (default /etc/freeradius/eap-certs):
+#    server.pem  server certificate (+ chain)
+#    server.key  private key (readable by freerad only)
+#    ca.pem      CA that issued server.pem (clients pin it)
+#  Production certificate / CA: REQUIRES_CLARIFICATION. Dev: a throw-away
+#  self-signed set from scripts/dev-eap-certs.sh (written under var/, never
+#  committed).
+#
+######################################################################
+
+eap {
+	default_eap_type = ttls
+	timer_expire = 60
+	ignore_unknown_eap_types = no
+	cisco_accounting_username_bug = no
+	max_sessions = ${max_requests}
+
+	tls-config tls-common {
+		private_key_password = "$ENV{RADIUS_EAP_KEY_PASSWORD}"
+		private_key_file = "$ENV{RADIUS_EAP_CERT_DIR}/server.key"
+		certificate_file = "$ENV{RADIUS_EAP_CERT_DIR}/server.pem"
+		ca_file = "$ENV{RADIUS_EAP_CERT_DIR}/ca.pem"
+		cipher_list = "DEFAULT"
+		cipher_server_preference = no
+		tls_min_version = "1.2"
+		tls_max_version = "1.2"
+		ecdh_curve = ""
+		cache {
+			enable = no
+		}
+		verify {
+		}
+		ocsp {
+			enable = no
+		}
+	}
+
+	ttls {
+		tls = tls-common
+		#  The NAS facts are copied explicitly in ecloud-inner (overwriting
+		#  anything tunnelled); the inner reply is promoted via session-state.
+		copy_request_to_tunnel = no
+		use_tunneled_reply = no
+		virtual_server = "ecloud-inner"
+		require_client_cert = no
+	}
+}

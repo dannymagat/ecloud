@@ -56,6 +56,7 @@ function groupButtons(nav: HTMLElement): string[] {
 const ALL_ORG = [
   'site:read',
   'nas:read',
+  'controller:read',
   'network_device:read',
   'session:read',
   'user:read',
@@ -204,6 +205,8 @@ describe('grouped sidebar', () => {
       'SSID rate-limit export',
       'Sites',
       'NAS clients (access points)',
+      'Access points (AP MAC)',
+      'Controllers',
       'Network devices',
       'Online sessions',
       'Users',

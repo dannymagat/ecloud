@@ -52,13 +52,23 @@ export const POLICY_FIELDS = [
 
 export type PolicyField = (typeof POLICY_FIELDS)[number];
 
-/** Engine adapter keys (D-012 / D-035). */
+/** Engine adapter keys a NAS may use (D-012 / D-035; Cycle A adds the generic 802.1X one). */
 export const ADAPTER_KEYS = [
   'openwifi-hostapd-radius',
   'openwifi-uspot-uam',
   'uspot-upstream-uam',
   'coovachilli-uam',
+  'generic-radius-8021x',
 ] as const;
+
+/** Human labels for the NAS adapter dropdown (the key stays visible for support). */
+export const ADAPTER_LABELS: Readonly<Record<(typeof ADAPTER_KEYS)[number], string>> = {
+  'openwifi-hostapd-radius': 'EZEAP 802.1X / MAC auth (hostapd)',
+  'openwifi-uspot-uam': 'EZEAP captive portal (TIP uspot)',
+  'uspot-upstream-uam': 'OpenWrt uspot captive portal',
+  'coovachilli-uam': 'CoovaChilli gateway captive portal',
+  'generic-radius-8021x': 'Any vendor: 802.1X / MAC auth (generic RADIUS)',
+};
 
 export interface StatusPresentation {
   /** Normalised status; unknown inputs fall back to REQUIRES_DEVICE_TEST (never VERIFIED). */

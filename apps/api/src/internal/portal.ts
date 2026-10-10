@@ -30,12 +30,14 @@ import {
   type RegisteredNas,
 } from '@ecloud/adapters';
 import { withPlatform, withTenant, type DbTransaction } from '@ecloud/db';
-import { isUuid, newId } from '@ecloud/shared';
+import { canonicalUnicastMac, isUuid, newId, type Logger } from '@ecloud/shared';
 import express, { type Request, type Response, type Router } from 'express';
 import { isIP } from 'node:net';
 import { z } from 'zod';
 import type { AppDeps } from '../context.js';
 import { Envelope, openSecretRef, sealSecretRef, sha256Hex } from '../crypto.js';
+import { logPortalSecurityEvent } from '../security-events.js';
+import { findNasByIdentity } from './nas-lookup.js';
 import {
   IdentityRejected,
   checkSubscriberLoginPassword,
@@ -161,39 +163,28 @@ function openUamSecret(deps: AppDeps, ref: string | null): string | null {
 }
 
 /**
- * NAS by `nasid` (= the ECLOUD-assigned NAS identifier, CP §7.3). NAS identifiers are not unique
- * across tenants (`idx_nas_clients_identifier`), so anything but exactly one active row fails
- * closed. `called` is not used as a fallback: no NAS column stores the AP MAC.
+ * NAS by `nasid` (= the ECLOUD-assigned NAS identifier, CP §7.3) and/or the AP MAC from `called`
+ * (Cycle A, migration 028 `nas_access_points`), via `findNasByIdentity` (nas-lookup.ts): anything
+ * but exactly one active NAS fails closed, and `nasid` + a registered AP MAC of another NAS is a
+ * conflict. The UAM `md` signature is still verified against the resolved NAS's secret.
  */
 async function resolvePortal(
   deps: AppDeps,
   flavour: UamFlavour,
-  nasid: string | undefined,
+  identity: { nasid: string | undefined; apMac: string | null },
+  logger: Logger,
 ): Promise<ResolvedPortal | null> {
-  if (nasid === undefined || nasid === '' || nasid.length > 253) return null;
+  const found = await findNasByIdentity(deps, {
+    nasid: identity.nasid ?? null,
+    apMac: identity.apMac,
+  });
+  if (!found.ok) return null;
+  if (found.apMacClaimedElsewhere) {
+    // Review M1a: a hint only; the NAS's own `md` signature still decides. No tenant detail.
+    logPortalSecurityEvent(logger, 'ap_mac_claimed_elsewhere', { apMac: identity.apMac });
+  }
+  const n = found.nas;
   return withPlatform(deps.dbPlatform, PORTAL_ACCESS, async (trx) => {
-    const rows = await trx
-      .selectFrom('nas_clients as n')
-      .innerJoin('sites as s', 's.id', 'n.site_id')
-      .innerJoin('organizations as o', 'o.id', 'n.organization_id')
-      .select([
-        'n.id',
-        'n.organization_id',
-        'n.site_id',
-        'n.nas_identifier',
-        'n.adapter_key',
-        'n.deployment_mode',
-        'n.controller_id',
-      ])
-      .where('n.nas_identifier', '=', nasid)
-      .where('n.status', '=', 'active')
-      .where('n.deleted_at', 'is', null)
-      .where('s.deleted_at', 'is', null)
-      .where('s.status', '=', 'active')
-      .where('o.status', '=', 'active')
-      .execute();
-    if (rows.length !== 1 || rows[0] === undefined) return null;
-    const n = rows[0];
     if (!(UAM_FLAVOURS[flavour].adapterKeys as readonly string[]).includes(n.adapter_key ?? '')) {
       return null;
     }
@@ -449,7 +440,12 @@ export function portalInternalRouter(deps: AppDeps): Router {
         await counter(deps, `pf:rl:redir:${clientIp}`, l.max, l.windowS);
       }
       const split = splitUamQuery(raw);
-      const resolved = await resolvePortal(deps, flavour, split.params.nasid);
+      const resolved = await resolvePortal(
+        deps,
+        flavour,
+        { nasid: split.params.nasid, apMac: canonicalUnicastMac(split.params.called) },
+        req.log,
+      );
       const adapter = getVendorAdapter(
         resolved?.nas.adapterKey ?? UAM_FLAVOURS[flavour].adapterKeys[0],
       );
@@ -467,7 +463,7 @@ export function portalInternalRouter(deps: AppDeps): Router {
         findNas: () => Promise.resolve(resolved?.nas ?? null),
         expectedOrganizationId: null,
         // Callbacks legitimately repeat a consumed redirect identity (same sessionid/challenge).
-        isReplay: (k) => (callback ? Promise.resolve(false) : isReplayed(deps.kv, replayKey(k))),
+        isReplay: (k) => (callback ? Promise.resolve(false) : isReplayed(deps.kv, k)),
         now: () => at,
       };
       const validation = await adapter.validateContext(parsed, lookup);

@@ -13,8 +13,14 @@
 #  DEPLOYMENT_ARCHITECTURE.md §2.1). No CoA/DAS listener (port 3799): dynamic
 #  authorization originates from the ECLOUD worker (AAA §6).
 #
-#  802.1X (EAP / inner-tunnel, AAA §2.4) is NOT enabled in this milestone;
-#  the image's `eap` module and `inner-tunnel` site are removed in the Dockerfile.
+#  802.1X (EAP, AAA §2.4; Cycle A, D-044) is OPT-IN: the image's stock `eap`
+#  module and `inner-tunnel` site are removed in the Dockerfile; ECLOUD's own
+#  `mods-available/eap` (EAP-TTLS with inner PAP only) and
+#  `sites-available/ecloud-inner` are linked in by the entrypoint only when
+#  RADIUS_EAP_ENABLED=1 and a server certificate is mounted (production
+#  certificate: REQUIRES_CLARIFICATION). Without it every EAP-Message is
+#  rejected here and ECLOUD is never asked (no anonymous outer identity ever
+#  reaches /internal/aaa/authorize).
 #
 ######################################################################
 
@@ -42,6 +48,30 @@ server ecloud {
 		rewrite_called_station_id
 
 		#
+		#  1b. 802.1X / EAP (Cycle A). The outer identity is usually anonymous:
+		#      ECLOUD decides only in the inner tunnel (sites-available/ecloud-inner),
+		#      which copies the NAS facts below from this outer request. `-eap`
+		#      is a no-op when the module is not loaded (EAP disabled) -> reject.
+		#
+		ecloud_request_context
+		if (&EAP-Message) {
+			#  The section return code is already `updated` (rewrite policies),
+			#  so success is detected by what eap DID: it set control:Auth-Type
+			#  (nothing else has at this point) or answered itself (handled).
+			-eap
+			if (handled || &control:Auth-Type) {
+				return
+			}
+			update control {
+				&ECLOUD-Decision := "reject"
+			}
+			update reply {
+				&Reply-Message := "802.1X is not enabled on this RADIUS server"
+			}
+			reject
+		}
+
+		#
 		#  2. BlastRADIUS: every response carries Message-Authenticator
 		#     (freeradius.org/security guidance; AAA §8).
 		#
@@ -59,7 +89,6 @@ server ecloud {
 		#     No fail-open: an unreachable backend rejects (AAA §4.2, Q2).
 		#     control:ECLOUD-Decision records which path was taken (post-auth).
 		#
-		ecloud_request_context
 		ecloud_rest_headers
 		rest {
 			fail = 1
@@ -112,6 +141,10 @@ server ecloud {
 		}
 		Auth-Type MS-CHAP {
 			mschap
+		}
+		#  Only reachable when the eap module is loaded (RADIUS_EAP_ENABLED=1).
+		Auth-Type eap {
+			-eap
 		}
 	}
 

@@ -21,4 +21,5 @@ export { capabilities as openwifiUspotUamCapabilities } from './adapters/openwif
 export { capabilities as uspotUpstreamUamCapabilities } from './adapters/uspot-upstream-uam.js';
 export { capabilities as coovachilliUamCapabilities } from './adapters/coovachilli-uam.js';
 export { capabilities as openwifiConfigCapabilities } from './adapters/openwifi-config.js';
+export { capabilities as genericRadius8021xCapabilities } from './adapters/generic-radius-8021x.js';
 export * from './openwifi/ucentral-fragment.js';

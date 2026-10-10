@@ -151,7 +151,7 @@ await describeIntegration('@ecloud/db schema', () => {
       .sort();
     expect(publicTables).toEqual([...ALL_TABLES].sort());
     expect(radiusTables).toEqual([...RADIUS_TABLES].sort());
-    expect(publicTables).toHaveLength(47); // + portal_assets, portal_terms_versions (021); + session_enforcement, accounting_anomalies (023); + usage_hourly (026)
+    expect(publicTables).toHaveLength(49); // + portal_assets, portal_terms_versions (021); + session_enforcement, accounting_anomalies (023); + usage_hourly (026); + nas_access_points, vendor_api_credentials (028)
 
     const view = await sql<{ count: number }>`
       SELECT count(*)::int AS count FROM pg_views WHERE schemaname = 'radius' AND viewname = 'nas_v'
@@ -593,10 +593,11 @@ await describeIntegration('@ecloud/db schema', () => {
           .execute(),
       ),
     ).toBe('23514');
-    // the reconciled catalogue holds exactly the five engine keys on a fresh database
+    // the reconciled catalogue holds exactly the engine keys on a fresh database (+ 028 generic)
     const keys = await platform.selectFrom('adapter_types').select('key').orderBy('key').execute();
     expect(keys.map((k) => k.key)).toEqual([
       'coovachilli-uam',
+      'generic-radius-8021x',
       'openwifi-config',
       'openwifi-hostapd-radius',
       'openwifi-uspot-uam',

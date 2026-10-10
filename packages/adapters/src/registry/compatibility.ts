@@ -802,6 +802,76 @@ const cambiumRow: CompatibilityRow = {
 };
 
 // ------------------------------------------------------------------------------------------
+// Generic 802.1X / MAC-auth row (Cycle A, D-044) — any vendor, no device claim
+// ------------------------------------------------------------------------------------------
+
+const GENERIC_8021X_ROW_ID = 'generic-radius-8021x';
+const F9_DOC = doc('docs/VENDOR_INTEGRATION_RESEARCH.md §2 F9, §3.1');
+
+const generic8021xRow: CompatibilityRow = {
+  key: GENERIC_8021X_ROW_ID,
+  vendorKey: 'generic-radius',
+  hardwareModel: 'UNKNOWN',
+  firmware: 'UNKNOWN',
+  controller: null,
+  lifecycle: 'implemented',
+  deploymentModes: ['native'],
+  enforcementPoint: 'UNKNOWN',
+  adapterKey: 'generic-radius-8021x',
+  sourceVersionMatchesDevice: null,
+  identity: [],
+  profile: {
+    ...allUnknownProfile(),
+    redirectProtocol: fact('none (802.1X / MAC-auth SSID, no portal)', 'DOCUMENTED', [F9_DOC]),
+    authorizationMethod: fact(
+      '802.1X EAP terminated by ECLOUD FreeRADIUS (EAP-TTLS/PAP; opt-in, certificate REQUIRES_CLARIFICATION) or MAC authentication (User-Name = client MAC)',
+      'DOCUMENTED',
+      [F9_DOC, doc('AAA_ARCHITECTURE.md §2.4'), doc('infra/freeradius/README.md (EAP)')],
+    ),
+    radiusAuth: fact(
+      'standard Access-Request; NAS identified by packet source (D-032/D-042)',
+      'DOCUMENTED',
+      [F9_DOC],
+    ),
+    radiusAccounting: fact('standard Start / Interim-Update / Stop (RFC 2866)', 'DOCUMENTED', [
+      F9_DOC,
+    ]),
+    disconnectCoa: fact('RFC 5176 per vendor: REQUIRES_DEVICE_TEST (D-006)', 'DOCUMENTED', [
+      F9_DOC,
+    ]),
+    bandwidthAttributes: fact(
+      'WISPr-Bandwidth-Max-Down/Up declared REQUIRES_DEVICE_TEST; per-vendor rate attributes UNKNOWN',
+      'DOCUMENTED',
+      [F9_DOC],
+    ),
+    sessionTimeout: fact(
+      'Session-Timeout, Idle-Timeout (RFC 2865): REQUIRES_DEVICE_TEST',
+      'DOCUMENTED',
+      [F9_DOC],
+    ),
+  },
+  capabilities: deriveCells(getAdapter('generic-radius-8021x').capabilities(), {
+    rowKey: GENERIC_8021X_ROW_ID,
+    sourceVersionMatchesDevice: null,
+    deviceFirmware: 'UNKNOWN',
+    dtResults: DT_RESULTS,
+  }),
+  configurationKind: 'vendor-ui',
+  openItems: [
+    {
+      id: 'CA-1',
+      label: 'REQUIRES_CLARIFICATION',
+      text: 'Production EAP server certificate and CA (issuer, distribution to clients); dev uses a throw-away self-signed certificate that is never committed.',
+    },
+    {
+      id: 'CA-2',
+      label: 'REQUIRES_DEVICE_TEST',
+      text: 'Per vendor: Called-Station-Id format, MAC-auth User-Name / password format, Session-Timeout / Idle-Timeout / VLAN / WISPr rate honouring, Disconnect support and port.',
+    },
+  ],
+};
+
+// ------------------------------------------------------------------------------------------
 // Roadmap rows — planned, everything UNKNOWN (plan §7.4)
 // ------------------------------------------------------------------------------------------
 
@@ -831,6 +901,7 @@ export const COMPATIBILITY_ROWS: readonly CompatibilityRow[] = Object.freeze([
   ezegateRow,
   coovaMasterRow,
   cambiumRow,
+  generic8021xRow,
   ...roadmapRows,
 ]);
 

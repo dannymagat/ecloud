@@ -4,6 +4,8 @@ import { AdministratorsPage } from './features/admins/AdministratorsPage';
 import { LoginPage } from './features/auth/LoginPage';
 import { MfaEnrolPage } from './features/auth/MfaEnrolPage';
 import { DashboardPage, SiteDashboardPage } from './features/dashboard/DashboardPage';
+import { AccessPointsPage } from './features/org/AccessPointsPage';
+import { ControllersPage } from './features/org/ControllersPage';
 import { NasPage } from './features/org/NasPage';
 import {
   ApiKeysPage,
@@ -76,6 +78,8 @@ export const routes: RouteObject[] = [
                   { path: 'sites/:siteId/dashboard', element: <SiteDashboardPage /> },
                   { path: 'network-devices', element: <NetworkDevicesPage /> },
                   { path: 'nas', element: <NasPage /> },
+                  { path: 'access-points', element: <AccessPointsPage /> },
+                  { path: 'controllers', element: <ControllersPage /> },
                   { path: 'users', element: <UsersPage /> },
                   { path: 'user-groups', element: <UserGroupsPage /> },
                   { path: 'client-devices', element: <ClientDevicesPage /> },

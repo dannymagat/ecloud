@@ -389,6 +389,52 @@ export interface NasClientsTable {
   deleted_at: NullableTimestamp;
 }
 
+/**
+ * Migration 028 (Cycle A, D-044): an access point behind a NAS, identified by AP MAC. The MAC
+ * is globally unique among live rows (`uq_nas_access_points_mac`); site/org follow the NAS.
+ */
+export interface NasAccessPointsTable {
+  id: Generated<Uuid>;
+  organization_id: Uuid;
+  site_id: Uuid;
+  nas_client_id: Uuid;
+  /** Canonical `aa:bb:cc:dd:ee:ff`, unicast (CHECK). */
+  mac: Macaddr;
+  name: string | null;
+  status: Generated<EnabledStatus>;
+  /**
+   * Set when the NAS itself proved the AP (authenticated RADIUS packet carrying this MAC in
+   * Called-Station-Id; later: controller inventory). Only verified rows serve MAC-only lookups.
+   */
+  verified_at: NullableTimestamp;
+  verification_source: 'radius-called-station' | 'controller-inventory' | null;
+  created_at: GeneratedTimestamp;
+  updated_at: GeneratedTimestamp;
+  deleted_at: NullableTimestamp;
+}
+
+export type VendorApiKind =
+  'unifi-network' | 'omada-controller' | 'mist' | 'ruckus-nbi' | 'ruckus-one' | 'meraki-dashboard';
+
+/**
+ * Migration 028 (Cycle A): one sealed controller-API credential per controller. `secret_ref` is
+ * an Envelope-sealed value (`enc:v1.…`, purpose ecloud:vendor-api:secret:v1), never returned.
+ */
+export interface VendorApiCredentialsTable {
+  id: Generated<Uuid>;
+  organization_id: Uuid;
+  controller_id: Uuid;
+  api_kind: VendorApiKind;
+  base_url: string;
+  username: string | null;
+  secret_ref: string;
+  external_org_id: string | null;
+  external_site_id: string | null;
+  rotated_at: GeneratedTimestamp;
+  created_at: GeneratedTimestamp;
+  updated_at: GeneratedTimestamp;
+}
+
 // ---------------------------------------------------------------------------------------------
 // 3.3 Subscribers, devices, identity
 // ---------------------------------------------------------------------------------------------
@@ -986,11 +1032,13 @@ export interface Database {
   network_devices: NetworkDevicesTable;
   wireguard_peers: WireguardPeersTable;
   nas_clients: NasClientsTable;
+  nas_access_points: NasAccessPointsTable;
   vendors: VendorsTable;
   hardware_models: HardwareModelsTable;
   firmware_versions: FirmwareVersionsTable;
   compatibility_entries: CompatibilityEntriesTable;
   controllers: ControllersTable;
+  vendor_api_credentials: VendorApiCredentialsTable;
   identity_providers: IdentityProvidersTable;
   user_groups: UserGroupsTable;
   users: UsersTable;

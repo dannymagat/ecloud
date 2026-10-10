@@ -1,0 +1,171 @@
+# -*- text -*-
+######################################################################
+#
+#  ECLOUD inner-tunnel virtual server (Cycle A, D-044; AAA_ARCHITECTURE.md
+#  §2.4): the decision for an 802.1X EAP-TTLS session is taken HERE, on the
+#  inner identity, by the same rlm_rest call as the outer `ecloud` server.
+#
+#  OPT-IN: linked into sites-enabled/ by docker-entrypoint.sh only when
+#  RADIUS_EAP_ENABLED=1 (together with mods-available/eap). Not linked by
+#  default, so the default image never loads it.
+#
+#  Inner method: PAP only (EAP-TTLS/PAP). ECLOUD stores one-way Argon2id
+#  hashes (AAA §2.6), so it verifies the inner password itself and answers
+#  control:Auth-Type = Accept. PEAP / MSCHAPv2 / CHAP cannot be verified and
+#  are not offered (mods-available/eap enables TTLS only).
+#
+#  Trust rule: everything inside the TLS tunnel is supplied by the CLIENT
+#  device, not by the NAS. NAS-side facts (Calling-Station-Id, NAS-Identifier,
+#  ...) are therefore deleted from the inner request and re-copied from the
+#  OUTER request, and the ECLOUD-* server-side facts are always overwritten,
+#  so a supplicant can never spoof its MAC or the NAS identity towards ECLOUD.
+#
+######################################################################
+
+server ecloud-inner {
+	authorize {
+		filter_username
+
+		#
+		#  1. Drop anything NAS-like the client may have tunnelled, then copy
+		#     the NAS facts from the outer request (copy_request_to_tunnel is
+		#     off in mods-available/eap: it would NOT overwrite inner values).
+		#
+		update request {
+			&Calling-Station-Id !* ANY
+			&Called-Station-Id !* ANY
+			&NAS-Identifier !* ANY
+			&NAS-IP-Address !* ANY
+			&NAS-IPv6-Address !* ANY
+			&NAS-Port !* ANY
+			&NAS-Port-Id !* ANY
+			&NAS-Port-Type !* ANY
+			&Acct-Session-Id !* ANY
+			&Framed-IP-Address !* ANY
+			&Service-Type !* ANY
+			&CHAP-Password !* ANY
+			&CHAP-Challenge !* ANY
+		}
+		if (&outer.request:Calling-Station-Id) {
+			update request {
+				&Calling-Station-Id := &outer.request:Calling-Station-Id
+			}
+		}
+		if (&outer.request:Called-Station-Id) {
+			update request {
+				&Called-Station-Id := &outer.request:Called-Station-Id
+			}
+		}
+		if (&outer.request:NAS-Identifier) {
+			update request {
+				&NAS-Identifier := &outer.request:NAS-Identifier
+			}
+		}
+		if (&outer.request:NAS-IP-Address) {
+			update request {
+				&NAS-IP-Address := &outer.request:NAS-IP-Address
+			}
+		}
+		if (&outer.request:NAS-Port-Id) {
+			update request {
+				&NAS-Port-Id := &outer.request:NAS-Port-Id
+			}
+		}
+		if (&outer.request:Acct-Session-Id) {
+			update request {
+				&Acct-Session-Id := &outer.request:Acct-Session-Id
+			}
+		}
+		rewrite_calling_station_id
+		rewrite_called_station_id
+
+		#
+		#  2. Server-side facts: always from the OUTER packet (set by
+		#     ecloud_request_context in the outer authorize section), never
+		#     from the tunnel. ECLOUD-EAP-Inner tells /internal/aaa/authorize
+		#     that User-Name is an inner identity (no MAC auth, no portal
+		#     credential, 802.1X adapters only).
+		#
+		update request {
+			&ECLOUD-Packet-Src-IP-Address := "%{outer.request:ECLOUD-Packet-Src-IP-Address}"
+			&ECLOUD-Packet-Src-Port := "%{outer.request:ECLOUD-Packet-Src-Port}"
+			&ECLOUD-Packet-Dst-Port := "%{outer.request:ECLOUD-Packet-Dst-Port}"
+			&ECLOUD-Client-Shortname := "%{outer.request:ECLOUD-Client-Shortname}"
+			&ECLOUD-EAP-Inner := "ttls"
+			&ECLOUD-Outer-User-Name := "%{outer.request:User-Name}"
+		}
+
+		#
+		#  3. Decision from ECLOUD (same mapping as the outer server).
+		#
+		ecloud_rest_headers
+		rest {
+			fail = 1
+			invalid = 1
+			notfound = 1
+			userlock = 1
+			reject = 1
+		}
+		if (fail || invalid) {
+			update control {
+				&ECLOUD-Decision := "unavailable"
+			}
+			update reply {
+				&Reply-Message := "AAA backend unavailable"
+			}
+			reject
+		}
+		elsif (reject || notfound || userlock) {
+			update control {
+				&ECLOUD-Decision := "reject"
+			}
+			reject
+		}
+		update control {
+			&ECLOUD-Decision := "accept"
+		}
+		pap
+	}
+
+	authenticate {
+		#  PAP against a Cleartext-Password ECLOUD returned (vouchers); an
+		#  explicit Auth-Type = Accept from ECLOUD skips this section.
+		Auth-Type PAP {
+			pap
+		}
+	}
+
+	session {
+	}
+
+	post-auth {
+		#
+		#  Promote the inner reply (policy attributes, Class) to the outer
+		#  Access-Accept via session-state (the FreeRADIUS 3.2 replacement for
+		#  use_tunneled_reply; stock sites-available/inner-tunnel post-auth).
+		#  Tunnel-internal and EAP framing attributes are not promoted.
+		#
+		update reply {
+			&User-Name !* ANY
+			&Message-Authenticator !* ANY
+			&EAP-Message !* ANY
+			&Proxy-State !* ANY
+			&MS-MPPE-Encryption-Types !* ANY
+			&MS-MPPE-Encryption-Policy !* ANY
+			&MS-MPPE-Send-Key !* ANY
+			&MS-MPPE-Recv-Key !* ANY
+		}
+		update {
+			&outer.session-state: += &reply:
+		}
+
+		Post-Auth-Type REJECT {
+			attr_filter.access_reject
+			if (&reply:Reply-Message) {
+				update outer.session-state {
+					&Reply-Message := &reply:Reply-Message
+				}
+			}
+		}
+	}
+}

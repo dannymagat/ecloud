@@ -23,9 +23,11 @@ RUN apt-get update \
 ARG RADDB=/etc/freeradius
 
 #  1. Remove what ECLOUD does not run: the stock `default` and
-#     `inner-tunnel` virtual servers (replaced by `ecloud`) and the `eap`
-#     module (802.1X is a later milestone; its certs are then supplied by
-#     ECLOUD PKI, not generated in the image).
+#     `inner-tunnel` virtual servers (replaced by `ecloud`) and the stock
+#     `eap` module (its test certificates in /etc/freeradius/certs are
+#     expired, root-only and never used). 802.1X (Cycle A) uses ECLOUD's own
+#     mods-available/eap + sites-available/ecloud-inner, linked in at start-up
+#     by the entrypoint only with RADIUS_EAP_ENABLED=1 and mounted certs.
 RUN rm -f "${RADDB}/sites-enabled/default" \
           "${RADDB}/sites-enabled/inner-tunnel" \
           "${RADDB}/mods-enabled/eap"
@@ -49,10 +51,34 @@ RUN RADIUS_LISTEN_IP=127.0.0.1 RADIUS_DEV_CLIENT_CIDR=127.0.0.1 \
     ECLOUD_INTERNAL_URL=http://127.0.0.1:1 INTERNAL_API_TOKEN=build-check-placeholder \
     freeradius -C -d "${RADDB}" -l stdout
 
-#  4. Run unprivileged. radiusd.conf keeps `user = freerad`; since the
-#     process already is freerad no setuid is attempted. Ports 1812/1813
-#     are unprivileged; the config/log/run dirs are owned by freerad.
-USER freerad
+#  3b. Same check with the opt-in 802.1X/EAP-TTLS configuration linked in, using
+#      a throw-away self-signed certificate created, used and deleted inside
+#      this single RUN (no key material in any layer).
+RUN set -e; d="$(mktemp -d)"; \
+    openssl req -x509 -newkey rsa:2048 -nodes -days 1 -subj "/CN=ecloud-build-check" \
+      -keyout "$d/server.key" -out "$d/server.pem" 2>/dev/null; \
+    cp "$d/server.pem" "$d/ca.pem"; chown -R freerad:freerad "$d"; \
+    ln -s ../mods-available/eap "${RADDB}/mods-enabled/eap"; \
+    ln -s ../sites-available/ecloud-inner "${RADDB}/sites-enabled/ecloud-inner"; \
+    RADIUS_LISTEN_IP=127.0.0.1 RADIUS_DEV_CLIENT_CIDR=127.0.0.1 \
+    RADIUS_DEV_CLIENT_SECRET=build-check-placeholder RADIUS_STATUS_SECRET=build-check-placeholder \
+    RADIUS_SQL_HOST=localhost RADIUS_SQL_PORT=5432 RADIUS_SQL_DB=ecloud \
+    RADIUS_SQL_USER=build-check RADIUS_SQL_PASSWORD=build-check-placeholder \
+    ECLOUD_INTERNAL_URL=http://127.0.0.1:1 INTERNAL_API_TOKEN=build-check-placeholder \
+    RADIUS_EAP_CERT_DIR="$d" RADIUS_EAP_KEY_PASSWORD= \
+    freeradius -C -d "${RADDB}" -l stdout; \
+    rm -f "${RADDB}/mods-enabled/eap" "${RADDB}/sites-enabled/ecloud-inner"; rm -rf "$d"
+
+#  4. Run unprivileged. The container STARTS as root only so the entrypoint
+#     can (un)link the opt-in EAP configuration in the root-owned
+#     mods-enabled/ and sites-enabled/ (they stay root-owned: the service user
+#     cannot change which modules load); it then drops to freerad with
+#     `setpriv --reuid/--regid freerad --init-groups --no-new-privs
+#     --bounding-set=-all` before exec'ing FreeRADIUS, so radiusd never runs as
+#     root (radiusd.conf `user = freerad`: no setuid attempted). Ports
+#     1812/1813 are unprivileged; the config/log/run dirs are owned by freerad.
+#     (Run with `--user freerad` the entrypoint skips the root step and refuses
+#     RADIUS_EAP_ENABLED=1 unless the links already match.)
 
 EXPOSE 1812/udp 1813/udp
 

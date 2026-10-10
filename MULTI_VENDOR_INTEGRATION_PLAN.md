@@ -777,3 +777,46 @@ External URLs actually read on 2026-10-08:
 9. https://academy.socialwifi.com/en/hardware-and-installation/hardware-faqs/recommended-devices/ (third-party)
 
 Referenced inside C4 but **not read** (so not relied on): Cambium company statement PDF (Sep 23 2026), cnMaestro Anchor user-guide page, support.cambiumnetworks.com/files/cnmaestro/.
+
+---
+
+## 13. Multi-vendor Cycle A (foundation) — DONE (2026-10-10, D-044)
+
+Scope (D-044 "foundation"): MAC-based NAS identity, vendor API credentials in the sealed store,
+post-back anti-forgery, MikroTik rate format, `generic-radius-8021x`. LOCAL only: no device, server
+or VPS change; no vendor login flow beyond generic RADIUS; no outbound controller call.
+
+| # | Deliverable | Where | Notes |
+|---|---|---|---|
+| A1 | AP MAC identity | migration **028** `nas_access_points`; `apps/api/src/routes/access-points.ts` (`/api/v1/orgs/{orgId}/access-points`, NAS permissions); `apps/api/src/internal/nas-lookup.ts`; `NasLookup.findNas({apMac, controllerId})`; admin "Access points (AP MAC)" | **Child table, not a NAS column**: a controller / gateway NAS fronts many APs and third-party redirects name the AP. MAC canonical `aa:bb:cc:dd:ee:ff`, unicast only (CHECK + API), **globally unique among live rows** (the portal resolves before any tenant is known; a second registration anywhere answers a generic 409). Site/org always those of the NAS (composite FK, `ON UPDATE CASCADE`); deleting a NAS soft-deletes its APs. Lookup fails closed: unknown, ambiguous `nasid`, disabled AP/NAS/site/org, or `nasid` and AP naming different NAS |
+| A2 | Vendor API credentials | migration **028** `vendor_api_credentials`; `GET/POST/DELETE /api/v1/orgs/{orgId}/controllers/{id}/api-credential`; admin "Controllers" page + "API credential" dialog | One per controller; kinds `unifi-network`, `omada-controller`, `mist`, `ruckus-nbi`, `ruckus-one`, `meraki-dashboard`, each pinned to its registry vendor. Secret sealed with `Envelope(DATA_ENCRYPTION_KEY, 'ecloud:vendor-api:secret:v1')`, write-only (set/rotate replaces the whole record), never returned, audit rows carry no value (`api_credential: set/rotated/removed`, kind, URL host); `base_url` through `normalizeControllerBaseUrl` (controller kind: cloud = public host only; loopback, link-local/metadata, `localhost.`, `::/96`, userinfo, fragment refused); refused while impersonating (D-027); idempotency key required. Never fetched (OQ-17 rules bind the Cycle D fetcher) |
+| A3 | Post-back anti-forgery | `packages/adapters/src/vendor/login-token.ts`; `isReplay` `nonceKind`; `replayKey` namespaces | `lt1.<payload>.<HMAC-SHA256>`; key = HKDF(server secret, `ecloud:portal:login-token:v1`); bound to {organization, site, NAS, client MAC, flow}; TTL default 120 s, max 300 s, 5 s skew; single use through an injected `SET NX EX` store, claimed only after signature/binding/expiry pass; constant-time compare; malformed input fails closed. Tests: tamper, replay, expiry, cross-tenant, foreign key, store failure |
+| A4 | MikroTik rate format | `packages/policy-engine/src/mikrotik.ts`; `RateAttrFamily` `mikrotik`, `RadiusVendor` `Mikrotik`, combined-attribute path in `translate()` | `renderMikrotikRateLimit`: `"<upload>/<download>"` (rx = client upload, tx = client download, vendor doc read 2026-10-10), multiples of 1000 kbit/s → `M`, else `k`; both directions always rendered (an unset one = `0`, whose "unlimited" meaning is REQUIRES_DEVICE_TEST); optional burst/threshold/time syntax for Cycle B, never emitted by the engine (burst UNSUPPORTED, D-028 stage 10). Declarations `MIKROTIK_RATE_ATTRIBUTE` / `MIKROTIK_RATE_FIELD_DECLARATIONS`: DOCUMENTED, REQUIRES_DEVICE_TEST. FreeRADIUS already `$INCLUDE`s `dictionary.mikrotik` (stock) — no change; contract test proves pass-through |
+| A5 | `generic-radius-8021x` | `packages/adapters/src/adapters/generic-radius-8021x.ts`; registry vendor `generic-radius` + row `generic-radius-8021x` (implemented, no model/firmware claim); migration 028 adapter key; NAS dropdown; `buildSetupGuide` (10 steps); FreeRADIUS opt-in EAP; AAA MAC-auth / EAP-inner rules | Session-Timeout, Idle-Timeout, Acct-Interim-Interval, WISPr-Bandwidth-Max-Down/Up, RFC 3580 VLAN triplet, Class: all REQUIRES_DEVICE_TEST / DOCUMENTED; quotas/burst UNSUPPORTED; validity/voucher/schedule/concurrency ECLOUD_SIDE_ONLY; Disconnect `rfc5176-das` on `coa_port` REQUIRES_DEVICE_TEST, no CoA change. MAB: `Call-Check`, or on this adapter `User-Name` = the `Calling-Station-Id` MAC (password absent or the same MAC) → `client_devices` policy; Call-Check with a different MAC is rejected. 802.1X: EAP-TTLS/PAP only (Argon2id storage), opt-in `RADIUS_EAP_ENABLED=1` + mounted certificate (production certificate **REQUIRES_CLARIFICATION**); the inner request carries `ECLOUD-EAP-Inner`, NAS facts re-copied from the outer packet; inner identities are accepted only on 802.1X adapters, never as MAC auth or portal credential |
+
+Test evidence (2026-10-10, MacBook, dev stack): `npm run build`, `npm run lint`, `npm run format:check`
+clean; `npm test` with `ECLOUD_TEST_DATABASE_URL`/`ECLOUD_TEST_REDIS_URL`/`ECLOUD_TEST_RADIUS=1`/
+`ECLOUD_TEST_REQUIRE_INTEGRATION=1`: 138 files, 1603 passed, 1 skipped; `npm run test:portal-e2e`
+4 passed; aaa-contract 11 passed (3 new); `bash scripts/check-no-secrets.sh` OK. Manual (not CI):
+real EAP-TTLS/PAP with `eapol_test` against the rebuilt image → EAP-SUCCESS, see
+infra/freeradius/README.md §7.
+
+What Cycles B–E can rely on: AP-MAC → NAS → tenant resolution with fail-closed rules
+(`findNasByIdentity`); the `findNas` / `isReplay` contract fields; the login-token primitive for
+challenge-less redirects (F3 engine, Meraki, Mist); sealed per-controller API credentials with
+kind ↔ vendor pinning (UniFi, Omada, Mist, Ruckus NBI/One, Meraki); the `mikrotik` rate family and
+renderer (Cycle B adapter only declares `MIKROTIK_RATE_FAMILY` + the declarations); a working
+generic 802.1X / MAB path (any vendor's enterprise SSID, VLAN triplet, standard timers) and opt-in
+EAP-TTLS. Still open: per-vendor Called-Station-Id parsing, the "API limits" translation target
+(Cycle D), Aruba `url-hash-key`, outbound fetch policy enforcement (OQ-17) and every device test.
+
+### 13.1 Review fixes (independent review: PASS WITH FIXES, applied 2026-10-10)
+
+- **M1 AP-MAC squatting.** (a) With `nasid`, the NAS is resolved by `nasid` only; an AP row of another NAS is a hint, logged as security event `ap_mac_claimed_elsewhere` (no tenant detail), never a `conflict` (no DoS by registering a sniffed MAC). (b) `nas_access_points.verified_at` / `verification_source` (migration 028): MAC-only lookups use verified rows only (`ap_unverified` otherwise). Verification is RADIUS-observed: an authenticated Access-Request of the AP's own NAS (resolved from UDP source / shortname, i.e. it passed the shared-secret check) carrying the MAC in `Called-Station-Id` sets it (`observeAccessPoint`, best effort, rows of other NAS never touched); a MAC or NAS change resets it; tenants cannot set it. Controller-inventory verification (`controller-inventory`) is the Cycle D hook. (c) `POST /api/v1/platform/access-points/release` (platform `organization:update`, reason ≥ 10 chars, refused while impersonating, audited `access_point:release` in the owning organization). Tenants keep the generic 409.
+- **M2.** Deleting a site or archiving an organization soft-deletes its access points, NAS clients and network devices (`apps/api/src/global-slots.ts`), freeing the globally unique MAC / NAS IP / serial slots. Suspension keeps them (reversible; lookups already fail closed). `wireguard_peers` (no soft delete) are out of scope.
+- **L1.** Idempotency fingerprints are HMAC-SHA256 keyed from `DATA_ENCRYPTION_KEY` (purpose `ecloud:idempotency:fingerprint:v1`) for every route (NAS secret rotation, vendor API credential, ...). Stored pre-upgrade fingerprints stop matching (a replay inside 24 h answers 422).
+- **L2.** 409s of global unique indexes (`uq_nas_access_points_mac`, `uq_nas_clients_ip`, `uq_network_devices_mac`, `uq_network_devices_serial`) carry no constraint name.
+- **L3.** EAP links are made by the entrypoint as root, then privileges drop to `freerad`; the `chown freerad` of `mods-enabled` / `sites-enabled` is reverted; both `freeradius -C` build checks pass.
+- **L4.** Replay keys are `pf:replay:v2:` + SHA-256 of a JSON array (unambiguous). Migration: `isReplayed` also reads the legacy `|`-joined UAM key; nothing writes it any more, so legacy markers expire within `REPLAY_TTL_S` (24 h); remove `legacyReplayKey` after that window.
+- **L5.** Call-Check MAC auth uses strict MAC parsing only and rejects when neither User-Name nor Calling-Station-Id is a MAC.
+- **L6.** `apps/api/src/internal/login-token-store.ts` (Redis `SET NX EX` claim; store error → `ServiceUnavailableError` 503), integration-tested against the test Redis.
