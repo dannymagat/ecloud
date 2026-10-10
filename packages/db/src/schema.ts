@@ -49,7 +49,8 @@ export type PolicyStatus = 'draft' | 'active' | 'retired';
 export type PolicyTargetType = 'user' | 'user_group' | 'site' | 'client_device' | 'voucher_batch';
 export type TranslationTrigger = 'authorize' | 'coa' | 'preview' | 'config_push';
 export type VoucherStatus = 'unused' | 'active' | 'exhausted' | 'expired' | 'revoked';
-export type PortalType = 'uspot' | 'coovachilli' | 'external';
+/** Migration 029 (Cycle B) adds `mikrotik` (RouterOS Hotspot login.html entry). */
+export type PortalType = 'uspot' | 'coovachilli' | 'external' | 'mikrotik';
 export type SessionStatus = 'authorized' | 'active' | 'stopped' | 'stale' | 'expired';
 export type AccountingStatusType =
   'start' | 'interim' | 'stop' | 'accounting_on' | 'accounting_off';
@@ -383,6 +384,11 @@ export interface NasClientsTable {
   coa_port: number | null;
   coa_supported: boolean | null;
   require_message_authenticator: Generated<boolean>;
+  /** Migration 029 (Cycle B): lab opt-in, also emit REQUIRES_DEVICE_TEST reply attributes. */
+  device_test_attributes: Generated<boolean>;
+  /** Migration 029 (review F1): browser login address of the NAS (private unicast IPv4). */
+  hotspot_address: Inet | null;
+  hotspot_port: number | null;
   status: Generated<EnabledStatus>;
   created_at: GeneratedTimestamp;
   updated_at: GeneratedTimestamp;

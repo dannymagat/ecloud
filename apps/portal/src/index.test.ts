@@ -62,7 +62,11 @@ class FakeApi implements PortalApi {
   readonly redirects: { flavour: string; rawQuery: string; clientIp: string | null }[] = [];
   readonly identifies: IdentifyInput[] = [];
 
-  redirect(input: { flavour: 'uspot' | 'chilli'; rawQuery: string; clientIp: string | null }) {
+  redirect(input: {
+    flavour: 'uspot' | 'chilli' | 'mikrotik';
+    rawQuery: string;
+    clientIp: string | null;
+  }) {
     this.redirects.push(input);
     return Promise.resolve(this.redirectOutcome);
   }
@@ -560,5 +564,82 @@ describe('P10-B metrics', () => {
       port: 9465,
     });
     expect(() => portalConfig({ PORTAL_METRICS_PORT: '70000' })).toThrow();
+  });
+});
+
+describe('Cycle B: MikroTik RouterOS Hotspot entry and POST hand-off', () => {
+  const MT_ORIGIN = 'http://10.5.50.1:80';
+  const mtView = () => view({ nasOrigin: MT_ORIGIN, methods: ['click_through'] });
+
+  it('GET /hotspot/mikrotik/ forwards the raw query with flavour mikrotik and starts a flow', async () => {
+    const { api, app } = setup();
+    const q = 'mac=01%3A23%3A45%3A67%3A89%3AAB&identity=mt-lobby&chap-id=%5C371';
+    const res = await request(app).get(`/hotspot/mikrotik/?${q}`);
+    expect(res.status).toBe(303);
+    expect(res.headers.location).toMatch(/^\/f\//);
+    expect(api.redirects[0]).toMatchObject({ flavour: 'mikrotik', rawQuery: q });
+  });
+
+  it('renders a script-free form POSTing to the router login, router origin in form-action', async () => {
+    const { api, app, token } = setup();
+    api.flowView = mtView();
+    api.identifyOutcome = {
+      result: 'ok',
+      handoffUrl: `${MT_ORIGIN}/login`,
+      handoffForm: {
+        username: 'pc-0123456789abcdef',
+        password: 'ed92c3cb60d7bfcc640fed522852d78e', // CHAP test vector. check-no-secrets: allow
+        dst: 'https://www.example.com/?a=1&b="x"',
+        popup: 'false',
+      },
+    };
+    const { cookie, csrf } = await formSession(app, `/f/${token}/terms`);
+    const res = await request(app)
+      .post(`/f/${token}/click`)
+      .set('Cookie', cookie)
+      .type('form')
+      .send({ csrf, accept_terms: 'yes' });
+    expect(res.status).toBe(200);
+    expect(res.text).toContain(`<form method="post" action="${MT_ORIGIN}/login">`);
+    expect(res.text).toContain('name="password" value="ed92c3cb60d7bfcc640fed522852d78e"');
+    expect(res.text).toContain('value="https://www.example.com/?a=1&amp;b=&quot;x&quot;"');
+    expect(res.text).not.toMatch(/<script/i);
+    expect(res.headers['content-security-policy']).toContain(`form-action 'self' ${MT_ORIGIN}`);
+    expect(res.headers['cache-control']).toBe('no-store');
+  });
+
+  it("refuses a POST hand-off to anything but this flow's router /login", async () => {
+    for (const url of [
+      'http://10.9.9.9:80/login',
+      `${MT_ORIGIN}/logout`,
+      `${MT_ORIGIN}/login?x=1`,
+      'https://evil.example/login',
+    ]) {
+      const { api, app, token } = setup();
+      api.flowView = mtView();
+      api.identifyOutcome = { result: 'ok', handoffUrl: url, handoffForm: { username: 'u' } };
+      const { cookie, csrf } = await formSession(app, `/f/${token}/terms`);
+      const res = await request(app)
+        .post(`/f/${token}/click`)
+        .set('Cookie', cookie)
+        .type('form')
+        .send({ csrf, accept_terms: 'yes' });
+      expect(res.status).toBe(502);
+    }
+  });
+
+  it('logout follows the router /logout of the flow', async () => {
+    const { api, app, token } = setup();
+    api.flowView = mtView();
+    api.logoutUrl = { url: `${MT_ORIGIN}/logout` };
+    const { cookie, res: page } = await formSession(app, `/f/${token}/status`);
+    const csrf = /name="csrf" value="([^"]+)"/.exec(page.text)?.[1] ?? '';
+    const res = await request(app)
+      .post(`/f/${token}/logout`)
+      .set('Cookie', cookie)
+      .type('form')
+      .send({ csrf });
+    expect(res.status).toBe(302);
+    expect(res.headers.location).toBe(`${MT_ORIGIN}/logout`);
   });
 });

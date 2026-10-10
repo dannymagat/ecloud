@@ -21,7 +21,11 @@ import { OrgIdParams, ResourceSchema, problemResponses } from '../http/common.js
 import { ImpersonationForbiddenError } from '../http/errors.js';
 import { defineRoute, type AnyRouteSpec } from '../http/route.js';
 import { assertRef, inTenant, requireOnSite } from '../tenant.js';
-import { NAS_ADAPTER_KEYS } from '../nas-adapter.js';
+import { NAS_ADAPTER_KEYS, nasAdapter } from '../nas-adapter.js';
+import { isPrivateIpv4 } from '@ecloud/adapters';
+import { ForbiddenError } from '@ecloud/shared';
+import { evaluate } from '../auth/authorize.js';
+import type { CrudHookContext } from './crud.js';
 import { releaseGlobalSlots } from '../global-slots.js';
 import { softDeleteAccessPointsOf } from './access-points.js';
 import { assertControllerFor, resolveDeploymentMode } from './controllers.js';
@@ -104,6 +108,22 @@ const NasCreate = z.strictObject({
   coa_port: z.number().int().min(1).max(65535).nullable().optional(),
   coa_supported: z.boolean().nullable().optional(),
   require_message_authenticator: z.boolean().optional(),
+  /**
+   * Migration 029 (Cycle B): lab opt-in — the AAA layer also emits REQUIRES_DEVICE_TEST reply
+   * attributes (marked experimental) for this NAS so a device test can observe them (D-028/D-034).
+   */
+  device_test_attributes: z.boolean().optional(),
+  /**
+   * Migration 029 (review F1): the NAS's browser login address (MikroTik: the HotSpot interface
+   * IP behind `$(link-login-only)`), unicast private IPv4; REQUIRED for `mikrotik-hotspot`.
+   * The portal refuses any login target on another host / port.
+   */
+  hotspot_address: z
+    .ipv4()
+    .refine((ip) => isPrivateIpv4(ip), { message: 'must be an RFC 1918 / RFC 6598 IPv4 address' })
+    .nullable()
+    .optional(),
+  hotspot_port: z.number().int().min(1).max(65535).nullable().optional(),
   /** Migration 019: defaults from the compatibility registry rows of `adapter_key`. */
   deployment_mode: z.enum(DEPLOYMENT_MODES).optional(),
   /** Migration 019: a controller of the same organization (and of the NAS site when site-bound). */
@@ -277,6 +297,50 @@ export function resourceRoutes(deps: AppDeps): AnyRouteSpec[] {
     },
   });
 
+  /**
+   * Review F3: the lab opt-in makes REQUIRES_DEVICE_TEST attributes live, so it needs the
+   * platform-only permission `platform:adapter:manage` (never while impersonating) and every
+   * change is audited `nas:lab_mode_changed`.
+   */
+  function assertLabModePermission(hook: CrudHookContext): void {
+    if (!evaluate(hook.ctx.principal, 'platform:adapter:manage', { organizationId: hook.orgId })) {
+      throw new ForbiddenError({
+        detail: 'device_test_attributes needs the platform permission platform:adapter:manage.',
+      });
+    }
+  }
+
+  async function auditLabMode(
+    hook: CrudHookContext,
+    nasId: string,
+    before: boolean,
+    after: boolean,
+  ): Promise<void> {
+    await writeAudit(hook.trx, hook.ctx, {
+      organizationId: hook.orgId,
+      action: 'nas:lab_mode_changed',
+      targetType: 'nas_client',
+      targetId: nasId,
+      before: { device_test_attributes: before },
+      after: { device_test_attributes: after },
+    });
+  }
+
+  /** Review F1: a MikroTik NAS must name its HotSpot login address. */
+  function assertHotspotAddress(adapterKey: unknown, address: unknown, port: unknown): void {
+    if (adapterKey === 'mikrotik-hotspot' && (address === null || address === undefined)) {
+      throw new ValidationError([
+        {
+          path: 'body.hotspot_address',
+          message: 'required for mikrotik-hotspot (the router HotSpot interface IP)',
+        },
+      ]);
+    }
+    if (port !== null && port !== undefined && (address === null || address === undefined)) {
+      throw new ValidationError([{ path: 'body.hotspot_port', message: 'needs hotspot_address' }]);
+    }
+  }
+
   const nas = crudRoutes(deps, {
     table: 'nas_clients',
     path: '/nas',
@@ -313,25 +377,57 @@ export function resourceRoutes(deps: AppDeps): AnyRouteSpec[] {
         body.adapter_key as string,
         body.deployment_mode as 'native' | 'gateway' | undefined,
       );
+      assertHotspotAddress(body.adapter_key, body.hotspot_address, body.hotspot_port);
+      if (body.device_test_attributes === true) assertLabModePermission(hook);
       // 32 random bytes → 43 base64url chars; RADIUS shared secrets ≤ 128 octets.
       const secret = randomToken(32);
       hook.scratch.secret = secret;
+      // Cycle B: without an explicit CoA port the adapter's documented DAS default is stored
+      // (MikroTik /radius incoming 1700); other adapters keep NULL (deployment default).
+      const defaultCoaPort = nasAdapter(body.adapter_key as string)?.capabilities().disconnect
+        .defaultPort;
       return {
         ...body,
+        ...(body.coa_port === undefined && defaultCoaPort !== undefined
+          ? { coa_port: defaultCoaPort }
+          : {}),
         deployment_mode: deploymentMode,
         adapter_type_key: body.adapter_key,
         secret_ref: sealSecretRef(dataEnvelope, secret),
       };
     },
-    afterCreate: (row, hook) => Promise.resolve({ ...row, secret: hook.scratch.secret }),
+    afterCreate: async (row, hook) => {
+      if (row.device_test_attributes === true) {
+        await auditLabMode(hook, row.id as string, false, true);
+      }
+      return { ...row, secret: hook.scratch.secret };
+    },
     // Cycle A (migration 028): a deleted NAS takes its access points along (frees their MACs).
     beforeDelete: (before, { trx }) => softDeleteAccessPointsOf(trx, before.id as string),
-    preparePatch: async (body, before, { trx }) => {
+    preparePatch: async (body, before, hook) => {
+      const { trx } = hook;
       if (typeof body.site_id === 'string') await assertRef(trx, 'sites', body.site_id, 'site');
       if (typeof body.network_device_id === 'string') {
         await assertRef(trx, 'network_devices', body.network_device_id, 'network_device');
       }
       await assertControllerOnPatch(trx, body, before);
+      assertHotspotAddress(
+        patched(body, before, 'adapter_key'),
+        patched(body, before, 'hotspot_address'),
+        patched(body, before, 'hotspot_port'),
+      );
+      if (
+        body.device_test_attributes !== undefined &&
+        body.device_test_attributes !== before.device_test_attributes
+      ) {
+        assertLabModePermission(hook);
+        await auditLabMode(
+          hook,
+          before.id as string,
+          before.device_test_attributes === true,
+          body.device_test_attributes === true,
+        );
+      }
       const next: Row =
         typeof body.adapter_key === 'string'
           ? { ...body, adapter_type_key: body.adapter_key }

@@ -397,8 +397,12 @@ function translateQuota(b: PlanBuilder, eff: EffectivePolicy): boolean {
   const adapter = b.adapter;
   const primary = quotaFields[0] as PolicyField;
   const decl = adapter.fields[primary];
+  // Lab mode (Cycle B): a REQUIRES_DEVICE_TEST octet limit is emitted too, gated and marked
+  // `experimental` by `emit`; it never counts as a verified limit (drain-time bound stays).
+  const labQuota =
+    decl.status === 'REQUIRES_DEVICE_TEST' && b.ctx.includeDeviceTestAttributes === true;
   if (
-    decl.status !== 'VERIFIED_SUPPORTED' ||
+    (decl.status !== 'VERIFIED_SUPPORTED' && !labQuota) ||
     !adapter.quotaAttributes.total ||
     adapter.octetWidth === null
   ) {
@@ -445,7 +449,7 @@ function translateQuota(b: PlanBuilder, eff: EffectivePolicy): boolean {
     const list = b.emittedFor.get(primary) ?? [];
     b.emittedFor.set(f, [...list]);
   }
-  return emitted;
+  return emitted && !labQuota;
 }
 
 function deriveSessionTimeout(

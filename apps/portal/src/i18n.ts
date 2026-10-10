@@ -20,6 +20,7 @@ const EN = {
   'title.expired': 'Page expired',
   'title.status': 'Connection status',
   'title.logout': 'Signed out',
+  'title.handoff': 'Connecting',
   'landing.choose': 'Choose how to connect:',
   'landing.none': 'No sign-in method is available on this network.',
   'method.password': 'Sign in with username and password',
@@ -36,6 +37,9 @@ const EN = {
   'terms.none': 'By continuing you agree to use this network responsibly.',
   'terms.version': 'Version {version}',
   'success.continue': 'Continue to your page',
+  'handoff.text':
+    'Your sign-in was accepted. Press Connect to finish connecting to the Wi-Fi network.',
+  'handoff.submit': 'Connect',
   'success.status': 'View connection status',
   'error.generic':
     'We could not start sign-in on this network. Please reconnect to the Wi-Fi network and open any web page.',

@@ -118,7 +118,8 @@ export const PortalCreate = z.strictObject({
   site_id: z.uuid(),
   name,
   public_slug: slug,
-  portal_type: z.enum(['uspot', 'coovachilli', 'external']),
+  /** Migration 029 (Cycle B): `mikrotik` = RouterOS Hotspot login.html entry. */
+  portal_type: z.enum(['uspot', 'coovachilli', 'external', 'mikrotik']),
   /** SSID / interface reference on the site's NAS (unique per site). */
   network_ref: z
     .string()
@@ -266,6 +267,7 @@ function serializePortal(row: Row): Row {
 const UAM_PATH_BY_TYPE: Readonly<Record<string, string>> = Object.freeze({
   uspot: UAM_FLAVOURS.uspot.path,
   coovachilli: UAM_FLAVOURS.chilli.path,
+  mikrotik: UAM_FLAVOURS.mikrotik.path,
 });
 
 /**

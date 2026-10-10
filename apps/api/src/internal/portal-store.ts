@@ -59,6 +59,16 @@ export interface PortalFlow {
   credentialUsername: string | null;
   /** A previous session of this device on this NAS ended by a timeout (expired notice). */
   readonly previousSessionExpired: boolean;
+  /**
+   * Cycle B (MikroTik): replay namespace of `challenge` (`vendor-nonce` = CHAP challenge hex,
+   * `ecloud-login-token` = id of `loginToken`). Absent = UAM challenge.
+   */
+  readonly nonceKind?: 'uam-challenge' | 'vendor-nonce' | 'ecloud-login-token';
+  /**
+   * Cycle B: ECLOUD login token (vendor/login-token.ts) issued with the flow; consumed once
+   * before a broker credential is handed to a post-back vendor. Server-side only.
+   */
+  readonly loginToken?: string;
 }
 
 /** Identity proven at the portal; re-checked by AAA when the credential is presented. */
@@ -80,7 +90,17 @@ export interface StoredCredential {
   readonly replayKey: string;
   readonly identity: BrokerIdentity;
   readonly expiresAt: string;
+  /**
+   * Cycle B (MikroTik HTTP-CHAP): the credential password sealed with the data key (purpose
+   * {@link CHAP_CREDENTIAL_PURPOSE}). CHAP cannot be checked against a one-way hash, so AAA opens
+   * it and hands it to FreeRADIUS as `control:Cleartext-Password` with `Auth-Type = CHAP`
+   * (docs/contracts/aaa-authorize.md rule 2). Absent = PAP-only credential.
+   */
+  readonly chapPasswordRef?: string;
 }
+
+/** HKDF purpose label of {@link StoredCredential.chapPasswordRef}, not a secret. */
+export const CHAP_CREDENTIAL_PURPOSE = 'ecloud:portal:chap-credential:v1'; // check-no-secrets: allow
 
 const flowKey = (id: string) => `pf:flow:${id}`;
 const credKey = (username: string) => `pf:cred:${username}`;

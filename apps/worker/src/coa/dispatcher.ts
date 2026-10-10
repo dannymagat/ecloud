@@ -197,7 +197,8 @@ export async function performDispatch(
   const outcome: RadclientOutcome = await sendDynamicAuthorization({
     radclientPath: deps.radclientPath,
     host: row.nas_ip,
-    port: row.coa_port ?? deps.defaultCoaPort,
+    // Cycle B: the adapter's documented DAS default (MikroTik 1700) before the deployment one.
+    port: row.coa_port ?? adapter.capabilities().disconnect.defaultPort ?? deps.defaultCoaPort,
     command: row.action === 'disconnect' ? 'disconnect' : 'coa',
     secret,
     attributes: withRequestHygiene(built.attributes, now),

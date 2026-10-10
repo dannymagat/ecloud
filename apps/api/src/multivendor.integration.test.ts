@@ -579,7 +579,7 @@ await describeIntegration('@ecloud/api multi-vendor (controllers, registry)', ()
       disconnect: { evidence_level: string | null; device_enforced: boolean };
       attributes: { evidence_level: string; device_enforced: boolean }[];
     }[];
-    expect(adapters).toHaveLength(6); // + generic-radius-8021x (Cycle A)
+    expect(adapters).toHaveLength(7); // + generic-radius-8021x (Cycle A), mikrotik-hotspot (Cycle B)
     for (const a of adapters) {
       for (const f of a.fields) {
         expect(f.evidence_level, a.key).not.toBeNull();

@@ -118,6 +118,53 @@ function roadmapNotes(v: RoadmapVendor): string {
   return v.note ? `${list} ${v.note}` : list;
 }
 
+/**
+ * Roadmap vendors promoted by a multi-vendor cycle: they leave the `planned` placeholder set
+ * (their `<key>-planned` row is no longer generated) and get an explicit entry below.
+ */
+export const PROMOTED_VENDOR_ENTRIES: readonly VendorEntry[] = [
+  // Cycle B (D-044): MikroTik RouterOS Hotspot adapter + Teltonika RutOS profile.
+  {
+    key: 'mikrotik',
+    name: 'MikroTik',
+    lifecycle: 'implemented',
+    roadmapPhase: 'phase-b',
+    docLinks: [
+      {
+        kind: 'url',
+        ref: 'MikroTik RouterOS 7.26 manual: RADIUS',
+        url: 'https://help.mikrotik.com/docs/spaces/ROS/pages/328097/RADIUS',
+      },
+      {
+        kind: 'url',
+        ref: 'MikroTik RouterOS 7.26 manual: Hotspot customisation',
+        url: 'https://help.mikrotik.com/docs/spaces/ROS/pages/87162881/Hotspot+customisation',
+      },
+      { kind: 'doc-section', ref: 'docs/VENDOR_INTEGRATION_RESEARCH.md §3.3 (mikrotik-hotspot)' },
+    ],
+    notes:
+      'Cycle B: `mikrotik-hotspot` adapter (native or gateway in front of any AP). DOCUMENTED / REQUIRES_DEVICE_TEST only; no lab test (D-028).',
+  },
+  {
+    key: 'teltonika',
+    name: 'Teltonika',
+    lifecycle: 'implemented',
+    roadmapPhase: 'phase-c',
+    docLinks: [
+      {
+        kind: 'doc-section',
+        ref: 'docs/VENDOR_INTEGRATION_RESEARCH.md §3.2 (Teltonika on coovachilli-uam)',
+      },
+    ],
+    notes:
+      'Cycle B: RutOS Hotspot profile on the existing `coovachilli-uam` adapter. UAM parameter set, `md`, password encoding and CoA REQUIRES_DEVICE_TEST / REQUIRES_CLARIFICATION (vendor wiki not fetchable, HTTP 403).',
+  },
+];
+
+export const PROMOTED_VENDOR_KEYS: ReadonlySet<string> = new Set(
+  PROMOTED_VENDOR_ENTRIES.map((v) => v.key),
+);
+
 export const VENDORS: readonly VendorEntry[] = Object.freeze([
   {
     key: 'ezelink',
@@ -172,7 +219,7 @@ export const VENDORS: readonly VendorEntry[] = Object.freeze([
     notes:
       'Researched only (plan §7.3). ECLOUD must not depend on cnMaestro Cloud (C4); AP-side External Hotspot + RADIUS is the primary candidate; no adapter.',
   },
-  ...ROADMAP_VENDORS.map((v): VendorEntry => ({
+  ...ROADMAP_VENDORS.filter((v) => !PROMOTED_VENDOR_KEYS.has(v.key)).map((v): VendorEntry => ({
     key: v.key,
     name: v.name,
     lifecycle: 'planned',
@@ -180,4 +227,5 @@ export const VENDORS: readonly VendorEntry[] = Object.freeze([
     docLinks: [],
     notes: roadmapNotes(v),
   })),
+  ...PROMOTED_VENDOR_ENTRIES,
 ]);

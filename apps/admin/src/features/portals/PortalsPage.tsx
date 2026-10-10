@@ -27,6 +27,7 @@ export function PortalsPage() {
         { value: 'uspot', label: 'uspot (OpenWrt / TIP)' },
         { value: 'coovachilli', label: 'CoovaChilli' },
         { value: 'external', label: 'External' },
+        { value: 'mikrotik', label: 'MikroTik RouterOS Hotspot' },
       ],
     },
     {

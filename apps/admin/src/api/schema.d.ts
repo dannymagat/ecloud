@@ -5808,7 +5808,8 @@ export interface operations {
           | 'uspot-upstream-uam'
           | 'coovachilli-uam'
           | 'openwifi-config'
-          | 'generic-radius-8021x';
+          | 'generic-radius-8021x'
+          | 'mikrotik-hotspot';
       };
       header?: never;
       path: {
@@ -7390,12 +7391,16 @@ export interface operations {
             | 'openwifi-uspot-uam'
             | 'uspot-upstream-uam'
             | 'coovachilli-uam'
-            | 'generic-radius-8021x';
+            | 'generic-radius-8021x'
+            | 'mikrotik-hotspot';
           coa_port?: number | null;
           coa_supported?: boolean | null;
           controller_id?: string | null;
           /** @enum {string} */
           deployment_mode?: 'native' | 'gateway';
+          device_test_attributes?: boolean;
+          hotspot_address?: string | null;
+          hotspot_port?: number | null;
           name: string;
           nas_identifier?: string | null;
           nas_ip: string;
@@ -7597,12 +7602,16 @@ export interface operations {
             | 'openwifi-uspot-uam'
             | 'uspot-upstream-uam'
             | 'coovachilli-uam'
-            | 'generic-radius-8021x';
+            | 'generic-radius-8021x'
+            | 'mikrotik-hotspot';
           coa_port?: number | null;
           coa_supported?: boolean | null;
           controller_id?: string | null;
           /** @enum {string} */
           deployment_mode?: 'native' | 'gateway';
+          device_test_attributes?: boolean;
+          hotspot_address?: string | null;
+          hotspot_port?: number | null;
           name?: string;
           nas_identifier?: string | null;
           nas_ip?: string;
@@ -11826,7 +11835,7 @@ export interface operations {
           nas_client_id?: string | null;
           network_ref: string;
           /** @enum {string} */
-          portal_type: 'uspot' | 'coovachilli' | 'external';
+          portal_type: 'uspot' | 'coovachilli' | 'external' | 'mikrotik';
           public_slug: string;
           redirect_url?: string | null;
           /** Format: uuid */
@@ -12029,7 +12038,7 @@ export interface operations {
           nas_client_id?: string | null;
           network_ref?: string;
           /** @enum {string} */
-          portal_type?: 'uspot' | 'coovachilli' | 'external';
+          portal_type?: 'uspot' | 'coovachilli' | 'external' | 'mikrotik';
           public_slug?: string;
           redirect_url?: string | null;
           /** @enum {string} */

@@ -22,7 +22,7 @@ import type {
   RegistryCell,
   RegistryFact,
 } from './types.js';
-import { CAMBIUM_SOURCES as C, ROADMAP_VENDORS } from './vendors.js';
+import { CAMBIUM_SOURCES as C, PROMOTED_VENDOR_KEYS, ROADMAP_VENDORS } from './vendors.js';
 
 export * from './types.js';
 
@@ -872,10 +872,167 @@ const generic8021xRow: CompatibilityRow = {
 };
 
 // ------------------------------------------------------------------------------------------
+// Cycle B (D-044) — MikroTik RouterOS Hotspot; Teltonika RutOS on coovachilli-uam
+// ------------------------------------------------------------------------------------------
+
+const MT_RADIUS: EvidenceRef = {
+  kind: 'url',
+  ref: 'MikroTik RouterOS 7.26 manual: RADIUS',
+  url: 'https://help.mikrotik.com/docs/spaces/ROS/pages/328097/RADIUS',
+};
+const MT_CUSTOM: EvidenceRef = {
+  kind: 'url',
+  ref: 'MikroTik RouterOS 7.26 manual: Hotspot customisation',
+  url: 'https://help.mikrotik.com/docs/spaces/ROS/pages/87162881/Hotspot+customisation',
+};
+const MT_HOTSPOT: EvidenceRef = {
+  kind: 'url',
+  ref: 'MikroTik RouterOS 7.26 manual: HotSpot - Captive portal',
+  url: 'https://help.mikrotik.com/docs/spaces/ROS/pages/56459266/HotSpot+-+Captive+portal',
+};
+const F2_DOC = doc('docs/VENDOR_INTEGRATION_RESEARCH.md §2 F2, §3.3');
+const MIKROTIK_ROW_ID = 'mikrotik-routeros-hotspot';
+
+const mikrotikRow: CompatibilityRow = {
+  key: MIKROTIK_ROW_ID,
+  vendorKey: 'mikrotik',
+  hardwareModel: 'UNKNOWN',
+  firmware: 'UNKNOWN',
+  controller: null,
+  lifecycle: 'implemented',
+  deploymentModes: ['gateway', 'native'],
+  enforcementPoint: 'gateway',
+  adapterKey: 'mikrotik-hotspot',
+  sourceVersionMatchesDevice: null,
+  identity: [],
+  profile: {
+    ...allUnknownProfile(),
+    redirectProtocol: fact(
+      'ECLOUD-generated login.html: GET to the ECLOUD portal with the RouterOS variables mac, ip, identity, link-login-only, link-orig, chap-id, chap-challenge, error ($(name-esc)); unsigned',
+      'DOCUMENTED',
+      [MT_CUSTOM, F2_DOC],
+    ),
+    authorizationMethod: fact(
+      'browser POST username/password/dst/popup to $(link-login-only); HTTP-CHAP = MD5(chap-id + password + chap-challenge), PAP only to an https target',
+      'DOCUMENTED',
+      [MT_CUSTOM, F2_DOC],
+    ),
+    radiusAuth: fact(
+      'NAS-Identifier = router identity; Calling-Station-Id = client MAC (capitals); Called-Station-Id = HotSpot server name; require-message-auth default yes-for-request-resp',
+      'DOCUMENTED',
+      [MT_RADIUS, F2_DOC],
+    ),
+    radiusAccounting: fact('RADIUS accounting (HotSpot profile radius-accounting)', 'DOCUMENTED', [
+      MT_HOTSPOT,
+    ]),
+    accountingInterval: fact(
+      'Acct-Interim-Interval honoured only with radius-interim-update=received',
+      'DOCUMENTED',
+      [MT_RADIUS],
+    ),
+    disconnectCoa: fact(
+      '/radius incoming accept=yes, port default 1700 (ECLOUD default for this adapter); CoA-changeable list documented; REQUIRES_DEVICE_TEST (D-006)',
+      'DOCUMENTED',
+      [MT_RADIUS],
+    ),
+    bandwidthAttributes: fact(
+      'Mikrotik-Rate-Limit "rx/tx" (rx = client upload); REQUIRES_DEVICE_TEST',
+      'DOCUMENTED',
+      [MT_RADIUS],
+    ),
+    quotaEnforcement: fact(
+      'Mikrotik-Total-Limit + -Gigawords (numeric table only; semantics REQUIRES_DEVICE_TEST)',
+      'DOCUMENTED',
+      [MT_RADIUS],
+    ),
+    sessionTimeout: fact('Session-Timeout, Idle-Timeout: REQUIRES_DEVICE_TEST', 'DOCUMENTED', [
+      MT_RADIUS,
+    ]),
+  },
+  capabilities: deriveCells(getAdapter('mikrotik-hotspot').capabilities(), {
+    rowKey: MIKROTIK_ROW_ID,
+    sourceVersionMatchesDevice: null,
+    deviceFirmware: 'UNKNOWN',
+    dtResults: DT_RESULTS,
+  }),
+  configurationKind: 'vendor-ui',
+  openItems: [
+    {
+      id: 'MB-1',
+      label: 'REQUIRES_DEVICE_TEST',
+      text: 'RouterOS version range: hotspot reported broken on 7.0–7.4 and device-mode limits on ≥ 7.17 factory images (third-party only); the `$(chap-id-esc)` / `$(chap-challenge-esc)` encoding; CHAP-Password / CHAP-Challenge in the Access-Request.',
+    },
+    {
+      id: 'MB-2',
+      label: 'REQUIRES_DEVICE_TEST',
+      text: 'Reply honouring: Mikrotik-Rate-Limit (incl. "0" = unlimited), Mikrotik-Total-Limit(+Gigawords), Session-/Idle-Timeout, Acct-Interim-Interval, Class echo; Disconnect on port 1700 and its identification attributes.',
+    },
+    {
+      id: 'MB-3',
+      label: 'REQUIRES_CLARIFICATION',
+      text: 'HotSpot dns-name / https login targets (only private-IPv4 link-login-only accepted in Cycle B); login-by=mac integration.',
+    },
+  ],
+};
+
+const TELTONIKA_ROW_ID = 'teltonika-rutos-hotspot';
+const TELTONIKA_DOC = doc('docs/VENDOR_INTEGRATION_RESEARCH.md §1 (Teltonika row), §3.2');
+
+const teltonikaRow: CompatibilityRow = {
+  key: TELTONIKA_ROW_ID,
+  vendorKey: 'teltonika',
+  hardwareModel: 'UNKNOWN',
+  firmware: 'UNKNOWN',
+  controller: null,
+  lifecycle: 'implemented',
+  deploymentModes: ['gateway'],
+  enforcementPoint: 'gateway',
+  adapterKey: 'coovachilli-uam',
+  // V11: the RutOS CoovaChilli build is unknown, so source-verified cells present as
+  // REQUIRES_DEVICE_TEST (research §3.2).
+  sourceVersionMatchesDevice: false,
+  identity: [],
+  profile: {
+    ...allUnknownProfile(),
+    redirectProtocol: fact(
+      'CoovaChilli UAM (RutOS Hotspot "uses CoovaChilli"); exact RutOS parameter set REQUIRES_DEVICE_TEST',
+      'DOCUMENTED',
+      [TELTONIKA_DOC],
+    ),
+    authorizationMethod: fact(
+      'GET /logon to uamip:uamport (UAM port default 3990), PAP-XOR with the UAM secret; "Password encoding" semantics REQUIRES_DEVICE_TEST',
+      'DOCUMENTED',
+      [TELTONIKA_DOC],
+    ),
+  },
+  capabilities: deriveCells(getAdapter('coovachilli-uam').capabilities(), {
+    rowKey: TELTONIKA_ROW_ID,
+    sourceVersionMatchesDevice: false,
+    deviceFirmware: 'UNKNOWN',
+    dtResults: DT_RESULTS,
+  }),
+  configurationKind: 'vendor-ui',
+  openItems: [
+    {
+      id: 'TB-1',
+      label: 'REQUIRES_CLARIFICATION',
+      text: 'RutOS Hotspot UI field names and UAM parameter list (vendor wiki returned HTTP 403; research §6 item 12).',
+    },
+    {
+      id: 'TB-2',
+      label: 'REQUIRES_DEVICE_TEST',
+      text: '`md` signature, "Password encoding" vs ECLOUD PAP-XOR, CoovaChilli reply attributes and CoA/Disconnect on the RutOS build.',
+    },
+  ],
+};
+
+// ------------------------------------------------------------------------------------------
 // Roadmap rows — planned, everything UNKNOWN (plan §7.4)
 // ------------------------------------------------------------------------------------------
 
-const roadmapRows: CompatibilityRow[] = ROADMAP_VENDORS.map((v) => ({
+const roadmapRows: CompatibilityRow[] = ROADMAP_VENDORS.filter(
+  (v) => !PROMOTED_VENDOR_KEYS.has(v.key),
+).map((v) => ({
   key: `${v.key}-planned`,
   vendorKey: v.key,
   hardwareModel: 'UNKNOWN',
@@ -902,6 +1059,8 @@ export const COMPATIBILITY_ROWS: readonly CompatibilityRow[] = Object.freeze([
   coovaMasterRow,
   cambiumRow,
   generic8021xRow,
+  mikrotikRow,
+  teltonikaRow,
   ...roadmapRows,
 ]);
 

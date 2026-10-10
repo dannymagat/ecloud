@@ -96,6 +96,7 @@ describe('first-party VendorAdapter wrappers (AC1, AC2)', () => {
       'coovachilli-uam',
       'openwifi-config',
       'generic-radius-8021x',
+      'mikrotik-hotspot',
     ]);
     for (const v of all) {
       expect(v.engine).toBe(getAdapter(v.key));

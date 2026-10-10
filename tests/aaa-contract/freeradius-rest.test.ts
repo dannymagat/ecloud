@@ -304,6 +304,67 @@ suite(title, () => {
     expect(reply.attributes['Mikrotik-Rate-Limit']).toEqual(['2M/10M']);
   });
 
+  // ------------------------------------------------------------ Cycle B (D-044)
+
+  function mikrotikChapRequest(sessionId: string): { packet: string; password: string } {
+    const packet = fixture('access-request-mikrotik-hotspot-chap.txt', {
+      '<mt-sessionid-placeholder>': sessionId,
+      '<nasid-placeholder>': 'lab-mikrotik',
+    });
+    const password = fixtureAttribute(packet, 'CHAP-Password');
+    if (password === undefined) throw new Error('fixture has no CHAP-Password');
+    return { packet, password };
+  }
+
+  it('Cycle B: MikroTik HTTP-CHAP — Auth-Type CHAP + Cleartext-Password verified by FreeRADIUS; Mikrotik-* reply attributes pass through', async () => {
+    const sessionId = uniqueSessionId();
+    const { packet, password } = mikrotikChapRequest(sessionId);
+    stub.setMode({
+      kind: 'accept',
+      policy: buildAcceptPolicy({
+        authType: 'CHAP',
+        cleartextPassword: password,
+        reply: {
+          'Mikrotik-Rate-Limit': '2500k/10M',
+          'Mikrotik-Total-Limit': 1705032704,
+          'Mikrotik-Total-Limit-Gigawords': 1,
+          'Session-Timeout': 3600,
+          'Idle-Timeout': 600,
+          'Acct-Interim-Interval': 300,
+          Class: classFor().ascii,
+        },
+      }),
+    });
+    const reply = await radclient(packet, { type: 'auth' });
+    expect(reply.code, reply.output).toBe('Access-Accept');
+    expect(reply.attributes['Mikrotik-Rate-Limit']).toEqual(['2500k/10M']);
+    expect(reply.attributes['Mikrotik-Total-Limit']).toEqual(['1705032704']);
+    expect(reply.attributes['Mikrotik-Total-Limit-Gigawords']).toEqual(['1']);
+    expect(reply.attributes['Idle-Timeout']).toEqual(['600']);
+    const authorize = await stub.waitForRequest(forSession(AAA_AUTHORIZE_PATH, sessionId));
+    // ECLOUD sees the CHAP request (presence) and the router identity, never a User-Password.
+    expect(authorize.body['CHAP-Password']).toBeDefined();
+    expect(attributeValue(authorize.body, 'User-Password')).toBeUndefined();
+    expect(attributeValue(authorize.body, 'NAS-Identifier')).toBe('lab-mikrotik');
+    expect(attributeValue(authorize.body, 'Called-Station-Id')).toBe('hotspot1');
+  });
+
+  it('Cycle B: a CHAP response that does not match the returned cleartext is rejected', async () => {
+    const sessionId = uniqueSessionId();
+    const { packet } = mikrotikChapRequest(sessionId);
+    stub.setMode({
+      kind: 'accept',
+      policy: buildAcceptPolicy({
+        authType: 'CHAP',
+        cleartextPassword: 'some-other-cleartext',
+        reply: { 'Mikrotik-Rate-Limit': '1M/1M', Class: classFor().ascii },
+      }),
+    });
+    const reply = await radclient(packet, { type: 'auth' });
+    expect(reply.code, reply.output).toBe('Access-Reject');
+    expect(reply.attributes['Mikrotik-Rate-Limit']).toBeUndefined();
+  });
+
   it('Cycle A: generic MAB (User-Name = MAC, no Call-Check) reaches ECLOUD unchanged; VLAN triplet returned', async () => {
     const sessionId = uniqueSessionId();
     const packet = fixture('access-request-generic-mab.txt', {

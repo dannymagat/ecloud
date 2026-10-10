@@ -19,6 +19,8 @@ export const ADAPTER_KEYS = [
   'openwifi-config',
   /** Cycle A (D-044): vendor-neutral 802.1X / MAC-auth NAS (no portal). */
   'generic-radius-8021x',
+  /** Cycle B (D-044): MikroTik RouterOS Hotspot with an ECLOUD-generated external login page. */
+  'mikrotik-hotspot',
 ] as const;
 
 export type AdapterKey = (typeof ADAPTER_KEYS)[number];
@@ -28,7 +30,9 @@ export type PortalType =
   | 'uam-chillispot'
   | 'uam-chillispot+capport'
   | 'uam-chillispot+wispr+json'
-  | 'config-only';
+  | 'config-only'
+  /** Cycle B: RouterOS Hotspot `login.html` → ECLOUD portal → POST to `$(link-login-only)`. */
+  | 'mikrotik-hotspot';
 
 /**
  * `mikrotik-rate-string`: one combined `rx/tx` string attribute (Mikrotik-Rate-Limit, rendered by
@@ -83,6 +87,11 @@ export interface DisconnectCapability extends AdapterFlag {
   /** Identification attributes the NAS needs in the Disconnect-Request. */
   readonly identifyBy: readonly string[];
   readonly acctStopEmitted: boolean | 'unknown';
+  /**
+   * Cycle B: the vendor's documented default DAS port, used when the NAS row has no `coa_port`
+   * (MikroTik `/radius incoming` default 1700, not RFC 5176's 3799). Absent = deployment default.
+   */
+  readonly defaultPort?: number;
 }
 
 export interface CoaChangeCapability extends AdapterFlag {

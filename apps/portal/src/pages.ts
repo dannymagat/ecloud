@@ -104,7 +104,16 @@ export type PageBody =
       readonly session: SessionStatus | null;
       readonly logout: FormTarget | null;
     }
-  | { readonly page: 'logout' };
+  | { readonly page: 'logout' }
+  | {
+      /**
+       * Cycle B (MikroTik): POST hand-off to the router's `$(link-login-only)`. A plain form the
+       * user submits (no script, ADMIN_UI §4); the router origin is in the CSP form-action.
+       */
+      readonly page: 'handoff';
+      readonly action: string;
+      readonly fields: Readonly<Record<string, string>>;
+    };
 
 export type PageName = PageBody['page'];
 
@@ -129,6 +138,7 @@ const TITLE_KEYS: Readonly<Record<PageName, MessageKey>> = {
   expired: 'title.expired',
   status: 'title.status',
   logout: 'title.logout',
+  handoff: 'title.handoff',
 };
 
 function errorLine(message: string | null): string {
@@ -232,6 +242,15 @@ function body(theme: PageTheme, b: PageBody): string {
     }
     case 'logout':
       return `<p role="status">${escapeHtml(t('logout.text', {}, l))}</p>`;
+    case 'handoff': {
+      const hidden = Object.entries(b.fields)
+        .map(
+          ([name, value]) =>
+            `<input type="hidden" name="${escapeHtml(name)}" value="${escapeHtml(value)}">`,
+        )
+        .join('');
+      return `<p role="status">${escapeHtml(t('handoff.text', {}, l))}</p><form method="post" action="${escapeHtml(b.action)}">${hidden}<button type="submit">${escapeHtml(t('handoff.submit', {}, l))}</button></form>`;
+    }
   }
 }
 

@@ -13,7 +13,7 @@ import { Badge, Button } from '../../components/ui';
 import { ADAPTER_KEYS, ADAPTER_LABELS } from '../../lib/adapterStatus';
 import { useAuth } from '../../lib/auth';
 import { display, formatDateTime, str } from '../../lib/format';
-import { can } from '../../lib/permissions';
+import { can, canPlatform } from '../../lib/permissions';
 import type { FieldDef } from '../resource/form';
 import { ResourcePage, type ResourceConfig } from '../resource/ResourcePage';
 
@@ -120,13 +120,49 @@ export function NasPage() {
         label: (r) => str(r.serial ?? r.id),
       },
     },
-    { name: 'coa_port', label: 'CoA port', type: 'number', min: 1, max: 65535, nullable: true },
+    {
+      name: 'coa_port',
+      label: 'CoA port',
+      type: 'number',
+      min: 1,
+      max: 65535,
+      nullable: true,
+      hint: 'Disconnect/CoA port on the NAS. Left empty, MikroTik NAS get the RouterOS default 1700.',
+    },
     {
       name: 'require_message_authenticator',
       label: 'Require Message-Authenticator',
       type: 'checkbox',
       defaultValue: true,
     },
+    {
+      name: 'hotspot_address',
+      label: 'Hotspot address',
+      type: 'text',
+      nullable: true,
+      hint: 'MikroTik: the router HotSpot interface IP (private IPv4), e.g. the address in its login page link. Required for MikroTik; the portal only sends logins there.',
+    },
+    {
+      name: 'hotspot_port',
+      label: 'Hotspot port',
+      type: 'number',
+      min: 1,
+      max: 65535,
+      nullable: true,
+      hint: 'Optional: the port of the login page when it is not the default 80 / 443.',
+    },
+    // Review F3: lab mode needs the platform permission; hidden from everyone else.
+    ...(canPlatform(me, 'platform:adapter:manage')
+      ? [
+          {
+            name: 'device_test_attributes',
+            label: 'Device-test attributes (lab only)',
+            type: 'checkbox',
+            defaultValue: false,
+            hint: 'WARNING: lab use only. Sends reply attributes that still REQUIRE DEVICE TEST (rate limit, timeouts, quota) to this NAS so a lab test can check them. They become live for every user of this NAS; nothing is marked verified. Every change is audited.',
+          } satisfies FieldDef,
+        ]
+      : []),
   ];
   const editFields: FieldDef[] = [
     ...fields,

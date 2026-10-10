@@ -59,6 +59,8 @@ export const ADAPTER_KEYS = [
   'uspot-upstream-uam',
   'coovachilli-uam',
   'generic-radius-8021x',
+  // Cycle B (D-044): MikroTik RouterOS Hotspot.
+  'mikrotik-hotspot',
 ] as const;
 
 /** Human labels for the NAS adapter dropdown (the key stays visible for support). */
@@ -68,6 +70,7 @@ export const ADAPTER_LABELS: Readonly<Record<(typeof ADAPTER_KEYS)[number], stri
   'uspot-upstream-uam': 'OpenWrt uspot captive portal',
   'coovachilli-uam': 'CoovaChilli gateway captive portal',
   'generic-radius-8021x': 'Any vendor: 802.1X / MAC auth (generic RADIUS)',
+  'mikrotik-hotspot': 'MikroTik RouterOS Hotspot (ECLOUD login page)',
 };
 
 export interface StatusPresentation {

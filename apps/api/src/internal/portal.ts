@@ -21,9 +21,14 @@
  * malformed) answers the same `{kind:"error"}`; the reason goes to the log only.
  */
 import {
+  LOGIN_TOKEN_MAX_TTL_S,
+  MIKROTIK_ADAPTER_KEY,
+  MIKROTIK_PORTAL_PATH,
   getVendorAdapter,
   isPrivateIpv4,
+  parseMikrotikLoginTarget,
   safeUserUrl,
+  splitMikrotikQuery,
   splitUamQuery,
   type HotspotContext,
   type NasLookup,
@@ -37,6 +42,7 @@ import { z } from 'zod';
 import type { AppDeps } from '../context.js';
 import { Envelope, openSecretRef, sealSecretRef, sha256Hex } from '../crypto.js';
 import { logPortalSecurityEvent } from '../security-events.js';
+import { consumePortalLoginToken, issuePortalLoginToken } from './login-token-store.js';
 import { findNasByIdentity } from './nas-lookup.js';
 import {
   IdentityRejected,
@@ -47,6 +53,7 @@ import {
   type PasswordCheck,
 } from './portal-identity.js';
 import {
+  CHAP_CREDENTIAL_PURPOSE,
   CREDENTIAL_TTL_S,
   FLOW_TTL_S,
   findIndexedFlow,
@@ -82,6 +89,12 @@ export const UAM_FLAVOURS = Object.freeze({
     path: '/uam/uspot/',
   },
   chilli: { adapterKeys: ['coovachilli-uam'], portalType: 'coovachilli', path: '/uam/chilli/' },
+  // Cycle B (D-044): RouterOS Hotspot, ECLOUD-generated login.html (vendor/mikrotik.ts).
+  mikrotik: {
+    adapterKeys: ['mikrotik-hotspot'],
+    portalType: 'mikrotik',
+    path: MIKROTIK_PORTAL_PATH,
+  },
 } as const);
 export type UamFlavour = keyof typeof UAM_FLAVOURS;
 
@@ -222,6 +235,8 @@ async function resolvePortal(
         deploymentMode,
         uamServerUrl: uamServerUrl(deps, flavour, portal.adapter_config),
         uamSecret: openUamSecret(deps, portal.uam_secret_ref),
+        hotspotAddress: n.hotspot_address ?? null,
+        hotspotPort: n.hotspot_port ?? null,
       },
     };
   });
@@ -377,8 +392,14 @@ function contextOf(flow: PortalFlow, now: Date): HotspotContext {
   };
 }
 
-/** `http://uamip:uamport` of the flow, only for a private uamip and a numeric port. */
+/**
+ * Origin the browser may be sent to for this flow: `http://uamip:uamport` (UAM), or the
+ * validated `$(link-login-only)` origin of a MikroTik flow (`http(s)://<private IPv4>:<port>`).
+ */
 function nasBase(flow: PortalFlow): string | null {
+  if (flow.adapterKey === MIKROTIK_ADAPTER_KEY) {
+    return parseMikrotikLoginTarget(flow.fields['link-login-only'])?.origin ?? null;
+  }
   const ip = flow.fields.uamip ?? '';
   const port = flow.fields.uamport ?? '';
   if (!isPrivateIpv4(ip) || !/^\d{1,5}$/.test(port) || Number(port) < 1 || Number(port) > 65535) {
@@ -388,7 +409,7 @@ function nasBase(flow: PortalFlow): string | null {
 }
 
 const RedirectBody = z.object({
-  flavour: z.enum(['uspot', 'chilli']),
+  flavour: z.enum(['uspot', 'chilli', 'mikrotik']),
   raw_query: z.string().max(8192),
   client_ip: z.string().max(64).optional(),
 });
@@ -439,13 +460,18 @@ export function portalInternalRouter(deps: AppDeps): Router {
         const l = PORTAL_LIMITS.redirectsPerIp;
         await counter(deps, `pf:rl:redir:${clientIp}`, l.max, l.windowS);
       }
-      const split = splitUamQuery(raw);
-      const resolved = await resolvePortal(
-        deps,
-        flavour,
-        { nasid: split.params.nasid, apMac: canonicalUnicastMac(split.params.called) },
-        req.log,
-      );
+      // MikroTik: NAS identity = router identity (RADIUS NAS-Identifier); no AP MAC variable.
+      const identity =
+        flavour === 'mikrotik'
+          ? { nasid: splitMikrotikQuery(raw).params.identity, apMac: null }
+          : (() => {
+              const split = splitUamQuery(raw);
+              return {
+                nasid: split.params.nasid,
+                apMac: canonicalUnicastMac(split.params.called),
+              };
+            })();
+      const resolved = await resolvePortal(deps, flavour, identity, req.log);
       const adapter = getVendorAdapter(
         resolved?.nas.adapterKey ?? UAM_FLAVOURS[flavour].adapterKeys[0],
       );
@@ -519,8 +545,32 @@ export function portalInternalRouter(deps: AppDeps): Router {
       const l = PORTAL_LIMITS.flowsPerNas;
       await counter(deps, `pf:rl:flows:${ctx.nas.id}`, l.max, l.windowS);
       const { md: _md, ...fields } = ctx.vendorOpaque.fields;
+      const flowId = newId();
+      // Cycle B (MikroTik, unsigned redirect): the CHAP challenge is the replay nonce; without
+      // CHAP the id of an ECLOUD login token is. The token is consumed once before a credential.
+      const isMikrotik = resolved.nas.adapterKey === MIKROTIK_ADAPTER_KEY;
+      const loginToken = isMikrotik
+        ? issuePortalLoginToken(
+            deps,
+            {
+              organizationId: ctx.organizationId,
+              siteId: ctx.siteId,
+              nasId: ctx.nas.id,
+              clientMac: ctx.clientMac,
+              flowId,
+            },
+            at,
+            LOGIN_TOKEN_MAX_TTL_S,
+          )
+        : null;
+      const chapHex = fields['chap-challenge-hex'];
+      const nonce: Pick<PortalFlow, 'challenge' | 'nonceKind'> = !isMikrotik
+        ? { challenge: fields.challenge ?? '' }
+        : chapHex !== undefined
+          ? { challenge: chapHex, nonceKind: 'vendor-nonce' }
+          : { challenge: loginToken?.tokenId ?? '', nonceKind: 'ecloud-login-token' };
       const flow: PortalFlow = {
-        id: newId(),
+        id: flowId,
         organizationId: ctx.organizationId,
         siteId: ctx.siteId,
         nasId: ctx.nas.id,
@@ -535,7 +585,8 @@ export function portalInternalRouter(deps: AppDeps): Router {
         clientIp: ctx.clientIp,
         ssid: ctx.ssid,
         sessionId: ctx.nasSessionId,
-        challenge: fields.challenge ?? '',
+        ...nonce,
+        ...(loginToken !== null ? { loginToken: loginToken.token } : {}),
         fields,
         createdAt: at.toISOString(),
         expiresAt: new Date(at.getTime() + FLOW_TTL_S * 1000).toISOString(),
@@ -618,7 +669,10 @@ export function portalInternalRouter(deps: AppDeps): Router {
                 },
           terms,
           nas: base === null ? null : { origin: base },
-          continue_url: safeUserUrl(flow.fields.userurl, flow.fields.uamip ?? null) ?? fallback,
+          continue_url:
+            (flow.adapterKey === MIKROTIK_ADAPTER_KEY
+              ? safeUserUrl(flow.fields['link-orig'], null)
+              : safeUserUrl(flow.fields.userurl, flow.fields.uamip ?? null)) ?? fallback,
           notice: flow.previousSessionExpired ? 'session_expired' : null,
         };
       });
@@ -765,6 +819,29 @@ export function portalInternalRouter(deps: AppDeps): Router {
       }
       await clearFailures(deps, counters);
 
+      // Cycle B (post-back vendor): the flow's login token is accepted exactly once, so one
+      // redirect yields at most one credential (a failed router login comes back as a new
+      // redirect with a fresh CHAP challenge). Store errors are 503 (fail closed).
+      if (flow.adapterKey === MIKROTIK_ADAPTER_KEY) {
+        const token = await consumePortalLoginToken(
+          deps,
+          flow.loginToken,
+          {
+            organizationId: flow.organizationId,
+            siteId: flow.siteId,
+            nasId: flow.nasId,
+            clientMac: flow.clientMac,
+            flowId: flow.id,
+          },
+          at,
+        );
+        if (!token.ok) {
+          req.log.info({ flowId: flow.id, reason: token.reason }, 'portal login token refused');
+          res.status(422).json({ result: 'handoff_unavailable' });
+          return;
+        }
+      }
+
       // Identity broker: a fresh single-use credential bound to NAS + MAC + sessionid.
       if (flow.credentialUsername !== null) {
         await revokeCredential(deps.kv, flow.credentialUsername);
@@ -804,9 +881,19 @@ export function portalInternalRouter(deps: AppDeps): Router {
           sessionId: flow.sessionId,
           challenge: flow.challenge,
           clientMac: flow.clientMac,
+          ...(flow.nonceKind !== undefined ? { nonceKind: flow.nonceKind } : {}),
         }),
         identity: outcome.identity,
         expiresAt: expiresAt.toISOString(),
+        // MikroTik HTTP-CHAP: AAA must hand the cleartext to FreeRADIUS `chap` (contract rule 2).
+        ...(flow.adapterKey === MIKROTIK_ADAPTER_KEY && flow.fields['chap-challenge-hex']
+          ? {
+              chapPasswordRef: sealSecretRef(
+                new Envelope(deps.config.dataEncryptionKey, CHAP_CREDENTIAL_PURPOSE),
+                pair.password,
+              ),
+            }
+          : {}),
       });
       flow.state = 'LOGON_SENT';
       flow.credentialUsername = pair.username;
@@ -814,7 +901,13 @@ export function portalInternalRouter(deps: AppDeps): Router {
       req.log.info({ flowId: flow.id, method }, 'portal credential issued');
       res.json({
         result: 'ok',
-        handoff: { method: handoff.browser.method, url: handoff.browser.url },
+        handoff: {
+          method: handoff.browser.method,
+          url: handoff.browser.url,
+          // POST-form hand-offs (MikroTik) carry the fields the browser submits; GET-302 ones
+          // have them in the URL already.
+          ...(handoff.browser.method === 'POST-form' ? { fields: handoff.browser.fields } : {}),
+        },
         expires_at: expiresAt.toISOString(),
       });
     } catch (error) {
@@ -874,8 +967,10 @@ export function portalInternalRouter(deps: AppDeps): Router {
         res.status(404).json({ result: 'flow_not_found' });
         return;
       }
-      // CP §3.3 / §7.4: `GET http://uamip:uamport/logoff` (uspot T/U and CoovaChilli).
-      res.json({ result: 'ok', url: `${base}/logoff` });
+      // CP §3.3 / §7.4: `GET http://uamip:uamport/logoff` (uspot T/U and CoovaChilli);
+      // MikroTik: `$(link-logout)` is `<origin>/logout` (vendor doc variable list).
+      const path = flow.adapterKey === MIKROTIK_ADAPTER_KEY ? '/logout' : '/logoff';
+      res.json({ result: 'ok', url: `${base}${path}` });
     } catch (error) {
       req.log.error({ err: error }, 'portal logout failed');
       unavailable(res);

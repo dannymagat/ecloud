@@ -1,0 +1,17 @@
+# Cycle B (D-044) -- MikroTik RouterOS HotSpot HTTP-CHAP login with the portal-issued single-use
+# credential (docs/VENDOR_INTEGRATION_RESEARCH.md §3.3). Attribute facts from the RouterOS RADIUS
+# manual: NAS-Identifier = router identity, Calling-Station-Id = client MAC in capitals,
+# Called-Station-Id = HotSpot server name, NAS-Port-Id = HotSpot interface. radclient turns the
+# cleartext CHAP-Password into a CHAP response; the real router's CHAP-Challenge / encoding is
+# REQUIRES_DEVICE_TEST. PLACEHOLDERS ONLY.
+User-Name = "pc-PLACEHOLDER"
+CHAP-Password = "PLACEHOLDER_PORTAL_CREDENTIAL"
+Acct-Session-Id = "<mt-sessionid-placeholder>"
+Framed-IP-Address = 192.0.2.100
+Calling-Station-Id = "AA:BB:CC:DD:EE:01"
+Called-Station-Id = "hotspot1"
+NAS-Identifier = "<nasid-placeholder>"
+NAS-IP-Address = 192.0.2.12
+NAS-Port-Id = "ether2"
+NAS-Port-Type = Ethernet
+Message-Authenticator = 0x00

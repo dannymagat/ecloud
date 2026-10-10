@@ -39,6 +39,8 @@ import {
   uamResult,
   verifyUamSignature,
 } from './uam.js';
+import { mikrotikSetupGuide, withMikrotikHotspot, MIKROTIK_VENDOR_KEY } from './mikrotik.js';
+import { TELTONIKA_ROW_KEY, TELTONIKA_VENDOR_KEY, teltonikaSetupGuide } from './teltonika.js';
 
 /** Registry vendor of the vendor-neutral 802.1X / MAC-auth adapter (registry/vendors.ts). */
 export const GENERIC_RADIUS_VENDOR_KEY = 'generic-radius';
@@ -314,6 +316,16 @@ const SPECS: readonly FirstPartySpec[] = [
     defaultDeployment: 'native',
     radius: true,
     setup: () => genericRadiusSetup(),
+  },
+  {
+    // Cycle B (D-044): MikroTik RouterOS Hotspot; portal behaviour composed in by
+    // `withMikrotikHotspot` (vendor/mikrotik.ts), not by the UAM path below.
+    key: 'mikrotik-hotspot',
+    vendorKey: MIKROTIK_VENDOR_KEY,
+    uam: null,
+    defaultDeployment: 'gateway',
+    radius: true,
+    setup: () => mikrotikSetupGuide(PORTAL_ORIGIN),
   },
 ];
 
@@ -628,8 +640,14 @@ function createFirstPartyVendorAdapter(spec: FirstPartySpec): VendorAdapter {
   return wrapper;
 }
 
+/** Vendor-specific composition on top of the engine-backed wrapper (Cycle B+). */
+function composeVendor(spec: FirstPartySpec): VendorAdapter {
+  const base = createFirstPartyVendorAdapter(spec);
+  return spec.key === 'mikrotik-hotspot' ? withMikrotikHotspot(base, PORTAL_ORIGIN) : base;
+}
+
 const VENDOR_ADAPTERS: Readonly<Record<AdapterKey, VendorAdapter>> = Object.freeze(
-  Object.fromEntries(SPECS.map((s) => [s.key, createFirstPartyVendorAdapter(s)])) as Record<
+  Object.fromEntries(SPECS.map((s) => [s.key, composeVendor(s)])) as Record<
     AdapterKey,
     VendorAdapter
   >,
@@ -644,4 +662,51 @@ export function getVendorAdapter(key: string): VendorAdapter {
 
 export function listVendorAdapters(): VendorAdapter[] {
   return SPECS.map((s) => VENDOR_ADAPTERS[s.key]);
+}
+
+// ------------------------------------------------------------------------------------------
+// Vendor profiles on an existing engine adapter (Cycle B: Teltonika RutOS on coovachilli-uam)
+// ------------------------------------------------------------------------------------------
+
+function teltonikaProfile(): VendorAdapter {
+  const base = VENDOR_ADAPTERS['coovachilli-uam'];
+  const row = COMPATIBILITY_ROWS.find((r) => r.key === TELTONIKA_ROW_KEY);
+  return {
+    ...base,
+    vendorKey: TELTONIKA_VENDOR_KEY,
+    discoverCapabilities(): CapabilityReport {
+      if (row === undefined) return base.discoverCapabilities({});
+      return {
+        adapterKey: base.key,
+        vendorKey: TELTONIKA_VENDOR_KEY,
+        rowKey: row.key,
+        lifecycle: row.lifecycle,
+        sourceVersionMatchesDevice: row.sourceVersionMatchesDevice,
+        cells: presentCells(row.capabilities),
+      };
+    },
+    buildSetupGuide(site) {
+      return teltonikaSetupGuide(PORTAL_ORIGIN, site);
+    },
+  };
+}
+
+const VENDOR_PROFILES: Readonly<Record<string, VendorAdapter>> = Object.freeze({
+  [TELTONIKA_VENDOR_KEY]: teltonikaProfile(),
+});
+
+/**
+ * Vendor adapter for a registry vendor: a profile on a shared engine adapter (Teltonika →
+ * coovachilli-uam), else the adapter whose own vendor key matches; null when none exists.
+ */
+export function getVendorProfile(vendorKey: string): VendorAdapter | null {
+  return (
+    (VENDOR_PROFILES as Record<string, VendorAdapter | undefined>)[vendorKey] ??
+    listVendorAdapters().find((v) => v.vendorKey === vendorKey) ??
+    null
+  );
+}
+
+export function listVendorProfiles(): VendorAdapter[] {
+  return Object.values(VENDOR_PROFILES);
 }

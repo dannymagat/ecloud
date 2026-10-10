@@ -3,6 +3,8 @@ export * from './types.js';
 export {
   GENERIC_RADIUS_VENDOR_KEY,
   getVendorAdapter,
+  getVendorProfile,
+  listVendorProfiles,
   listVendorAdapters,
   PORTAL_ORIGIN,
 } from './first-party.js';
@@ -51,3 +53,24 @@ export {
   type LoginTokenResult,
   type SingleUseStore,
 } from './login-token.js';
+export {
+  HOTSPOT_BINDING_FIELD,
+  MIKROTIK_ADAPTER_KEY,
+  MIKROTIK_LOGIN_FIELDS,
+  MIKROTIK_PORTAL_PATH,
+  MIKROTIK_REDIRECT_PARAMS,
+  MIKROTIK_VENDOR_KEY,
+  computeMikrotikChapPassword,
+  loginTargetBinding,
+  targetMatchesBinding,
+  type LoginTargetBinding,
+  decodeMikrotikOctal,
+  mikrotikChap,
+  mikrotikRedirectTemplateQuery,
+  mikrotikSetupGuide,
+  parseMikrotikLoginTarget,
+  renderMikrotikLoginHtml,
+  splitMikrotikQuery,
+  type MikrotikLoginTarget,
+} from './mikrotik.js';
+export { TELTONIKA_ROW_KEY, TELTONIKA_VENDOR_KEY, teltonikaSetupGuide } from './teltonika.js';

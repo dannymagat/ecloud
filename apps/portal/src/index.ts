@@ -5,9 +5,11 @@
  *
  * Public routes (API_ARCHITECTURE.md "Portal public"):
  *   GET  /uam/uspot/ | /uam/chilli/   UAM entry + `res=` callbacks → 303 /f/{token} or a page
+ *   GET  /hotspot/mikrotik/            MikroTik RouterOS login.html entry (Cycle B) → 303 /f/{token}
  *   GET  /f/{token}                    landing (enabled methods)
  *   GET  /f/{token}/login|voucher|terms
- *   POST /f/{token}/login|voucher|click → 302 to http://uamip:uamport/logon (adapter hand-off)
+ *   POST /f/{token}/login|voucher|click → 302 to http://uamip:uamport/logon (adapter hand-off), or
+ *                                       (MikroTik) a form POSTing to the router's link-login-only
  *   GET  /f/{token}/status, POST /f/{token}/logout → 302 to http://uamip:uamport/logoff
  *   GET  /a/{assetId}                  branding asset (nosniff; ETag/304 + Cache-Control from the API)
  *   GET  /static/portal.<hash>.css, GET /healthz
@@ -66,7 +68,9 @@ export const DEFAULT_SHUTDOWN_GRACE_MS = 10_000;
 
 const ASSET_ID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const ASSET_TYPES = new Set(['image/png', 'image/jpeg', 'image/webp']);
-const NAS_ORIGIN_RE = /^http:\/\/(\d{1,3}\.){3}\d{1,3}:\d{1,5}$/;
+/** NAS origin from the API: `http(s)://<IPv4>:<port>` (https only for MikroTik login-by=https). */
+const NAS_ORIGIN_RE = /^https?:\/\/(\d{1,3}\.){3}\d{1,3}:\d{1,5}$/;
+const MIKROTIK_LOGIN_PATH_RE = /^(?:\/[A-Za-z0-9_-]{1,32})?\/login$/;
 
 /**
  * Open-redirect guard: a NAS hand-off is followed only when it targets this flow's own
@@ -75,11 +79,22 @@ const NAS_ORIGIN_RE = /^http:\/\/(\d{1,3}\.){3}\d{1,3}:\d{1,5}$/;
 export function isNasHandoff(
   url: string,
   nasOrigin: string | null,
-  path: '/logon' | '/logoff',
+  path: '/logon' | '/logoff' | '/logout',
 ): boolean {
   if (nasOrigin === null || !NAS_ORIGIN_RE.test(nasOrigin)) return false;
   const base = `${nasOrigin}${path}`;
   return url === base || url.startsWith(`${base}?`);
+}
+
+/**
+ * Cycle B open-redirect guard for a MikroTik POST hand-off: exactly this flow's router origin
+ * and a `/login` path (optionally under one language directory), no query or fragment.
+ */
+export function isMikrotikLoginHandoff(url: string, nasOrigin: string | null): boolean {
+  if (nasOrigin === null || !NAS_ORIGIN_RE.test(nasOrigin)) return false;
+  if (!url.startsWith(`${nasOrigin}/`)) return false;
+  const path = url.slice(nasOrigin.length);
+  return MIKROTIK_LOGIN_PATH_RE.test(path);
 }
 
 export interface ServerOptions {
@@ -228,8 +243,14 @@ export function createServer(options: ServerOptions = {}): Express {
   });
 
   // --------------------------------------------------------------------------- UAM entry
-  for (const flavour of ['uspot', 'chilli'] as const) {
-    app.get([`/uam/${flavour}`, `/uam/${flavour}/`], async (req, res) => {
+  const ENTRY_PATHS = [
+    ['uspot', ['/uam/uspot', '/uam/uspot/']],
+    ['chilli', ['/uam/chilli', '/uam/chilli/']],
+    // Cycle B: the ECLOUD-generated RouterOS login.html sends the browser here.
+    ['mikrotik', ['/hotspot/mikrotik', '/hotspot/mikrotik/']],
+  ] as const;
+  for (const [flavour, paths] of ENTRY_PATHS) {
+    app.get([...paths], async (req, res) => {
       // Raw query exactly as the device built it: `md` covers the bytes, not a re-encoding.
       const q = req.originalUrl.indexOf('?');
       const rawQuery = q < 0 ? '' : req.originalUrl.slice(q + 1);
@@ -460,6 +481,23 @@ export function createServer(options: ServerOptions = {}): Express {
       const username = route.method === 'password' ? field('username').slice(0, 253) : '';
       switch (outcome.result) {
         case 'ok':
+          if (outcome.handoffForm !== undefined) {
+            // MikroTik: the browser POSTs username / password (CHAP hash) / dst / popup to the
+            // router itself; the router origin is allowed as form-action for this page only.
+            if (!isMikrotikLoginHandoff(outcome.handoffUrl, l.view.nasOrigin)) {
+              logger.error({ flowId: l.view.id }, 'portal hand-off URL rejected');
+              errorPage(res, 502, t('error.unavailable'), l.view);
+              return;
+            }
+            send(res, {
+              status: 200,
+              theme: themeOf(l.view),
+              branding: brandingOf(l.view),
+              body: { page: 'handoff', action: outcome.handoffUrl, fields: outcome.handoffForm },
+              nasOrigin: l.view.nasOrigin,
+            });
+            return;
+          }
           if (!isNasHandoff(outcome.handoffUrl, l.view.nasOrigin, '/logon')) {
             logger.error({ flowId: l.view.id }, 'portal hand-off URL rejected');
             errorPage(res, 502, t('error.unavailable'), l.view);
@@ -554,7 +592,13 @@ export function createServer(options: ServerOptions = {}): Express {
       errorPage(res, 503, t('error.unavailable'), l.view);
       return;
     }
-    if (logoff === null || !isNasHandoff(logoff.url, l.view.nasOrigin, '/logoff')) {
+    if (
+      logoff === null ||
+      !(
+        isNasHandoff(logoff.url, l.view.nasOrigin, '/logoff') ||
+        isNasHandoff(logoff.url, l.view.nasOrigin, '/logout')
+      )
+    ) {
       expiredPage(res);
       return;
     }

@@ -50,6 +50,8 @@ const EXPECTED_VERIFIED: Record<AdapterKey, PolicyField[]> = {
   ],
   // Cycle A (D-044): vendor-neutral, no vendor source and no lab test → nothing VERIFIED.
   'generic-radius-8021x': [],
+  // Cycle B (D-044): vendor documentation only, no lab test → nothing VERIFIED.
+  'mikrotik-hotspot': [],
 };
 
 /** Full per-field status table (the enforceability preview source), for cross-checking. */
@@ -100,6 +102,18 @@ const EXPECTED_STATUS: Record<AdapterKey, Partial<Record<PolicyField, AdapterFie
     schedule_id: 'ECLOUD_SIDE_ONLY',
     vlan_id: 'REQUIRES_DEVICE_TEST',
   },
+  'mikrotik-hotspot': {
+    download_rate_kbps: 'REQUIRES_DEVICE_TEST',
+    upload_rate_kbps: 'REQUIRES_DEVICE_TEST',
+    burst_download_kbps: 'UNSUPPORTED',
+    quota_daily_bytes: 'REQUIRES_DEVICE_TEST',
+    quota_total_bytes: 'REQUIRES_DEVICE_TEST',
+    session_timeout_s: 'REQUIRES_DEVICE_TEST',
+    idle_timeout_s: 'REQUIRES_DEVICE_TEST',
+    max_concurrent_sessions: 'ECLOUD_SIDE_ONLY',
+    valid_until: 'ECLOUD_SIDE_ONLY',
+    vlan_id: 'UNSUPPORTED',
+  },
 };
 
 /** Attribute names exactly as in the FreeRADIUS dictionaries (AAA_ARCHITECTURE.md §4.3) plus the Gigawords additions. */
@@ -133,6 +147,10 @@ const KNOWN_ATTRIBUTES = new Set([
   'Tunnel-Type',
   'Tunnel-Medium-Type',
   'Tunnel-Private-Group-Id',
+  // Cycle B: stock FreeRADIUS dictionary.mikrotik (vendor 14988).
+  'Mikrotik-Rate-Limit',
+  'Mikrotik-Total-Limit',
+  'Mikrotik-Total-Limit-Gigawords',
 ]);
 
 const DOC_CITATION =
@@ -141,7 +159,7 @@ const DOC_CITATION =
 describe('adapter capability declarations (D-028)', () => {
   const all = listCapabilities();
 
-  it('ships the five adapters of POLICY_ENGINE.md §3 plus generic-radius-8021x (Cycle A)', () => {
+  it('ships the five adapters of POLICY_ENGINE.md §3 plus generic-radius-8021x (Cycle A) and mikrotik-hotspot (Cycle B)', () => {
     expect(all.map((a) => a.key)).toEqual([...ADAPTER_KEYS]);
     expect(ADAPTER_KEYS).toEqual([
       'openwifi-hostapd-radius',
@@ -150,6 +168,7 @@ describe('adapter capability declarations (D-028)', () => {
       'coovachilli-uam',
       'openwifi-config',
       'generic-radius-8021x',
+      'mikrotik-hotspot',
     ]);
   });
 

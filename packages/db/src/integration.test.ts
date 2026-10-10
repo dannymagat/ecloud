@@ -19,6 +19,7 @@ import {
   truncateAll,
 } from '@ecloud/testing';
 import { sql } from 'kysely';
+import { readFileSync } from 'node:fs';
 import pg from 'pg';
 import { afterAll, beforeAll, expect, it } from 'vitest';
 import {
@@ -593,11 +594,12 @@ await describeIntegration('@ecloud/db schema', () => {
           .execute(),
       ),
     ).toBe('23514');
-    // the reconciled catalogue holds exactly the engine keys on a fresh database (+ 028 generic)
+    // the reconciled catalogue holds exactly the engine keys on a fresh database (+ 028 generic, + 029 mikrotik)
     const keys = await platform.selectFrom('adapter_types').select('key').orderBy('key').execute();
     expect(keys.map((k) => k.key)).toEqual([
       'coovachilli-uam',
       'generic-radius-8021x',
+      'mikrotik-hotspot',
       'openwifi-config',
       'openwifi-hostapd-radius',
       'openwifi-uspot-uam',
@@ -648,6 +650,53 @@ await describeIntegration('@ecloud/db schema', () => {
       .insertInto('radius.radacct_raw')
       .values({ ...packet, acctsessiontime: 600 })
       .execute();
+  });
+
+  it('migration 029 is idempotent and rebuilds its CHECKs from the live definition (keeps unknown keys)', async () => {
+    const file = new URL('../migrations/029_mikrotik_teltonika.sql', import.meta.url);
+    const migration029 = readFileSync(file, 'utf8');
+    const client = new pg.Client({ connectionString: databaseUrl });
+    await client.connect();
+    const def = async (table: string, con: string) =>
+      (
+        await client.query<{ d: string }>(
+          'SELECT pg_get_constraintdef(oid) AS d FROM pg_constraint WHERE conname = $1 AND conrelid = $2::regclass',
+          [con, table],
+        )
+      ).rows[0]?.d ?? '';
+    try {
+      await client.query('BEGIN');
+      // A key another branch's migration (e.g. 030) added, with uppercase and underscore.
+      await client.query(`ALTER TABLE nas_clients DROP CONSTRAINT ck_nas_clients_adapter_key`);
+      await client.query(
+        `ALTER TABLE nas_clients ADD CONSTRAINT ck_nas_clients_adapter_key CHECK (adapter_key IS NULL OR adapter_key IN ('coovachilli-uam', 'Future_Key-030'))`,
+      );
+      await client.query(
+        `ALTER TABLE captive_portals DROP CONSTRAINT ck_captive_portals_portal_type`,
+      );
+      await client.query(
+        `ALTER TABLE captive_portals ADD CONSTRAINT ck_captive_portals_portal_type CHECK (portal_type IN ('uspot', 'external', 'post_back'))`,
+      );
+      await client.query(migration029);
+      await client.query(migration029); // idempotent
+      const adapterDef = await def('nas_clients', 'ck_nas_clients_adapter_key');
+      for (const key of ['coovachilli-uam', 'Future_Key-030', 'mikrotik-hotspot'])
+        expect(adapterDef).toContain(`'${key}'`);
+      expect(adapterDef.match(/'mikrotik-hotspot'/g)).toHaveLength(1);
+      const portalDef = await def('captive_portals', 'ck_captive_portals_portal_type');
+      for (const key of ['uspot', 'external', 'post_back', 'mikrotik'])
+        expect(portalDef).toContain(`'${key}'`);
+      expect(portalDef.match(/'mikrotik'/g)).toHaveLength(1);
+      const cols = await client.query<{ column_name: string }>(
+        `SELECT column_name FROM information_schema.columns
+          WHERE table_name = 'nas_clients'
+            AND column_name IN ('device_test_attributes', 'hotspot_address', 'hotspot_port')`,
+      );
+      expect(cols.rows).toHaveLength(3);
+    } finally {
+      await client.query('ROLLBACK');
+      await client.end();
+    }
   });
 
   it('bootstraps a platform admin bound to the platform_super_admin template', async () => {
@@ -770,7 +819,7 @@ await describeIntegration('@ecloud/db schema', () => {
         await client.query(
           `UPDATE compatibility_entries
               SET capabilities = jsonb_set(capabilities, '{bandwidth,0,status}', '"VERIFIED_SUPPORTED"')
-            WHERE key = 'mikrotik-planned'`,
+            WHERE key = 'ubiquiti-unifi-planned'`,
         );
         await client.query(
           "UPDATE vendors SET registry_hash = repeat('0', 64) WHERE key = 'cambium'",
@@ -779,7 +828,7 @@ await describeIntegration('@ecloud/db schema', () => {
         expect(drift.ok).toBe(false);
         expect(drift.mismatches).toEqual(
           expect.arrayContaining([
-            'row mikrotik-planned: content differs from the registry',
+            'row ubiquiti-unifi-planned: content differs from the registry',
             'vendor cambium: stale registry_hash',
           ]),
         );

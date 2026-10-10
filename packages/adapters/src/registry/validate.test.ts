@@ -146,7 +146,7 @@ describe('registry validator (V1–V12)', () => {
 
   it('V6: a planned row with a non-UNKNOWN cell fails', () => {
     const input = baseInput();
-    const cell = rowOf(input, 'mikrotik-planned').capabilities
+    const cell = rowOf(input, 'ubiquiti-unifi-planned').capabilities
       .bandwidth[0] as Mutable<RegistryCell>;
     cell.status = 'REQUIRES_DEVICE_TEST';
     cell.evidenceLevel = 'DOCUMENTED';

@@ -37,7 +37,12 @@ export type IdentifyInput =
   | { method: 'click_through'; accept_terms: true; client_ip?: string };
 
 export type IdentifyOutcome =
-  | { result: 'ok'; handoffUrl: string }
+  | {
+      result: 'ok';
+      handoffUrl: string;
+      /** Cycle B (MikroTik): POST-form hand-off fields; absent = GET-302 hand-off. */
+      handoffForm?: Readonly<Record<string, string>>;
+    }
   | { result: 'rejected' }
   | { result: 'rate_limited'; retryAfter: number }
   | { result: 'flow_not_found' }
@@ -65,7 +70,7 @@ export interface AssetResponse {
 
 export interface PortalApi {
   redirect(input: {
-    flavour: 'uspot' | 'chilli';
+    flavour: 'uspot' | 'chilli' | 'mikrotik';
     rawQuery: string;
     clientIp: string | null;
   }): Promise<RedirectOutcome>;
@@ -123,7 +128,7 @@ export class HttpPortalApi implements PortalApi {
   }
 
   async redirect(input: {
-    flavour: 'uspot' | 'chilli';
+    flavour: 'uspot' | 'chilli' | 'mikrotik';
     rawQuery: string;
     clientIp: string | null;
   }): Promise<RedirectOutcome> {
@@ -210,8 +215,19 @@ export class HttpPortalApi implements PortalApi {
     const j = r.json;
     switch (j.result) {
       case 'ok': {
-        const url = str((j.handoff as Json | undefined)?.url);
-        return url === null ? { result: 'handoff_unavailable' } : { result: 'ok', handoffUrl: url };
+        const handoff = j.handoff as Json | undefined;
+        const url = str(handoff?.url);
+        if (url === null) return { result: 'handoff_unavailable' };
+        if (handoff?.method !== 'POST-form') return { result: 'ok', handoffUrl: url };
+        const raw = handoff.fields;
+        if (raw === null || typeof raw !== 'object' || Array.isArray(raw))
+          return { result: 'handoff_unavailable' };
+        const form: Record<string, string> = {};
+        for (const [k, v] of Object.entries(raw as Record<string, unknown>)) {
+          if (typeof v !== 'string') return { result: 'handoff_unavailable' };
+          form[k] = v;
+        }
+        return { result: 'ok', handoffUrl: url, handoffForm: form };
       }
       case 'rate_limited':
         return { result: 'rate_limited', retryAfter: Number(j.retry_after) || 60 };

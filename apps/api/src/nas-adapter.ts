@@ -15,6 +15,8 @@ export const NAS_ADAPTER_KEYS = [
   'coovachilli-uam',
   // Cycle A (D-044, migration 028): vendor-neutral 802.1X / MAC-auth NAS.
   'generic-radius-8021x',
+  // Cycle B (D-044, migration 029): MikroTik RouterOS Hotspot.
+  'mikrotik-hotspot',
 ] as const;
 
 export type NasAdapterKey = (typeof NAS_ADAPTER_KEYS)[number];

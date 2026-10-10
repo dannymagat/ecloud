@@ -32,6 +32,9 @@ export interface ResolvedNasRow {
   adapter_key: string | null;
   deployment_mode: 'native' | 'gateway';
   controller_id: string | null;
+  /** Migration 029 (review F1): the NAS's own browser login address (post-back target). */
+  hotspot_address?: string | null;
+  hotspot_port?: number | null;
 }
 
 export type NasIdentityResult =
@@ -62,6 +65,8 @@ const NAS_COLUMNS = [
   'n.adapter_key',
   'n.deployment_mode',
   'n.controller_id',
+  'n.hotspot_address',
+  'n.hotspot_port',
 ] as const;
 
 async function byNasid(trx: DbTransaction, nasid: string): Promise<ResolvedNasRow[]> {
@@ -125,6 +130,8 @@ function strip(row: ApRow): ResolvedNasRow {
     adapter_key: row.adapter_key,
     deployment_mode: row.deployment_mode,
     controller_id: row.controller_id,
+    hotspot_address: row.hotspot_address ?? null,
+    hotspot_port: row.hotspot_port ?? null,
   };
 }
 

@@ -4914,7 +4914,8 @@
                 "uspot-upstream-uam",
                 "coovachilli-uam",
                 "openwifi-config",
-                "generic-radius-8021x"
+                "generic-radius-8021x",
+                "mikrotik-hotspot"
               ],
               "type": "string"
             }
@@ -7112,7 +7113,8 @@
                       "openwifi-uspot-uam",
                       "uspot-upstream-uam",
                       "coovachilli-uam",
-                      "generic-radius-8021x"
+                      "generic-radius-8021x",
+                      "mikrotik-hotspot"
                     ],
                     "type": "string"
                   },
@@ -7134,6 +7136,23 @@
                     ]
                   },
                   "deployment_mode": { "enum": ["native", "gateway"], "type": "string" },
+                  "device_test_attributes": { "type": "boolean" },
+                  "hotspot_address": {
+                    "anyOf": [
+                      {
+                        "format": "ipv4",
+                        "pattern": "^(?:(?:25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])\\.){3}(?:25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])$",
+                        "type": "string"
+                      },
+                      { "type": "null" }
+                    ]
+                  },
+                  "hotspot_port": {
+                    "anyOf": [
+                      { "maximum": 65535, "minimum": 1, "type": "integer" },
+                      { "type": "null" }
+                    ]
+                  },
                   "name": { "maxLength": 200, "minLength": 1, "type": "string" },
                   "nas_identifier": {
                     "anyOf": [
@@ -7381,7 +7400,8 @@
                       "openwifi-uspot-uam",
                       "uspot-upstream-uam",
                       "coovachilli-uam",
-                      "generic-radius-8021x"
+                      "generic-radius-8021x",
+                      "mikrotik-hotspot"
                     ],
                     "type": "string"
                   },
@@ -7403,6 +7423,23 @@
                     ]
                   },
                   "deployment_mode": { "enum": ["native", "gateway"], "type": "string" },
+                  "device_test_attributes": { "type": "boolean" },
+                  "hotspot_address": {
+                    "anyOf": [
+                      {
+                        "format": "ipv4",
+                        "pattern": "^(?:(?:25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])\\.){3}(?:25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])$",
+                        "type": "string"
+                      },
+                      { "type": "null" }
+                    ]
+                  },
+                  "hotspot_port": {
+                    "anyOf": [
+                      { "maximum": 65535, "minimum": 1, "type": "integer" },
+                      { "type": "null" }
+                    ]
+                  },
                   "name": { "maxLength": 200, "minLength": 1, "type": "string" },
                   "nas_identifier": {
                     "anyOf": [
@@ -12578,7 +12615,10 @@
                     "pattern": "^[A-Za-z0-9._:-]+$",
                     "type": "string"
                   },
-                  "portal_type": { "enum": ["uspot", "coovachilli", "external"], "type": "string" },
+                  "portal_type": {
+                    "enum": ["uspot", "coovachilli", "external", "mikrotik"],
+                    "type": "string"
+                  },
                   "public_slug": {
                     "pattern": "^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$",
                     "type": "string"
@@ -12847,7 +12887,10 @@
                     "pattern": "^[A-Za-z0-9._:-]+$",
                     "type": "string"
                   },
-                  "portal_type": { "enum": ["uspot", "coovachilli", "external"], "type": "string" },
+                  "portal_type": {
+                    "enum": ["uspot", "coovachilli", "external", "mikrotik"],
+                    "type": "string"
+                  },
                   "public_slug": {
                     "pattern": "^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$",
                     "type": "string"

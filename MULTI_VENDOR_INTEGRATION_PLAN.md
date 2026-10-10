@@ -820,3 +820,56 @@ EAP-TTLS. Still open: per-vendor Called-Station-Id parsing, the "API limits" tra
 - **L4.** Replay keys are `pf:replay:v2:` + SHA-256 of a JSON array (unambiguous). Migration: `isReplayed` also reads the legacy `|`-joined UAM key; nothing writes it any more, so legacy markers expire within `REPLAY_TTL_S` (24 h); remove `legacyReplayKey` after that window.
 - **L5.** Call-Check MAC auth uses strict MAC parsing only and rejects when neither User-Name nor Calling-Station-Id is a MAC.
 - **L6.** `apps/api/src/internal/login-token-store.ts` (Redis `SET NX EX` claim; store error → `ServiceUnavailableError` 503), integration-tested against the test Redis.
+
+## 14. Multi-vendor Cycle B (MikroTik, Teltonika) — BUILT, LOCAL ONLY (2026-10-10, D-044)
+
+Scope (D-044 "B"): MikroTik RouterOS Hotspot adapter and Teltonika RutOS on the existing
+`coovachilli-uam` family. LOCAL only: no device, server or VPS change. Every vendor cell stays
+DOCUMENTED / REQUIRES_DEVICE_TEST (D-028); nothing is VERIFIED.
+
+| # | Deliverable | Where | Notes |
+|---|---|---|---|
+| B1 | `mikrotik-hotspot` engine adapter | `packages/adapters/src/adapters/mikrotik-hotspot.ts`; `ADAPTER_KEYS`, registry, migration **029** (adapter key + NAS CHECK), NAS dropdown | `Mikrotik-Rate-Limit` via the Cycle A renderer (`"<up>/<down>"`), `Mikrotik-Total-Limit` + `-Gigawords` (octet width 64), Session-Timeout, Idle-Timeout, Acct-Interim-Interval (needs `radius-interim-update=received`), Class: all REQUIRES_DEVICE_TEST. Burst UNSUPPORTED (engine), VLAN UNSUPPORTED (no documented HotSpot VLAN reply), MAC auth UNSUPPORTED (`login-by=mac` not wired), validity/voucher/schedule/concurrency ECLOUD_SIDE_ONLY. Disconnect `rfc5176-das`, `defaultPort` 1700; CoA-changeable list from the vendor doc (REQUIRES_DEVICE_TEST) |
+| B2 | Redirect + hand-off | `packages/adapters/src/vendor/mikrotik.ts`; `apps/api/src/internal/portal.ts` (flavour `mikrotik`); portal `GET /hotspot/mikrotik/` + POST hand-off page | ECLOUD-generated `login.html` (`renderMikrotikLoginHtml`, meta refresh, no script, no secret) sends the RouterOS variables `mac`, `ip`, `identity`, `link-login-only`, `link-orig`, `chap-id`, `chap-challenge`, `error` by their documented names. NAS = `identity` (= NAS-Identifier). `link-login-only` must be a private-IPv4 `/login` URL. Hand-off = form POST of `username`, `password`, `dst`, `popup`; CHAP `MD5(chap-id ‖ password ‖ chap-challenge)` when `chap-id` is present, PAP only to `https:` |
+| B3 | Anti-forgery | portal flow + `login-token-store.ts` | CHAP challenge = replay nonce (`vendor-nonce`); ECLOUD login token (Cycle A) issued per redirect, consumed once by `identify` (`ecloud-login-token` nonce when no CHAP); RADIUS binding unchanged (NAS by packet source + NAS-Identifier, client MAC, single use) |
+| B4 | CHAP in AAA | `apps/api/src/internal/aaa.ts`, `portal-credential.ts`, `portal-store.ts` | CHAP accepted only for a broker credential issued for a CHAP hand-off: password sealed in the 90 s credential record (`ecloud:portal:chap-credential:v1`); answer `Auth-Type = CHAP` + `Cleartext-Password`, FreeRADIUS `chap` verifies (contract rule 2). Other CHAP → `chap_unsupported` as before |
+| B5 | Lab opt-in | migration **029** `nas_clients.device_test_attributes`; NAS API + admin checkbox | When true, `translate(includeDeviceTestAttributes)` + `buildReplyAttributes(includeExperimental)`: REQUIRES_DEVICE_TEST attributes are sent, recorded `experimental`; `translate()` now also emits a REQUIRES_DEVICE_TEST octet limit in lab mode (never counted as a verified limit). Default false: such NAS get `Auth-Type` + `Class` only |
+| B6 | CoA port | `routes/resources.ts` (create default), `apps/worker/src/coa/dispatcher.ts` | Per-NAS `coa_port` already existed; create without one stores the adapter default (MikroTik 1700); dispatcher falls back `coa_port` → adapter `defaultPort` → deployment default |
+| B7 | Setup guides | `mikrotikSetupGuide`, `teltonikaSetupGuide` | MikroTik: `/system identity`, `/radius add service=hotspot …`, `/radius incoming set accept=yes port=…` (1700), hotspot profile `use-radius=yes radius-accounting=yes radius-interim-update=received login-by=http-chap`, walled garden for the portal host, ECLOUD `login.html`, ECLOUD NAS + portal registration. Teltonika: landing page `/uam/chilli/`, UAM port 3990, UAM secret required, password encoding (REQUIRES_DEVICE_TEST), RADIUS servers, allowlist; RutOS labels REQUIRES_CLARIFICATION |
+| B8 | Registry | `registry/vendors.ts` (`PROMOTED_VENDOR_ENTRIES`), `registry/compatibility.ts` | Vendors `mikrotik`, `teltonika` → `implemented` (their `-planned` rows are no longer generated; `ROADMAP_VENDORS` keeps 23 entries, 21 planned rows). Rows `mikrotik-routeros-hotspot` (gateway + native) and `teltonika-rutos-hotspot` (V11 override). `getVendorProfile(vendorKey)` |
+| B9 | Captive portal type | migration **029** CHECK, portal-admin enum, admin select | `portal_type = 'mikrotik'` (`uam_server_url` path `/hotspot/mikrotik/`) |
+
+Evidence: vendor docs fetched 2026-10-10 (RouterOS 7.26: Hotspot customisation, RADIUS, HotSpot -
+Captive portal; URLs in docs/VENDOR_INTEGRATION_RESEARCH.md §7). Teltonika wiki: HTTP 403 (curl and
+WebFetch) → REQUIRES_CLARIFICATION as before.
+
+Open items (Cycle B): device test of the whole MikroTik path (CHAP encoding of `$(chap-id-esc)`,
+CHAP-Password/Challenge in the Access-Request, reply honouring incl. `"0"` = unlimited and
+Total-Limit semantics, Class echo, Disconnect on 1700 and its identification attributes); HotSpot
+`dns-name` / certificate login targets; `login-by=mac`; a setup-guide API/gallery (guides are data
+only); Teltonika RutOS field names and the RutOS CoovaChilli build; and the review items below.
+
+### 14.1 Review fixes (independent review: CONDITIONAL PASS, applied 2026-10-10)
+
+- **F1 (HIGH) login target bound to the NAS.** Migration 029 adds `nas_clients.hotspot_address`
+  (inet, unicast RFC 1918 / RFC 6598 IPv4, CHECK) and optional `hotspot_port`; REQUIRED for
+  `mikrotik-hotspot` (API 400 + DB CHECK for live rows). `validateContext` refuses any
+  `link-login-only` whose host is not exactly that address (or whose port differs when a port is
+  registered) and fails closed when none is registered; the hand-off re-checks the server-side
+  binding (`ecloud:hotspot-address`, never accepted from the query). Generic name so the post-back
+  family (Cycle C) can reuse it. Admin NAS form fields + setup-guide step. Tests: foreign private
+  host (CHAP) and foreign https host (PAP) refused, missing address fails closed, happy path.
+- **F2 (MEDIUM) retransmit cache.** The cached decision no longer carries
+  `control:Cleartext-Password`: it is sealed (`ecloud:aaa:retransmit-cleartext:v1`) and re-opened on
+  a hit; `retransmitKey` includes SHA-256(CHAP-Password) when present (unchanged otherwise). Test:
+  the KV value holds no cleartext and a retransmit gets the identical answer.
+- **F3 (LOW) lab mode.** Setting / changing `device_test_attributes` needs the platform-only
+  permission `platform:adapter:manage` (refused while impersonating; tenant admins get 403) and is
+  audited `nas:lab_mode_changed` (before/after). Admin shows the toggle only to holders, with a
+  warning.
+- **F5 (LOW, accepted as-is).** The post-login `dst` (from `link-orig`) goes through `safeUserUrl`
+  exactly like the UAM `userurl`; no further restriction (same behaviour as the existing UAM flows).
+- **Merge safety (Cycle C review).** Migration 029 rebuilds `ck_nas_clients_adapter_key` and
+  `ck_captive_portals_portal_type` from `pg_get_constraintdef` (quoted keys incl. `_` and upper
+  case) ∪ its own keys, so keys added by 030 on another branch survive any merge order; 029 is
+  idempotent (`IF NOT EXISTS` / `DROP … IF EXISTS`). Test in `packages/db/src/integration.test.ts`.

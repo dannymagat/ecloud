@@ -133,6 +133,13 @@ export interface RegisteredNas {
   readonly uamServerUrl: string | null;
   /** UAM secret, decrypted server-side; never copied into a context or hand-off. */
   readonly uamSecret: string | null;
+  /**
+   * Cycle B review F1: the NAS's registered browser login address (MikroTik HotSpot interface
+   * IP, `nas_clients.hotspot_address`) and optional port. A post-back login target naming any
+   * other host / port is refused; absent = post-back adapters fail closed.
+   */
+  readonly hotspotAddress?: string | null;
+  readonly hotspotPort?: number | null;
 }
 
 /** Injected lookup (keeps this package free of DB / network). */

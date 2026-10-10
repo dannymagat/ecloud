@@ -47,3 +47,4 @@ the server runs `require_message_authenticator = yes`).
 | `acct-on.txt` | DT-16, T-A7 | NAS restart (uspot sends On/Off) |
 | `disconnect-hostapd-das.txt` | DT-07, T-A8 | minimal identification set first, then add User-Name / Event-Timestamp |
 | `disconnect-coovachilli.txt`, `coa-coovachilli.txt` | DT-15, T-A8/T-A9 | chilli requires `User-Name`; CoA re-applies timeouts/bandwidth/quota |
+| `access-request-mikrotik-hotspot-chap.txt` | Cycle B | MikroTik HotSpot HTTP-CHAP; ECLOUD answers `Auth-Type = CHAP` + `Cleartext-Password`, FreeRADIUS `chap` verifies |

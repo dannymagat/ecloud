@@ -1368,3 +1368,47 @@ organization holds it; audited there; refused while impersonating). Access point
 own NAS sends the MAC in `Called-Station-Id`). Site delete / organization archive soft-delete
 the scope's access points, NAS clients and network devices. Idempotency fingerprints are keyed
 HMACs. 409s of cross-tenant unique indexes omit `constraint`.
+
+### Implementation notes (multi-vendor Cycle B, 2026-10-10, D-044)
+
+MikroTik RouterOS Hotspot (`mikrotik-hotspot`) and the Teltonika RutOS profile on `coovachilli-uam`.
+Migration **029**. No new public endpoint; changed contracts:
+
+| Path | Change |
+|---|---|
+| `POST/PATCH /api/v1/orgs/{orgId}/nas` | `adapter_key` accepts `mikrotik-hotspot`. New boolean `device_test_attributes` (default false, migration 029): lab opt-in, the AAA layer also emits REQUIRES_DEVICE_TEST reply attributes (stored as `experimental` in `policy_translations.emitted`); nothing becomes VERIFIED. On create without `coa_port`, the adapter's documented DAS default is stored (MikroTik `/radius incoming` 1700; other adapters keep NULL). |
+| `POST/PATCH /api/v1/orgs/{orgId}/captive-portals` | `portal_type` accepts `mikrotik` (`uam_server_url` path `/hotspot/mikrotik/`). |
+| Portal public `GET /hotspot/mikrotik/` | Entry from the ECLOUD-generated RouterOS `login.html`; query names are the RouterOS servlet variables `mac`, `ip`, `identity`, `link-login-only`, `link-orig`, `chap-id`, `chap-challenge`, `error` (values from `$(name-esc)`). → 303 `/f/{token}`. |
+| Portal `POST /f/{token}/login\|voucher\|click` | For MikroTik flows the hand-off is a script-free page with a form POSTing `username`, `password`, `dst`, `popup` to the flow's `link-login-only` (private IPv4 `http(s)://…/login` only); the router origin is added to that page's CSP `form-action`. `POST /f/{token}/logout` follows `<router>/logout`. |
+
+Internal behaviour:
+
+- `POST /internal/portal/redirects`: `flavour: "mikrotik"`. The NAS is resolved by `identity`
+  (= RADIUS NAS-Identifier = router identity, registered as `nas_identifier`); no AP MAC (RouterOS
+  has no such variable). `link-login-only` must be `http(s)://<RFC 1918/6598 IPv4>[:port][/<dir>]/login`.
+  `chap-id` / `chap-challenge` are the documented octal-escaped bytes; both or neither. The CHAP
+  challenge is the replay nonce (`nonceKind: vendor-nonce`); without CHAP an ECLOUD login token id is
+  (`ecloud-login-token`). Every flow carries a login token (TTL 300 s) that `identify` consumes once
+  before issuing the broker credential (second identify on the same redirect → 422
+  `handoff_unavailable`; a failed router login comes back as a new redirect).
+- `POST /internal/portal/flows/:id/identify`: `handoff` gains `fields` for `method: "POST-form"`. With
+  CHAP the form password is `MD5(chap-id ‖ credential ‖ chap-challenge)` (lowercase hex); without
+  CHAP the cleartext credential is sent only to an `https:` target, else 422.
+- `POST /internal/aaa/authorize`: `CHAP-Password` is accepted only for a portal credential issued for a
+  CHAP hand-off; all binding checks (NAS by packet source, NAS-Identifier, client MAC, single use)
+  run as for PAP, then the answer is `control:Auth-Type = CHAP` + `control:Cleartext-Password`
+  (contract rule 2) and FreeRADIUS `chap` verifies. The credential password is kept sealed
+  (`ecloud:portal:chap-credential:v1`) in the 90 s credential record for this purpose only. Any
+  other CHAP request stays `chap_unsupported`. `includeDeviceTestAttributes` /
+  `includeExperimental` follow `nas_clients.device_test_attributes`.
+- Worker Disconnect/CoA: port = `nas_clients.coa_port`, else the adapter's documented default
+  (`disconnect.defaultPort`, MikroTik 1700), else the deployment default.
+
+Cycle B review fixes (same day): `POST/PATCH /nas` gains `hotspot_address` (private unicast IPv4,
+required for `mikrotik-hotspot`) and `hotspot_port`; the MikroTik `link-login-only` must be exactly
+that host (and port when set), else the redirect is refused (fail closed when unset).
+`device_test_attributes` needs the platform permission `platform:adapter:manage` (403 otherwise,
+never while impersonating) and writes audit `nas:lab_mode_changed`. The AAA retransmit cache seals
+the CHAP `Cleartext-Password` (`ecloud:aaa:retransmit-cleartext:v1`) and keys on
+SHA-256(CHAP-Password) as well. Post-login `dst` keeps the UAM `userurl` rule (`safeUserUrl`), by
+review decision F5.

@@ -23,3 +23,10 @@ export { capabilities as coovachilliUamCapabilities } from './adapters/coovachil
 export { capabilities as openwifiConfigCapabilities } from './adapters/openwifi-config.js';
 export { capabilities as genericRadius8021xCapabilities } from './adapters/generic-radius-8021x.js';
 export * from './openwifi/ucentral-fragment.js';
+export {
+  capabilities as mikrotikHotspotCapabilities,
+  MIKROTIK_DEFAULT_COA_PORT,
+  MIKROTIK_DOCS,
+  MIKROTIK_TOTAL_LIMIT_ATTRIBUTE,
+  MIKROTIK_TOTAL_LIMIT_GIGAWORDS_ATTRIBUTE,
+} from './adapters/mikrotik-hotspot.js';

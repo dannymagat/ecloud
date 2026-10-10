@@ -39,7 +39,14 @@ import {
 import { canonicalMacStrict, isUuid, newId } from '@ecloud/shared';
 import type { Request, RequestHandler, Response } from 'express';
 import type { AppDeps } from '../context.js';
-import { normalizeVoucherCode, safeEqual, sha256Hex } from '../crypto.js';
+import {
+  Envelope,
+  normalizeVoucherCode,
+  openSecretRef,
+  safeEqual,
+  sealSecretRef,
+  sha256Hex,
+} from '../crypto.js';
 import { recordAaaDecision } from '../metrics.js';
 import { nasAdapter } from '../nas-adapter.js';
 import { AUTHN_ACCESS } from '../auth/principal.js';
@@ -80,11 +87,60 @@ interface NasRow {
   adapter_type_key: string;
   adapter_key: string | null;
   network_device_id: string | null;
+  /** Migration 029: lab opt-in, also emit REQUIRES_DEVICE_TEST attributes (experimental). */
+  device_test_attributes: boolean;
 }
 
 interface CachedDecision {
   status: 200 | 401;
   body: unknown;
+  /**
+   * Review F2: a CHAP decision's `control:Cleartext-Password`, sealed (purpose
+   * {@link RETRANSMIT_CLEARTEXT_PURPOSE}); the cached `body` never holds the cleartext.
+   */
+  sealedCleartext?: string;
+}
+
+/** HKDF purpose label of the sealed CHAP cleartext in the retransmit cache, not a secret. */
+export const RETRANSMIT_CLEARTEXT_PURPOSE = 'ecloud:aaa:retransmit-cleartext:v1'; // check-no-secrets: allow
+const CLEARTEXT_KEY = 'control:Cleartext-Password';
+
+/** Cache form of a decision: the CHAP cleartext moved out of the body and sealed (review F2). */
+export function sealDecisionForCache(
+  dataEncryptionKey: string,
+  decision: { status: 200 | 401; body: unknown },
+): CachedDecision {
+  const body = decision.body as Record<string, { value?: unknown[] }> | null;
+  const clear = body?.[CLEARTEXT_KEY]?.value?.[0];
+  if (body === null || typeof clear !== 'string') return { status: decision.status, body };
+  const { [CLEARTEXT_KEY]: _removed, ...rest } = body;
+  return {
+    status: decision.status,
+    body: rest,
+    sealedCleartext: sealSecretRef(
+      new Envelope(dataEncryptionKey, RETRANSMIT_CLEARTEXT_PURPOSE),
+      clear,
+    ),
+  };
+}
+
+/** Inverse of {@link sealDecisionForCache}; throws when the sealed value cannot be opened. */
+export function openCachedDecision(
+  dataEncryptionKey: string,
+  cached: CachedDecision,
+): { status: 200 | 401; body: unknown } {
+  if (cached.sealedCleartext === undefined) return { status: cached.status, body: cached.body };
+  const clear = openSecretRef(
+    new Envelope(dataEncryptionKey, RETRANSMIT_CLEARTEXT_PURPOSE),
+    cached.sealedCleartext,
+  );
+  return {
+    status: cached.status,
+    body: {
+      ...(cached.body as Record<string, unknown>),
+      [CLEARTEXT_KEY]: { value: [clear], op: ':=', do_xlat: false },
+    },
+  };
 }
 
 /** Facts about a decision kept for post-auth (no secrets). */
@@ -133,7 +189,11 @@ function keyParts(body: RadiusRequestBody): string[] {
 
 export function retransmitKey(body: RadiusRequestBody): string {
   const password = attr(body, 'User-Password') ?? '';
-  return `aaa:rt:${sha256Hex([...keyParts(body), sha256Hex(password)].join('|'))}`;
+  // Review F2: a different CHAP response is a different packet (unchanged key without CHAP).
+  const chap = attr(body, 'CHAP-Password');
+  const parts = [...keyParts(body), sha256Hex(password)];
+  if (chap !== undefined) parts.push(`chap:${sha256Hex(chap)}`);
+  return `aaa:rt:${sha256Hex(parts.join('|'))}`;
 }
 
 export function decisionKey(body: RadiusRequestBody): string {
@@ -162,6 +222,7 @@ export async function resolveNas(deps: AppDeps, body: RadiusRequestBody): Promis
           'adapter_type_key',
           'adapter_key',
           'network_device_id',
+          'device_test_attributes',
         ])
         .where('status', '=', 'active')
         .where('deleted_at', 'is', null);
@@ -187,6 +248,11 @@ interface Identity {
   voucherId: string | null;
   voucherBatchId: string | null;
   groupIds: string[];
+  /**
+   * Cycle B: CHAP broker credential (MikroTik HTTP-CHAP). The decision answers
+   * `control:Auth-Type = CHAP` + `control:Cleartext-Password` and FreeRADIUS verifies.
+   */
+  chapPassword?: string;
 }
 
 /**
@@ -318,8 +384,9 @@ async function identify(
   const userName = attr(body, 'User-Name') ?? '';
   const password = attr(body, 'User-Password');
   if (userName === '') throw new Reject('missing_username', 'Access denied');
-  if (hasAttr(body, 'CHAP-Password')) {
-    // ECLOUD stores only one-way hashes: CHAP cannot be verified (contract §2.1).
+  if (hasAttr(body, 'CHAP-Password') && !isPortalCredentialUsername(userName)) {
+    // ECLOUD stores only one-way hashes: CHAP cannot be verified (contract §2.1). Cycle B: the
+    // only CHAP path is a broker credential issued for a CHAP hand-off (portal-credential.ts).
     throw new Reject('chap_unsupported', 'Authentication method not supported');
   }
 
@@ -627,7 +694,15 @@ async function decide(deps: AppDeps, body: RadiusRequestBody, now: Date): Promis
 
       const sessionId = newId();
       const classValue = classForSession(sessionId);
-      const builder = new PolicyBuilder().set('control', 'Auth-Type', 'Accept');
+      const builder = new PolicyBuilder();
+      if (identity.chapPassword !== undefined) {
+        // Contract rule 2: FreeRADIUS `chap` verifies CHAP-Password against this cleartext.
+        builder
+          .set('control', 'Auth-Type', 'CHAP')
+          .set('control', 'Cleartext-Password', identity.chapPassword);
+      } else {
+        builder.set('control', 'Auth-Type', 'Accept');
+      }
       const adapter = nasAdapter(nas.adapter_key);
       let emitted: unknown = [];
       let unsupported: unknown = [];
@@ -649,6 +724,9 @@ async function decide(deps: AppDeps, body: RadiusRequestBody, now: Date): Promis
           now,
           interimIntervalS: deps.config.aaaInterimIntervalS,
           sessionTimeoutCapS: strategy === 'next_reauth' ? deps.config.aaaSessionTimeoutCapS : null,
+          // Migration 029 lab opt-in (D-028/D-034): REQUIRES_DEVICE_TEST attributes are emitted
+          // only for a NAS flagged for device testing, and stay marked `experimental`.
+          includeDeviceTestAttributes: nas.device_test_attributes,
         });
         if (plan.decision === 'reject') {
           throw new Reject(plan.reasonCode ?? 'unenforceable', 'Access denied', {
@@ -657,7 +735,7 @@ async function decide(deps: AppDeps, body: RadiusRequestBody, now: Date): Promis
           });
         }
         const attributes = adapter
-          .buildReplyAttributes(plan)
+          .buildReplyAttributes(plan, { includeExperimental: nas.device_test_attributes })
           .filter((a) => !FORBIDDEN_REPLY_ATTRIBUTES.has(a.name));
         for (const a of attributes) builder.add('reply', dictionaryName(a.name), a.value);
         emitted = attributes;
@@ -791,7 +869,10 @@ export function authorizeHandler(deps: AppDeps): RequestHandler {
     try {
       const cached = await deps.kv.get(rtKey);
       if (cached !== null) {
-        const decision = JSON.parse(cached) as CachedDecision;
+        const decision = openCachedDecision(
+          deps.config.dataEncryptionKey,
+          JSON.parse(cached) as CachedDecision,
+        );
         req.log.info({ status: decision.status, retransmit: true }, 'aaa authorize (retransmit)');
         recordAaaDecision(
           deps.metrics,
@@ -804,7 +885,7 @@ export function authorizeHandler(deps: AppDeps): RequestHandler {
         return;
       }
       const decision = await decide(deps, body, now());
-      const cachedValue: CachedDecision = { status: decision.status, body: decision.body };
+      const cachedValue = sealDecisionForCache(deps.config.dataEncryptionKey, decision);
       // A portal credential is single-use: keep its decision for the NAS retransmit horizon so
       // every retransmit of the same packet gets the same answer (same Class).
       const rtTtl = isPortalCredentialUsername(attr(body, 'User-Name') ?? '')

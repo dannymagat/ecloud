@@ -11,11 +11,19 @@
  * user disabled or a voucher revoked within the TTL is refused) and the redirect is marked as
  * consumed in the replay store. Retransmits of the same packet are answered from the AAA
  * retransmit cache (`aaa.ts`), so they never reach the single-use claim.
+ *
+ * Cycle B (MikroTik HTTP-CHAP): a request carrying `CHAP-Password` is accepted only for a
+ * credential issued for a CHAP hand-off (`chapPasswordRef`). Every binding check above still
+ * runs; the password itself is verified by FreeRADIUS `chap` against the returned
+ * `Cleartext-Password` (contract rule 2), and a CHAP mismatch there is a final reject (post-auth
+ * closes the provisional session).
  */
 import type { Subject } from '@ecloud/policy-engine';
 import type { DbTransaction } from '@ecloud/db';
 import type { AppDeps } from '../context.js';
+import { Envelope, openSecretRef } from '../crypto.js';
 import {
+  CHAP_CREDENTIAL_PURPOSE,
   claimCredential,
   credentialPasswordMatches,
   loadCredential,
@@ -30,7 +38,7 @@ import {
   recheckUser,
   recheckVoucher,
 } from './portal-identity.js';
-import { attr, macFrom, type RadiusRequestBody } from './radius.js';
+import { attr, hasAttr, macFrom, type RadiusRequestBody } from './radius.js';
 
 export type PortalAuthMethod = 'portal_password' | 'portal_voucher' | 'portal_click_through';
 
@@ -41,6 +49,8 @@ export interface PortalIdentity {
   voucherId: string | null;
   voucherBatchId: string | null;
   groupIds: string[];
+  /** CHAP hand-off only: the cleartext FreeRADIUS `chap` verifies against (never logged). */
+  chapPassword?: string;
 }
 
 export interface PortalNas {
@@ -60,7 +70,20 @@ export async function identifyPortalCredential(
   const password = attr(body, 'User-Password');
   const credential = await loadCredential(deps.kv, username);
   if (credential === null) throw new IdentityRejected('portal_credential_unknown');
-  if (password === undefined || !credentialPasswordMatches(credential, password)) {
+  let chapPassword: string | undefined;
+  if (hasAttr(body, 'CHAP-Password')) {
+    if (credential.chapPasswordRef === undefined) {
+      throw new IdentityRejected('portal_credential_chap_not_issued');
+    }
+    try {
+      chapPassword = openSecretRef(
+        new Envelope(deps.config.dataEncryptionKey, CHAP_CREDENTIAL_PURPOSE),
+        credential.chapPasswordRef,
+      );
+    } catch {
+      throw new IdentityRejected('portal_credential_chap_unreadable');
+    }
+  } else if (password === undefined || !credentialPasswordMatches(credential, password)) {
     throw new IdentityRejected('portal_credential_bad_password');
   }
   if (Date.parse(credential.expiresAt) <= now.getTime()) {
@@ -135,6 +158,7 @@ export async function identifyPortalCredential(
   // The redirect that led here is now consumed (validateContext → `replayed` from now on).
   await markReplayed(deps.kv, credential.replayKey);
   await revokeCredential(deps.kv, username);
+  if (chapPassword !== undefined) identity.chapPassword = chapPassword;
   const flow = await loadFlow(deps.kv, credential.flowId, now).catch(() => null);
   if (flow !== null && flow.state === 'LOGON_SENT') {
     flow.state = 'AUTHORIZED';
