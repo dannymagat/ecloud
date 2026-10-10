@@ -1,6 +1,6 @@
 /**
  * Grid of vendor tiles with official logos (D-045). As links ("How to configure your access
- * points?" → Network › Setup guides › vendor) or as a single-choice picker (Add Access Point
+ * points?" → Access Points › Setup guides › vendor) or as a single-choice picker (Add Access Point
  * wizard step 1). The trademark notice is shown under the grid.
  */
 import { Check } from 'lucide-react';

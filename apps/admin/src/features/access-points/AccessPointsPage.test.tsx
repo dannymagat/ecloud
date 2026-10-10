@@ -172,7 +172,8 @@ function routes(overview: Overview, perms = ALL, extra: MockRoute[] = []): MockR
 
 const PAGES = [
   { path: '/orgs/:orgId/access-points', element: <AccessPointsPage /> },
-  { path: '/orgs/:orgId/setup-guides/:vendorKey', element: <p>Guide page</p> },
+  { path: '/orgs/:orgId/access-points/setup-guides/:vendorKey', element: <p>Guide page</p> },
+  { path: '/orgs/:orgId/access-points/setup-guides', element: <p>Gallery page</p> },
   { path: '/orgs/:orgId/administrators', element: <AdministratorsPage /> },
 ];
 
@@ -194,6 +195,15 @@ describe('Access Points page (D-045)', () => {
     const view = renderRoutes(PAGES, `/orgs/${ORG_A}/access-points`);
     expect(await screen.findByRole('heading', { name: 'Access Points', level: 1 })).toBeVisible();
     expect(screen.getByRole('button', { name: 'Add' })).toBeInTheDocument();
+    // the setup guides are part of Access Points: a header button opens the gallery
+    expect(screen.getByRole('link', { name: 'Setup guides' })).toHaveAttribute(
+      'href',
+      `/orgs/${ORG_A}/access-points/setup-guides`,
+    );
+    expect(screen.getByRole('link', { name: 'View all setup guides' })).toHaveAttribute(
+      'href',
+      `/orgs/${ORG_A}/access-points/setup-guides`,
+    );
     expect(screen.getByRole('link', { name: 'Network Limits' })).toHaveAttribute(
       'href',
       `/orgs/${ORG_A}/policies`,
@@ -233,7 +243,7 @@ describe('Access Points page (D-045)', () => {
     expect(within(table).getByText('NAS: Quiet')).toBeInTheDocument();
     expect(within(table).getByRole('link', { name: /Setup guide for/ })).toHaveAttribute(
       'href',
-      `/orgs/${ORG_A}/setup-guides/aruba`,
+      `/orgs/${ORG_A}/access-points/setup-guides/aruba`,
     );
     for (const h of ['MAC address', 'Vendor', 'Name', 'Status', 'Date added', 'Actions']) {
       expect(within(table).getByRole('columnheader', { name: h })).toBeInTheDocument();
@@ -244,7 +254,7 @@ describe('Access Points page (D-045)', () => {
     expect(within(grid).getAllByRole('link')).toHaveLength(3);
     expect(within(grid).getByRole('link', { name: /MikroTik/ })).toHaveAttribute(
       'href',
-      `/orgs/${ORG_A}/setup-guides/mikrotik`,
+      `/orgs/${ORG_A}/access-points/setup-guides/mikrotik`,
     );
     const srcs = [...view.container.querySelectorAll('img')].map((i) => i.getAttribute('src'));
     expect(srcs).toContain('/vendor-logos/mikrotik.svg');
@@ -280,6 +290,43 @@ describe('Access Points page (D-045)', () => {
     expect(screen.queryByRole('button', { name: 'Rotate secret' })).toBeNull();
     expect(screen.queryByRole('link', { name: /Invite IT Staff/ })).toBeNull();
     expect(screen.queryByRole('link', { name: 'Network Limits' })).toBeNull();
+    // the guides stay readable with nas:read
+    expect(screen.getByRole('link', { name: 'Setup guides' })).toBeInTheDocument();
+  });
+
+  it('header order: Add · Setup guides · Network Limits · Download MikroTik script', async () => {
+    mockFetch(routes(OVERVIEW));
+    renderRoutes(PAGES, `/orgs/${ORG_A}/access-points`);
+    await screen.findByText('3 of 5');
+    const add = screen.getByRole('button', { name: 'Add' });
+    const actions = add.parentElement as HTMLElement;
+    expect([...actions.children].map((el) => (el.textContent ?? '').trim())).toEqual([
+      'Add',
+      'Setup guides',
+      'Network Limits',
+      'Download MikroTik installation script',
+    ]);
+    fireEvent.click(screen.getByRole('link', { name: 'Setup guides' }));
+    expect(await screen.findByText('Gallery page')).toBeInTheDocument();
+  });
+
+  it('"?add=<vendor>" (Add this access point from a guide) opens the wizard on that vendor', async () => {
+    mockFetch(routes(OVERVIEW));
+    renderRoutes(PAGES, `/orgs/${ORG_A}/access-points?add=mikrotik`);
+    const dialog = await screen.findByRole('dialog', { name: 'Add Access Point' });
+    await waitFor(() =>
+      expect(within(dialog).getByRole('button', { name: /MikroTik/ })).toHaveAttribute(
+        'aria-pressed',
+        'true',
+      ),
+    );
+  });
+
+  it('"?add=" is ignored without nas:create', async () => {
+    mockFetch(routes(OVERVIEW, ['nas:read']));
+    renderRoutes(PAGES, `/orgs/${ORG_A}/access-points?add=mikrotik`);
+    await screen.findByText('3 of 5');
+    expect(screen.queryByRole('dialog', { name: 'Add Access Point' })).toBeNull();
   });
 
   it('MikroTik script button opens the MikroTik setup guide when there is no MikroTik NAS', async () => {

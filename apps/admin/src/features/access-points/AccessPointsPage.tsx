@@ -1,10 +1,12 @@
 /**
- * Access Points page (D-045): header actions (Add, Network Limits, Download MikroTik
+ * Access Points page (D-045): header actions (Add, Setup guides, Network Limits, Download MikroTik
  * installation script), the "Configure Access Points" progress card, the RADIUS Secret box,
  * the access-point table and the "How to configure your access points?" vendor grid with
- * official logos. The Add flow is a step-by-step wizard (AddAccessPointWizard).
+ * official logos. The Add flow is a step-by-step wizard (AddAccessPointWizard); `?add=<vendorKey>`
+ * opens it on that vendor ("Add this access point" from a setup guide). The setup guides are part
+ * of Access Points: `access-points/setup-guides[/:vendorKey]`.
  */
-import { Download, Gauge, Plus } from 'lucide-react';
+import { ArrowRight, BookOpen, Download, Gauge, Plus } from 'lucide-react';
 import { useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router';
 import { buildUrl, downloadFile, saveBlob } from '../../api/client';
@@ -16,7 +18,8 @@ import { useAuth } from '../../lib/auth';
 import { useOrgId } from '../../lib/org';
 import { can } from '../../lib/permissions';
 import { siteParam } from '../../lib/sites';
-import { useCatalogue } from '../setup-guides/SetupGuidesPage';
+import { BACK_LINK as linkButton, useCatalogue } from '../setup-guides/SetupGuidesPage';
+import { setupGuidesHref, vendorGuideHref } from '../setup-guides/types';
 import { AccessPointsTable } from './AccessPointsTable';
 import { AddAccessPointWizard } from './AddAccessPointWizard';
 import {
@@ -29,9 +32,6 @@ import {
 import { RadiusSecretBox } from './RadiusSecretBox';
 import { SetupProgressCard } from './SetupProgressCard';
 import { VendorGrid } from './VendorGrid';
-
-const linkButton =
-  'inline-flex items-center gap-1.5 rounded-md border border-border bg-surface px-3.5 py-2 text-sm font-medium text-fg hover:bg-muted focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary';
 
 function MikrotikDownloads({
   orgId,
@@ -99,22 +99,38 @@ function Page() {
   const orgId = useOrgId();
   const { me } = useAuth();
   const navigate = useNavigate();
-  const [params] = useSearchParams();
+  const [params, setParams] = useSearchParams();
   const siteId = siteParam(params);
+  const addVendor = params.get('add');
   const overview = useOverview(orgId, siteId);
   const catalogue = useCatalogue(orgId);
   const [wizard, setWizard] = useState(false);
-  const [downloads, setDownloads] = useState(false);
-
   const target = { organizationId: orgId, anySite: true };
   const canAdd = can(me, 'nas:create', target);
+  // "Add this access point" from a setup guide: `?add=<vendorKey>` opens the wizard on it.
+  const wizardOpen = wizard || (addVendor !== null && canAdd);
+  const closeWizard = () => {
+    setWizard(false);
+    if (addVendor !== null) {
+      setParams(
+        (prev) => {
+          const next = new URLSearchParams(prev);
+          next.delete('add');
+          return next;
+        },
+        { replace: true },
+      );
+    }
+  };
+  const [downloads, setDownloads] = useState(false);
+
   const canInvite = can(me, 'administrator:invite', { organizationId: orgId });
   const canPolicies = can(me, 'policy:read', { organizationId: orgId });
   const o = overview.data;
   const mikrotik = (o?.nas ?? []).filter((n) => n.adapter_key === MIKROTIK_ADAPTER);
 
   const openMikrotik = () => {
-    if (mikrotik.length === 0) void navigate(`/orgs/${orgId}/setup-guides/mikrotik`);
+    if (mikrotik.length === 0) void navigate(vendorGuideHref(orgId, 'mikrotik', siteId));
     else setDownloads(true);
   };
 
@@ -130,6 +146,10 @@ function Page() {
                 Add
               </Button>
             ) : null}
+            <Link to={setupGuidesHref(orgId, siteId)} className={linkButton}>
+              <BookOpen aria-hidden="true" className="h-4 w-4" />
+              Setup guides
+            </Link>
             {canPolicies ? (
               <Link to={`/orgs/${orgId}/policies`} className={linkButton}>
                 <Gauge aria-hidden="true" className="h-4 w-4" />
@@ -180,26 +200,36 @@ function Page() {
       ) : null}
 
       <section aria-labelledby="how-to-heading" className="space-y-3">
-        <h2 id="how-to-heading" className="text-base font-semibold">
-          How to configure your access points?
-        </h2>
+        <div className="flex flex-wrap items-baseline justify-between gap-2">
+          <h2 id="how-to-heading" className="text-base font-semibold">
+            How to configure your access points?
+          </h2>
+          <Link
+            to={setupGuidesHref(orgId, siteId)}
+            className="inline-flex items-center gap-1 rounded text-sm font-medium text-primary underline-offset-2 hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+          >
+            View all setup guides
+            <ArrowRight aria-hidden="true" className="h-4 w-4" />
+          </Link>
+        </div>
         <ProblemAlert error={catalogue.error} />
         {catalogue.data ? (
           <VendorGrid
             entries={catalogue.data.data}
             label="Vendor setup guides"
-            hrefFor={(e) => `/orgs/${orgId}/setup-guides/${e.vendor_key}`}
+            hrefFor={(e) => vendorGuideHref(orgId, e.vendor_key, siteId)}
           />
         ) : null}
       </section>
 
-      {wizard && o ? (
+      {wizardOpen && o ? (
         <AddAccessPointWizard
           open
           orgId={orgId}
           siteId={siteId}
           nas={o.nas}
-          onClose={() => setWizard(false)}
+          initialVendor={wizard ? null : addVendor}
+          onClose={closeWizard}
         />
       ) : null}
       {downloads ? (

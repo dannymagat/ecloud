@@ -13,6 +13,7 @@ import { Dialog } from '../../components/Dialog';
 import { ProblemAlert } from '../../components/ProblemAlert';
 import { Badge, Button, SelectField, TextField } from '../../components/ui';
 import { formatDateTime } from '../../lib/format';
+import { vendorGuideHref } from '../setup-guides/types';
 import { ACTIVITY_LABEL, ACTIVITY_TONE, type OverviewAccessPoint } from './data';
 import { VendorLogo } from './VendorLogo';
 
@@ -229,7 +230,7 @@ export function AccessPointsTable({
           ) : null}
           {r.vendor_key !== null ? (
             <Link
-              to={`/orgs/${orgId}/setup-guides/${r.vendor_key}`}
+              to={vendorGuideHref(orgId, r.vendor_key)}
               aria-label={`Setup guide for ${r.mac}`}
               className="inline-flex items-center gap-1.5 rounded-md border border-border bg-surface px-2.5 py-1 text-xs font-medium text-fg hover:bg-muted focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
             >

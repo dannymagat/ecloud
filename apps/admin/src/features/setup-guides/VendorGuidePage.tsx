@@ -2,11 +2,12 @@
  * One vendor's setup guide (multi-vendor Cycle F). Numbered steps with copy buttons for the
  * values ECLOUD fills in (portal URL, RADIUS server and ports, walled garden), honest warnings
  * (cleartext http, lab mode, Meraki OFF state, untested), a pre-flight checklist and an
- * "Add this access point" button that opens the NAS form with the adapter / profile preselected.
+ * "Add this access point" button that opens the Access Points Add wizard on this vendor. Part of
+ * Access Points (`access-points/setup-guides/:vendorKey`), with a way back to Access Points.
  * Secrets are never shown: their placeholders point to the NAS secret shown once at creation.
  */
 import { useQuery } from '@tanstack/react-query';
-import { ArrowLeft, KeyRound, Plus } from 'lucide-react';
+import { ArrowLeft, BookOpen, KeyRound, Plus } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router';
 import { buildUrl, request } from '../../api/client';
@@ -17,9 +18,16 @@ import { RequireOrgPermission } from '../../layout/guards';
 import { useAuth } from '../../lib/auth';
 import { useOrgId } from '../../lib/org';
 import { can } from '../../lib/permissions';
-import { SITE_PARAM, siteParam } from '../../lib/sites';
+import { siteParam } from '../../lib/sites';
 import { merakiStatusTitle } from '../org/MerakiCloudRadius';
-import { STATUS_TONE, addNasHref, type VendorGuide } from './types';
+import { BACK_LINK } from './SetupGuidesPage';
+import {
+  STATUS_TONE,
+  accessPointsHref,
+  addAccessPointHref,
+  setupGuidesHref,
+  type VendorGuide,
+} from './types';
 
 const PATH = '/api/v1/orgs/{orgId}/setup-guides/{vendorKey}';
 
@@ -164,7 +172,6 @@ function Guide() {
       ),
   });
   const canCreate = can(me, 'nas:create', { organizationId: orgId, anySite: true });
-  const back = `/orgs/${orgId}/setup-guides${siteId === null ? '' : `?${SITE_PARAM}=${siteId}`}`;
   const g = guide.data;
 
   return (
@@ -174,17 +181,20 @@ function Guide() {
         subtitle={g?.product_line}
         actions={
           <>
-            <Link
-              to={back}
-              className="inline-flex items-center gap-1.5 rounded-md border border-border bg-surface px-3.5 py-2 text-sm font-medium text-fg hover:bg-muted focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
-            >
+            <Link to={accessPointsHref(orgId, siteId)} className={BACK_LINK}>
               <ArrowLeft aria-hidden="true" className="h-4 w-4" />
+              Back to Access Points
+            </Link>
+            <Link to={setupGuidesHref(orgId, siteId)} className={BACK_LINK}>
+              <BookOpen aria-hidden="true" className="h-4 w-4" />
               All vendors
             </Link>
             {g && canCreate ? (
               <Button
                 variant="primary"
-                onClick={() => void navigate(addNasHref(orgId, g.add_nas, g.site?.id ?? null))}
+                onClick={() =>
+                  void navigate(addAccessPointHref(orgId, g.vendor_key, g.site?.id ?? siteId))
+                }
               >
                 <Plus aria-hidden="true" className="h-4 w-4" />
                 Add this access point

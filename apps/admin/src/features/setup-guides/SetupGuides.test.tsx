@@ -1,11 +1,12 @@
 import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { adminMe, orgScope, ORG_A } from '../../test/fixtures';
+import { useLocation } from 'react-router';
 import { mockFetch, renderRoutes, type MockRoute } from '../../test/utils';
 import { NasPage, nasCreatePreset } from '../org/NasPage';
 import { SetupGuidesPage } from './SetupGuidesPage';
 import type { Catalogue, CatalogueEntry, VendorGuide } from './types';
-import { addNasHref } from './types';
+import { addAccessPointHref, addNasHref, setupGuidesHref, vendorGuideHref } from './types';
 import { VendorGuidePage } from './VendorGuidePage';
 
 const base = `/api/v1/orgs/${ORG_A}`;
@@ -108,9 +109,17 @@ function routes(extra: MockRoute[] = []): MockRoute[] {
   ];
 }
 
+function Landed() {
+  const { pathname, search } = useLocation();
+  return <p>{`Landed ${pathname}${search}`}</p>;
+}
+
+const SITE = '01900000-0000-7000-8000-0000000000c1';
+
 const PAGES = [
-  { path: '/orgs/:orgId/setup-guides', element: <SetupGuidesPage /> },
-  { path: '/orgs/:orgId/setup-guides/:vendorKey', element: <VendorGuidePage /> },
+  { path: '/orgs/:orgId/access-points/setup-guides', element: <SetupGuidesPage /> },
+  { path: '/orgs/:orgId/access-points/setup-guides/:vendorKey', element: <VendorGuidePage /> },
+  { path: '/orgs/:orgId/access-points', element: <Landed /> },
   { path: '/orgs/:orgId/nas', element: <NasPage /> },
 ];
 
@@ -119,7 +128,7 @@ afterEach(() => vi.unstubAllGlobals());
 describe('Cycle F admin: setup-guide gallery', () => {
   it('renders a tile grid with self-hosted logos, family badges and status pills', async () => {
     mockFetch(routes());
-    const view = renderRoutes(PAGES, `/orgs/${ORG_A}/setup-guides`);
+    const view = renderRoutes(PAGES, `/orgs/${ORG_A}/access-points/setup-guides`);
     const grid = await screen.findByRole('list', { name: 'Vendors' });
     const tiles = within(grid).getAllByRole('link');
     expect(tiles).toHaveLength(4);
@@ -135,12 +144,12 @@ describe('Cycle F admin: setup-guide gallery', () => {
     for (const img of imgs)
       expect(img.getAttribute('src')).toMatch(/^\/vendor-logos\/[a-z0-9-]+\.svg$/);
     expect(screen.getByText(/Logos are trademarks of their respective owners/)).toBeInTheDocument();
-    expect(tiles[0]).toHaveAttribute('href', `/orgs/${ORG_A}/setup-guides/cambium`);
+    expect(tiles[0]).toHaveAttribute('href', `/orgs/${ORG_A}/access-points/setup-guides/cambium`);
   });
 
   it('filters by integration family and by search text', async () => {
     mockFetch(routes());
-    renderRoutes(PAGES, `/orgs/${ORG_A}/setup-guides`);
+    renderRoutes(PAGES, `/orgs/${ORG_A}/access-points/setup-guides`);
     const grid = await screen.findByRole('list', { name: 'Vendors' });
     const group = screen.getByRole('group', { name: 'Filter by integration family' });
     fireEvent.click(within(group).getByRole('button', { name: 'Controller API' }));
@@ -161,7 +170,7 @@ describe('Cycle F admin: setup-guide gallery', () => {
 
   it('a tile opens the guide: numbered steps, warnings, ECLOUD values; secrets never shown', async () => {
     mockFetch(routes());
-    renderRoutes(PAGES, `/orgs/${ORG_A}/setup-guides`);
+    renderRoutes(PAGES, `/orgs/${ORG_A}/access-points/setup-guides`);
     fireEvent.click(await screen.findByRole('link', { name: /^Cambium Networks/ }));
     expect(await screen.findByRole('heading', { name: 'Cambium Networks' })).toBeInTheDocument();
     const steps = screen.getByRole('list', { name: 'Setup steps' });
@@ -182,7 +191,7 @@ describe('Cycle F admin: setup-guide gallery', () => {
     const writeText = vi.fn(() => Promise.resolve());
     vi.stubGlobal('navigator', { ...navigator, clipboard: { writeText } });
     mockFetch(routes());
-    renderRoutes(PAGES, `/orgs/${ORG_A}/setup-guides/cambium`);
+    renderRoutes(PAGES, `/orgs/${ORG_A}/access-points/setup-guides/cambium`);
     fireEvent.click(await screen.findByRole('button', { name: 'Copy Portal URL' }));
     await waitFor(() =>
       expect(writeText).toHaveBeenCalledWith(`${PORTAL}/pb/cambium-hotspot/<NAS_IDENTIFIER>/`),
@@ -202,7 +211,43 @@ describe('Cycle F admin: setup-guide gallery', () => {
     }
   });
 
-  it('"Add this access point" opens the NAS form with adapter and profile preselected', async () => {
+  it('"Add this access point" opens the Access Points Add wizard on the vendor', async () => {
+    mockFetch(routes());
+    renderRoutes(PAGES, `/orgs/${ORG_A}/access-points/setup-guides/cambium?site_id=${SITE}`);
+    fireEvent.click(await screen.findByRole('button', { name: 'Add this access point' }));
+    expect(
+      await screen.findByText(`Landed /orgs/${ORG_A}/access-points?add=cambium&site_id=${SITE}`),
+    ).toBeInTheDocument();
+  });
+
+  it('the guide leads back to Access Points and to all vendors, keeping the site', async () => {
+    mockFetch(routes());
+    renderRoutes(PAGES, `/orgs/${ORG_A}/access-points/setup-guides/cambium?site_id=${SITE}`);
+    expect(await screen.findByRole('link', { name: 'Back to Access Points' })).toHaveAttribute(
+      'href',
+      `/orgs/${ORG_A}/access-points?site_id=${SITE}`,
+    );
+    expect(screen.getByRole('link', { name: 'All vendors' })).toHaveAttribute(
+      'href',
+      `/orgs/${ORG_A}/access-points/setup-guides?site_id=${SITE}`,
+    );
+  });
+
+  it('the gallery leads back to Access Points; tiles keep the site', async () => {
+    mockFetch(routes());
+    renderRoutes(PAGES, `/orgs/${ORG_A}/access-points/setup-guides?site_id=${SITE}`);
+    const grid = await screen.findByRole('list', { name: 'Vendors' });
+    expect(within(grid).getAllByRole('link')[0]).toHaveAttribute(
+      'href',
+      `/orgs/${ORG_A}/access-points/setup-guides/cambium?site_id=${SITE}`,
+    );
+    fireEvent.click(screen.getByRole('link', { name: 'Back to Access Points' }));
+    expect(
+      await screen.findByText(`Landed /orgs/${ORG_A}/access-points?site_id=${SITE}`),
+    ).toBeInTheDocument();
+  });
+
+  it('the NAS page links to the setup guides under Access Points', async () => {
     mockFetch(
       routes([
         { method: 'GET', path: `${base}/nas`, body: { data: [], next_cursor: null } },
@@ -216,15 +261,10 @@ describe('Cycle F admin: setup-guide gallery', () => {
         { method: 'GET', path: `${base}/network-devices`, body: { data: [], next_cursor: null } },
       ]),
     );
-    renderRoutes(PAGES, `/orgs/${ORG_A}/setup-guides/cambium`);
-    fireEvent.click(await screen.findByRole('button', { name: 'Add this access point' }));
-    const dialog = await screen.findByRole('dialog', { name: 'New nas client' });
-    expect(within(dialog).getByLabelText(/^Adapter/)).toHaveValue('external-portal-postback');
-    expect(within(dialog).getByLabelText(/Vendor profile/)).toHaveValue('cambium-hotspot');
-    // the NAS page links back to the gallery
+    renderRoutes(PAGES, `/orgs/${ORG_A}/nas`);
     expect(
-      screen.getByRole('link', { name: 'How to configure your access points' }),
-    ).toHaveAttribute('href', `/orgs/${ORG_A}/setup-guides`);
+      await screen.findByRole('link', { name: 'How to configure your access points' }),
+    ).toHaveAttribute('href', `/orgs/${ORG_A}/access-points/setup-guides`);
   });
 
   it('the "Any vendor" profile shows the portal URL from configuration, not a constant', async () => {
@@ -273,7 +313,7 @@ describe('Cycle F admin: setup-guide gallery', () => {
       },
       { method: 'GET', path: `${base}/setup-guides/cambium`, body: CAMBIUM },
     ]);
-    renderRoutes(PAGES, `/orgs/${ORG_A}/setup-guides/cambium`);
+    renderRoutes(PAGES, `/orgs/${ORG_A}/access-points/setup-guides/cambium`);
     expect(await screen.findByRole('heading', { name: 'Cambium Networks' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Add this access point' })).toBeNull();
   });
@@ -282,7 +322,7 @@ describe('Cycle F admin: setup-guide gallery', () => {
     mockFetch([
       { method: 'GET', path: '/api/v1/auth/me', body: adminMe([orgScope(ORG_A, ['user:read'])]) },
     ]);
-    renderRoutes(PAGES, `/orgs/${ORG_A}/setup-guides`);
+    renderRoutes(PAGES, `/orgs/${ORG_A}/access-points/setup-guides`);
     expect(await screen.findByText(/nas:read/)).toBeInTheDocument();
     expect(screen.queryByRole('list', { name: 'Vendors' })).toBeNull();
   });
@@ -329,6 +369,16 @@ describe('Cycle F admin: setup-guide gallery', () => {
     ).toBeNull();
     expect(addNasHref(ORG_A, { adapter_key: 'mikrotik-hotspot', profile: null }, null)).toBe(
       `/orgs/${ORG_A}/nas?new=1&adapter_key=mikrotik-hotspot`,
+    );
+  });
+
+  it('guide paths live under Access Points', () => {
+    expect(setupGuidesHref(ORG_A)).toBe(`/orgs/${ORG_A}/access-points/setup-guides`);
+    expect(vendorGuideHref(ORG_A, 'cambium', SITE)).toBe(
+      `/orgs/${ORG_A}/access-points/setup-guides/cambium?site_id=${SITE}`,
+    );
+    expect(addAccessPointHref(ORG_A, 'cambium', null)).toBe(
+      `/orgs/${ORG_A}/access-points?add=cambium`,
     );
   });
 });

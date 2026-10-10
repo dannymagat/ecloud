@@ -25,7 +25,7 @@ import { toBody } from '../resource/form';
 import { ResourceForm } from '../resource/ResourceForm';
 import { PostbackProfileField } from '../org/NasPage';
 import { useCatalogue } from '../setup-guides/SetupGuidesPage';
-import type { CatalogueEntry, VendorGuide } from '../setup-guides/types';
+import { vendorGuideHref, type CatalogueEntry, type VendorGuide } from '../setup-guides/types';
 import { EcloudValues, Steps } from '../setup-guides/VendorGuidePage';
 import { MIKROTIK_ADAPTER, SCRIPT_PATH, type OverviewNas } from './data';
 import { VendorGrid } from './VendorGrid';
@@ -569,7 +569,7 @@ export function AddAccessPointWizard({
         ) : null}
         {vendorKey !== null ? (
           <Link
-            to={`/orgs/${orgId}/setup-guides/${vendorKey}`}
+            to={vendorGuideHref(orgId, vendorKey, guideSite)}
             className="inline-block text-sm font-medium text-primary underline underline-offset-2"
           >
             Open the full setup guide

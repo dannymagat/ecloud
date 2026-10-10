@@ -21,7 +21,7 @@ import { siteParam } from '../../lib/sites';
 import type { FieldDef } from '../resource/form';
 import { ResourcePage, type ResourceConfig } from '../resource/ResourcePage';
 import { POSTBACK_PROFILES, PostbackProfileEditor } from './PostbackProfileEditor';
-import type { VendorGuide } from '../setup-guides/types';
+import { setupGuidesHref, type VendorGuide } from '../setup-guides/types';
 import { MERAKI_ADAPTER_KEY, MerakiCloudRadiusNotice, SetupGuideButton } from './MerakiCloudRadius';
 
 const ADAPTER_OPTIONS = ADAPTER_KEYS.map((k) => ({
@@ -389,7 +389,7 @@ export function NasPage() {
       ),
     headerActions: ({ orgId }) => (
       <Link
-        to={`/orgs/${orgId}/setup-guides`}
+        to={setupGuidesHref(orgId)}
         className="inline-flex items-center gap-1.5 rounded-md border border-border bg-surface px-3.5 py-2 text-sm font-medium text-fg hover:bg-muted focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
       >
         <BookOpen aria-hidden="true" className="h-4 w-4" />

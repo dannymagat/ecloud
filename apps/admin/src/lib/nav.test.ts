@@ -36,7 +36,6 @@ describe('permission-driven navigation', () => {
       'sites',
       'nas',
       'access-points',
-      'setup-guides',
     ]);
     expect(visibleOrgNav(me, ORG_B)).toEqual([]);
     expect(visiblePlatformNav(me)).toEqual([]);
@@ -109,10 +108,8 @@ describe('permission-driven navigation', () => {
   it('groups follow the approved sidebar; empty groups are hidden', () => {
     expect(ORG_GROUPS.map((g) => [g.label, g.items.map((i) => i.path)])).toEqual([
       ['Bandwidth Management', ['policies', 'policy-assignments', 'ssid-rate-limit-export']],
-      [
-        'Network',
-        ['sites', 'nas', 'access-points', 'setup-guides', 'controllers', 'network-devices'],
-      ],
+      // The setup guides are part of Access Points (header button), not a sidebar entry.
+      ['Network', ['sites', 'nas', 'access-points', 'controllers', 'network-devices']],
       ['Clients', ['sessions', 'users', 'user-groups', 'client-devices', 'vouchers']],
       ['Reports', ['usage', 'accounting', 'reports']],
       ['Login Page', ['portals']],
@@ -120,7 +117,7 @@ describe('permission-driven navigation', () => {
     ]);
     const me = adminMe([orgScope(ORG_A, ['nas:read', 'accounting:read'])]);
     expect(visibleOrgGroups(me, ORG_A).map((g) => [g.key, g.items.map((i) => i.path)])).toEqual([
-      ['network', ['nas', 'access-points', 'setup-guides']],
+      ['network', ['nas', 'access-points']],
       ['reports', ['usage', 'accounting']],
     ]);
     expect(visibleOrgGroups(me, ORG_B)).toEqual([]);
@@ -158,9 +155,9 @@ describe('permission-driven navigation', () => {
       'audit-log',
       'administrators',
       'api-keys',
-      // Cycle F: setup-guide gallery
-      'setup-guides',
     ];
+    // Cycle F setup guides: reachable under Access Points (`access-points/setup-guides`).
+    expect(groupKeyOf(ORG_GROUPS, 'setup-guides')).toBeNull();
     expect(ORG_NAV.map((i) => i.path).sort()).toEqual([...previous].sort());
     expect(PLATFORM_NAV.map((i) => i.path)).toEqual([
       'summary',

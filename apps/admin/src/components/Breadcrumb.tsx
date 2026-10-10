@@ -45,6 +45,12 @@ export function crumbsFor(
       { label: organizationName(orgId) ?? 'Organization', to: `${base}/dashboard` },
     ];
     const [list, id, sub] = parts.slice(2);
+    if (list === 'access-points' && id === 'setup-guides') {
+      // Setup guides live under Access Points: … › Access Points › Setup guides › <vendor>.
+      crumbs.push({ label: navLabel('org', list) ?? list, to: `${base}/${list}` });
+      if (sub) crumbs.push({ label: 'Setup guides', to: `${base}/${list}/${id}` });
+      return crumbs;
+    }
     if (list && id) {
       crumbs.push({ label: navLabel('org', list) ?? list, to: `${base}/${list}` });
       if (sub && !(list === 'sites' && sub === 'dashboard')) {

@@ -1,4 +1,4 @@
-import { Navigate, Outlet, type RouteObject } from 'react-router';
+import { Navigate, Outlet, useLocation, useParams, type RouteObject } from 'react-router';
 import { AuditLogPage } from './features/audit/AuditLogPage';
 import { AdministratorsPage } from './features/admins/AdministratorsPage';
 import { LoginPage } from './features/auth/LoginPage';
@@ -50,6 +50,19 @@ function Root() {
   );
 }
 
+/**
+ * The setup guides moved under Access Points: the former `setup-guides[/:vendorKey]` addresses
+ * redirect to `access-points/setup-guides[/:vendorKey]`, keeping the query (e.g. `?site_id=`)
+ * and hash.
+ */
+export function LegacySetupGuideRedirect() {
+  const { orgId = '', vendorKey } = useParams();
+  const { search, hash } = useLocation();
+  const base = `/orgs/${encodeURIComponent(orgId)}/access-points/setup-guides`;
+  const path = vendorKey === undefined ? base : `${base}/${encodeURIComponent(vendorKey)}`;
+  return <Navigate to={`${path}${search}${hash}`} replace />;
+}
+
 function NotFound() {
   return (
     <Notice tone="warning" title="Page not found">
@@ -81,8 +94,13 @@ export const routes: RouteObject[] = [
                   { path: 'network-devices', element: <NetworkDevicesPage /> },
                   { path: 'nas', element: <NasPage /> },
                   { path: 'access-points', element: <AccessPointsPage /> },
-                  { path: 'setup-guides', element: <SetupGuidesPage /> },
-                  { path: 'setup-guides/:vendorKey', element: <VendorGuidePage /> },
+                  { path: 'access-points/setup-guides', element: <SetupGuidesPage /> },
+                  {
+                    path: 'access-points/setup-guides/:vendorKey',
+                    element: <VendorGuidePage />,
+                  },
+                  { path: 'setup-guides', element: <LegacySetupGuideRedirect /> },
+                  { path: 'setup-guides/:vendorKey', element: <LegacySetupGuideRedirect /> },
                   { path: 'controllers', element: <ControllersPage /> },
                   { path: 'users', element: <UsersPage /> },
                   { path: 'user-groups', element: <UserGroupsPage /> },

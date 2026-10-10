@@ -77,3 +77,38 @@ export function addNasHref(
   if (siteId !== null) q.set('site_id', siteId);
   return `/orgs/${encodeURIComponent(orgId)}/nas?${q.toString()}`;
 }
+
+/**
+ * The setup guides live under Access Points (`access-points/setup-guides[/:vendorKey]`); the
+ * former top-level `setup-guides` routes redirect here. `siteId` keeps the `?site_id=` filter.
+ */
+export function setupGuidesHref(orgId: string, siteId: string | null = null): string {
+  const q = siteId === null ? '' : `?${new URLSearchParams({ site_id: siteId }).toString()}`;
+  return `/orgs/${encodeURIComponent(orgId)}/access-points/setup-guides${q}`;
+}
+
+export function vendorGuideHref(
+  orgId: string,
+  vendorKey: string,
+  siteId: string | null = null,
+): string {
+  const q = siteId === null ? '' : `?${new URLSearchParams({ site_id: siteId }).toString()}`;
+  return `/orgs/${encodeURIComponent(orgId)}/access-points/setup-guides/${encodeURIComponent(vendorKey)}${q}`;
+}
+
+/** Access Points with the Add wizard open on `vendorKey` ("Add this access point"). */
+export function addAccessPointHref(
+  orgId: string,
+  vendorKey: string,
+  siteId: string | null,
+): string {
+  const q = new URLSearchParams({ add: vendorKey });
+  if (siteId !== null) q.set('site_id', siteId);
+  return `/orgs/${encodeURIComponent(orgId)}/access-points?${q.toString()}`;
+}
+
+/** The Access Points page, keeping the `?site_id=` filter. */
+export function accessPointsHref(orgId: string, siteId: string | null = null): string {
+  const q = siteId === null ? '' : `?${new URLSearchParams({ site_id: siteId }).toString()}`;
+  return `/orgs/${encodeURIComponent(orgId)}/access-points${q}`;
+}

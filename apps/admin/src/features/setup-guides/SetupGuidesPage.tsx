@@ -3,10 +3,11 @@
  * vendor tiles with the vendor's official logo (D-045, self-hosted; a text wordmark when none),
  * each with its integration-family badge and an evidence status pill, filterable by family and
  * searchable.
- * A tile opens the vendor guide (`setup-guides/:vendorKey`).
+ * Part of Access Points (`access-points/setup-guides`, opened from the Access Points header); a
+ * tile opens the vendor guide (`access-points/setup-guides/:vendorKey`).
  */
 import { useQuery } from '@tanstack/react-query';
-import { ArrowRight, Search } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Search } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router';
 import { buildUrl, request } from '../../api/client';
@@ -14,11 +15,22 @@ import { ProblemAlert } from '../../components/ProblemAlert';
 import { Badge, Card, EmptyState, PageHeader, Spinner, cx } from '../../components/ui';
 import { RequireOrgPermission } from '../../layout/guards';
 import { useOrgId } from '../../lib/org';
-import { SITE_PARAM, siteParam } from '../../lib/sites';
+import { siteParam } from '../../lib/sites';
 import { LOGO_NOTICE, VendorLogo } from '../access-points/VendorLogo';
-import { STATUS_TONE, type Catalogue, type CatalogueEntry, type GalleryFamily } from './types';
+import {
+  STATUS_TONE,
+  accessPointsHref,
+  vendorGuideHref,
+  type Catalogue,
+  type CatalogueEntry,
+  type GalleryFamily,
+} from './types';
 
 const PATH = '/api/v1/orgs/{orgId}/setup-guides';
+
+/** Secondary link-button (same style as the Access Points header links). */
+export const BACK_LINK =
+  'inline-flex items-center gap-1.5 rounded-md border border-border bg-surface px-3.5 py-2 text-sm font-medium text-fg hover:bg-muted focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary';
 
 export function useCatalogue(orgId: string) {
   return useQuery({
@@ -92,13 +104,18 @@ function Gallery() {
     [catalogue.data, family, query],
   );
   const families = catalogue.data?.families ?? [];
-  const suffix = siteId === null ? '' : `?${SITE_PARAM}=${encodeURIComponent(siteId)}`;
 
   return (
     <div>
       <PageHeader
         title="Setup guides"
         description="How to configure your access points: pick your vendor for step-by-step settings with the ECLOUD values filled in. Secrets are never shown here; a NAS secret is shown once when you add the NAS."
+        actions={
+          <Link to={accessPointsHref(orgId, siteId)} className={BACK_LINK}>
+            <ArrowLeft aria-hidden="true" className="h-4 w-4" />
+            Back to Access Points
+          </Link>
+        }
       />
       <Card>
         <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
@@ -172,7 +189,7 @@ function Gallery() {
               <VendorTile
                 key={e.vendor_key}
                 entry={e}
-                href={`/orgs/${orgId}/setup-guides/${e.vendor_key}${suffix}`}
+                href={vendorGuideHref(orgId, e.vendor_key, siteId)}
               />
             ))}
           </ul>

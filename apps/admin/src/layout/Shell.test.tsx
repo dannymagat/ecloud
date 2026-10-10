@@ -1,7 +1,9 @@
 import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { useLocation } from 'react-router';
 import { PageHeader } from '../components/ui';
+import { LegacySetupGuideRedirect } from '../routes';
 import { adminMe, orgScope, ORG_A, ORG_B, platformScope } from '../test/fixtures';
 import { mockFetch, renderRoutes, type MockRoute } from '../test/utils';
 import { RequireAuth } from './guards';
@@ -10,6 +12,12 @@ import { NAV_STATE_KEY } from './Sidebar';
 
 const SITE = '01900000-0000-7000-8000-0000000000c1';
 const SESSION = '01900000-0000-7000-8000-0000000000e1';
+
+/** Shows where a redirect landed (path + query). */
+function Landed() {
+  const { pathname, search } = useLocation();
+  return <PageHeader title={`Landed ${pathname}${search}`} />;
+}
 
 const routes = [
   {
@@ -26,6 +34,13 @@ const routes = [
             path: '/orgs/:orgId/sessions/:sessionId',
             element: <PageHeader title="Session detail" />,
           },
+          {
+            path: '/orgs/:orgId/access-points/setup-guides/:vendorKey',
+            element: <Landed />,
+          },
+          { path: '/orgs/:orgId/access-points/setup-guides', element: <Landed /> },
+          { path: '/orgs/:orgId/setup-guides', element: <LegacySetupGuideRedirect /> },
+          { path: '/orgs/:orgId/setup-guides/:vendorKey', element: <LegacySetupGuideRedirect /> },
           { path: '/orgs/:orgId/:page', element: <PageHeader title="Org page" /> },
           { path: '/platform/:page', element: <PageHeader title="Organizations" /> },
           { path: '/', element: <p>Home</p> },
@@ -206,7 +221,6 @@ describe('grouped sidebar', () => {
       'Sites',
       'NAS clients (access points)',
       'Access Points',
-      'Setup guides',
       'Controllers',
       'Network devices',
       'Online sessions',
@@ -525,6 +539,56 @@ describe('breadcrumb', () => {
     ]);
     expect(within(crumb).getByText('Session detail')).toHaveAttribute('aria-current', 'page');
   });
+
+  it('setup guides sit under Access Points, which the sidebar highlights', async () => {
+    mockFetch(orgMocks());
+    renderRoutes(routes, `/orgs/${ORG_A}/access-points/setup-guides/cambium`);
+    const crumb = await screen.findByRole('navigation', { name: 'Breadcrumb' });
+    await waitFor(() => expect(crumb).toHaveTextContent('Acme Hotels'));
+    const links = within(crumb).getAllByRole('link');
+    expect(links.map(accessibleName)).toEqual([
+      'Home',
+      'Acme Hotels',
+      'Access Points',
+      'Setup guides',
+    ]);
+    expect(links.map((a) => a.getAttribute('href')).slice(2)).toEqual([
+      `/orgs/${ORG_A}/access-points`,
+      `/orgs/${ORG_A}/access-points/setup-guides`,
+    ]);
+    const nav = screen.getByRole('navigation', { name: 'Primary' });
+    expect(within(nav).getByRole('link', { name: 'Access Points' })).toHaveAttribute(
+      'aria-current',
+      'page',
+    );
+    expect(within(nav).queryByRole('link', { name: 'Setup guides' })).not.toBeInTheDocument();
+  });
+
+  it('the gallery crumb is Access Points › Setup guides', async () => {
+    mockFetch(orgMocks());
+    renderRoutes(routes, `/orgs/${ORG_A}/access-points/setup-guides`);
+    const crumb = await screen.findByRole('navigation', { name: 'Breadcrumb' });
+    await waitFor(() => expect(crumb).toHaveTextContent('Acme Hotels'));
+    expect(within(crumb).getAllByRole('link').map(accessibleName)).toEqual([
+      'Home',
+      'Acme Hotels',
+      'Access Points',
+    ]);
+  });
+
+  it.each([
+    ['setup-guides', 'access-points/setup-guides'],
+    ['setup-guides/cambium', 'access-points/setup-guides/cambium'],
+  ])(
+    'the former /%s address redirects under Access Points, keeping the query',
+    async (from, to) => {
+      mockFetch(orgMocks());
+      renderRoutes(routes, `/orgs/${ORG_A}/${from}?site_id=${SITE}`);
+      expect(
+        await screen.findByRole('heading', { name: `Landed /orgs/${ORG_A}/${to}?site_id=${SITE}` }),
+      ).toBeInTheDocument();
+    },
+  );
 
   it('site dashboards sit under Sites; platform pages under Platform', async () => {
     mockFetch(orgMocks());
