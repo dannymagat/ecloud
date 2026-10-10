@@ -57,6 +57,8 @@ export type PortalMethod = 'password' | 'voucher' | 'click_through';
 export interface FormTarget {
   readonly action: string;
   readonly csrf: string;
+  /** Cycle C: single-use ECLOUD login token of a post-back flow (hidden field `lt`). */
+  readonly loginToken?: string;
 }
 
 export interface SessionStatus {
@@ -104,7 +106,17 @@ export type PageBody =
       readonly session: SessionStatus | null;
       readonly logout: FormTarget | null;
     }
-  | { readonly page: 'logout' };
+  | { readonly page: 'logout' }
+  | {
+      /**
+       * Cycle C post-back hand-off: a form posted to the validated AP / controller login URL,
+       * auto-submitted by a nonce'd script; the visible button is the no-JS fallback.
+       */
+      readonly page: 'handoff';
+      readonly action: string;
+      readonly fields: readonly (readonly [string, string])[];
+      readonly scriptNonce: string | null;
+    };
 
 export type PageName = PageBody['page'];
 
@@ -129,6 +141,7 @@ const TITLE_KEYS: Readonly<Record<PageName, MessageKey>> = {
   expired: 'title.expired',
   status: 'title.status',
   logout: 'title.logout',
+  handoff: 'title.handoff',
 };
 
 function errorLine(message: string | null): string {
@@ -138,7 +151,11 @@ function errorLine(message: string | null): string {
 
 function formOpen(form: FormTarget | null): string {
   if (form === null) return '<form>';
-  return `<form method="post" action="${escapeHtml(form.action)}"><input type="hidden" name="csrf" value="${escapeHtml(form.csrf)}">`;
+  const lt =
+    form.loginToken === undefined
+      ? ''
+      : `<input type="hidden" name="lt" value="${escapeHtml(form.loginToken)}">`;
+  return `<form method="post" action="${escapeHtml(form.action)}"><input type="hidden" name="csrf" value="${escapeHtml(form.csrf)}">${lt}`;
 }
 
 function back(href: string | null, locale: string): string {
@@ -232,6 +249,16 @@ function body(theme: PageTheme, b: PageBody): string {
     }
     case 'logout':
       return `<p role="status">${escapeHtml(t('logout.text', {}, l))}</p>`;
+    case 'handoff': {
+      const hidden = b.fields
+        .map(([k, v]) => `<input type="hidden" name="${escapeHtml(k)}" value="${escapeHtml(v)}">`)
+        .join('');
+      const script =
+        b.scriptNonce === null
+          ? ''
+          : `<script nonce="${escapeHtml(b.scriptNonce)}">document.getElementById('pb').submit();</script>`;
+      return `<p role="status">${escapeHtml(t('handoff.text', {}, l))}</p><form id="pb" method="post" action="${escapeHtml(b.action)}">${hidden}<button type="submit">${escapeHtml(t('handoff.button', {}, l))}</button></form>${script}`;
+    }
   }
 }
 

@@ -1368,3 +1368,57 @@ organization holds it; audited there; refused while impersonating). Access point
 own NAS sends the MAC in `Called-Station-Id`). Site delete / organization archive soft-delete
 the scope's access points, NAS clients and network devices. Idempotency fingerprints are keyed
 HMACs. 409s of cross-tenant unique indexes omit `constraint`.
+
+### Implementation notes (multi-vendor Cycle C, 2026-10-10, D-044)
+
+F3 external captive portal post-back engine (`external-portal-postback`, migration **030**;
+docs/VENDOR_INTEGRATION_RESEARCH.md §3.4; MULTI_VENDOR_INTEGRATION_PLAN.md §14).
+
+| Path | Method | Permission | Notes |
+|---|---|---|---|
+| `/api/v1/orgs/{orgId}/nas` (+ `/{id}`) | POST, PATCH | `nas:create` / `nas:update` | New body field `adapter_config` (object). Required and validated (`parsePostbackNasConfig`, strict allow-list, unknown keys refused) when `adapter_key = external-portal-postback`: `{profile, https?, login_target?, login_hosts?[≤ 8], generic?}`; stored normalised. Any other adapter takes none (`{}`; a non-empty object is a 422). Changing the adapter away from post-back clears it; changing it to post-back re-validates the stored config |
+| `/api/v1/orgs/{orgId}/nas/{id}/setup-guide` | GET | `nas:read` | `{id, adapter_key, profile, steps[]}`: "how to configure this device" steps in ECLOUD wording, values filled from the NAS (portal URL `https://portal.ezecloud.ezelink.ai/pb/<profile>/<nas_identifier>/`), every secret a placeholder (`<RADIUS_SECRET>`). Empty for an unconfigured post-back NAS |
+
+Portal public (portal process): `GET /pb/{profile}[/{nasid}]/` — vendor redirect entry. Profile
+segment `^[a-z][a-z0-9-]{1,39}$`, NAS id segment `^[A-Za-z0-9._:-]{1,64}$`; the raw query is
+forwarded byte-for-byte; the answer is a 303 to `/f/{token}` or one generic error page. The method
+pages carry the single-use login token (hidden `lt`); a successful identify renders an
+auto-submitting form (`script-src 'nonce-…'` on that page only, no-JS "Continue" button) whose
+action must have exactly the login origin the API validated (`isPostbackHandoff`); CSP
+`form-action 'self' <login origin>`; `Cache-Control: no-store`.
+
+Internal (`X-Internal-Token`):
+
+- `POST /internal/portal/postback/redirects` `{profile, nasid?, raw_query ≤ 4 KB, client_ip?}` →
+  `{kind:"flow", flow_id, expires_at}` | `{kind:"error"}` | 429 / 503. NAS resolution by
+  `findNasByIdentity` before any query value is trusted: NAS identifier (portal path or the
+  profile's NAS-ID parameter, which must agree) or else a **verified** AP MAC; the NAS must use
+  `external-portal-postback` with this profile; the site needs an active `captive_portals` row of
+  type `external` (pinned by `adapter_config.nas_client_id` or the only one). The adapter refuses
+  a login URL that is not the AP / controller (private RFC 1918 / 6598 IPv4, the registered NAS IP,
+  an operator login host, or a documented intercept name such as `securelogin.arubanetworks.com`;
+  loopback, link-local / metadata, IPv6, userinfo, backslash, foreign hosts and wrong ports /
+  paths refused) and a replayed vendor nonce (`magic`, `ga_Qv`; `nonceKind = vendor-nonce`).
+  Generic profile: the NAS id must be in the path. Same rate limits as UAM redirects.
+- `GET /internal/portal/flows/{id}` for a post-back flow adds `postback: {login_origin,
+  login_token}` (token: Cycle A `lt1.…`, TTL 300 s, bound to org / site / NAS / client MAC / flow,
+  re-issued on every view); `nas` is null; `continue_url` from the profile's continue parameter
+  through `safeUserUrl`.
+- `POST /internal/portal/flows/{id}/identify` accepts `login_token`; for a post-back flow it is
+  required and consumed exactly once (Redis `SET NX`) before the identity is checked — missing,
+  forged, expired, foreign-flow or replayed → 403 `{result:"login_token_invalid"}`. A successful
+  post-back hand-off answers `handoff: {method:"POST-form", url, fields}` (fields = profile
+  constants, echoed vendor fields, the single-use `pc-…` credential); GET profiles answer
+  `GET-302` as before. The credential's replay key is the vendor nonce or the consumed login token
+  id, marked by AAA on Access-Accept.
+- `/internal/aaa/authorize`: unchanged code path — the `pc-…` credential is checked against the
+  packet-source NAS, the bound client MAC and single use. Engine adapter `external-portal-postback`
+  declares Session-Timeout / Idle-Timeout / Acct-Interim-Interval / Class as REQUIRES_DEVICE_TEST
+  (emitted only in lab mode, D-028) and no rate / quota / VLAN attribute.
+
+Cycle C review fixes: NAS `adapter_config` gains `strict_login_hosts` (boolean) and, for
+`postback-generic`, required `generic.login_path` + optional `generic.login_port`; login URLs are
+limited to documented ports and RFC 1918 / registered / configured hosts. NAS create / patch answer
+a generic 409 when a NAS identifier would collide across organizations for adapters that expose it
+in public URLs (`external-portal-postback`, `mikrotik-hotspot`). Details:
+MULTI_VENDOR_INTEGRATION_PLAN.md §14.1.

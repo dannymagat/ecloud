@@ -52,6 +52,10 @@ const EN = {
   'status.logout': 'Sign out',
   'logout.text': 'You have been signed out of the Wi-Fi network.',
   'skip.main': 'Skip to content',
+  'title.handoff': 'Connecting',
+  'handoff.text': 'Connecting you to the Wi-Fi network. If nothing happens, select Continue.',
+  'handoff.button': 'Continue',
+  'form.token': 'This sign-in page needs to be refreshed. Please try again.',
 } as const;
 
 export type MessageKey = keyof typeof EN;

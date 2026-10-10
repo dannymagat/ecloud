@@ -29,15 +29,33 @@ export interface FlowView {
   nasOrigin: string | null;
   continueUrl: string | null;
   notice: 'session_expired' | null;
+  /**
+   * Cycle C: post-back flows only. `loginOrigin` = validated AP / controller login origin (the
+   * only extra form-action allowed), `loginToken` = single-use ECLOUD login token for the forms.
+   */
+  postback?: { loginOrigin: string; loginToken: string } | null;
 }
 
 export type IdentifyInput =
-  | { method: 'password'; username: string; password: string; client_ip?: string }
-  | { method: 'voucher'; code: string; client_ip?: string }
-  | { method: 'click_through'; accept_terms: true; client_ip?: string };
+  | {
+      method: 'password';
+      username: string;
+      password: string;
+      client_ip?: string;
+      login_token?: string;
+    }
+  | { method: 'voucher'; code: string; client_ip?: string; login_token?: string }
+  | { method: 'click_through'; accept_terms: true; client_ip?: string; login_token?: string };
 
 export type IdentifyOutcome =
-  | { result: 'ok'; handoffUrl: string }
+  | {
+      result: 'ok';
+      handoffUrl: string;
+      /** Cycle C: `POST-form` hand-offs carry the form fields (single-use credential). */
+      handoffMethod?: 'GET-302' | 'POST-form';
+      fields?: Record<string, string>;
+    }
+  | { result: 'login_token_invalid' }
   | { result: 'rejected' }
   | { result: 'rate_limited'; retryAfter: number }
   | { result: 'flow_not_found' }
@@ -66,6 +84,13 @@ export interface AssetResponse {
 export interface PortalApi {
   redirect(input: {
     flavour: 'uspot' | 'chilli';
+    rawQuery: string;
+    clientIp: string | null;
+  }): Promise<RedirectOutcome>;
+  /** Cycle C: external captive portal post-back entry (`/pb/<profile>[/<nasid>]/`). */
+  postbackRedirect?(input: {
+    profile: string;
+    nasid: string | null;
     rawQuery: string;
     clientIp: string | null;
   }): Promise<RedirectOutcome>;
@@ -157,6 +182,29 @@ export class HttpPortalApi implements PortalApi {
     }
   }
 
+  async postbackRedirect(input: {
+    profile: string;
+    nasid: string | null;
+    rawQuery: string;
+    clientIp: string | null;
+  }): Promise<RedirectOutcome> {
+    const r = await this.call('POST', '/internal/portal/postback/redirects', {
+      profile: input.profile,
+      ...(input.nasid === null ? {} : { nasid: input.nasid }),
+      raw_query: input.rawQuery,
+      ...(input.clientIp === null ? {} : { client_ip: input.clientIp }),
+    });
+    if (r === null) return { kind: 'unavailable' };
+    const j = r.json;
+    const flowId = str(j.flow_id);
+    const exp = str(j.expires_at);
+    if (j.kind === 'flow' && flowId !== null && exp !== null)
+      return { kind: 'flow', flowId, expiresAt: new Date(exp) };
+    if (j.kind === 'rate_limited')
+      return { kind: 'rate_limited', retryAfter: Number(j.retry_after) || 60 };
+    return { kind: 'error' };
+  }
+
   async flow(flowId: string): Promise<FlowView | null | 'unavailable'> {
     const r = await this.call('GET', `/internal/portal/flows/${encodeURIComponent(flowId)}`);
     if (r === null) return 'unavailable';
@@ -166,6 +214,7 @@ export class HttpPortalApi implements PortalApi {
     const theme = j.theme as Json | null;
     const terms = j.terms as Json | null;
     const nas = j.nas as Json | null;
+    const pb = j.postback as Json | null | undefined;
     const methods = Array.isArray(j.methods)
       ? (j.methods as unknown[]).filter(
           (m): m is 'password' | 'voucher' | 'click_through' =>
@@ -197,6 +246,12 @@ export class HttpPortalApi implements PortalApi {
       nasOrigin: nas === null || typeof nas !== 'object' ? null : str(nas.origin),
       continueUrl: str(j.continue_url),
       notice: j.notice === 'session_expired' ? 'session_expired' : null,
+      postback:
+        pb === null || pb === undefined || typeof pb !== 'object'
+          ? null
+          : str(pb.login_origin) !== null && str(pb.login_token) !== null
+            ? { loginOrigin: str(pb.login_origin) ?? '', loginToken: str(pb.login_token) ?? '' }
+            : null,
     };
   }
 
@@ -210,9 +265,24 @@ export class HttpPortalApi implements PortalApi {
     const j = r.json;
     switch (j.result) {
       case 'ok': {
-        const url = str((j.handoff as Json | undefined)?.url);
-        return url === null ? { result: 'handoff_unavailable' } : { result: 'ok', handoffUrl: url };
+        const h = (j.handoff ?? {}) as Json;
+        const url = str(h.url);
+        if (url === null) return { result: 'handoff_unavailable' };
+        if (h.method === 'POST-form') {
+          const raw = h.fields;
+          if (typeof raw !== 'object' || raw === null || Array.isArray(raw))
+            return { result: 'handoff_unavailable' };
+          const fields: Record<string, string> = {};
+          for (const [k, v] of Object.entries(raw as Json)) {
+            if (typeof v !== 'string') return { result: 'handoff_unavailable' };
+            fields[k] = v;
+          }
+          return { result: 'ok', handoffUrl: url, handoffMethod: 'POST-form', fields };
+        }
+        return { result: 'ok', handoffUrl: url, handoffMethod: 'GET-302' };
       }
+      case 'login_token_invalid':
+        return { result: 'login_token_invalid' };
       case 'rate_limited':
         return { result: 'rate_limited', retryAfter: Number(j.retry_after) || 60 };
       case 'rejected':

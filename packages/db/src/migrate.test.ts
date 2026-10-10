@@ -287,7 +287,11 @@ describe('repository migrations', () => {
     expect(files.length).toBeGreaterThanOrEqual(11);
     expect(files[0]?.file).toBe('001_functions.sql');
     expect(files.every((f) => !f.noTransaction)).toBe(true);
-    expect(files.map((f) => Number(f.version))).toEqual(files.map((_, i) => i + 1));
+    // Strictly increasing and unique. Parallel cycle branches reserve numbers (Cycle C = 030),
+    // so a branch may carry a gap until the branches merge.
+    const versions = files.map((f) => Number(f.version));
+    expect(versions.every((v, i) => i === 0 || v > (versions[i - 1] ?? 0))).toBe(true);
+    expect(versions[0]).toBe(1);
     expect(files.every((f) => /SET LOCAL lock_timeout/.test(f.sql))).toBe(true);
   });
 });

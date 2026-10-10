@@ -59,6 +59,8 @@ export const ADAPTER_KEYS = [
   'uspot-upstream-uam',
   'coovachilli-uam',
   'generic-radius-8021x',
+  // Cycle C (migration 030): external captive portal post-back engine (vendor profiles).
+  'external-portal-postback',
 ] as const;
 
 /** Human labels for the NAS adapter dropdown (the key stays visible for support). */
@@ -68,6 +70,8 @@ export const ADAPTER_LABELS: Readonly<Record<(typeof ADAPTER_KEYS)[number], stri
   'uspot-upstream-uam': 'OpenWrt uspot captive portal',
   'coovachilli-uam': 'CoovaChilli gateway captive portal',
   'generic-radius-8021x': 'Any vendor: 802.1X / MAC auth (generic RADIUS)',
+  'external-portal-postback':
+    'External captive portal (Cambium, Aruba, Cisco, Fortinet, Ruckus, Omada, Huawei, any vendor)',
 };
 
 export interface StatusPresentation {

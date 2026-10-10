@@ -957,6 +957,26 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/api/v1/orgs/{orgId}/nas/{id}/setup-guide': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Setup guide steps for a NAS (filled values; secrets as placeholders)
+     * @description Permission: `nas:read`
+     */
+    get: operations['get_api_v1_orgs_orgId_nas_id_setup_guide'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/api/v1/orgs/{orgId}/users': {
     parameters: {
       query?: never;
@@ -5808,7 +5828,8 @@ export interface operations {
           | 'uspot-upstream-uam'
           | 'coovachilli-uam'
           | 'openwifi-config'
-          | 'generic-radius-8021x';
+          | 'generic-radius-8021x'
+          | 'external-portal-postback';
       };
       header?: never;
       path: {
@@ -7384,13 +7405,17 @@ export interface operations {
     requestBody?: {
       content: {
         'application/json': {
+          adapter_config?: {
+            [key: string]: unknown;
+          };
           /** @enum {string} */
           adapter_key:
             | 'openwifi-hostapd-radius'
             | 'openwifi-uspot-uam'
             | 'uspot-upstream-uam'
             | 'coovachilli-uam'
-            | 'generic-radius-8021x';
+            | 'generic-radius-8021x'
+            | 'external-portal-postback';
           coa_port?: number | null;
           coa_supported?: boolean | null;
           controller_id?: string | null;
@@ -7591,13 +7616,17 @@ export interface operations {
     requestBody?: {
       content: {
         'application/json': {
+          adapter_config?: {
+            [key: string]: unknown;
+          };
           /** @enum {string} */
           adapter_key?:
             | 'openwifi-hostapd-radius'
             | 'openwifi-uspot-uam'
             | 'uspot-upstream-uam'
             | 'coovachilli-uam'
-            | 'generic-radius-8021x';
+            | 'generic-radius-8021x'
+            | 'external-portal-postback';
           coa_port?: number | null;
           coa_supported?: boolean | null;
           controller_id?: string | null;
@@ -7691,6 +7720,69 @@ export interface operations {
     requestBody?: never;
     responses: {
       /** @description New secret */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            id: string;
+          } & {
+            [key: string]: unknown;
+          };
+        };
+      };
+      /** @description Validation failed (application/problem+json) */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Authentication required */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Permission denied */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Not found (also returned for objects of other tenants) */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+    };
+  };
+  get_api_v1_orgs_orgId_nas_id_setup_guide: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        orgId: string;
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Setup guide */
       200: {
         headers: {
           [name: string]: unknown;

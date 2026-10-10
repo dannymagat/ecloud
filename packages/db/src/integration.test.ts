@@ -597,6 +597,7 @@ await describeIntegration('@ecloud/db schema', () => {
     const keys = await platform.selectFrom('adapter_types').select('key').orderBy('key').execute();
     expect(keys.map((k) => k.key)).toEqual([
       'coovachilli-uam',
+      'external-portal-postback',
       'generic-radius-8021x',
       'openwifi-config',
       'openwifi-hostapd-radius',

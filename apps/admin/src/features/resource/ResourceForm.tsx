@@ -27,6 +27,10 @@ function FieldInput({
     placeholder: field.placeholder,
   };
   switch (field.type) {
+    case 'custom':
+      return field.render === undefined ? null : (
+        <>{field.render({ value: String(value), values: {}, error, onChange })}</>
+      );
     case 'checkbox':
       return (
         <CheckboxField
@@ -109,7 +113,7 @@ export function ResourceForm({
   footer,
   onValuesChange,
 }: ResourceFormProps) {
-  const visible = fields.filter((f) => !(mode === 'edit' && f.createOnly));
+  const shown = fields.filter((f) => !(mode === 'edit' && f.createOnly));
   const [original] = useState(() => initialValues(fields, row));
   const [values, setValues] = useState<FormValues>(original);
   const errors = fieldErrors(problem);
@@ -120,24 +124,30 @@ export function ResourceForm({
   return (
     <form onSubmit={submit} className="space-y-4">
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        {visible.map((f) => (
-          <div
-            key={f.name}
-            className={f.type === 'textarea' || f.type === 'checkbox' ? 'sm:col-span-2' : undefined}
-          >
-            <FieldInput
-              field={f}
-              orgId={orgId}
-              value={values[f.name] ?? ''}
-              error={errors[f.name]}
-              onChange={(v) => {
-                const next = { ...values, [f.name]: v };
-                setValues(next);
-                onValuesChange?.(next);
-              }}
-            />
-          </div>
-        ))}
+        {shown
+          .filter((f) => f.visibleWhen === undefined || f.visibleWhen(values))
+          .map((f) => (
+            <div
+              key={f.name}
+              className={
+                f.type === 'textarea' || f.type === 'checkbox' || f.type === 'custom'
+                  ? 'sm:col-span-2'
+                  : undefined
+              }
+            >
+              <FieldInput
+                field={f}
+                orgId={orgId}
+                value={values[f.name] ?? ''}
+                error={errors[f.name]}
+                onChange={(v) => {
+                  const next = { ...values, [f.name]: v };
+                  setValues(next);
+                  onValuesChange?.(next);
+                }}
+              />
+            </div>
+          ))}
       </div>
       <ProblemAlert problem={problem} />
       {footer}

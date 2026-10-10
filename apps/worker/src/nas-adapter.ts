@@ -13,6 +13,8 @@ export const NAS_ADAPTER_KEYS: readonly string[] = Object.freeze([
   'coovachilli-uam',
   // Cycle A (D-044, migration 028): vendor-neutral 802.1X / MAC-auth NAS.
   'generic-radius-8021x',
+  // Cycle C (D-044, migration 030): external captive portal post-back (vendor profiles).
+  'external-portal-postback',
 ]);
 
 export function resolveAdapter(adapterKey: string | null): NasAdapter | null {

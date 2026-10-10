@@ -15,6 +15,8 @@ export const NAS_ADAPTER_KEYS = [
   'coovachilli-uam',
   // Cycle A (D-044, migration 028): vendor-neutral 802.1X / MAC-auth NAS.
   'generic-radius-8021x',
+  // Cycle C (D-044, migration 030): external captive portal post-back (vendor profiles).
+  'external-portal-postback',
 ] as const;
 
 export type NasAdapterKey = (typeof NAS_ADAPTER_KEYS)[number];

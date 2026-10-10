@@ -2,9 +2,17 @@
  * Tenant resources built on the generic CRUD factory: sites, network devices, NAS clients,
  * subscribers, user groups, client devices, schedules.
  */
-import { hashPassword } from '@ecloud/db';
+import {
+  POSTBACK_ADAPTER_KEY,
+  getVendorAdapter,
+  parsePostbackNasConfig,
+  postbackAdapterForNas,
+  serializePostbackNasConfig,
+} from '@ecloud/adapters';
+import { hashPassword, withPlatform } from '@ecloud/db';
 import { ScheduleRuleSchema, isValidTimeZone } from '@ecloud/policy-engine';
 import {
+  ConflictError,
   NAS_ADDRESS_RULE,
   NotFoundError,
   ValidationError,
@@ -108,8 +116,84 @@ const NasCreate = z.strictObject({
   deployment_mode: z.enum(DEPLOYMENT_MODES).optional(),
   /** Migration 019: a controller of the same organization (and of the NAS site when site-bound). */
   controller_id: z.uuid().nullable().optional(),
+  /**
+   * Migration 030 (Cycle C): adapter settings; only `external-portal-postback` uses them (post-back
+   * profile, login hosts, generic parameter names). Validated by `parsePostbackNasConfig`.
+   */
+  adapter_config: z.record(z.string(), z.unknown()).optional(),
 });
 const NasUpdate = NasCreate.partial().extend({ status: z.enum(['active', 'disabled']).optional() });
+
+/**
+ * Cycle C: the stored `adapter_config` for `adapterKey`. The post-back adapter needs a valid
+ * profile config (strict allow-list, normalised); every other adapter takes none (`{}`).
+ */
+export function nasAdapterConfigFor(adapterKey: string | null, input: unknown): string {
+  if (adapterKey === POSTBACK_ADAPTER_KEY) {
+    const parsed = parsePostbackNasConfig(input ?? null);
+    if (!parsed.ok) {
+      throw new ValidationError(
+        parsed.errors.map((e) => ({
+          path: `body.adapter_config${e.path === '' || e.path.startsWith('adapter_config') ? e.path.replace(/^adapter_config/, '') : `.${e.path}`}`,
+          message: e.message,
+        })),
+      );
+    }
+    return JSON.stringify(serializePostbackNasConfig(parsed.config));
+  }
+  if (
+    input !== undefined &&
+    input !== null &&
+    !(typeof input === 'object' && Object.keys(input).length === 0)
+  ) {
+    throw new ValidationError([
+      { path: 'body.adapter_config', message: `only used by the ${POSTBACK_ADAPTER_KEY} adapter` },
+    ]);
+  }
+  return '{}';
+}
+
+/**
+ * Review L1: adapters whose NAS identifier is part of a public portal URL
+ * (`/pb/<profile>/<nasid>/`) or of the redirect itself (MikroTik `identity`). The portal resolves
+ * a NAS identifier before any tenant is known and refuses an ambiguous one, so another
+ * organization registering the same identifier would deny service. For these adapters the
+ * identifier is unique across organizations among live NAS (in both directions); identifiers of
+ * other adapters keep the per-organization rule (unchanged).
+ */
+export const PUBLIC_NAS_IDENTIFIER_ADAPTERS: ReadonlySet<string> = new Set([
+  POSTBACK_ADAPTER_KEY,
+  'mikrotik-hotspot',
+]);
+
+const IDENTIFIER_CHECK_ACCESS = Object.freeze({ reason: 'nas-identifier-check', audit: false });
+
+/** Generic 409 (no tenant detail) when the identifier collides across organizations (L1). */
+export async function assertNasIdentifierAvailable(
+  deps: AppDeps,
+  input: { orgId: string; identifier: unknown; adapterKey: unknown },
+): Promise<void> {
+  if (typeof input.identifier !== 'string' || input.identifier === '') return;
+  const identifier = input.identifier;
+  const others = await withPlatform(deps.dbPlatform, IDENTIFIER_CHECK_ACCESS, (trx) =>
+    trx
+      .selectFrom('nas_clients')
+      .select(['adapter_key'])
+      .where('nas_identifier', '=', identifier)
+      .where('organization_id', '<>', input.orgId)
+      .where('deleted_at', 'is', null)
+      .limit(20)
+      .execute(),
+  );
+  const mine =
+    typeof input.adapterKey === 'string' && PUBLIC_NAS_IDENTIFIER_ADAPTERS.has(input.adapterKey);
+  if (
+    others.length > 0 &&
+    (mine || others.some((o) => PUBLIC_NAS_IDENTIFIER_ADAPTERS.has(o.adapter_key ?? '')))
+  ) {
+    throw new ConflictError();
+  }
+}
 
 const AUTH_METHODS = ['password', 'mac', 'voucher', 'idp'] as const;
 export const UserCreate = z.strictObject({
@@ -298,6 +382,11 @@ export function resourceRoutes(deps: AppDeps): AnyRouteSpec[] {
     serialize: (row) => withoutKeys(row, ['secret_ref']),
     prepareCreate: async (body, hook) => {
       await assertRef(hook.trx, 'sites', body.site_id as string, 'site');
+      await assertNasIdentifierAvailable(deps, {
+        orgId: hook.orgId,
+        identifier: body.nas_identifier,
+        adapterKey: body.adapter_key,
+      });
       if (typeof body.network_device_id === 'string') {
         await assertRef(hook.trx, 'network_devices', body.network_device_id, 'network_device');
       }
@@ -318,6 +407,7 @@ export function resourceRoutes(deps: AppDeps): AnyRouteSpec[] {
       hook.scratch.secret = secret;
       return {
         ...body,
+        adapter_config: nasAdapterConfigFor(body.adapter_key as string, body.adapter_config),
         deployment_mode: deploymentMode,
         adapter_type_key: body.adapter_key,
         secret_ref: sealSecretRef(dataEnvelope, secret),
@@ -326,16 +416,39 @@ export function resourceRoutes(deps: AppDeps): AnyRouteSpec[] {
     afterCreate: (row, hook) => Promise.resolve({ ...row, secret: hook.scratch.secret }),
     // Cycle A (migration 028): a deleted NAS takes its access points along (frees their MACs).
     beforeDelete: (before, { trx }) => softDeleteAccessPointsOf(trx, before.id as string),
-    preparePatch: async (body, before, { trx }) => {
+    preparePatch: async (body, before, { trx, orgId }) => {
       if (typeof body.site_id === 'string') await assertRef(trx, 'sites', body.site_id, 'site');
       if (typeof body.network_device_id === 'string') {
         await assertRef(trx, 'network_devices', body.network_device_id, 'network_device');
       }
       await assertControllerOnPatch(trx, body, before);
+      // Review L1: the resulting identifier / adapter pair must not collide across organizations.
+      if (body.nas_identifier !== undefined || body.adapter_key !== undefined) {
+        await assertNasIdentifierAvailable(deps, {
+          orgId,
+          identifier:
+            body.nas_identifier !== undefined ? body.nas_identifier : before.nas_identifier,
+          adapterKey: body.adapter_key !== undefined ? body.adapter_key : before.adapter_key,
+        });
+      }
       const next: Row =
         typeof body.adapter_key === 'string'
           ? { ...body, adapter_type_key: body.adapter_key }
           : { ...body };
+      // Cycle C: re-validate the adapter config whenever it or the adapter changes.
+      // Review L8: an adapter_key set to null (not accepted by the API schema today) clears too.
+      if (body.adapter_config !== undefined || body.adapter_key !== undefined) {
+        const effectiveKey = (
+          body.adapter_key !== undefined ? body.adapter_key : before.adapter_key
+        ) as string | null;
+        const input =
+          body.adapter_config !== undefined
+            ? body.adapter_config
+            : effectiveKey === POSTBACK_ADAPTER_KEY
+              ? before.adapter_config
+              : undefined;
+        next.adapter_config = nasAdapterConfigFor(effectiveKey, input);
+      }
       if (body.deployment_mode !== undefined || typeof body.adapter_key === 'string') {
         const adapterKey = (body.adapter_key ?? before.adapter_key) as string | null;
         if (adapterKey !== null) {
@@ -409,6 +522,64 @@ export function resourceRoutes(deps: AppDeps): AnyRouteSpec[] {
         return before;
       });
       return { status: 200, body: { id: row.id, secret } };
+    },
+  });
+
+  /**
+   * Cycle C: "how to configure your device" steps for a NAS (docs/VENDOR_INTEGRATION_RESEARCH.md
+   * §5): ECLOUD wording, values filled from the NAS (portal URL with its identifier), every
+   * secret a placeholder. Read-only; never returns a secret.
+   */
+  const nasSetupGuide = defineRoute({
+    method: 'get',
+    path: '/api/v1/orgs/:orgId/nas/:id/setup-guide',
+    summary: 'Setup guide steps for a NAS (filled values; secrets as placeholders)',
+    tags: ['nas'],
+    auth: 'principal',
+    permission: 'nas:read',
+    scope: 'any-site',
+    params: OrgIdParams,
+    responses: {
+      200: { description: 'Setup guide', schema: ResourceSchema },
+      ...problemResponses,
+    },
+    handler: async ({ params, ctx }) => {
+      const row = await inTenant(deps, params.orgId, async (trx) => {
+        const r = await loose(trx)
+          .selectFrom('nas_clients')
+          .select(['id', 'site_id', 'nas_identifier', 'nas_ip', 'adapter_key', 'adapter_config'])
+          .where('id', '=', params.id)
+          .where('deleted_at', 'is', null)
+          .executeTakeFirst();
+        if (r === undefined) throw new NotFoundError('nas_client', params.id);
+        requireOnSite(ctx, 'nas:read', params.orgId, r.site_id as string, 'nas_client', 'nas:read');
+        return r;
+      });
+      const adapterKey = row.adapter_key as string | null;
+      const site = {
+        siteId: row.site_id as string,
+        nasId: (row.nas_identifier as string | null) ?? '<NAS_IDENTIFIER>',
+      };
+      let profile: string | null = null;
+      let steps: readonly unknown[] = [];
+      if (adapterKey === POSTBACK_ADAPTER_KEY) {
+        const built = postbackAdapterForNas({
+          adapterConfig: row.adapter_config as Record<string, unknown>,
+          nasIp: String(row.nas_ip),
+        });
+        profile = built?.profile.key ?? null;
+        steps = built === null ? [] : built.adapter.buildSetupGuide(site);
+      } else if (adapterKey !== null) {
+        try {
+          steps = getVendorAdapter(adapterKey).buildSetupGuide(site);
+        } catch {
+          steps = [];
+        }
+      }
+      return {
+        status: 200,
+        body: { id: row.id as string, adapter_key: adapterKey, profile, steps },
+      };
     },
   });
 
@@ -546,6 +717,7 @@ export function resourceRoutes(deps: AppDeps): AnyRouteSpec[] {
     ...networkDevices,
     ...nas,
     rotateNasSecret,
+    nasSetupGuide,
     ...users,
     ...userGroups,
     ...clientDevices,

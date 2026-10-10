@@ -66,6 +66,11 @@ export interface ParsedRedirect {
   readonly rawQuery: string;
   readonly signature: { readonly kind: 'uam-md5' | 'none'; readonly value: string | null };
   readonly result: 'notyet' | 'already' | 'success' | 'failed' | 'logoff' | 'other' | null;
+  /**
+   * Cycle C (post-back): NAS identifier taken from the ECLOUD portal URL path
+   * (`/pb/<profile>/<nasid>/`), which the operator configures on the AP / controller.
+   */
+  readonly pathNasId?: string | null;
 }
 
 export type ContextValidationFailure =
@@ -133,6 +138,10 @@ export interface RegisteredNas {
   readonly uamServerUrl: string | null;
   /** UAM secret, decrypted server-side; never copied into a context or hand-off. */
   readonly uamSecret: string | null;
+  /** Cycle C: registered RADIUS source address (`nas_clients.nas_ip`), a valid login host. */
+  readonly nasIp?: string | null;
+  /** Cycle C: `nas_clients.adapter_config` (post-back profile selection; no secrets). */
+  readonly adapterConfig?: Readonly<Record<string, unknown>> | null;
 }
 
 /** Injected lookup (keeps this package free of DB / network). */

@@ -19,6 +19,8 @@ export const ADAPTER_KEYS = [
   'openwifi-config',
   /** Cycle A (D-044): vendor-neutral 802.1X / MAC-auth NAS (no portal). */
   'generic-radius-8021x',
+  /** Cycle C (D-044): F3 external captive portal post-back engine (vendor profiles). */
+  'external-portal-postback',
 ] as const;
 
 export type AdapterKey = (typeof ADAPTER_KEYS)[number];
@@ -28,7 +30,9 @@ export type PortalType =
   | 'uam-chillispot'
   | 'uam-chillispot+capport'
   | 'uam-chillispot+wispr+json'
-  | 'config-only';
+  | 'config-only'
+  /** Cycle C: AP/controller redirects to ECLOUD, the browser posts credentials back to the AP. */
+  | 'external-postback';
 
 /**
  * `mikrotik-rate-string`: one combined `rx/tx` string attribute (Mikrotik-Rate-Limit, rendered by

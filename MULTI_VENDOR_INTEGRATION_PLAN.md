@@ -820,3 +820,98 @@ EAP-TTLS. Still open: per-vendor Called-Station-Id parsing, the "API limits" tra
 - **L4.** Replay keys are `pf:replay:v2:` + SHA-256 of a JSON array (unambiguous). Migration: `isReplayed` also reads the legacy `|`-joined UAM key; nothing writes it any more, so legacy markers expire within `REPLAY_TTL_S` (24 h); remove `legacyReplayKey` after that window.
 - **L5.** Call-Check MAC auth uses strict MAC parsing only and rejects when neither User-Name nor Calling-Station-Id is a MAC.
 - **L6.** `apps/api/src/internal/login-token-store.ts` (Redis `SET NX EX` claim; store error → `ServiceUnavailableError` 503), integration-tested against the test Redis.
+
+## 14. Multi-vendor Cycle C (post-back engine) — BUILT LOCALLY (2026-10-10, D-044)
+
+Scope (D-044 "C"): the F3 `external-portal-postback` engine with vendor profiles; Cambium and
+Aruba first (owner priority), then Cisco, Fortinet, Ruckus, Omada (portal mode), Huawei (HTTP
+only) and a configurable "any vendor" profile. LOCAL only: no device, server or VPS change, no
+FreeRADIUS image change. Every profile is **DOCUMENTED / REQUIRES_DEVICE_TEST**; nothing is
+VERIFIED and no registry row moved beyond `implemented` (D-028, D-034).
+
+| # | Deliverable | Where | Notes |
+|---|---|---|---|
+| C1 | Engine adapter key | `packages/adapters/src/adapters/external-portal-postback.ts`; policy-engine `ADAPTER_KEYS` + `PortalType 'external-postback'`; migration **030** (`adapter_types`, NAS adapter CHECK rebuilt append-only, `nas_clients.adapter_config jsonb` object ≤ 8 KB); registry vendor `generic-postback` + row `external-portal-postback` (implemented, native + gateway, no model / firmware claim); NAS dropdown | Reply: Session-Timeout, Idle-Timeout, Acct-Interim-Interval, Class declared REQUIRES_DEVICE_TEST (so emitted only in lab mode); rate, quota, VLAN, burst UNSUPPORTED (no vendor rate attribute documented to vendor-doc level; Cambium `WIFI_ALLIANCE_MAX_*` dictionary / units UNKNOWN; Aruba-User-Role not modelled); validity / voucher / schedule / concurrency ECLOUD_SIDE_ONLY; Disconnect `rfc5176-das` REQUIRES_DEVICE_TEST, no CoA change. Only standard RADIUS attributes → stock FreeRADIUS dictionaries suffice, no image change |
+| C2 | Engine | `packages/adapters/src/vendor/postback/engine.ts` | `parseRedirect` keeps the raw query; `/pb/<profile>/<nasid>/` path NAS id. `validateContext`: duplicates refused, client MAC unicast, NAS id (path or profile parameter, must agree) else AP MAC → `findNas` (verified-AP rule of Cycle A, fail closed), adapter + profile of the registered NAS must match, tenant check, `resolveLoginUrl` / `checkLoginUrl` (login URL must be the AP / controller: private IPv4, the registered NAS IP, an operator `login_hosts` entry or a documented intercept name; refuses loopback, 0/8, link-local / metadata, multicast, IPv6, userinfo, backslash / control characters, fragments, foreign hosts, wrong scheme / port / path), vendor-nonce replay (`magic`, `ga_Qv`). `authorizeSession`: binding / expiry checks, vendor limits (Fortinet 125-character post data, Ruckus 31-character password), POST-form (Cambium: received query appended byte-for-byte) or GET-302 |
+| C3 | Profiles | `packages/adapters/src/vendor/postback/profiles.ts` | See the table below. Names only from the research document's vendor / vendor-community sources; third-party-only names are listed as REQUIRES_CLARIFICATION and left out |
+| C4 | Generic profile + NAS config | `packages/adapters/src/vendor/postback/config.ts`; `apps/api/src/routes/resources.ts` (`adapter_config`); admin `PostbackProfileEditor` on the NAS form | Fixed `login_path` + optional `login_port` (§14.1 M1); names `^[A-Za-z][A-Za-z0-9_.-]{0,31}$`, client MAC + login URL parameters required, no duplicates, ≤ 8 constants (`[A-Za-z0-9_.:@/+-]{0,64}`), ≤ 8 login hosts, POST or GET, optional query append; the generic profile needs the NAS id in the portal path (parameter names are per NAS) |
+| C5 | Portal flow | `apps/api/src/internal/portal-postback.ts` (`POST /internal/portal/postback/redirects`), `internal/portal.ts` (flow view, identify), `apps/portal` (`GET /pb/...`, hand-off page) | Flow view issues a Cycle A login token (TTL 300 s, bound to org / site / NAS / client MAC / flow); identify consumes it once (`SET NX`) before any identity check, then issues the existing single-use `pc-…` credential (90 s, NAS + MAC bound) and returns `POST-form` fields. The portal renders an auto-submitting form (nonce'd script, no-JS button) to the exact validated login origin (CSP `form-action`), `no-store`. AAA path unchanged |
+| C6 | Setup guides | `postbackSetupGuide`; `GET /api/v1/orgs/{orgId}/nas/{id}/setup-guide`; admin "Setup guide" row action | ECLOUD wording, portal URL filled with the NAS identifier, vendor UI names where documented, every secret a placeholder |
+
+Profiles (all DOCUMENTED / REQUIRES_DEVICE_TEST):
+
+| Profile | Identity | Login target | Fields posted | Nonce | Source (research §1 / plan §7.3) |
+|---|---|---|---|---|---|
+| `cambium-hotspot` | `ga_nas_id` (or path), AP `ga_ap_mac`, client `ga_cmac` | `http://<ga_srvr>:880/cgi-bin/hotspot_login.cgi` (`https` option → :444) + received query | `ga_user`, `ga_pass` | `ga_Qv` | C1, C2 (V-c, H) |
+| `aruba-ecp` | path or verified AP `apmac`; client `mac`, `essid`, `ip`, `url` | `https://securelogin.arubanetworks.com/cgi-bin/login`; `login_target=switchip` → `https://<switchip>/cgi-bin/login` | `cmd=authenticate`, `user`, `password`, `url` | none | HPE Instant / CLI-Bank + V-c PDF (M) |
+| `cisco-webauth` | path or verified `ap_mac`; client `client_mac`, `ssid` | `switch_url` | `buttonClicked=4`, `err_flag=0`, `username`, `password`, `redirectUrl` (when a safe continue URL exists) | none | Cisco 217457 (H) |
+| `fortinet-ecp` | path or verified `apmac`; client `usermac`, `userip`, `ssid` | `post` (path `/fgtauth`) | `magic`, `username`, `password` (≤ 125 chars) | `magic` | Fortinet 7.4.2 + V-c (H) |
+| `ruckus-wispr` | path or verified `mac`; client `client_mac` (unencrypted), `uip`, `ssid`, `url` | `http://<sip>:9997/login` (`https` → :9998) | `username`, `password` (≤ 31), `ip` | none | ZD app note + Ruckus One (M) |
+| `omada-external-portal` | path or verified `apMac` / `gatewayMac`; client `clientMac` | `<scheme>://<target>:<targetPort>/portal/radius/browserauth` | `authType=2`, echoed `clientMac`, `clientIP`, `apMac`, `gatewayMac`, `ssidName`, `vid`, `radioId`, `originUrl`, `username`, `password` | none | Omada 13025 (H) |
+| `huawei-portal` | path or verified `device-mac`; client `user-mac` | `loginurl` | `username`, `password` | none | third-party only (L); keyword names fixed by the setup guide |
+| `postback-generic` | path NAS id | configured login URL parameter | configured names + constants | configured | admin entry from a lab capture |
+
+REQUIRES_CLARIFICATION / REQUIRES_DEVICE_TEST (open):
+
+1. **Aruba `url-hash-key`**: algorithm, hashed bytes and carrying parameter not documented in any
+   source read (HPE CLI-Bank `aaa-auth-cptv-prtl`; HPE community thread "Configuring url-hash-key on
+   Instant AP": syntax only; HPE Central "Captive Portal Authentication Profile": HTTP 403). Not
+   implemented; the setup guide says to leave it unset. Aruba POST target / field names are
+   vendor-community sourced (M). AOS 8 AP-MAC / IP parameter names: REQUIRES_DEVICE_TEST.
+2. Cisco `redirectUrl` vs `redirect_url`; AireOS `wlan` / `redirect` (third-party only, not in the
+   profile); virtual IP (often 192.0.2.1) must be entered as a login host.
+3. Ruckus ZoneDirector / Unleashed redirects carry no client MAC → refused (credential is MAC-bound);
+   SmartZone browser-login path.
+4. Cambium query-append vs Referer (OQ-10 / OQ-12); `:444` certificate; `ga_srvr` public IP
+   (OQ-8) accepted only as the registered NAS IP or a configured login host.
+5. Omada parameter-name case variants (both accepted); cloud controller host must be a login host.
+6. Huawei AC HTTP mode (port 8000 path, Portal protocol UDP 50100 role): use the generic profile
+   after a lab capture. Huawei Portal 2.0 (UDP) is out of scope.
+7. HTTPS portal → `http://` AP post (mixed-content warnings, Private Network Access) on iOS /
+   Android captive browsers.
+8. Vendor rate / role attributes (Cambium `WIFI_ALLIANCE_MAX_*`, Aruba-User-Role, Cisco, Ruckus,
+   Fortinet): not emitted until documented and modelled.
+9. Long tail (Grandstream, EnGenius, Zyxel, DrayTek, Ruijie, Extreme, Alcatel-Lucent, Tanaza, DCN):
+   usable now through `postback-generic` once the parameter names are captured in the lab (D-034).
+
+AP-MAC chicken-and-egg: a MAC-only redirect needs a verified AP row, and verification needs a
+RADIUS packet from the AP's NAS. The portal URL path therefore carries the NAS identifier
+(`/pb/<profile>/<nasid>/`, set once on the device); the first accepted login verifies the AP MAC
+(Cycle A `observeAccessPoint`), after which MAC-only redirects resolve as well.
+
+Test evidence: see the Cycle C report (unit `packages/adapters/src/vendor/postback/postback.test.ts`,
+portal `apps/portal/src/postback.test.ts`, admin `CycleC.test.tsx`, integration
+`apps/api/src/cycle-c.integration.test.ts` against the isolated test database / Redis slot).
+
+### 14.1 Review fixes (independent review: PASS WITH CONDITIONS, applied 2026-10-10)
+
+- **M1 (LAN CSRF via any port / path).** `param-url` targets now carry the documented port set:
+  Cisco `switch_url` 80 / 443, Fortinet `post` 1000 only (the `auth-secure-http` port is not in the
+  sources read: REQUIRES_CLARIFICATION), Huawei `loginurl` 443 / 80; Omada `targetPort` 8088 / 8843
+  only. The generic profile requires `generic.login_path` (exact path) and takes an optional
+  `generic.login_port` (default 80 / 443); "any port / any path" no longer exists
+  (`http://10.0.0.5:6379/anything` is refused).
+- **M2 (phishable "any private IPv4").** RFC 1918 only for login targets (100.64.0.0/10 must be the
+  NAS IP or a login host). New `adapter_config.strict_login_hosts`: when true and a NAS IP or login
+  host is known, ONLY those plus documented intercept names are accepted. Default false because
+  per-AP login pages (Cambium `ga_srvr` = each AP's own address) need the private rule. Admin editor
+  and setup guide explain when to enable it.
+- **L1 (identifier squatting → DoS).** NAS identifiers of adapters that appear in public portal
+  URLs or redirects (`external-portal-postback`, `mikrotik-hotspot`) are unique across
+  organizations among live NAS, in both directions (a post-back NAS may not take an identifier
+  another org uses; no NAS in another org may take a post-back NAS's identifier), on create and
+  patch; generic 409 without tenant detail (`assertNasIdentifierAvailable`, platform read).
+  Identifiers of other adapters keep the per-organization rule. Existing rows are not rewritten
+  (collisions created before this change still resolve as `ambiguous_nasid`, fail closed). The
+  check is not serialised against a concurrent insert in another organization (two-transaction
+  race window; a partial unique index can follow once the adapter set is final).
+- **L2.** Query maps are prototype-less and every lookup is an own-property read
+  (`constructor`, `toString`, `__proto__` are plain names).
+- **L3.** Vendor-nonce replay identity = NAS + exact nonce bytes (no client MAC, no case folding).
+- **L4.** GET post-back: editor warning and setup-guide step (credential in the URL); every guide
+  states that over `http://` the single-use credential (90 s, NAS + MAC bound) crosses the guest
+  network in clear text.
+- **L6 / L7.** Migration 030 keeps rebuilding the NAS adapter CHECK from the live definition (order
+  safe with 029, idempotent); the key pattern accepts `[A-Za-z0-9_.-]`.
+- **L8.** `adapter_key` cannot be set to null through the API (schema enum); the patch path now
+  treats an explicit null like any other non-post-back key (config cleared to `{}`).

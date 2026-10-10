@@ -59,6 +59,20 @@ export interface PortalFlow {
   credentialUsername: string | null;
   /** A previous session of this device on this NAS ended by a timeout (expired notice). */
   readonly previousSessionExpired: boolean;
+  /** Cycle C: post-back flows (external-portal-postback); absent for UAM flows. */
+  readonly postback?: PostbackFlowData;
+}
+
+/** What a post-back flow needs to rebuild its hand-off (no secrets). */
+export interface PostbackFlowData {
+  readonly profile: string;
+  /** Redirect query exactly as received (Cambium appends it to the login URL). */
+  readonly rawQuery: string;
+  /** Validated `nas_clients.adapter_config` at redirect time. */
+  readonly adapterConfig: Readonly<Record<string, unknown>>;
+  readonly nasIp: string | null;
+  /** Raw vendor nonce (`magic`, `ga_Qv`), the replay identity; null = ECLOUD login token. */
+  readonly vendorNonce: string | null;
 }
 
 /** Identity proven at the portal; re-checked by AAA when the credential is presented. */

@@ -43,6 +43,7 @@ describe('compatibility registry data', () => {
       ['coova-chilli-1.2.9-ezegate', 'coovachilli-uam', 'implemented'],
       ['coova-chilli-master', 'coovachilli-uam', 'implemented'],
       ['generic-radius-8021x', 'generic-radius-8021x', 'implemented'],
+      ['external-portal-postback', 'external-portal-postback', 'implemented'],
     ]);
     const tip = row('ezelink-eze-ap1832-r32912-tip-uspot');
     expect([tip.deploymentModes, tip.enforcementPoint, tip.sourceVersionMatchesDevice]).toEqual([
@@ -205,7 +206,9 @@ describe('compatibility registry data', () => {
     const keys = new Set(COMPATIBILITY_ROWS.map((r) => r.adapterKey).filter((k) => k !== null));
     expect([...keys].sort()).toEqual([...ADAPTER_KEYS].sort());
     for (const r of COMPATIBILITY_ROWS)
-      if (!['ezelink', 'coova', 'openwrt', 'generic-radius'].includes(r.vendorKey))
+      if (
+        !['ezelink', 'coova', 'openwrt', 'generic-radius', 'generic-postback'].includes(r.vendorKey)
+      )
         expect(r.adapterKey).toBeNull();
   });
 

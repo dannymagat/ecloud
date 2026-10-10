@@ -50,6 +50,8 @@ const EXPECTED_VERIFIED: Record<AdapterKey, PolicyField[]> = {
   ],
   // Cycle A (D-044): vendor-neutral, no vendor source and no lab test → nothing VERIFIED.
   'generic-radius-8021x': [],
+  // Cycle C (D-044): post-back family, no vendor source and no lab test → nothing VERIFIED.
+  'external-portal-postback': [],
 };
 
 /** Full per-field status table (the enforceability preview source), for cross-checking. */
@@ -99,6 +101,17 @@ const EXPECTED_STATUS: Record<AdapterKey, Partial<Record<PolicyField, AdapterFie
     valid_until: 'ECLOUD_SIDE_ONLY',
     schedule_id: 'ECLOUD_SIDE_ONLY',
     vlan_id: 'REQUIRES_DEVICE_TEST',
+  },
+  // Cycle C: no rate / quota / VLAN attribute is emitted (never shown as device-enforced).
+  'external-portal-postback': {
+    download_rate_kbps: 'UNSUPPORTED',
+    upload_rate_kbps: 'UNSUPPORTED',
+    quota_total_bytes: 'UNSUPPORTED',
+    session_timeout_s: 'REQUIRES_DEVICE_TEST',
+    idle_timeout_s: 'REQUIRES_DEVICE_TEST',
+    max_concurrent_sessions: 'ECLOUD_SIDE_ONLY',
+    valid_until: 'ECLOUD_SIDE_ONLY',
+    vlan_id: 'UNSUPPORTED',
   },
 };
 
@@ -150,6 +163,7 @@ describe('adapter capability declarations (D-028)', () => {
       'coovachilli-uam',
       'openwifi-config',
       'generic-radius-8021x',
+      'external-portal-postback',
     ]);
   });
 

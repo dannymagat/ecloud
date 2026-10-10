@@ -872,6 +872,82 @@ const generic8021xRow: CompatibilityRow = {
 };
 
 // ------------------------------------------------------------------------------------------
+// External captive portal post-back engine (Cycle C, D-044) — vendor profiles, no device claim
+// ------------------------------------------------------------------------------------------
+
+const POSTBACK_ROW_ID = 'external-portal-postback';
+const F3_DOC = doc('docs/VENDOR_INTEGRATION_RESEARCH.md §2 F3, §3.4');
+
+const postbackRow: CompatibilityRow = {
+  key: POSTBACK_ROW_ID,
+  vendorKey: 'generic-postback',
+  hardwareModel: 'UNKNOWN',
+  firmware: 'UNKNOWN',
+  controller: null,
+  lifecycle: 'implemented',
+  deploymentModes: ['native', 'gateway'],
+  enforcementPoint: 'UNKNOWN',
+  adapterKey: 'external-portal-postback',
+  sourceVersionMatchesDevice: null,
+  identity: [],
+  profile: {
+    ...allUnknownProfile(),
+    redirectProtocol: fact(
+      'vendor redirect to the ECLOUD portal (/pb/<profile>/<nasid>/), parameter names per profile: Cambium, Aruba, Cisco 9800/AireOS, Fortinet, Ruckus, Omada (RADIUS), Huawei eKit, configurable generic',
+      'DOCUMENTED',
+      [F3_DOC],
+    ),
+    authorizationMethod: fact(
+      'browser form post of a single-use ECLOUD portal credential (pc-…) to the validated AP / controller login URL; the device sends RADIUS PAP',
+      'DOCUMENTED',
+      [F3_DOC],
+    ),
+    radiusAuth: fact(
+      'standard Access-Request (PAP); NAS identified by packet source',
+      'DOCUMENTED',
+      [F3_DOC],
+    ),
+    radiusAccounting: fact(
+      'standard Start / Interim-Update / Stop: REQUIRES_DEVICE_TEST',
+      'DOCUMENTED',
+      [F3_DOC],
+    ),
+    disconnectCoa: fact('RFC 5176 per vendor: REQUIRES_DEVICE_TEST (D-006)', 'DOCUMENTED', [
+      F3_DOC,
+    ]),
+    bandwidthAttributes: fact(
+      'none emitted: no vendor rate attribute documented to vendor-doc level (Cambium WIFI_ALLIANCE_MAX_* units UNKNOWN)',
+      'DOCUMENTED',
+      [F3_DOC],
+    ),
+    sessionTimeout: fact(
+      'Session-Timeout, Idle-Timeout (RFC 2865): REQUIRES_DEVICE_TEST',
+      'DOCUMENTED',
+      [F3_DOC],
+    ),
+  },
+  capabilities: deriveCells(getAdapter('external-portal-postback').capabilities(), {
+    rowKey: POSTBACK_ROW_ID,
+    sourceVersionMatchesDevice: null,
+    deviceFirmware: 'UNKNOWN',
+    dtResults: DT_RESULTS,
+  }),
+  configurationKind: 'vendor-ui',
+  openItems: [
+    {
+      id: 'CC-1',
+      label: 'REQUIRES_DEVICE_TEST',
+      text: 'Per profile: redirect parameter names on current firmware, login URL / form fields, HTTPS-portal to http:// AP post (mixed content, Private Network Access) on iOS / Android captive browsers, timers and accounting honouring.',
+    },
+    {
+      id: 'CC-2',
+      label: 'REQUIRES_CLARIFICATION',
+      text: 'Aruba url-hash-key algorithm; Cisco redirectUrl spelling; Ruckus ZoneDirector client MAC; Huawei AC HTTP mode; vendor rate attributes (docs/VENDOR_INTEGRATION_RESEARCH.md §6).',
+    },
+  ],
+};
+
+// ------------------------------------------------------------------------------------------
 // Roadmap rows — planned, everything UNKNOWN (plan §7.4)
 // ------------------------------------------------------------------------------------------
 
@@ -902,6 +978,7 @@ export const COMPATIBILITY_ROWS: readonly CompatibilityRow[] = Object.freeze([
   coovaMasterRow,
   cambiumRow,
   generic8021xRow,
+  postbackRow,
   ...roadmapRows,
 ]);
 

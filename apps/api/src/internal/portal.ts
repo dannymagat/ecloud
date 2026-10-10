@@ -22,6 +22,11 @@
  */
 import {
   getVendorAdapter,
+  loginOriginOf,
+  postbackAdapterForNas,
+  postbackContinueUrl,
+  resolveLoginUrl,
+  splitPostbackQuery,
   isPrivateIpv4,
   safeUserUrl,
   splitUamQuery,
@@ -30,6 +35,7 @@ import {
   type RegisteredNas,
 } from '@ecloud/adapters';
 import { withPlatform, withTenant, type DbTransaction } from '@ecloud/db';
+import { LOGIN_TOKEN_MAX_TTL_S } from '@ecloud/adapters';
 import { canonicalUnicastMac, isUuid, newId, type Logger } from '@ecloud/shared';
 import express, { type Request, type Response, type Router } from 'express';
 import { isIP } from 'node:net';
@@ -37,7 +43,9 @@ import { z } from 'zod';
 import type { AppDeps } from '../context.js';
 import { Envelope, openSecretRef, sealSecretRef, sha256Hex } from '../crypto.js';
 import { logPortalSecurityEvent } from '../security-events.js';
+import { consumePortalLoginToken, issuePortalLoginToken } from './login-token-store.js';
 import { findNasByIdentity } from './nas-lookup.js';
+import { registerPostbackRoutes } from './portal-postback.js';
 import {
   IdentityRejected,
   checkSubscriberLoginPassword,
@@ -372,7 +380,7 @@ function contextOf(flow: PortalFlow, now: Date): HotspotContext {
     nasSessionId: flow.sessionId,
     policyRef: null,
     deploymentMode: flow.deploymentMode,
-    vendorOpaque: { raw: '', fields: flow.fields },
+    vendorOpaque: { raw: flow.postback?.rawQuery ?? '', fields: flow.fields },
     receivedAt: now,
   };
 }
@@ -387,11 +395,50 @@ function nasBase(flow: PortalFlow): string | null {
   return `http://${ip}:${port}`;
 }
 
+/** Cycle C: the post-back adapter + profile of a post-back flow (null = refuse). */
+function postbackOf(flow: PortalFlow) {
+  if (flow.postback === undefined) return null;
+  const built = postbackAdapterForNas({
+    adapterConfig: flow.postback.adapterConfig,
+    nasIp: flow.postback.nasIp,
+  });
+  return built !== null && built.profile.key === flow.postback.profile ? built : null;
+}
+
+/** Cycle C: login origin (`scheme://host[:port]`) and continue URL of a post-back flow. */
+function postbackView(
+  flow: PortalFlow,
+): { loginOrigin: string; continueUrl: string | null } | null {
+  const built = postbackOf(flow);
+  if (built === null || flow.postback === undefined) return null;
+  const params = splitPostbackQuery(flow.postback.rawQuery).params;
+  const cfg = flow.postback.adapterConfig;
+  const loginUrl = resolveLoginUrl(
+    built.profile,
+    {
+      https: typeof cfg.https === 'boolean' ? cfg.https : null,
+      loginTarget: typeof cfg.login_target === 'string' ? cfg.login_target : null,
+      loginHosts: Array.isArray(cfg.login_hosts)
+        ? cfg.login_hosts.filter((h): h is string => typeof h === 'string')
+        : [],
+      nasIp: flow.postback.nasIp,
+      strictLoginHosts: cfg.strict_login_hosts === true,
+    },
+    params,
+  );
+  const origin = loginUrl === null ? null : loginOriginOf(loginUrl);
+  if (origin === null) return null;
+  return { loginOrigin: origin, continueUrl: postbackContinueUrl(built.profile, params, loginUrl) };
+}
+
 const RedirectBody = z.object({
   flavour: z.enum(['uspot', 'chilli']),
   raw_query: z.string().max(8192),
   client_ip: z.string().max(64).optional(),
 });
+
+/** Cycle C: ECLOUD login token of a post-back flow (required there, ignored for UAM flows). */
+const LoginTokenField = z.string().min(1).max(1024).optional();
 
 const IdentifyBody = z.discriminatedUnion('method', [
   z.object({
@@ -399,16 +446,19 @@ const IdentifyBody = z.discriminatedUnion('method', [
     username: z.string().min(1).max(253),
     password: z.string().min(1).max(256),
     client_ip: z.string().max(64).optional(),
+    login_token: LoginTokenField,
   }),
   z.object({
     method: z.literal('voucher'),
     code: z.string().min(1).max(64),
     client_ip: z.string().max(64).optional(),
+    login_token: LoginTokenField,
   }),
   z.object({
     method: z.literal('click_through'),
     accept_terms: z.literal(true),
     client_ip: z.string().max(64).optional(),
+    login_token: LoginTokenField,
   }),
 ]);
 
@@ -560,6 +610,20 @@ export function portalInternalRouter(deps: AppDeps): Router {
     }
   });
 
+  // Cycle C: external captive portal post-back redirects (portal-postback.ts).
+  registerPostbackRoutes(
+    router,
+    deps,
+    {
+      counter: (key, max, windowS) => counter(deps, key, max, windowS),
+      isRateLimited: (error): error is RateLimited => error instanceof RateLimited,
+      limits: PORTAL_LIMITS,
+      pickPortalId: (rows, nasId) => pickPortal(rows as unknown as PortalRow[], nasId)?.id ?? null,
+      previousSessionExpired: (nas, mac, at) => previousSessionExpired(deps, nas, mac, at),
+    },
+    now,
+  );
+
   // ---------------------------------------------------------------------- flow page data
   router.get('/flows/:id', async (req: Request, res: Response) => {
     const id = String(req.params.id);
@@ -599,6 +663,28 @@ export function portalInternalRouter(deps: AppDeps): Router {
         const base = nasBase(flow);
         const fallback =
           portal.redirect_url !== null ? safeUserUrl(portal.redirect_url, null) : null;
+        // Cycle C: post-back flows carry the validated login origin and a fresh single-use
+        // login token (consumed by identify before a credential is handed out).
+        const pb = flow.postback === undefined ? undefined : postbackView(flow);
+        if (pb === null) return null;
+        const postback =
+          pb === undefined
+            ? undefined
+            : {
+                login_origin: pb.loginOrigin,
+                login_token: issuePortalLoginToken(
+                  deps,
+                  {
+                    organizationId: flow.organizationId,
+                    siteId: flow.siteId,
+                    nasId: flow.nasId,
+                    clientMac: flow.clientMac,
+                    flowId: flow.id,
+                  },
+                  now(),
+                  LOGIN_TOKEN_MAX_TTL_S,
+                ).token,
+              };
         return {
           id: flow.id,
           state: flow.state,
@@ -618,7 +704,11 @@ export function portalInternalRouter(deps: AppDeps): Router {
                 },
           terms,
           nas: base === null ? null : { origin: base },
-          continue_url: safeUserUrl(flow.fields.userurl, flow.fields.uamip ?? null) ?? fallback,
+          ...(postback === undefined ? {} : { postback }),
+          continue_url:
+            (pb === undefined
+              ? safeUserUrl(flow.fields.userurl, flow.fields.uamip ?? null)
+              : pb.continueUrl) ?? fallback,
           notice: flow.previousSessionExpired ? 'session_expired' : null,
         };
       });
@@ -663,6 +753,30 @@ export function portalInternalRouter(deps: AppDeps): Router {
       }
       const ls = PORTAL_LIMITS.attemptsPerSite;
       await counter(deps, `pf:rl:site:${flow.siteId}`, ls.max, ls.windowS);
+
+      // Cycle C: a post-back flow needs its ECLOUD login token back exactly once (anti-forgery,
+      // vendor/login-token.ts); the portal re-renders the form with a fresh token on refusal.
+      let loginTokenId: string | null = null;
+      if (flow.postback !== undefined) {
+        const consumed = await consumePortalLoginToken(
+          deps,
+          input.login_token,
+          {
+            organizationId: flow.organizationId,
+            siteId: flow.siteId,
+            nasId: flow.nasId,
+            clientMac: flow.clientMac,
+            flowId: flow.id,
+          },
+          at,
+        );
+        if (!consumed.ok) {
+          req.log.info({ flowId: flow.id, reason: consumed.reason }, 'portal login token refused');
+          res.status(403).json({ result: 'login_token_invalid' });
+          return;
+        }
+        loginTokenId = consumed.tokenId;
+      }
 
       // B-3: the Argon2id verify (~45 ms CPU) runs with no pg connection held. A short tenant
       // transaction reads the credential, the verify runs outside it, and the decision
@@ -771,7 +885,15 @@ export function portalInternalRouter(deps: AppDeps): Router {
       }
       const pair = newCredentialPair();
       const expiresAt = new Date(at.getTime() + CREDENTIAL_TTL_S * 1000);
-      const handoff = getVendorAdapter(flow.adapterKey).authorizeSession(
+      const postbackAdapter = flow.postback === undefined ? null : postbackOf(flow);
+      if (flow.postback !== undefined && postbackAdapter === null) {
+        req.log.warn({ flowId: flow.id }, 'portal hand-off unavailable: post-back profile changed');
+        res.status(422).json({ result: 'handoff_unavailable' });
+        return;
+      }
+      const handoff = (
+        postbackAdapter?.adapter ?? getVendorAdapter(flow.adapterKey)
+      ).authorizeSession(
         contextOf(flow, at),
         {
           username: pair.username,
@@ -799,12 +921,30 @@ export function portalInternalRouter(deps: AppDeps): Router {
         nasId: flow.nasId,
         clientMac: flow.clientMac,
         sessionId: flow.sessionId,
-        replayKey: replayKey({
-          nasId: flow.nasId,
-          sessionId: flow.sessionId,
-          challenge: flow.challenge,
-          clientMac: flow.clientMac,
-        }),
+        replayKey: replayKey(
+          flow.postback === undefined
+            ? {
+                nasId: flow.nasId,
+                sessionId: flow.sessionId,
+                challenge: flow.challenge,
+                clientMac: flow.clientMac,
+              }
+            : flow.postback.vendorNonce !== null
+              ? {
+                  nasId: flow.nasId,
+                  sessionId: null,
+                  challenge: flow.postback.vendorNonce,
+                  clientMac: '', // review L3: NAS + nonce only (same key as validateContext)
+                  nonceKind: 'vendor-nonce',
+                }
+              : {
+                  nasId: flow.nasId,
+                  sessionId: null,
+                  challenge: loginTokenId ?? '',
+                  clientMac: flow.clientMac,
+                  nonceKind: 'ecloud-login-token',
+                },
+        ),
         identity: outcome.identity,
         expiresAt: expiresAt.toISOString(),
       });
@@ -814,7 +954,13 @@ export function portalInternalRouter(deps: AppDeps): Router {
       req.log.info({ flowId: flow.id, method }, 'portal credential issued');
       res.json({
         result: 'ok',
-        handoff: { method: handoff.browser.method, url: handoff.browser.url },
+        handoff: {
+          method: handoff.browser.method,
+          url: handoff.browser.url,
+          // Cycle C: a post-back hand-off is a browser form (fields include the single-use
+          // credential; the portal renders them into an auto-submitting form, never logs them).
+          ...(handoff.browser.method === 'POST-form' ? { fields: handoff.browser.fields } : {}),
+        },
         expires_at: expiresAt.toISOString(),
       });
     } catch (error) {

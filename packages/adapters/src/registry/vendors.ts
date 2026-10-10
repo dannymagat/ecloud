@@ -164,6 +164,21 @@ export const VENDORS: readonly VendorEntry[] = Object.freeze([
       'Pseudo-vendor for the vendor-neutral 802.1X / MAC-auth adapter (Cycle A). Not a hardware claim: every capability stays DOCUMENTED / REQUIRES_DEVICE_TEST until a lab test per vendor (D-028).',
   },
   {
+    key: 'generic-postback',
+    name: 'Any vendor: external captive portal post-back',
+    lifecycle: 'implemented',
+    roadmapPhase: 'pilot',
+    docLinks: [
+      {
+        kind: 'doc-section',
+        ref: 'docs/VENDOR_INTEGRATION_RESEARCH.md §2 F3, §3.4 (external-portal-postback)',
+      },
+      { kind: 'doc-section', ref: 'MULTI_VENDOR_INTEGRATION_PLAN.md §14 (Cycle C)' },
+    ],
+    notes:
+      'Pseudo-vendor for the F3 post-back engine (Cycle C): built-in profiles for Cambium, Aruba, Cisco, Fortinet, Ruckus, Omada, Huawei and an admin-configured generic profile. Not a hardware claim: DOCUMENTED / REQUIRES_DEVICE_TEST until a lab test per vendor (D-028).',
+  },
+  {
     key: 'cambium',
     name: 'Cambium Networks',
     lifecycle: 'researched',

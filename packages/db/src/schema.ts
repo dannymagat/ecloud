@@ -380,6 +380,8 @@ export interface NasClientsTable {
   /** Migration 019: optional vendor controller of the same organization. */
   controller_id: Uuid | null;
   secret_ref: string;
+  /** Migration 030 (Cycle C): per-NAS adapter settings (post-back profile; no secrets). */
+  adapter_config: GeneratedJsonb<Record<string, unknown>>;
   coa_port: number | null;
   coa_supported: boolean | null;
   require_message_authenticator: Generated<boolean>;
