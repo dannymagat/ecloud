@@ -84,15 +84,17 @@ fi
 if [ -n "${RADIUS_CLIENTS_RENDERED:-}" ]; then
 	clients_dir=/etc/freeradius/clients.d
 	rendered="$clients_dir/${RADIUS_CLIENTS_RENDERED_FILE:-ecloud-nas.conf}"
-	if [ -e "$clients_dir/dev.conf" ]; then
+	if as_freerad test -e "$clients_dir/dev.conf"; then
 		echo "freeradius: RADIUS_CLIENTS_RENDERED is set but $clients_dir/dev.conf is visible; mount the rendered-clients volume over $clients_dir" >&2
 		exit 1
 	fi
-	if [ ! -s "$rendered" ] || ! as_freerad test -r "$rendered"; then
+	#  As freerad: with ALL capabilities dropped, root cannot even search the 2750 node:101
+	#  rendered-clients directory (no CAP_DAC_READ_SEARCH); freerad reads it through gid 101.
+	if ! as_freerad test -s "$rendered" || ! as_freerad test -r "$rendered"; then
 		echo "freeradius: rendered clients file $rendered is missing, empty or unreadable; run the radius-clients renderer first" >&2
 		exit 1
 	fi
-	if ! grep -q '^client nas-' "$rendered"; then
+	if ! as_freerad grep -q '^client nas-' "$rendered"; then
 		echo "freeradius: rendered clients file $rendered defines no client" >&2
 		exit 1
 	fi
