@@ -16,13 +16,44 @@ import {
 } from '../lib/sites';
 import { Popover, popoverItemClass } from './Popover';
 
-/** The two-tone EZECLOUD letters, without a link (sign-in screens have nowhere to go "home"). */
-export function WordmarkText() {
+/**
+ * The EZECLOUD wordmark in the EZE product family style (as EZECONTROL): a drawn, brand-blue
+ * "EZE" (rounded E, Z, rounded E) followed by heavy "CLOUD" in the text colour (white in dark
+ * mode). Without a link: sign-in screens have nowhere to go "home".
+ */
+export function WordmarkText({ className }: { className?: string }) {
   return (
-    <>
-      <span className="text-brand-ink">EZE</span>
-      <span className="text-primary">CLOUD</span>
-    </>
+    <svg
+      viewBox="0 0 348 60"
+      role="img"
+      aria-label="EZECLOUD"
+      className={cx('h-7 w-auto', className)}
+      focusable="false"
+    >
+      <g
+        fill="none"
+        className="stroke-[var(--wordmark-eze)]"
+        strokeWidth="8"
+        strokeLinejoin="round"
+      >
+        <path d="M42 11 H20 Q11 11 11 20 V40 Q11 49 20 49 H42 M11 30 H36" />
+        <path d="M51 11 H86 L51 49 H86" />
+        <path d="M128 11 H106 Q97 11 97 20 V40 Q97 49 106 49 H128 M97 30 H122" />
+      </g>
+      <text
+        x="140"
+        y="49.5"
+        fill="currentColor"
+        fontFamily="'Arial Black', 'Helvetica Neue', Arial, sans-serif"
+        fontWeight="900"
+        fontSize="50"
+        letterSpacing="1"
+        textLength="204"
+        lengthAdjust="spacingAndGlyphs"
+      >
+        CLOUD
+      </text>
+    </svg>
   );
 }
 
@@ -32,7 +63,7 @@ export function Wordmark({ className }: { className?: string }) {
       to="/"
       aria-label="EZECLOUD home"
       className={cx(
-        'shrink-0 rounded text-2xl font-extrabold tracking-wide',
+        'inline-flex shrink-0 items-center rounded text-fg',
         'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary',
         className,
       )}

@@ -77,6 +77,8 @@ body {
  */
 :root {
   --c-brand-ink: 29 79 168;
+  /* EZE letters of the wordmark (EZE product family blue). */
+  --wordmark-eze: #2d6be4;
   --tile-teal: #357f76;
   --tile-rose: #b9474f;
   --tile-blue: #2f6fd6;
@@ -88,6 +90,7 @@ body {
 
 .dark {
   --c-brand-ink: 170 200 245;
+  --wordmark-eze: #6ea4f5;
   --tile-teal: #2b6861;
   --tile-rose: #983a41;
   --tile-blue: #275baf;
