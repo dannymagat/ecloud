@@ -71,7 +71,7 @@ else
   [ -f "$KEY" ] || die "deploy key missing: $KEY"
   [ -s "$KNOWN" ] || die "pinned known_hosts missing: $KNOWN"
   REMOTE="git@github.com:${BACKUP_GITHUB_REPO}.git"
-  export GIT_SSH_COMMAND="ssh -F /dev/null -i $KEY -o IdentitiesOnly=yes -o GlobalKnownHostsFile=/dev/null -o UserKnownHostsFile=$KNOWN -o StrictHostKeyChecking=yes -o BatchMode=yes"
+  export GIT_SSH_COMMAND="ssh -F /dev/null -i $KEY -o IdentitiesOnly=yes -o GlobalKnownHostsFile=/dev/null -o UserKnownHostsFile=$KNOWN -o StrictHostKeyChecking=yes -o CheckHostIP=no -o UpdateHostKeys=no -o BatchMode=yes"
 fi
 
 # --- 1. the newest KEEP complete sets (the new one included) -----------------------------------
