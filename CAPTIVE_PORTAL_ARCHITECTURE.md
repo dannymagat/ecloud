@@ -1,4 +1,4 @@
-# ECLOUD Captive Portal Architecture (Phase 2 — design + protocol validation)
+# EZECLOUD Captive Portal Architecture (Phase 2 — design + protocol validation)
 
 Author: A4 Captive Portal Agent. Status: PROPOSED design built only on VERIFIED mechanisms. No remote host or device was modified.
 
@@ -7,7 +7,7 @@ Evidence labels used throughout: **VERIFIED FROM EXISTING CODE** (local path/key
 ## 0. Headline findings
 
 1. There are **two different uspot code bases**. TIP OpenWiFi firmware ships its own fork at `wlan-ap/feeds/ucentral/uspot` (depends on `spotfilter` + `ratelimit`, no DAS daemon). The f00b4r0 upstream (`github.com/f00b4r0/uspot`, packaged in openwrt/packages) is a later rewrite with `uspotfilter`, an RFC 5176 DAS and RFC 8908 CapPort API. Which one is on EZEAP is **REQUIRES DEVICE TEST** (`ls /usr/share/uspot; ubus list | grep -i spotfilter`). Everything below is stated per code base.
-2. uspot (both) and CoovaChilli implement the **same ChilliSpot UAM redirect protocol** (`res=, uamip=, uamport=, challenge=, mac=, ip=, called=, nasid=, sessionid=, userurl=, md=`; login via `http://uamip:uamport/logon?username=&password=|response=`; `/logoff`). This lets ECLOUD share a portal *page layer* while keeping **separate adapters**, because the RADIUS reply attributes honoured, CoA path, quota attributes, MAC-auth username/password rules and password-encoding block size differ.
+2. uspot (both) and CoovaChilli implement the **same ChilliSpot UAM redirect protocol** (`res=, uamip=, uamport=, challenge=, mac=, ip=, called=, nasid=, sessionid=, userurl=, md=`; login via `http://uamip:uamport/logon?username=&password=|response=`; `/logoff`). This lets EZECLOUD share a portal *page layer* while keeping **separate adapters**, because the RADIUS reply attributes honoured, CoA path, quota attributes, MAC-auth username/password rules and password-encoding block size differ.
 3. CoA/Disconnect: CoovaChilli listens on `coaport` and matches on `User-Name` (+ optional `Acct-Session-Id`). TIP-fork uspot has **no RADIUS listener of its own**: a Disconnect-Request must be sent to **hostapd's DAS** (uCentral `ssid.radius.dynamic-authorization`), which raises a ubus `coa` event that uspot consumes to kick the client. Upstream uspot runs its own DAS on UDP 3799. All three paths are **REQUIRES DEVICE TEST** on EZEAP.
 4. Rate limiting: both uspot variants and CoovaChilli honour `WISPr-Bandwidth-Max-Up/Down` (bits/s) and `ChilliSpot-/CoovaChilli-Bandwidth-Max-Up/Down` (kbit/s ×1000). Quota: CoovaChilli honours Max-Input/Output/Total-Octets(+Gigawords); TIP-fork uspot honours only `ChilliSpot-Max-Total-Octets` (32-bit, ≈4 GiB cap); upstream honours all three plus Gigawords.
 5. The `sessionid` UAM parameter **is** the RADIUS `Acct-Session-Id` in both uspot variants and CoovaChilli — it is the natural correlation key between portal flow, Access-Request and accounting.
@@ -157,31 +157,31 @@ Reply attributes **honoured** (T `uspot.uc client_add/client_ratelimit`; U `uspo
 | Local state/API | `ubus uspot/spotfilter`, OpenWiFi state report `captive{}` | `chilli_query`, `/json/status` | VERIFIED |
 | Dictionary vendor id | ChilliSpot 14559 (`files/etc/radcli/dictionary.chillispot`), WISPr 14122 | CoovaChilli 14559 (same numbers as ChilliSpot) | VERIFIED |
 
-## 7. ECLOUD design (PROPOSED)
+## 7. EZECLOUD design (PROPOSED)
 
 ### 7.1 Components
 - **Portal service** `portal.ezecloud.ezelink.ai` (candidate; A1/A0 own DNS) — stateless HTTPS web app (Node/TS per baseline), behind the existing Caddy. Renders tenant/site-branded pages: `login`, `voucher`, `social`, `consent`, `connecting`, `success`, `error`, `expired`, `logout`. Branding resolved from the NAS identity (7.3). No RADIUS code inside the portal.
 - **Portal adapters** (`uspot-uam`, `coovachilli-uam`) — pure functions that (a) parse/verify the inbound UAM query, (b) produce the device-native login/logoff URL, (c) interpret `res=` callbacks. Selected per NAS record (`nas.portal_adapter`), never by sniffing.
-- **Identity broker** — ECLOUD core module that turns any identity proof (password check, voucher, MAC allow-list, social/OIDC assertion) into a **short-lived portal credential** `{username: "pc-<16 hex>", password: <≤16 chars>, ttl 90 s, bound to nasid+mac+sessionid, single-use}` stored in the AAA credential store. The AAA layer (FreeRADIUS → rlm_sql/rlm_rest into ECLOUD) authenticates that credential exactly like a normal user and attaches the policy of the *resolved identity*. Social providers therefore never touch RADIUS.
-- **AAA adapter layer** (A3) — emits NAS-type-specific reply attributes from the ECLOUD policy intent (7.5). ECLOUD session records key on `Acct-Session-Id` (= UAM `sessionid`).
+- **Identity broker** — EZECLOUD core module that turns any identity proof (password check, voucher, MAC allow-list, social/OIDC assertion) into a **short-lived portal credential** `{username: "pc-<16 hex>", password: <≤16 chars>, ttl 90 s, bound to nasid+mac+sessionid, single-use}` stored in the AAA credential store. The AAA layer (FreeRADIUS → rlm_sql/rlm_rest into EZECLOUD) authenticates that credential exactly like a normal user and attaches the policy of the *resolved identity*. Social providers therefore never touch RADIUS.
+- **AAA adapter layer** (A3) — emits NAS-type-specific reply attributes from the EZECLOUD policy intent (7.5). EZECLOUD session records key on `Acct-Session-Id` (= UAM `sessionid`).
 
 ### 7.2 Portal state machine (per `sessionid`+`mac`)
 `ARRIVED(res=notyet)` → `IDENTIFYING` (password | voucher | social | mac) → `CREDENTIAL_ISSUED` (broker) → `LOGON_SENT` (302 to NAS logon) → `AUTHORIZED(res=success)` | `REJECTED(res=reject|failed)` → `ACTIVE` (Acct Start/Interim seen) → `ENDED` (Acct Stop | res=logoff | CoA). Transitions are recorded in `portal_flows` with the `md`-verified source NAS, so a callback for a flow that never issued a credential is rejected (replay protection).
 
 ### 7.3 Identifying the site/NAS from the UAM request
 1. Verify `md` when the NAS has a `uam_secret`: recompute `MD5(url_without_&md= + secret)` (both devices append `md` last; compare case-insensitively).
-2. Lookup order: `nasid` (unique per NAS in ECLOUD; set `captive.nasid` = ECLOUD NAS id) → fall back to `called` (uspot: `nasmac` or device serial; CoovaChilli: `nasmac`). Validate that `uamip` is a private/LAN address and that the request's source IP is a known site egress/WireGuard peer where available (A1 dependency).
+2. Lookup order: `nasid` (unique per NAS in EZECLOUD; set `captive.nasid` = EZECLOUD NAS id) → fall back to `called` (uspot: `nasmac` or device serial; CoovaChilli: `nasmac`). Validate that `uamip` is a private/LAN address and that the request's source IP is a known site egress/WireGuard peer where available (A1 dependency).
 3. Resolve `nas → site → organization → branding, allowed auth methods, policies`. Unknown NAS → generic error page, no credential issuance.
 
 ### 7.4 Adapters
 
 **`uspot-uam`** (EZEAP, TIP fork assumed; upstream differences flagged)
 - Receives: `res, uamip, uamport, challenge, mac, ip, called, nasid, ssid, sessionid[, userurl, md]` (`timeleft/reply` only on U).
-- Posts back (top-level 302 from the HTTPS page, as hotspotsystem.com does in the TIP test): `http://{uamip}:{uamport}/logon?username={pc}&password={hex(pw XOR md5(chal_bytes+uam_secret))}&userurl={enc(userurl)}`. Keep the broker password **≤16 bytes** so the same encoding works on T and U. If the NAS has no `uam_secret`, PAP is cleartext over LAN HTTP — ECLOUD should require `uam_secret` for uspot NAS records.
+- Posts back (top-level 302 from the HTTPS page, as hotspotsystem.com does in the TIP test): `http://{uamip}:{uamport}/logon?username={pc}&password={hex(pw XOR md5(chal_bytes+uam_secret))}&userurl={enc(userurl)}`. Keep the broker password **≤16 bytes** so the same encoding works on T and U. If the NAS has no `uam_secret`, PAP is cleartext over LAN HTTP — EZECLOUD should require `uam_secret` for uspot NAS records.
 - Logout: link to `http://{uamip}:{uamport}/logoff`.
 - Callbacks: `res=success` → success page (requires `final-redirect-url: "uam"` on the NAS, otherwise T serves its local `/allow.html` and the portal never learns of success except via accounting); `res=reject|failed` → error page; `res=logoff` → logout page; `res=already` → status page (U) / treat as success.
-- Required uCentral config emitted by the device adapter (A2): `auth-mode: uam`, `uam-server: https://portal.ezecloud.ezelink.ai/uam/uspot/` (no `?`), `uam-port: 3990`, `uam-secret`, `nasid: <ecloud nas id>`, `nasmac` (optional), `auth-server/acct-server` = ECLOUD RADIUS (public IP or WireGuard address, A1), `acct-port: 1813` (schema default is 1812), `final-redirect-url: uam`, `walled-garden-fqdn: [portal.ezecloud.ezelink.ai, <IdP hosts>]` plus `walled-garden-ipaddr` for the portal's IPs (wildcards are not rendered), `mac-auth: true` only when MAC login is a site policy. Do **not** set `acct-interval` if RADIUS should control interim cadence (NAS value overrides RADIUS).
-- CoA: send Disconnect-Request with `Calling-Station-Id` (and `NAS-Identifier`) to the hostapd DAS address/port/secret from `ssid.radius.dynamic-authorization`; expect ACK; ECLOUD must close the session itself (no Acct-Stop on this path). CoA attribute changes are **not** applied by T → re-authentication is the only way to change a live session's rate on T. (U) DAS: Disconnect/CoA with `Session-Timeout`, `Idle-Timeout`, `Acct-Interim-Interval` only.
+- Required uCentral config emitted by the device adapter (A2): `auth-mode: uam`, `uam-server: https://portal.ezecloud.ezelink.ai/uam/uspot/` (no `?`), `uam-port: 3990`, `uam-secret`, `nasid: <ecloud nas id>`, `nasmac` (optional), `auth-server/acct-server` = EZECLOUD RADIUS (public IP or WireGuard address, A1), `acct-port: 1813` (schema default is 1812), `final-redirect-url: uam`, `walled-garden-fqdn: [portal.ezecloud.ezelink.ai, <IdP hosts>]` plus `walled-garden-ipaddr` for the portal's IPs (wildcards are not rendered), `mac-auth: true` only when MAC login is a site policy. Do **not** set `acct-interval` if RADIUS should control interim cadence (NAS value overrides RADIUS).
+- CoA: send Disconnect-Request with `Calling-Station-Id` (and `NAS-Identifier`) to the hostapd DAS address/port/secret from `ssid.radius.dynamic-authorization`; expect ACK; EZECLOUD must close the session itself (no Acct-Stop on this path). CoA attribute changes are **not** applied by T → re-authentication is the only way to change a live session's rate on T. (U) DAS: Disconnect/CoA with `Session-Timeout`, `Idle-Timeout`, `Acct-Interim-Interval` only.
 
 **`coovachilli-uam`** (EZE gateway or any CoovaChilli)
 - Receives: `res, uamip, uamport, challenge, called, mac (XX-XX-…), ip, nasid, sessionid, userurl[, uid, timeleft, reply, ssid, vlan, loc, lang, ssl, redirurl, md]`.
@@ -213,8 +213,8 @@ sequenceDiagram
   participant C as Client
   participant AP as EZEAP uspot (TIP)
   participant P as portal.ecloud (uspot-uam adapter)
-  participant E as ECLOUD core / broker
-  participant R as FreeRADIUS→ECLOUD AAA
+  participant E as EZECLOUD core / broker
+  participant R as FreeRADIUS→EZECLOUD AAA
   C->>AP: HTTP GET any site (CPD hijack :80)
   AP-->>C: 302 /hotspot/?redir=…
   AP-->>C: 302 uam-server?res=notyet&uamip&uamport&challenge&mac&ip&called&nasid&ssid&sessionid&userurl&md
@@ -238,8 +238,8 @@ sequenceDiagram
   participant C as Client
   participant G as EZE gateway CoovaChilli
   participant P as portal.ecloud (coovachilli-uam adapter)
-  participant E as ECLOUD core / broker
-  participant R as FreeRADIUS→ECLOUD AAA
+  participant E as EZECLOUD core / broker
+  participant R as FreeRADIUS→EZECLOUD AAA
   C->>G: HTTP GET (DNAT by chilli)
   G-->>C: 302 uamserver?res=notyet&uamip&uamport&challenge&called&mac&ip&nasid&sessionid&userurl&md
   C->>P: GET /uam/chilli/?res=notyet…
@@ -259,7 +259,7 @@ sequenceDiagram
 sequenceDiagram
   participant C as Client
   participant P as Portal
-  participant E as ECLOUD core
+  participant E as EZECLOUD core
   participant N as NAS (uspot or chilli)
   participant R as AAA
   C->>P: voucher code
@@ -278,7 +278,7 @@ sequenceDiagram
   participant C as Client
   participant P as Portal
   participant IdP as Social IdP (OIDC)
-  participant E as ECLOUD identity broker
+  participant E as EZECLOUD identity broker
   participant N as NAS
   participant R as AAA
   C->>P: choose "Login with X"
@@ -298,7 +298,7 @@ sequenceDiagram
   participant C as Client
   participant N as NAS
   participant P as Portal
-  participant E as ECLOUD
+  participant E as EZECLOUD
   participant R as AAA
   Note over C,N: Explicit logout
   C->>N: GET uamip:uamport/logoff
@@ -315,13 +315,13 @@ sequenceDiagram
 
 ### 7.7 Security considerations
 - **HTTPS portal behind captive detection**: CPD only hijacks port 80; the portal FQDN (and its IPs) must be in the walled garden so the 302 to `https://portal…` succeeds; the AP's own `/hotspot` pages are HTTP on a LAN IP. Set HSTS on the portal, never serve it on HTTP except a 302.
-- **`uam_secret`/`uamsecret` handling**: secret per NAS, stored encrypted in ECLOUD, only used by the adapter for `md` verification and PAP XOR / CHAP; without it PAP is cleartext over the LAN hop (`uspot` T/U) → mandatory. Rotate via config push (uspot) / chilli config.
+- **`uam_secret`/`uamsecret` handling**: secret per NAS, stored encrypted in EZECLOUD, only used by the adapter for `md` verification and PAP XOR / CHAP; without it PAP is cleartext over the LAN hop (`uspot` T/U) → mandatory. Rotate via config push (uspot) / chilli config.
 - **Replay & binding**: portal credentials are single-use, 90 s TTL, bound to `mac+nasid+sessionid`; AAA rejects Access-Requests whose `Calling-Station-Id`/`NAS-Identifier` do not match the binding. Flow ids in OIDC `state`.
 - **Open redirects**: `userurl`/`redir` values are reflected into 302s — only allow `http(s)://` with a host that is not the NAS `uamip`, strip credentials, cap length, or replace with the tenant landing page.
 - **Rate limiting**: per `nasid+mac` (login attempts, voucher guesses), per source IP; voucher codes ≥ 8 chars from a non-ambiguous alphabet; constant-time compare.
 - **NAS impersonation**: `md` check + known NAS id + (where WireGuard/public IP allow-lists exist) source checks; unknown NAS gets no credential.
 - **uspot CPD `userurl` is not URL-encoded (T)** → treat the query string as hostile, parse the last `&md=` first.
-- **DAS exposure**: hostapd DAS / uspot DAS / chilli coaport must only accept the ECLOUD RADIUS address (WireGuard preferred, A1); U's DAS has no replay protection (no Event-Timestamp support).
+- **DAS exposure**: hostapd DAS / uspot DAS / chilli coaport must only accept the EZECLOUD RADIUS address (WireGuard preferred, A1); U's DAS has no replay protection (no Event-Timestamp support).
 
 ## 8. Evidence index
 - VERIFIED FROM EXISTING CODE: `/Users/danny/Project/ezecontroller/src/schemas/ucentral.full.json` (`$defs/service.captive`, `.click`, `.radius`, `.credentials`, `.uam`, `$defs/interface.ssid.radius.dynamic-authorization`, `$defs/interface.ssid/properties/captive`); `/Users/danny/Project/wlan-testing/tests/e2e/basic/advanced_captive_portal_tests/{internal,external}_captive_portal_tests/open/*.py` (lines cited in §2); `/Users/danny/Project/wlan-testing/tests/lab_info.json` L206–244; `/Users/danny/Project/EZEGATE/Ezeinstall/post-install-script.sh` L224–269, L462–463, L573–575, L783; `/Users/danny/Project/EZEGATE/Ezeinstall/sudoers` L11; `/Users/danny/Project/EZEGATE/Ezeinstall/portal.ezelink.net.conf`.
@@ -337,8 +337,8 @@ sequenceDiagram
 2. Is the EZE gateway CoovaChilli (1.2.9) still in service and may it be upgraded to current master (needed for `coaport`/JSON behaviour verified here)?
 3. Confirm `portal.ezecloud.ezelink.ai` as the portal host and whether the AAA RADIUS endpoint for sites will be the VPS public IP or a WireGuard address (affects `auth-server`, walled garden and DAS source allow-lists; A1).
 4. Which social IdPs are required (each adds hosts to the walled garden; wildcard FQDNs are not rendered by the TIP renderer)?
-5. Should MAC-auth be offered (requires `mac-auth: true` and an ECLOUD MAC allow-list in AAA; username = formatted MAC)?
-6. Is `radius-gw-proxy` (RADIUS tunnelled through the OpenWiFi gateway) in scope, or will EZEAP reach ECLOUD RADIUS directly?
+5. Should MAC-auth be offered (requires `mac-auth: true` and an EZECLOUD MAC allow-list in AAA; username = formatted MAC)?
+6. Is `radius-gw-proxy` (RADIUS tunnelled through the OpenWiFi gateway) in scope, or will EZEAP reach EZECLOUD RADIUS directly?
 
 ## 10. Items requiring a real device test (EZEAP / gateway)
 1. Identify the uspot code base on EZEAP firmware (`opkg list-installed | grep -i spot; ls /usr/share/uspot; ubus list`), and whether `ratelimit` is installed.

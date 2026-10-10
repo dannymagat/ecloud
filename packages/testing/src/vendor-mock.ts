@@ -47,7 +47,7 @@ export function testPki(): TestPki {
       '-days',
       '2',
       '-subj',
-      '/CN=ECLOUD Test CA',
+      '/CN=EZECLOUD Test CA',
       '-addext',
       'basicConstraints=critical,CA:TRUE',
       '-addext',

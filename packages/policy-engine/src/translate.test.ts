@@ -582,7 +582,7 @@ describe('translate — per-SSID adapter (openwifi-config shape)', () => {
 describe('translate — degradation modes (§4.2)', () => {
   const r = resolveEffectivePolicy(workedExampleInput());
 
-  it('fallback_ecloud_side (default) keeps the ECLOUD controls and arms a config_push_fallback for site-scoped rates on untested adapters', () => {
+  it('fallback_ecloud_side (default) keeps the EZECLOUD controls and arms a config_push_fallback for site-scoped rates on untested adapters', () => {
     const siteRate = effectiveOf({ download_rate_kbps: 20000 }, 'site');
     const plan = translate(siteRate, untested, { clip: emptyClip, now: NOW });
     expect(plan.degradation).toBe('fallback_ecloud_side');

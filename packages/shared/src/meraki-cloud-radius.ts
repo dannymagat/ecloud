@@ -14,10 +14,10 @@
  *                                 organization in Dashboard "Help > Firewall info" and "may change
  *                                 over time" (Meraki doc "Configuring RADIUS Authentication with a
  *                                 Sign-On Splash Page"). Empty = nothing is rendered (fail closed).
- *                                 REQUIRES_CLARIFICATION: the authoritative list for the ECLOUD
+ *                                 REQUIRES_CLARIFICATION: the authoritative list for the EZECLOUD
  *                                 deployment, and how its changes are tracked.
  *   MERAKI_RADIUS_PORT_RANGE      `min-max` UDP range for the per-NAS listener pairs (auth = even
- *                                 port, acct = auth + 1). An ECLOUD deployment choice, not a
+ *                                 port, acct = auth + 1). An EZECLOUD deployment choice, not a
  *                                 Meraki fact; no default (REQUIRES_CLARIFICATION). Unset = no
  *                                 port is allocated to new Meraki NAS.
  *   MERAKI_MAX_NAS_PER_ORG        live Meraki NAS per organization (default 50, 1..10000): each
@@ -199,7 +199,7 @@ export function parseMerakiCloudRadiusSettings(
   });
 }
 
-/** Operational state shown to administrators (never claims reachability ECLOUD cannot observe). */
+/** Operational state shown to administrators (never claims reachability EZECLOUD cannot observe). */
 export type MerakiCloudRadiusState =
   'disabled' | 'enabled_missing_source_cidrs' | 'enabled_missing_port_range' | 'enabled';
 

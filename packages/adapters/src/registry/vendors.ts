@@ -232,7 +232,7 @@ export const VENDORS: readonly VendorEntry[] = Object.freeze([
     roadmapPhase: 'phase-a',
     docLinks: Object.values(CAMBIUM_SOURCES),
     notes:
-      'Researched only (plan §7.3). ECLOUD must not depend on cnMaestro Cloud (C4); AP-side External Hotspot + RADIUS is the primary candidate; no adapter.',
+      'Researched only (plan §7.3). EZECLOUD must not depend on cnMaestro Cloud (C4); AP-side External Hotspot + RADIUS is the primary candidate; no adapter.',
   },
   ...ROADMAP_VENDORS.filter((v) => !PROMOTED_VENDOR_KEYS.has(v.key)).map((v): VendorEntry =>
     v.key === 'cisco-meraki'

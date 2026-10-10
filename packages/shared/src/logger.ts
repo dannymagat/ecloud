@@ -56,7 +56,7 @@ export interface CreateLoggerOptions {
 }
 
 /**
- * Creates the standard ECLOUD pino logger: JSON lines, ISO timestamps, level labels and
+ * Creates the standard EZECLOUD pino logger: JSON lines, ISO timestamps, level labels and
  * mandatory redaction of credentials. Request-id binding is added per request by the apps.
  */
 export function createLogger(options: CreateLoggerOptions): Logger {

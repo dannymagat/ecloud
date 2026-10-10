@@ -87,7 +87,7 @@ describe('performDispatch', () => {
     );
   });
 
-  it('ACK on TIP uspot (no Acct-Stop after kick) closes the ECLOUD session', async () => {
+  it('ACK on TIP uspot (no Acct-Stop after kick) closes the EZECLOUD session', async () => {
     const d = await performDispatch(
       action({ adapter_key: 'openwifi-uspot-uam', coa_port: 3800 }),
       deps(reply('Received Disconnect-ACK Id 2')),

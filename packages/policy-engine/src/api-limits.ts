@@ -72,7 +72,7 @@ export interface ApiLimitInput {
    * expiry …) when known; the smaller of this and `session_timeout_s` is granted.
    */
   readonly sessionCapS?: number | null;
-  /** Remaining quota bytes when ECLOUD knows them (it usually does not in API mode). */
+  /** Remaining quota bytes when EZECLOUD knows them (it usually does not in API mode). */
   readonly remainingQuotaBytes?: bigint | null;
   /** Used when neither the policy nor the clip sets a duration. Default 24 h. */
   readonly defaultDurationS?: number;
@@ -249,7 +249,7 @@ export function translateApiLimits(target: ApiLimitTarget, input: ApiLimitInput)
         'UNSUPPORTED',
         'none',
         null,
-        'no RADIUS accounting in API mode: ECLOUD cannot observe usage to carry a period quota across authorisations (the smallest quota is still sent as a per-authorisation cap)',
+        'no RADIUS accounting in API mode: EZECLOUD cannot observe usage to carry a period quota across authorisations (the smallest quota is still sent as a per-authorisation cap)',
       );
     }
   }
@@ -276,7 +276,7 @@ export function translateApiLimits(target: ApiLimitTarget, input: ApiLimitInput)
       'ECLOUD_SIDE_ONLY',
       'ecloud_side',
       null,
-      'checked by ECLOUD before authorising; the granted duration is clipped to the remaining window',
+      'checked by EZECLOUD before authorising; the granted duration is clipped to the remaining window',
     );
   }
   for (const field of ['max_concurrent_sessions', 'max_devices'] as const) {
@@ -285,7 +285,7 @@ export function translateApiLimits(target: ApiLimitTarget, input: ApiLimitInput)
       'ECLOUD_SIDE_ONLY',
       'ecloud_side',
       null,
-      'counted by ECLOUD over its API-authorised sessions only (no device sessions are observable)',
+      'counted by EZECLOUD over its API-authorised sessions only (no device sessions are observable)',
     );
   }
 

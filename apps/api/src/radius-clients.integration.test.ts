@@ -413,7 +413,7 @@ await describeIntegration('@ecloud/api FreeRADIUS clients renderer (F-P10-07)', 
       expect(check.status).toBe(0);
     }, 60_000);
 
-    it('accepts the rendered NAS with its ECLOUD secret and drops a wrong secret', async () => {
+    it('accepts the rendered NAS with its EZECLOUD secret and drops a wrong secret', async () => {
       const net = docker(['network', 'create', '--subnet', network.subnet, network.name]);
       expect(net.status, net.out).toBe(0);
       await chmod(join(dir, 'ecloud-nas.conf'), 0o644);

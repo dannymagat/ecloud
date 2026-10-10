@@ -629,7 +629,7 @@ const cambiumRow: CompatibilityRow = {
       'documentedModels',
     ),
     fact(
-      'AP firmware 3.11.3-r7 and newer, tested up to 4.2.3.1-r7 (third-party report; not evidence for ECLOUD)',
+      'AP firmware 3.11.3-r7 and newer, tested up to 4.2.3.1-r7 (third-party report; not evidence for EZECLOUD)',
       'DOCUMENTED',
       [C.S1],
       'thirdPartyFirmwareRange',
@@ -681,7 +681,7 @@ const cambiumRow: CompatibilityRow = {
     ipv6Behaviour: unknown(),
     roamingContinuity: unknown(),
     cloudDependencies: fact(
-      'cnMaestro Cloud may not support Enterprise devices after end of October 2026; on-prem 6.0 lacks some EasyPass features — ECLOUD must not depend on cnMaestro Cloud',
+      'cnMaestro Cloud may not support Enterprise devices after end of October 2026; on-prem 6.0 lacks some EasyPass features — EZECLOUD must not depend on cnMaestro Cloud',
       'DOCUMENTED',
       [C.C4],
     ),
@@ -796,7 +796,7 @@ const cambiumRow: CompatibilityRow = {
     {
       id: 'OQ-13',
       label: 'REQUIRES_DEVICE_TEST',
-      text: 'RadSec support / reachability of ECLOUD RADIUS through a site WireGuard gateway.',
+      text: 'RadSec support / reachability of EZECLOUD RADIUS through a site WireGuard gateway.',
     },
   ],
 };
@@ -824,7 +824,7 @@ const generic8021xRow: CompatibilityRow = {
     ...allUnknownProfile(),
     redirectProtocol: fact('none (802.1X / MAC-auth SSID, no portal)', 'DOCUMENTED', [F9_DOC]),
     authorizationMethod: fact(
-      '802.1X EAP terminated by ECLOUD FreeRADIUS (EAP-TTLS/PAP; opt-in, certificate REQUIRES_CLARIFICATION) or MAC authentication (User-Name = client MAC)',
+      '802.1X EAP terminated by EZECLOUD FreeRADIUS (EAP-TTLS/PAP; opt-in, certificate REQUIRES_CLARIFICATION) or MAC authentication (User-Name = client MAC)',
       'DOCUMENTED',
       [F9_DOC, doc('AAA_ARCHITECTURE.md §2.4'), doc('infra/freeradius/README.md (EAP)')],
     ),
@@ -908,7 +908,7 @@ const mikrotikRow: CompatibilityRow = {
   profile: {
     ...allUnknownProfile(),
     redirectProtocol: fact(
-      'ECLOUD-generated login.html: GET to the ECLOUD portal with the RouterOS variables mac, ip, identity, link-login-only, link-orig, chap-id, chap-challenge, error ($(name-esc)); unsigned',
+      'ECLOUD-generated login.html: GET to the EZECLOUD portal with the RouterOS variables mac, ip, identity, link-login-only, link-orig, chap-id, chap-challenge, error ($(name-esc)); unsigned',
       'DOCUMENTED',
       [MT_CUSTOM, F2_DOC],
     ),
@@ -931,7 +931,7 @@ const mikrotikRow: CompatibilityRow = {
       [MT_RADIUS],
     ),
     disconnectCoa: fact(
-      '/radius incoming accept=yes, port default 1700 (ECLOUD default for this adapter); CoA-changeable list documented; REQUIRES_DEVICE_TEST (D-006)',
+      '/radius incoming accept=yes, port default 1700 (EZECLOUD default for this adapter); CoA-changeable list documented; REQUIRES_DEVICE_TEST (D-006)',
       'DOCUMENTED',
       [MT_RADIUS],
     ),
@@ -1021,7 +1021,7 @@ const teltonikaRow: CompatibilityRow = {
     {
       id: 'TB-2',
       label: 'REQUIRES_DEVICE_TEST',
-      text: '`md` signature, "Password encoding" vs ECLOUD PAP-XOR, CoovaChilli reply attributes and CoA/Disconnect on the RutOS build.',
+      text: '`md` signature, "Password encoding" vs EZECLOUD PAP-XOR, CoovaChilli reply attributes and CoA/Disconnect on the RutOS build.',
     },
   ],
 };
@@ -1048,12 +1048,12 @@ const postbackRow: CompatibilityRow = {
   profile: {
     ...allUnknownProfile(),
     redirectProtocol: fact(
-      'vendor redirect to the ECLOUD portal (/pb/<profile>/<nasid>/), parameter names per profile: Cambium, Aruba, Cisco 9800/AireOS, Fortinet, Ruckus, Omada (RADIUS), Huawei eKit, configurable generic',
+      'vendor redirect to the EZECLOUD portal (/pb/<profile>/<nasid>/), parameter names per profile: Cambium, Aruba, Cisco 9800/AireOS, Fortinet, Ruckus, Omada (RADIUS), Huawei eKit, configurable generic',
       'DOCUMENTED',
       [F3_DOC],
     ),
     authorizationMethod: fact(
-      'browser form post of a single-use ECLOUD portal credential (pc-…) to the validated AP / controller login URL; the device sends RADIUS PAP',
+      'browser form post of a single-use EZECLOUD portal credential (pc-…) to the validated AP / controller login URL; the device sends RADIUS PAP',
       'DOCUMENTED',
       [F3_DOC],
     ),
@@ -1125,7 +1125,7 @@ const merakiSplashRow: CompatibilityRow = {
   profile: {
     ...allUnknownProfile(),
     redirectProtocol: fact(
-      'Meraki custom-hosted splash: GET to the ECLOUD portal with login_url, continue_url, ap_mac, ap_name, ap_tags, client_ip, client_mac (sign-on) or base_grant_url, user_continue_url, node_mac, client_mac (click-through)',
+      'Meraki custom-hosted splash: GET to the EZECLOUD portal with login_url, continue_url, ap_mac, ap_name, ap_tags, client_ip, client_mac (sign-on) or base_grant_url, user_continue_url, node_mac, client_mac (click-through)',
       'DOCUMENTED',
       [F4_DOC],
     ),

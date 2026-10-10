@@ -27,7 +27,7 @@ export type DegradationMode = (typeof DEGRADATION_MODES)[number];
 export type PlanField = PolicyField | 'interim_interval' | 'class' | 'session_bound';
 
 export interface TranslationContext {
-  /** ECLOUD session id → `Class = ecloud:<id>` (§4.1). Omit to skip `Class`. */
+  /** EZECLOUD session id → `Class = ecloud:<id>` (§4.1). Omit to skip `Class`. */
   readonly sessionId?: string | null;
   readonly now?: Date;
   readonly clip: Clip;

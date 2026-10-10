@@ -488,7 +488,7 @@ const RedirectBody = z.object({
   flavour: z.enum(['uspot', 'chilli', 'mikrotik', 'meraki']),
   raw_query: z.string().max(8192),
   client_ip: z.string().max(64).optional(),
-  /** Meraki only: the `/meraki/<nasid>/` path segment (= the NAS-Identifier registered in ECLOUD). */
+  /** Meraki only: the `/meraki/<nasid>/` path segment (= the NAS-Identifier registered in EZECLOUD). */
   nasid: z
     .string()
     .regex(/^[A-Za-z0-9._:-]{3,128}$/)
@@ -496,7 +496,7 @@ const RedirectBody = z.object({
 });
 
 /**
- * ECLOUD login token of a Cycle C post-back flow or a Cycle E Meraki flow (required there,
+ * EZECLOUD login token of a Cycle C post-back flow or a Cycle E Meraki flow (required there,
  * ignored for UAM flows).
  */
 const LoginTokenField = z.string().min(1).max(1024).optional();
@@ -725,7 +725,7 @@ export function portalInternalRouter(deps: AppDeps): Router {
       const { md: _md, ...fields } = ctx.vendorOpaque.fields;
       const flowId = newId();
       // Cycle B (MikroTik, unsigned redirect): the CHAP challenge is the replay nonce; without
-      // CHAP the id of an ECLOUD login token is. The token is consumed once before a credential.
+      // CHAP the id of an EZECLOUD login token is. The token is consumed once before a credential.
       const isMikrotik = resolved.nas.adapterKey === MIKROTIK_ADAPTER_KEY;
       const loginToken = isMikrotik
         ? issuePortalLoginToken(
@@ -972,7 +972,7 @@ export function portalInternalRouter(deps: AppDeps): Router {
       const ls = PORTAL_LIMITS.attemptsPerSite;
       await counter(deps, `pf:rl:site:${flow.siteId}`, ls.max, ls.windowS);
 
-      // Cycle C: a post-back flow needs its ECLOUD login token back exactly once (anti-forgery,
+      // Cycle C: a post-back flow needs its EZECLOUD login token back exactly once (anti-forgery,
       // vendor/login-token.ts); the portal re-renders the form with a fresh token on refusal.
       let loginTokenId: string | null = null;
       if (flow.postback !== undefined) {
@@ -1160,7 +1160,7 @@ export function portalInternalRouter(deps: AppDeps): Router {
         res.status(422).json({ result: 'handoff_unavailable' });
         return;
       }
-      // Cycle E: the Meraki sign-on hand-off carries ECLOUD's success URL as `success_url`.
+      // Cycle E: the Meraki sign-on hand-off carries EZECLOUD's success URL as `success_url`.
       const handoffCtx = isMerakiFlow(flow)
         ? (() => {
             const c = contextOf(flow, at);

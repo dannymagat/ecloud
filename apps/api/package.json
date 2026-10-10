@@ -2,7 +2,7 @@
   "name": "@ecloud/api",
   "version": "0.1.0",
   "private": true,
-  "description": "ECLOUD REST API (/api/v1) and internal listener",
+  "description": "EZECLOUD REST API (/api/v1) and internal listener",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",

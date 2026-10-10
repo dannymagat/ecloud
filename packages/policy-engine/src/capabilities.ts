@@ -38,9 +38,9 @@ export type PortalType =
   | 'uam-chillispot+capport'
   | 'uam-chillispot+wispr+json'
   | 'config-only'
-  /** Cycle B: RouterOS Hotspot `login.html` → ECLOUD portal → POST to `$(link-login-only)`. */
+  /** Cycle B: RouterOS Hotspot `login.html` → EZECLOUD portal → POST to `$(link-login-only)`. */
   | 'mikrotik-hotspot'
-  /** Cycle C: AP/controller redirects to ECLOUD, the browser posts credentials back to the AP. */
+  /** Cycle C: AP/controller redirects to EZECLOUD, the browser posts credentials back to the AP. */
   | 'external-postback'
   /** Cycle E: Meraki-hosted login endpoint (`login_url`), browser POST, cloud-sourced RADIUS. */
   | 'meraki-splash-signon';

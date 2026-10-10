@@ -2,7 +2,7 @@
   "name": "@ecloud/vendor-api",
   "version": "0.1.0",
   "private": true,
-  "description": "ECLOUD outbound vendor controller API clients (UniFi, Omada, Mist signing, Ruckus NBI stub) behind an SSRF-safe, TLS-verifying HTTP client",
+  "description": "EZECLOUD outbound vendor controller API clients (UniFi, Omada, Mist signing, Ruckus NBI stub) behind an SSRF-safe, TLS-verifying HTTP client",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",

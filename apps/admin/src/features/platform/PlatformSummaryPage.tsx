@@ -1,7 +1,7 @@
 /**
  * Platform summary (P9-B) over `GET /api/v1/platform/dashboard` (`platform:health:read`, P9-A
  * contract §6): per-organization counts for platform administrators, no subscriber data. NAS
- * figures are ECLOUD's observed RADIUS activity per NAS (spec §8), never device up/down state.
+ * figures are EZECLOUD's observed RADIUS activity per NAS (spec §8), never device up/down state.
  * Polled every 30 s (Q73), stopping on error.
  */
 import { useState } from 'react';
@@ -52,7 +52,7 @@ function Screen() {
     <div className="space-y-4">
       <PageHeader
         title="Platform summary"
-        description="Per-organization counts observed by ECLOUD over the last 24 hours. No subscriber data is shown."
+        description="Per-organization counts observed by EZECLOUD over the last 24 hours. No subscriber data is shown."
       />
       {doc.isPending ? (
         <Spinner label="Loading…" />

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # =============================================================================================
-#  Internal CA + edge certificate for the LAN-only ECLOUD pilot on vps-local
+#  Internal CA + edge certificate for the LAN-only EZECLOUD pilot on vps-local
 #  DRAFT, NOT RUN on any host (docs/VPS_LOCAL_CHANGE_LIST.md LCL-TLS-1 / LCL-TLS-2).
 #
 #    sudo ECLOUD_APPROVED_CHANGE=LCL-TLS-1 ./make-lan-tls.sh ca               # once
@@ -55,8 +55,8 @@ distinguished_name = dn
 prompt = no
 x509_extensions = v3_ca
 [dn]
-O = ECLOUD LAN pilot
-CN = ECLOUD LAN pilot CA (vps-local)
+O = EZECLOUD LAN pilot
+CN = EZECLOUD LAN pilot CA (vps-local)
 [v3_ca]
 basicConstraints = critical,CA:true,pathlen:0
 keyUsage = critical,keyCertSign,cRLSign
@@ -90,7 +90,7 @@ authorityKeyIdentifier = keyid
 subjectAltName = ${san}
 EOF
     openssl ecparam -name prime256v1 -genkey -noout -out "$work/edge.key"
-    openssl req -new -sha256 -key "$work/edge.key" -subj "/O=ECLOUD LAN pilot/CN=ECLOUD edge" \
+    openssl req -new -sha256 -key "$work/edge.key" -subj "/O=EZECLOUD LAN pilot/CN=EZECLOUD edge" \
       -out "$work/edge.csr"
     openssl x509 -req -sha256 -days "$LEAF_DAYS" -in "$work/edge.csr" \
       -CA "$TLS_DIR/ca/ca.crt" -CAkey "$TLS_DIR/ca/ca.key" -CAcreateserial \

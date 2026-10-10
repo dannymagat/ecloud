@@ -2,7 +2,7 @@
   "name": "@ecloud/tests",
   "version": "0.1.0",
   "private": true,
-  "description": "ECLOUD cross-package test suites: tenant isolation, DB security probes, FreeRADIUS<->AAA contract, e2e smoke",
+  "description": "EZECLOUD cross-package test suites: tenant isolation, DB security probes, FreeRADIUS<->AAA contract, e2e smoke",
   "type": "module",
   "scripts": {
     "typecheck": "tsc -p tsconfig.json --noEmit",

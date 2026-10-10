@@ -201,7 +201,7 @@ export function isAmberStatus(status: unknown): boolean {
 
 export function amberReason(status: unknown): string {
   return status === 'ECLOUD_SIDE_ONLY'
-    ? 'Enforced by ECLOUD (at authorization / accounting), not by the device'
+    ? 'Enforced by EZECLOUD (at authorization / accounting), not by the device'
     : 'Sent to the device but not verified on a lab device (needs device test)';
 }
 

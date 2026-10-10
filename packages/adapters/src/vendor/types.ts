@@ -67,7 +67,7 @@ export interface ParsedRedirect {
   readonly signature: { readonly kind: 'uam-md5' | 'none'; readonly value: string | null };
   readonly result: 'notyet' | 'already' | 'success' | 'failed' | 'logoff' | 'other' | null;
   /**
-   * Cycle C (post-back): NAS identifier taken from the ECLOUD portal URL path
+   * Cycle C (post-back): NAS identifier taken from the EZECLOUD portal URL path
    * (`/pb/<profile>/<nasid>/`), which the operator configures on the AP / controller.
    */
   readonly pathNasId?: string | null;

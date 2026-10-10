@@ -1,4 +1,4 @@
-# Deployment Architecture — ECLOUD pilot on the current VPS and the path to production
+# Deployment Architecture — EZECLOUD pilot on the current VPS and the path to production
 
 Status: PROPOSED (Phase 2 design only). Nothing has been deployed, installed or changed on `vps`. Labels: **VERIFIED ON VPS (read-only)**, **VERIFIED FROM EXISTING CODE**, **VERIFIED FROM OFFICIAL DOCUMENTATION**, **PROPOSED**, **REQUIRES CLARIFICATION**.
 

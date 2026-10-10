@@ -382,7 +382,7 @@ export function AddAccessPointWizard({
               · profile <code>{vendor.profile}</code>
             </>
           ) : null}
-          . The NAS is the device that sends RADIUS to ECLOUD (controller, gateway or the AP).
+          . The NAS is the device that sends RADIUS to EZECLOUD (controller, gateway or the AP).
         </p>
         {created !== null ? (
           secretStored ? (
@@ -472,7 +472,7 @@ export function AddAccessPointWizard({
         </h3>
         <p className="text-xs text-subtle">
           The MAC address as the vendor sends it in the portal redirect. Each AP stays
-          &quot;unverified&quot; until ECLOUD sees its first RADIUS request.
+          &quot;unverified&quot; until EZECLOUD sees its first RADIUS request.
         </p>
         <ul className="space-y-2" aria-label="AP MAC addresses">
           {rows.map((r, i) => (
@@ -587,7 +587,7 @@ export function AddAccessPointWizard({
           {savedCount === 0
             ? 'No AP MAC address was registered; you can add them later.'
             : `${String(savedCount)} access point${savedCount === 1 ? '' : 's'} added behind ${chosenNas?.name ?? 'the NAS'}.`}{' '}
-          They show as unverified until ECLOUD receives their first RADIUS request.
+          They show as unverified until EZECLOUD receives their first RADIUS request.
         </Notice>
       </section>
     );

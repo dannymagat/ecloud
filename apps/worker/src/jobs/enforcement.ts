@@ -1,5 +1,5 @@
 /**
- * Runtime enforcement loop, ECLOUD side (Phase 7 P7-A; POLICY_ENGINE.md §5.1–5.4, D-028 staged
+ * Runtime enforcement loop, EZECLOUD side (Phase 7 P7-A; POLICY_ENGINE.md §5.1–5.4, D-028 staged
  * items 6–8: quotas, concurrency, schedules).
  *
  * - `recordRuntimeEnforcement`: one `session_enforcement` row per (session, breach trigger) while

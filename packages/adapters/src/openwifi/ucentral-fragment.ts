@@ -78,7 +78,7 @@ export interface SchemaValidation {
 
 export interface RateLimitFragmentExport {
   readonly kind: typeof RATE_LIMIT_FRAGMENT_KIND;
-  /** Always export/preview: ECLOUD never pushes this to a controller in Phase 7. */
+  /** Always export/preview: EZECLOUD never pushes this to a controller in Phase 7. */
   readonly mode: 'export_preview_only';
   readonly adapter: 'openwifi-config';
   readonly adapterVersion: string;
@@ -100,7 +100,7 @@ export interface FragmentUnavailable {
 }
 
 export const FRAGMENT_WARNINGS: readonly string[] = [
-  'Export/preview only: ECLOUD did not push this fragment to any controller.',
+  'Export/preview only: EZECLOUD did not push this fragment to any controller.',
   'Per-SSID rate-limit: every station of the SSID gets the same ceiling (site-scoped intent only).',
   'Direction mapping ingress-rate = client upload, egress-rate = client download is REQUIRES DEVICE TEST (NETWORK_INTEGRATION.md §11 item 2, DT-02).',
   'Applying it through the controller re-applies hostapd/uspot and resets captive-portal sessions (NETWORK_INTEGRATION.md §5).',

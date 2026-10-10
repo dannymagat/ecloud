@@ -1,6 +1,6 @@
 /**
  * `meraki-splash` vendor adapter pieces (multi-vendor Cycle E, D-044; docs/VENDOR_INTEGRATION_RESEARCH.md
- * §3.5). Pure: no network, no DB, no logging. ECLOUD NEVER fetches a Meraki URL; `login_url` and
+ * §3.5). Pure: no network, no DB, no logging. EZECLOUD NEVER fetches a Meraki URL; `login_url` and
  * `base_grant_url` are browser targets only.
  *
  * Redirect parameters, ONLY as documented (no other name is read):
@@ -14,7 +14,7 @@
  *  - Click-through splash (Developer Hub "Captive Portal with Click-through API logic"):
  *      `base_grant_url`, `user_continue_url`, `node_id`, `node_mac`, `gateway_id`, `client_ip`,
  *      `client_mac`. Completion: browser GET `base_grant_url?continue_url=…[&duration=<s>]`,
- *      duration ≤ 2592000 s. No RADIUS: ECLOUD enforces nothing beyond `duration`.
+ *      duration ≤ 2592000 s. No RADIUS: EZECLOUD enforces nothing beyond `duration`.
  *
  * Host allow-list: the documented examples are `https://n143.network-auth.com/splash/login?mauth=…`
  * and `https://n143.network-auth.com/splash/grant`. Only `https://n<digits>.network-auth.com` (no
@@ -210,7 +210,7 @@ function portalUrl(raw: string): string | null {
 
 /**
  * Sign-on completion (documented): POST `username`, `password`, `success_url` to `login_url`.
- * `success_url` is the ECLOUD portal's own page (Meraki appends `logout_url`).
+ * `success_url` is the EZECLOUD portal's own page (Meraki appends `logout_url`).
  */
 export function buildMerakiSignOnHandoff(input: {
   readonly loginUrl: string;
@@ -225,10 +225,10 @@ export function buildMerakiSignOnHandoff(input: {
   }
   const fields: Record<string, string> = { username: input.username, password: input.password };
   if (input.successUrl !== null) {
-    // Built server-side from the ECLOUD portal origin (https in production, D-039); never from
+    // Built server-side from the EZECLOUD portal origin (https in production, D-039); never from
     // the query, so only its shape is checked (no userinfo, no backslash, http(s)).
     const success = portalUrl(input.successUrl);
-    if (success === null) return unsupported('success_url must be an http(s) ECLOUD portal URL');
+    if (success === null) return unsupported('success_url must be an http(s) EZECLOUD portal URL');
     fields.success_url = success;
   }
   return {
@@ -259,7 +259,7 @@ export function buildMerakiGrantUrl(input: {
 }
 
 // ------------------------------------------------------------------------------------------
-// Setup guide (Meraki Dashboard; ECLOUD wording; placeholders only)
+// Setup guide (Meraki Dashboard; EZECLOUD wording; placeholders only)
 // ------------------------------------------------------------------------------------------
 
 const F4: EvidenceRef = {
@@ -283,14 +283,14 @@ function step(
 
 /**
  * Meraki Dashboard steps. Menu labels are quoted from Meraki documentation as factual
- * identifiers; the text is ECLOUD's own. Every value is a placeholder that the API resolves for
+ * identifiers; the text is EZECLOUD's own. Every value is a placeholder that the API resolves for
  * display (never a secret: the RADIUS secret is shown once at NAS creation / rotation).
  */
 export function merakiSetupGuide(): readonly SetupStep[] {
   return [
     step(
       'platform-flag',
-      'ECLOUD platform: Meraki cloud RADIUS must be enabled (MERAKI_CLOUD_RADIUS_ENABLED) and the listener ports publicly reachable from the Meraki Cloud. OFF by default; the LAN-only pilot (D-043) does not allow it.',
+      'EZECLOUD platform: Meraki cloud RADIUS must be enabled (MERAKI_CLOUD_RADIUS_ENABLED) and the listener ports publicly reachable from the Meraki Cloud. OFF by default; the LAN-only pilot (D-043) does not allow it.',
       'MERAKI_CLOUD_RADIUS_ENABLED',
       '<MERAKI_CLOUD_RADIUS_STATE>',
       [SEC36],
@@ -304,7 +304,7 @@ export function merakiSetupGuide(): readonly SetupStep[] {
     ),
     step(
       'radius-auth',
-      'RADIUS servers: add the ECLOUD RADIUS server (public address, this NAS’s dedicated port, this NAS’s secret). Meraki sends these requests from the Meraki Cloud, not from the access point.',
+      'RADIUS servers: add the EZECLOUD RADIUS server (public address, this NAS’s dedicated port, this NAS’s secret). Meraki sends these requests from the Meraki Cloud, not from the access point.',
       'Access control > RADIUS servers {Host, Port, Secret}',
       '<ECLOUD_RADIUS_PUBLIC_ADDRESS>, <MERAKI_AUTH_PORT>, <RADIUS_SECRET>',
       [F4, MERAKI_DOCS.radiusSignOn, SEC36],
@@ -318,14 +318,14 @@ export function merakiSetupGuide(): readonly SetupStep[] {
     ),
     step(
       'nas-identifier',
-      'NAS-Identifier: ECLOUD rejects any request whose NAS-Identifier differs from the value registered for this NAS. Set a custom NAS-ID if your Dashboard offers it (whether splash requests carry it is REQUIRES_DEVICE_TEST).',
+      'NAS-Identifier: EZECLOUD rejects any request whose NAS-Identifier differs from the value registered for this NAS. Set a custom NAS-ID if your Dashboard offers it (whether splash requests carry it is REQUIRES_DEVICE_TEST).',
       'NAS-Identifier',
       '<NAS_IDENTIFIER>',
       [F4, SEC36],
     ),
     step(
       'custom-splash-url',
-      'Splash page: custom splash URL = the ECLOUD portal URL of this NAS (Meraki appends login_url, continue_url, ap_mac, client_mac, client_ip)',
+      'Splash page: custom splash URL = the EZECLOUD portal URL of this NAS (Meraki appends login_url, continue_url, ap_mac, client_mac, client_ip)',
       'Splash page > Custom splash URL',
       '<PORTAL_MERAKI_URL>',
       [F4, MERAKI_DOCS.customSplash],
@@ -339,28 +339,28 @@ export function merakiSetupGuide(): readonly SetupStep[] {
     ),
     step(
       'walled-garden',
-      'Walled garden: allow the ECLOUD portal (Meraki may require an IP address instead of a host name unless Meraki support enables walled-garden domain names)',
+      'Walled garden: allow the EZECLOUD portal (Meraki may require an IP address instead of a host name unless Meraki support enables walled-garden domain names)',
       'Access control > Walled garden ranges',
       '<PORTAL_HOST>',
       [F4, MERAKI_DOCS.customSplash],
     ),
     step(
       'source-ranges',
-      'Meraki Cloud source addresses: read them from Dashboard > Help > Firewall info and give them to the ECLOUD platform operator (MERAKI_RADIUS_SOURCE_CIDRS). They may change over time.',
+      'Meraki Cloud source addresses: read them from Dashboard > Help > Firewall info and give them to the EZECLOUD platform operator (MERAKI_RADIUS_SOURCE_CIDRS). They may change over time.',
       'Help > Firewall info',
       '<MERAKI_SOURCE_CIDRS>',
       [MERAKI_DOCS.radiusSignOn],
     ),
     step(
       'disconnect',
-      'Disconnect (CoA): Meraki listens for RFC 5176 Disconnect only, on UDP 3799 of your dashboard host (the nNNN.meraki.com name in the Dashboard browser URL); register it in ECLOUD as the Disconnect host. CoA attribute changes are not supported by Meraki. REQUIRES_DEVICE_TEST.',
-      'ECLOUD NAS > Disconnect host',
+      'Disconnect (CoA): Meraki listens for RFC 5176 Disconnect only, on UDP 3799 of your dashboard host (the nNNN.meraki.com name in the Dashboard browser URL); register it in EZECLOUD as the Disconnect host. CoA attribute changes are not supported by Meraki. REQUIRES_DEVICE_TEST.',
+      'EZECLOUD NAS > Disconnect host',
       '<MERAKI_DAS_HOST>:3799',
       [F4, MERAKI_DOCS.disconnect],
     ),
     step(
       'message-authenticator',
-      'Message-Authenticator: ECLOUD requires it on every Access-Request by default (BlastRADIUS). Whether the Meraki Cloud sends it is REQUIRES_DEVICE_TEST; relaxing it is a per-NAS decision.',
+      'Message-Authenticator: EZECLOUD requires it on every Access-Request by default (BlastRADIUS). Whether the Meraki Cloud sends it is REQUIRES_DEVICE_TEST; relaxing it is a per-NAS decision.',
       'require_message_authenticator',
       '<REQUIRE_MESSAGE_AUTHENTICATOR>',
       [SEC36],
@@ -375,10 +375,10 @@ export function merakiSetupGuide(): readonly SetupStep[] {
 /**
  * Returns `base` (the first-party wrapper of the `meraki-splash` engine) with the Meraki redirect
  * parsing, context validation and sign-on hand-off. `validateContext` resolves the NAS by the
- * `nasid` path segment ECLOUD put in the custom splash URL (the caller passes it as the
+ * `nasid` path segment EZECLOUD put in the custom splash URL (the caller passes it as the
  * ECLOUD-internal `ecloud_nasid` param; the query parser never reads undocumented names, so a
  * query cannot set it) and uses `login_url` as the vendor nonce (`nonceKind: 'vendor-nonce'`).
- * The redirect is unsigned: the ECLOUD login token (vendor/login-token.ts) guards the identify
+ * The redirect is unsigned: the EZECLOUD login token (vendor/login-token.ts) guards the identify
  * step, and a forged redirect only yields a credential usable through the registered NAS's own
  * listener and secret, for the bound client MAC (SECURITY §3.5).
  */
@@ -436,7 +436,7 @@ export function withMerakiSplash(base: VendorAdapter): VendorAdapter {
       if (!r.ok) return { ok: false, reason: 'malformed', detail: r.reason };
       const nasid = parsed.params.ecloud_nasid ?? null;
       if (nasid === null || !MERAKI_NAS_IDENTIFIER_RE.test(nasid)) {
-        return { ok: false, reason: 'malformed', detail: 'missing ECLOUD NAS path segment' };
+        return { ok: false, reason: 'malformed', detail: 'missing EZECLOUD NAS path segment' };
       }
       const nas = await lookup.findNas({ nasid, called: null, apMac: r.redirect.apMac });
       if (!nas) return { ok: false, reason: 'unknown_nas', detail: 'no registered Meraki NAS' };

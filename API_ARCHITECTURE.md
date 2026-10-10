@@ -1,4 +1,4 @@
-# ECLOUD — API & Backend Architecture (Phase 2, A5)
+# EZECLOUD — API & Backend Architecture (Phase 2, A5)
 
 Status: design only. Nothing here was deployed or changed on any host. Labels: **VERIFIED FROM EXISTING CODE** (local path), **VERIFIED FROM OFFICIAL DOCUMENTATION** (URL), **PROPOSED** (our choice), **UNKNOWN**, **REQUIRES DEVICE TEST**. Everything not labelled otherwise in §1–§8 is **PROPOSED**. Internal AAA endpoint names are aligned with A3 (`AAA_ARCHITECTURE.md`) and A5b (`POLICY_ENGINE.md`), both being written in parallel — names marked PROPOSED until those documents land.
 
@@ -219,7 +219,7 @@ Permissions are keys from `MULTITENANCY.md §4.2` exactly. `—` = authenticated
 | `/internal/portal/flows/{id}/status` | GET | portal | session status (bytes, time left) from `sessions`/`usage_counters` |
 | `/internal/portal/flows/{id}/result` | POST | portal | `res=success|reject|failed|logoff` callback recorded |
 | `/internal/portal/idp/{idpId}/callback` | POST | portal | OIDC code exchange done by `api` (holds `client_secret_ref`); portal never sees IdP secrets |
-| `/internal/adapters/openwifi/devices/{serial}/state` | POST | EZE controller → ECLOUD (webhook, Option A, PROPOSED) | `state.interfaces[].ssids[].associations[]` byte counters → telemetry adapter (`NETWORK_INTEGRATION.md §7.4`) |
+| `/internal/adapters/openwifi/devices/{serial}/state` | POST | EZE controller → EZECLOUD (webhook, Option A, PROPOSED) | `state.interfaces[].ssids[].associations[]` byte counters → telemetry adapter (`NETWORK_INTEGRATION.md §7.4`) |
 | `/internal/adapters/openwifi/push` | POST | worker → controller client | queue entry; actual HTTP goes out to `EZE_CONTROLLER_URL` (§6) |
 
 **Portal public (`portal.ezecloud.ezelink.ai`, served by `portal` process; CSRF + rate limits below)**
@@ -245,7 +245,7 @@ Portal CSRF/rate-limit design: flow cookie `__Host-pf` (HttpOnly, Secure, SameSi
 
 | Aspect | Decision (PROPOSED) | Precedent / rationale |
 |---|---|---|
-| Session carrier | **Opaque session id in cookie** `__Host-ecloud_sid` (HttpOnly, Secure, SameSite=Lax, Path=/) when API is same-origin via admin host; if the SPA calls `api.ecloud…` cross-subdomain, use `Domain=.ezecloud.ezelink.ai` + SameSite=Lax + `Origin` check + CSRF header (`X-CSRF-Token` = value from `GET /auth/csrf`). Server-side row `admin_sessions` (`token_hash` = SHA-256 of id) mirrored in Redis for O(1) lookup; idle 30 min, absolute 12 h (A7 §5), revocable instantly | Precedent: JWT in `localStorage` (`server.ts` L299, `public/js/app.js`) — rejected (XSS-readable, no server revocation). The precedent already mints HttpOnly SameSite=Lax cookies for tickets (`server.ts` L889, L4274) and has `SessionService.ts` dual-writing `sessions` rows — ECLOUD makes that authoritative. A7 prefers cookie; A8 reviewing |
+| Session carrier | **Opaque session id in cookie** `__Host-ecloud_sid` (HttpOnly, Secure, SameSite=Lax, Path=/) when API is same-origin via admin host; if the SPA calls `api.ecloud…` cross-subdomain, use `Domain=.ezecloud.ezelink.ai` + SameSite=Lax + `Origin` check + CSRF header (`X-CSRF-Token` = value from `GET /auth/csrf`). Server-side row `admin_sessions` (`token_hash` = SHA-256 of id) mirrored in Redis for O(1) lookup; idle 30 min, absolute 12 h (A7 §5), revocable instantly | Precedent: JWT in `localStorage` (`server.ts` L299, `public/js/app.js`) — rejected (XSS-readable, no server revocation). The precedent already mints HttpOnly SameSite=Lax cookies for tickets (`server.ts` L889, L4274) and has `SessionService.ts` dual-writing `sessions` rows — EZECLOUD makes that authoritative. A7 prefers cookie; A8 reviewing |
 | Non-browser clients | API keys (below). No JWT issuance in v1; a signed short-lived JWT can be added later for the controller webhook if mTLS is unavailable | |
 | Passwords | **Argon2id** (`argon2` package; m=64 MiB, t=3, p=1), `needsRehash()` on login | Precedent `passwordService.ts` is algorithm-agile with Argon2id preferred, scrypt default, bcrypt verify-only (VERIFIED) — port the shape, drop bcrypt |
 | MFA | TOTP (RFC 6238), secret AES-256-GCM at rest under `ENCRYPTION_KEY_FILE`, 10 recovery codes (hashed); enforced for platform bindings; per-org `settings.mfa_required` | Precedent `totpService.ts` zero-dep implementation incl. encryption + recovery codes (VERIFIED) — reuse |
@@ -321,16 +321,16 @@ DLQ = BullMQ `failed` set of a dedicated queue with 30-day retention; `/platform
 
 ## 6. Integration with the existing EZE controller (Option C → Option A, PROPOSED)
 
-Pilot (Option C, `NETWORK_INTEGRATION.md §8`): operators configure SSIDs in the EZE controller UI pointing `radius.*`, `captive.uam-*`, `dynamic-authorization` at ECLOUD; ECLOUD pushes nothing. ECLOUD exposes a **"NAS onboarding sheet"** (`GET {o}/nas/{id}/onboarding`) listing the values to type into the controller (RADIUS host/port, UAM server URL, nasid, DAE host/port; secrets shown once).
+Pilot (Option C, `NETWORK_INTEGRATION.md §8`): operators configure SSIDs in the EZE controller UI pointing `radius.*`, `captive.uam-*`, `dynamic-authorization` at EZECLOUD; EZECLOUD pushes nothing. EZECLOUD exposes a **"NAS onboarding sheet"** (`GET {o}/nas/{id}/onboarding`) listing the values to type into the controller (RADIUS host/port, UAM server URL, nasid, DAE host/port; secrets shown once).
 
-Option A contract sketch (what ECLOUD needs; controller side **PROPOSED pending owner Q4 in NETWORK_INTEGRATION.md**; nothing exists yet on the controller for these shapes):
+Option A contract sketch (what EZECLOUD needs; controller side **PROPOSED pending owner Q4 in NETWORK_INTEGRATION.md**; nothing exists yet on the controller for these shapes):
 
-| Need | Controller API (existing / proposed) | ECLOUD side |
+| Need | Controller API (existing / proposed) | EZECLOUD side |
 |---|---|---|
-| Device inventory per site | **Existing** REST under `/api/access-points/*` (VERIFIED `src/ap_routes.ts`, `src/ap_device_config_routes.ts`); mapping EZE site ↔ ECLOUD site stored in `network_devices` (`serial`) | `adapters.openwifi.inventory` job pulls serial/model/firmware/mode → `network_devices` |
+| Device inventory per site | **Existing** REST under `/api/access-points/*` (VERIFIED `src/ap_routes.ts`, `src/ap_device_config_routes.ts`); mapping EZE site ↔ EZECLOUD site stored in `network_devices` (`serial`) | `adapters.openwifi.inventory` job pulls serial/model/firmware/mode → `network_devices` |
 | SSID/NAS config fragments | **Existing**: `PATCH /api/access-points/:serial/configuration/overrides`, `POST …/configuration/apply`, `GET …/configuration/{effective,diff,history}`, `POST …/rollback` (VERIFIED `ap_device_config_routes.ts` L244-632). **Proposed addition**: `PUT /api/access-points/:serial/policy-fragments/:fragmentId` carrying only `ssids[].rate-limit`, `ssids[].radius.{authentication,accounting,dynamic-authorization,nas-identifier}`, `captive.{uam-*, acct-*, idle-timeout, session-timeout, walled-garden-*}` — validated by the controller against `ucentral.full.json`, merged as an override layer, applied with its existing `ap_apply.ts` path | `openwifi-config` adapter emits the fragment (`NETWORK_INTEGRATION.md §7.3`); result stored in `policy_translations(trigger='config_push')` |
-| Device state / telemetry | **Existing** data: `state.interfaces[].ssids[].associations[]` already parsed into `ap_clients` (VERIFIED `ucentral_gateway.ts` `collectAssociations`). **Proposed**: controller webhook `POST <ECLOUD>/internal/adapters/openwifi/devices/{serial}/state` on each `state` event (or ECLOUD polls a proposed `GET /api/access-points/:serial/clients`) | telemetry adapter correlates by MAC with `sessions`; secondary to RADIUS accounting |
-| Auth between systems | **Reuse controller API keys**: `ezk_` keys, SHA-256 stored, `X-API-Key` or Bearer, `write` scope gates mutations, permission `device.config_push` for apply (VERIFIED `server.ts` L1704-1748, `lib/permissions.ts`). ECLOUD stores the key in `EZE_CONTROLLER_API_KEY_FILE`, one key per ECLOUD platform, scoped to the operator user the owner designates | Controller → ECLOUD webhook authenticates with an ECLOUD platform API key (`platform_support`-like template restricted to the webhook route) or mTLS over the tunnel |
+| Device state / telemetry | **Existing** data: `state.interfaces[].ssids[].associations[]` already parsed into `ap_clients` (VERIFIED `ucentral_gateway.ts` `collectAssociations`). **Proposed**: controller webhook `POST <EZECLOUD>/internal/adapters/openwifi/devices/{serial}/state` on each `state` event (or EZECLOUD polls a proposed `GET /api/access-points/:serial/clients`) | telemetry adapter correlates by MAC with `sessions`; secondary to RADIUS accounting |
+| Auth between systems | **Reuse controller API keys**: `ezk_` keys, SHA-256 stored, `X-API-Key` or Bearer, `write` scope gates mutations, permission `device.config_push` for apply (VERIFIED `server.ts` L1704-1748, `lib/permissions.ts`). EZECLOUD stores the key in `EZE_CONTROLLER_API_KEY_FILE`, one key per EZECLOUD platform, scoped to the operator user the owner designates | Controller → EZECLOUD webhook authenticates with an EZECLOUD platform API key (`platform_support`-like template restricted to the webhook route) or mTLS over the tunnel |
 | Failure semantics | Controller `apply` returns rejected keys / "Already applied" (VERIFIED `ap_apply.ts` L475-528) | map to `policy.push_result{status: applied|rejected|noop, rejected[]}`; retries per `adapters.openwifi.push` |
 
 Everything in this section that touches real APs is **REQUIRES DEVICE TEST** (rate-limit semantics, DAE reachability, uspot attribute handling — `NETWORK_INTEGRATION.md §11`).
@@ -412,7 +412,7 @@ Tooling: pnpm workspaces, `tsc --build`, eslint + prettier, vitest; one Dockerfi
 ### Open questions for owner
 
 1. Admin app and API on separate subdomains (`ecloud.` + `api.ecloud.`) or same-origin `/api` on `ecloud.`? Same-origin keeps the cookie `__Host-` prefixed and removes CSRF complexity (recommended).
-2. Who owns and schedules the ezecontroller "policy fragment" API and state webhook (Option A)? Which controller user/API key would ECLOUD use?
+2. Who owns and schedules the ezecontroller "policy fragment" API and state webhook (Option A)? Which controller user/API key would EZECLOUD use?
 3. Is Platform Support impersonation acceptable with the proposed guardrails (no key creation / secret rotation / binding changes while impersonating)?
 4. Are third-party integrations (billing, PMS, CRM) expected in release 1? That decides whether API keys and webhooks are a pilot deliverable or Phase 4.
 5. Object storage for assets/backups: MinIO on the VPS or an external bucket (ties to A1 Q18)?
@@ -427,7 +427,7 @@ Tooling: pnpm workspaces, `tsc --build`, eslint + prettier, vitest; one Dockerfi
 3. Accounting cadence and fields (`Acct-Interim-Interval`, octets, `Acct-Unique-Session-Id` presence) from hostapd and uspot — validates ingestion idempotency keys and stale-session thresholds.
 4. Option A: controller `apply` of a fragment limited to `rate-limit`/`radius`/`captive` keys — confirm no session reset side effects beyond those documented (`NETWORK_INTEGRATION.md §5`) and the shape of rejected-key responses.
 5. Portal flow on real EZEAP: `uam-server` path-based adapter URL (`/uam/uspot/`) accepted, `res=` callbacks received (`final-redirect-url: uam`), `md` verification with `uam-secret`, cookie persistence inside iOS/Android CNA.
-6. Controller → ECLOUD state webhook volume (one `state` per AP per ~60 s) versus `api` capacity on the pilot host.
+6. Controller → EZECLOUD state webhook volume (one `state` per AP per ~60 s) versus `api` capacity on the pilot host.
 
 ---
 
@@ -598,7 +598,7 @@ not VERIFIED DEVICE CAPABILITY: everything device-facing below inherits the adap
   restriction), vouchers (User-Name = code, PAP password must equal the code, HMAC lookup,
   `FOR UPDATE`, batch site restriction), MAC authentication (`Service-Type = Call-Check` →
   `client_devices.mac_auth_enabled`). Blocked client devices are rejected. CHAP is rejected
-  (ECLOUD stores only one-way hashes). Portal single-use credentials (`pc-<16 hex>`, identity
+  (EZECLOUD stores only one-way hashes). Portal single-use credentials (`pc-<16 hex>`, identity
   broker, Phase 6 P6-A): kept in Redis for 90 s (SHA-256 of the password only), accepted only from
   the bound NAS (packet source) + Calling-Station-Id + Acct-Session-Id, consumed once (SET NX),
   identity re-checked; their decision is cached for 30 s (NAS retransmit horizon) so retransmits
@@ -623,7 +623,7 @@ not VERIFIED DEVICE CAPABILITY: everything device-facing below inherits the adap
 - Policy: `loadResolutionInput` (assignments by site/user/group/device/voucher batch, schedules,
   org default, usage counters for the site's local day/month, active sessions) →
   `resolveEffectivePolicy` → adapter `translate` + `buildReplyAttributes` (non-experimental only).
-- Response: `control:Auth-Type = Accept` (ECLOUD verified the credential itself), reply attributes
+- Response: `control:Auth-Type = Accept` (EZECLOUD verified the credential itself), reply attributes
   in object form with `"do_xlat": false`, `CoovaChilli-*` names rewritten to `ChilliSpot-*`,
   `reply:Class = ai:<32 hex of the session UUID>`; never `User-Password`, `Cleartext-Password` or
   any other control item. Rejects → `401` + `reply:Reply-Message` (generic text; the internal
@@ -1144,9 +1144,9 @@ those whose online status is actually known). Migration **026** (`026_dashboard_
 next free number) is additive: the `usage_hourly` rollup, `portal_login_attempts.triggered_lockout`
 and read indexes (see "Performance").
 
-**Device state.** ECLOUD has no device-management telemetry (local-only phase: no controller, AP
+**Device state.** EZECLOUD has no device-management telemetry (local-only phase: no controller, AP
 or VPS integration). The dashboard therefore never reports a NAS or AP as online/offline. Per NAS
-it reports only what ECLOUD itself observed: the newest RADIUS Access-Request (`auth_events`) and
+it reports only what EZECLOUD itself observed: the newest RADIUS Access-Request (`auth_events`) and
 the newest accounting record (`accounting_records`) from that NAS, and an **observed-activity**
 status derived from them with explicit thresholds:
 
@@ -1159,7 +1159,7 @@ status derived from them with explicit thresholds:
 
 A NAS with no clients is legitimately `quiet`/`silent`; the status says nothing about device
 reachability. `network_devices` are reported as `registered` with `online_status_known: 0`
-(nothing in ECLOUD observes AP state; `network_devices.mgmt_status` is not written by any ECLOUD
+(nothing in EZECLOUD observes AP state; `network_devices.mgmt_status` is not written by any EZECLOUD
 component and is not used).
 
 #### Dashboard & reports API contract (consumed by P9-B admin views)
@@ -1387,7 +1387,7 @@ Internal behaviour:
   (= RADIUS NAS-Identifier = router identity, registered as `nas_identifier`); no AP MAC (RouterOS
   has no such variable). `link-login-only` must be `http(s)://<RFC 1918/6598 IPv4>[:port][/<dir>]/login`.
   `chap-id` / `chap-challenge` are the documented octal-escaped bytes; both or neither. The CHAP
-  challenge is the replay nonce (`nonceKind: vendor-nonce`); without CHAP an ECLOUD login token id is
+  challenge is the replay nonce (`nonceKind: vendor-nonce`); without CHAP an EZECLOUD login token id is
   (`ecloud-login-token`). Every flow carries a login token (TTL 300 s) that `identify` consumes once
   before issuing the broker credential (second identify on the same redirect → 422
   `handoff_unavailable`; a failed router login comes back as a new redirect).
@@ -1421,7 +1421,7 @@ docs/VENDOR_INTEGRATION_RESEARCH.md §3.4; MULTI_VENDOR_INTEGRATION_PLAN.md §15
 | Path | Method | Permission | Notes |
 |---|---|---|---|
 | `/api/v1/orgs/{orgId}/nas` (+ `/{id}`) | POST, PATCH | `nas:create` / `nas:update` | New body field `adapter_config` (object). Required and validated (`parsePostbackNasConfig`, strict allow-list, unknown keys refused) when `adapter_key = external-portal-postback`: `{profile, https?, login_target?, login_hosts?[≤ 8], generic?}`; stored normalised. Any other adapter takes none (`{}`; a non-empty object is a 422). Changing the adapter away from post-back clears it; changing it to post-back re-validates the stored config |
-| `/api/v1/orgs/{orgId}/nas/{id}/setup-guide` | GET | `nas:read` | `{id, adapter_key, profile, steps[]}`: "how to configure this device" steps in ECLOUD wording, values filled from the NAS (portal URL `https://portal.ezecloud.ezelink.ai/pb/<profile>/<nas_identifier>/`), every secret a placeholder (`<RADIUS_SECRET>`). Empty for an unconfigured post-back NAS |
+| `/api/v1/orgs/{orgId}/nas/{id}/setup-guide` | GET | `nas:read` | `{id, adapter_key, profile, steps[]}`: "how to configure this device" steps in EZECLOUD wording, values filled from the NAS (portal URL `https://portal.ezecloud.ezelink.ai/pb/<profile>/<nas_identifier>/`), every secret a placeholder (`<RADIUS_SECRET>`). Empty for an unconfigured post-back NAS |
 
 Portal public (portal process): `GET /pb/{profile}[/{nasid}]/` — vendor redirect entry. Profile
 segment `^[a-z][a-z0-9-]{1,39}$`, NAS id segment `^[A-Za-z0-9._:-]{1,64}$`; the raw query is

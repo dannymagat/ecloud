@@ -168,7 +168,7 @@ describe('Cycle F admin: setup-guide gallery', () => {
     expect(screen.getByText('No vendor matches')).toBeInTheDocument();
   });
 
-  it('a tile opens the guide: numbered steps, warnings, ECLOUD values; secrets never shown', async () => {
+  it('a tile opens the guide: numbered steps, warnings, EZECLOUD values; secrets never shown', async () => {
     mockFetch(routes());
     renderRoutes(PAGES, `/orgs/${ORG_A}/access-points/setup-guides`);
     fireEvent.click(await screen.findByRole('link', { name: /^Cambium Networks/ }));

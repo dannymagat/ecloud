@@ -131,7 +131,7 @@ Mac today.
 |---|---|---|---|---|---|
 | LCL-APP-1 | G | Secrets as files: group `ecloud-secrets` gid 10001, `/opt/ecloud/secrets` root:10001 0750, files 0440 (docs/SECRETS_MANAGEMENT.md). Generated and sealed on the Mac, never on the host. Include `backup-recipients.txt` (age **public** key, see LCL-BK-1) | Mac: `bash scripts/secrets/generate.sh pilot` (→ `var/secrets/pilot`; seal with `seal.sh` into the ops repo) · `scp -rp var/secrets/pilot vps-local:ecloud-secrets` · `ssh -t vps-local 'sudo ECLOUD_APPROVED_CHANGE=LCL-APP-1 /opt/ecloud/infra/vps-local/scripts/install-secrets.sh /home/ezeadmin/ecloud-secrets'` | the script prints modes/owners (root 10001 0440) and shreds the copy | `ssh -t vps-local 'sudo rm -rf /opt/ecloud/secrets'` (before LCL-APP-2; after it, the DB passwords are bound to the files) |
 | LCL-TLS-1 | G | Internal CA (once) and edge certificate in `/opt/ecloud/tls`: `ca/ca.key` root 0600 (directory 0700), `ecloud-lan-ca.crt` 0444, `edge.crt` 0444, `edge.key` root:10001 0440 | `ssh -t vps-local 'sudo ECLOUD_APPROVED_CHANGE=LCL-TLS-1 /opt/ecloud/infra/vps-local/scripts/make-lan-tls.sh ca'` (prints the CA SHA-256 fingerprint: note it) · offline copy of the CA key (it is **not** in the automatic backups): `ssh -t vps-local 'sudo install -m 0600 -o ezeadmin /opt/ecloud/tls/ca/ca.key /home/ezeadmin/ca.key'` · `scp vps-local:ca.key ~/ecloud-age/ca.key` · `ssh vps-local 'shred -u ca.key'`. On the Mac, encrypt it with age or keep it in the password manager. (Do not redirect `ssh -t … sudo cat` into a file: the pty would mix the sudo prompt and CRLFs into it.) · `ssh -t vps-local 'sudo ECLOUD_APPROVED_CHANGE=LCL-TLS-1 /opt/ecloud/infra/vps-local/scripts/make-lan-tls.sh leaf 192.168.203.196'` | `ssh vps-local /opt/ecloud/infra/vps-local/scripts/make-lan-tls.sh show` | `ssh -t vps-local 'sudo rm -rf /opt/ecloud/tls'`. Renewal (yearly, `check-host.sh` warns at 30 days): re-run `leaf`, then `ecc restart edge`; the previous pair is kept as `*.prev` |
-| LCL-TLS-2 | G | The owner trusts the CA on the Mac | `scp vps-local:/opt/ecloud/tls/ecloud-lan-ca.crt ~/Downloads/` · compare `openssl x509 -in ~/Downloads/ecloud-lan-ca.crt -noout -fingerprint -sha256` with the fingerprint from LCL-TLS-1 · `sudo security add-trusted-cert -d -r trustRoot -k /Library/Keychains/System.keychain ~/Downloads/ecloud-lan-ca.crt` | after LCL-APP-4: `curl -sS -o /dev/null -w '%{http_code}\n' https://192.168.203.196:8443/` → 200 without `-k`; Safari/Chrome show no warning. Firefox uses its own store: set `security.enterprise_roots.enabled=true` or import the certificate in Firefox | `sudo security delete-certificate -c "ECLOUD LAN pilot CA (vps-local)" /Library/Keychains/System.keychain` |
+| LCL-TLS-2 | G | The owner trusts the CA on the Mac | `scp vps-local:/opt/ecloud/tls/ecloud-lan-ca.crt ~/Downloads/` · compare `openssl x509 -in ~/Downloads/ecloud-lan-ca.crt -noout -fingerprint -sha256` with the fingerprint from LCL-TLS-1 · `sudo security add-trusted-cert -d -r trustRoot -k /Library/Keychains/System.keychain ~/Downloads/ecloud-lan-ca.crt` | after LCL-APP-4: `curl -sS -o /dev/null -w '%{http_code}\n' https://192.168.203.196:8443/` → 200 without `-k`; Safari/Chrome show no warning. Firefox uses its own store: set `security.enterprise_roots.enabled=true` or import the certificate in Firefox | `sudo security delete-certificate -c "EZECLOUD LAN pilot CA (vps-local)" /Library/Keychains/System.keychain` |
 
 ### 4.3 Firewall (DOCKER-USER; firewalld is not modified)
 
@@ -221,7 +221,7 @@ GC timing for pruned sets is not under our control. Q18 (proper object storage) 
 
 Ports after go-live, on 192.168.203.196 only: 8443/tcp, 8444/tcp (from 192.168.203.0/24), and
 1812–1813/udp (from .198, once LCL-RADIUS-1 runs). Never published: 3000, 3001 (api internal), 3002, 3003 (worker
-health), 5432, 6379 (ECLOUD Redis; the system Redis is untouched), 3799.
+health), 5432, 6379 (EZECLOUD Redis; the system Redis is untouched), 3799.
 
 ## 5. Rollback summary
 
@@ -230,14 +230,14 @@ health), 5432, 6379 (ECLOUD Redis; the system Redis is untouched), 3799.
 | one step | that step's rollback (none touches nginx/EZEOS, firewalld zones, sshd, cloudflared or the system Redis) | < 1 min |
 | firewall | `apply-firewall.sh rollback` (DOCKER-USER back to `RETURN`); the dead-man does the same after 10 min if `confirm` was not run | < 1 min |
 | application | `ecc stop`, or `IMAGE_TAG=<previous>` + `ecc up -d`; DB only via restore | minutes |
-| all of ECLOUD | `ecc down` (volumes kept) · disable `ecloud-docker-user`, `ecloud-backup.timer`, `ecloud-check.timer` · `rm -rf /opt/ecloud` (Docker itself was enabled by the owner earlier; disabling it is a separate owner decision) | minutes |
+| all of EZECLOUD | `ecc down` (volumes kept) · disable `ecloud-docker-user`, `ecloud-backup.timer`, `ecloud-check.timer` · `rm -rf /opt/ecloud` (Docker itself was enabled by the owner earlier; disabling it is a separate owner decision) | minutes |
 | whole appliance | the owner's local backup/restore (LCL-PRE-1) | owner |
 
 ## 6. Differences from the old VPS change list (docs/VPS_CHANGE_LIST.md)
 
 | Area | Old VPS (Ubuntu, public IP) | vps-local (EZEOS/OL8, LAN only) |
 |---|---|---|
-| Web entry | native Caddy, public 80/443, hostname routing, ACME certs | ECLOUD `edge` container on LAN 8443/8444, internal CA; EZEOS nginx untouched |
+| Web entry | native Caddy, public 80/443, hostname routing, ACME certs | EZECLOUD `edge` container on LAN 8443/8444, internal CA; EZEOS nginx untouched |
 | Exposure | Internet (DNS-only A/AAAA) | LAN only, nothing public, no tunnel |
 | Host firewall | own `table inet ecloud` (nftables) + DOCKER-USER | no host firewall change (firewalld left as is); DOCKER-USER only, with LAN source allow-lists |
 | RADIUS | WireGuard hub 100.100.0.1 only (D-032) | LAN address, only from the AP .198 (D-042); WireGuard deferred |

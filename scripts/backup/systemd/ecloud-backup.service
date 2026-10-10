@@ -1,6 +1,6 @@
-# DRAFT (not applied; VPS change list, D-031). Nightly ECLOUD backup - scripts/backup/backup.sh.
+# DRAFT (not applied; VPS change list, D-031). Nightly EZECLOUD backup - scripts/backup/backup.sh.
 [Unit]
-Description=ECLOUD encrypted backup (pg_dump + config, age, off-site)
+Description=EZECLOUD encrypted backup (pg_dump + config, age, off-site)
 Wants=network-online.target docker.service
 After=network-online.target docker.service
 

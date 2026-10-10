@@ -1,6 +1,6 @@
 # @ecloud/db
 
-PostgreSQL 16 schema for ECLOUD: forward-only SQL migrations, the runner CLI, Kysely types and
+PostgreSQL 16 schema for EZECLOUD: forward-only SQL migrations, the runner CLI, Kysely types and
 the tenant-scoping helpers. Implements `DATABASE_DESIGN.md` (Phase 2) and the RLS rules of
 `MULTITENANCY.md`. Deviations from the design are listed in `DATABASE_DESIGN.md`
 "Implementation notes (Phase 3)".

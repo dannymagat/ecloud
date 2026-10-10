@@ -1,4 +1,4 @@
-# A7 — Admin UI / Policy UI / Captive Portal UI (ECLOUD Phase 2)
+# A7 — Admin UI / Policy UI / Captive Portal UI (EZECLOUD Phase 2)
 
 Status legend: **VERIFIED FROM EXISTING CODE** (local path cited) · **PROPOSED** (our design choice) · **UNKNOWN** · **REQUIRES DEVICE TEST**. Nothing here changes any remote host. Backend/API specifics are owned by A5 (API_ARCHITECTURE.md) and auth/security by A8; dependencies are flagged inline.
 
@@ -16,7 +16,7 @@ Status legend: **VERIFIED FROM EXISTING CODE** (local path cited) · **PROPOSED*
 | i18n / RTL | None found (no `i18n`, `dir="rtl"`, `lang="ar"` in public/) | **VERIFIED (absence)** grep over `public/` |
 | Captive portal | No portal UI precedent in ezecontroller | **VERIFIED (absence)** |
 
-Lessons for ECLOUD (**PROPOSED**): keep Tailwind + React/TS + self-hosted vendor + permission-catalogue pattern; **do not** repeat the 1.27 MB vanilla `bundle.js` + per-island React duplication (React is re-bundled into each of 15 islands) + localStorage JWT.
+Lessons for EZECLOUD (**PROPOSED**): keep Tailwind + React/TS + self-hosted vendor + permission-catalogue pattern; **do not** repeat the 1.27 MB vanilla `bundle.js` + per-island React duplication (React is re-bundled into each of 15 islands) + localStorage JWT.
 
 > **Implementation note (Phase 4, 2026-10-07).** The admin app is implemented in `apps/admin`
 > (`@ecloud/admin`): Vite + React 19 + TypeScript strict + Tailwind 3 + TanStack Query + React
@@ -39,7 +39,7 @@ Lessons for ECLOUD (**PROPOSED**): keep Tailwind + React/TS + self-hosted vendor
 | (b) Captive portal | `portal.ezecloud.ezelink.ai` (one host, per-site routing by token/`?site=`/NAS id) | Subscribers inside mini-browsers (iOS CNA, Android captive sign-in, Windows) | Server-rendered templates (Node, same backend image) + progressive, optional ~5 KB vanilla JS; no framework |
 | (c) Self-care | `my.ezecloud.ezelink.ai` or `portal…/account` (future) | Subscribers | Server-rendered first; reuse portal theme |
 
-**Admin app: SPA vs server-rendered + islands.** Recommendation: **single-build React SPA (Vite, React 18/19, TypeScript, Tailwind, TanStack Query/Table/Router)** rather than cloning the ezecontroller include-partials + islands pattern. Reasons: (1) ECLOUD is greenfield — the islands pattern in ezecontroller exists only to migrate a legacy vanilla shell incrementally (`vite.config.islands.mjs` header comment cites `docs/react-migration`), a constraint we do not have; (2) one shared React runtime instead of 15 copies; (3) the 2 vCPU / 3.7 GiB pilot VPS favours static files behind Caddy (zero server CPU per page) over SSR; (4) team already owns React/TS/Tailwind kit code (`EzeTable`, `EzeModal`, `EzeWizard`) that can be lifted. Keep what is good from precedent: Tailwind tokens, self-hosted fonts/icons, permission catalogue, dark mode. Avoid Next.js/SSR for admin (needs a Node render process per request; no SEO benefit). Code-split by route; budget ≤ 250 KB gz initial.
+**Admin app: SPA vs server-rendered + islands.** Recommendation: **single-build React SPA (Vite, React 18/19, TypeScript, Tailwind, TanStack Query/Table/Router)** rather than cloning the ezecontroller include-partials + islands pattern. Reasons: (1) EZECLOUD is greenfield — the islands pattern in ezecontroller exists only to migrate a legacy vanilla shell incrementally (`vite.config.islands.mjs` header comment cites `docs/react-migration`), a constraint we do not have; (2) one shared React runtime instead of 15 copies; (3) the 2 vCPU / 3.7 GiB pilot VPS favours static files behind Caddy (zero server CPU per page) over SSR; (4) team already owns React/TS/Tailwind kit code (`EzeTable`, `EzeModal`, `EzeWizard`) that can be lifted. Keep what is good from precedent: Tailwind tokens, self-hosted fonts/icons, permission catalogue, dark mode. Avoid Next.js/SSR for admin (needs a Node render process per request; no SEO benefit). Code-split by route; budget ≤ 250 KB gz initial.
 
 ## 2. Information architecture (permission-driven, never role-name-driven)
 
@@ -74,7 +74,7 @@ Site Admin sees the same tree filtered to assigned sites (server enforces; UI ju
 | Org/Site dashboard KPIs | online NAS / total; active sessions; auth success/fail last 24 h; top sites by traffic; expiring vouchers; recent audit events | Poll 30 s or SSE/WebSocket (A5 to choose; precedent uses socket.io) |
 | Device / NAS health | per NAS: adapter type (uCentral-uspot, CoovaChilli, …), last RADIUS seen, WireGuard tunnel state (from A1/A2 data), **capability matrix** incl. `coa: VERIFIED / UNKNOWN / UNSUPPORTED`, firmware | Capability matrix is the single source for enabling/disabling actions |
 | Active sessions | paginated sessions: user/MAC/IP/NAS/site/start/in-out octets/policy applied; actions: **Disconnect** (CoA/DM) and **Re-authorize** | Disconnect button enabled **only** if that session's NAS reports `coa=VERIFIED`; otherwise disabled with reason tooltip. Verification of CoA itself: **REQUIRES DEVICE TEST** (A3/A4) |
-| Policy editor (intent) | policy intent fields exactly as owner list (rate down/up, burst, daily/monthly/total quota, session/idle timeout, concurrent devices/sessions, account validity, voucher validity, schedules, VLAN); plus `GET /adapters/{type}/capabilities` | **Enforceability preview** (core UX): a right-hand panel listing each intent field with per-NAS-type badge — Enforced / Partially (e.g. quota tracked by ECLOUD, cut by disconnect) / Not enforceable — drawn from the adapter capability matrix supplied by A3/A4. Field-level badges show the translation layer rather than hiding it; saving a policy that has "Not enforceable" fields for an assigned site requires explicit acknowledgment |
+| Policy editor (intent) | policy intent fields exactly as owner list (rate down/up, burst, daily/monthly/total quota, session/idle timeout, concurrent devices/sessions, account validity, voucher validity, schedules, VLAN); plus `GET /adapters/{type}/capabilities` | **Enforceability preview** (core UX): a right-hand panel listing each intent field with per-NAS-type badge — Enforced / Partially (e.g. quota tracked by EZECLOUD, cut by disconnect) / Not enforceable — drawn from the adapter capability matrix supplied by A3/A4. Field-level badges show the translation layer rather than hiding it; saving a policy that has "Not enforceable" fields for an assigned site requires explicit acknowledgment |
 | Policy assignment | targets (user, group, site, client device, temporary), priority integer, effective window (from/to, schedule ref), resulting **effective policy** resolver endpoint for a given user+site | Show "effective policy for X at site Y" simulation before saving |
 | Voucher batches | create batch (count, prefix, length, policy, validity, max devices), list, revoke, `GET …/print` (HTML A4 grid, QR via server-rendered SVG), CSV export | Print view is a server-rendered page reusing portal branding; QR precedent exists (`qrcode` dep) |
 | User import | CSV upload → dry-run report (rows, errors) → commit; job status endpoint (BullMQ precedent) | Async job with progress |
@@ -87,7 +87,7 @@ Site Admin sees the same tree filtered to assigned sites (server enforces; UI ju
 flowchart LR
   PE[Policy editor<br/>intent fields] -->|GET capabilities| CAP[Adapter capability matrix<br/>A3/A4 owned]
   CAP --> PV[Enforceability preview<br/>per NAS type badges]
-  PE -->|save intent| API[(ECLOUD API)]
+  PE -->|save intent| API[(EZECLOUD API)]
   API --> TL[Translation layer] --> AD[Device/AAA adapter] --> NAS[NAS / AP]
   SES[Active sessions] -->|coa=VERIFIED?| BTN{Disconnect enabled}
 ```

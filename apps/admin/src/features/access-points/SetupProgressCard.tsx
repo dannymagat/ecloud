@@ -48,7 +48,7 @@ export function SetupProgressCard({
           </h2>
           <p className="mt-0.5 text-sm text-subtle">
             {completed === total
-              ? 'Setup complete: guests have logged in through ECLOUD.'
+              ? 'Setup complete: guests have logged in through EZECLOUD.'
               : `Next: ${next?.label ?? ''}`}
           </p>
         </div>
@@ -92,7 +92,7 @@ export function SetupProgressCard({
       </ol>
 
       <p className="mt-4 max-w-3xl text-sm">
-        To use ECLOUD at your venue, adjust your network settings. Not sure how?{' '}
+        To use EZECLOUD at your venue, adjust your network settings. Not sure how?{' '}
         {canInvite ? (
           <Link
             to={inviteHref(orgId)}

@@ -340,7 +340,7 @@ export interface NetworkDevicesTable {
   hardware_model_id: Uuid | null;
   firmware_version_id: Uuid | null;
   controller_id: Uuid | null;
-  /** false for third-party APs behind a gateway that ECLOUD does not configure. */
+  /** false for third-party APs behind a gateway that EZECLOUD does not configure. */
   managed: Generated<boolean>;
   created_at: GeneratedTimestamp;
   updated_at: GeneratedTimestamp;

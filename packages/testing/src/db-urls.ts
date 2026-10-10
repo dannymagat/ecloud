@@ -21,7 +21,7 @@ export function withDatabaseName(url: string, name: string): string {
 /**
  * URL for the `ecloud_radius` role on the test database: the explicit
  * `ECLOUD_TEST_RADIUS_ROLE_DATABASE_URL`, or `ECLOUD_TEST_DATABASE_URL` with the user name
- * replaced (the dev stack and CI give all ECLOUD roles the same dev-only password).
+ * replaced (the dev stack and CI give all EZECLOUD roles the same dev-only password).
  */
 export function getTestRadiusRoleDatabaseUrl(
   env: NodeJS.ProcessEnv = process.env,

@@ -1,7 +1,7 @@
 /**
  * `external-portal-postback` (Cycle C, D-044; docs/VENDOR_INTEGRATION_RESEARCH.md §2 F3, §3.4):
  * engine record of the external captive portal post-back family. The AP / controller redirects
- * the browser to ECLOUD, ECLOUD issues a single-use portal credential (`pc-…`), and the browser
+ * the browser to EZECLOUD, EZECLOUD issues a single-use portal credential (`pc-…`), and the browser
  * posts it back to a login URL on the AP / controller, which sends the RADIUS Access-Request.
  * Vendor differences (parameter names, login target, field names) live in data profiles
  * (`vendor/postback/profiles.ts`); the RADIUS reply is the same for every profile.

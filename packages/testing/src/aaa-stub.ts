@@ -1,8 +1,8 @@
 /**
- * Reusable stub of the ECLOUD internal AAA listener as specified in
+ * Reusable stub of the EZECLOUD internal AAA listener as specified in
  * docs/contracts/aaa-authorize.md (FreeRADIUS rlm_rest -> `/internal/aaa/authorize` and
  * `/internal/aaa/post-auth`). Used by the aaa-contract suite against the real FreeRADIUS
- * container and by unit tests; it is NOT an implementation of ECLOUD's AAA decision logic.
+ * container and by unit tests; it is NOT an implementation of EZECLOUD's AAA decision logic.
  */
 import { timingSafeEqual } from 'node:crypto';
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';

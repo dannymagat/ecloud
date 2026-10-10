@@ -1,7 +1,7 @@
 # -*- text -*-
 ######################################################################
 #
-#  ECLOUD policies (AAA_ARCHITECTURE.md §2.1, §4.1, §5.2).
+#  EZECLOUD policies (AAA_ARCHITECTURE.md §2.1, §4.1, §5.2).
 #  The stock policies this server relies on are unchanged and shipped by
 #  the image: filter_username (policy.d/filter), rewrite_calling_station_id /
 #  rewrite_called_station_id (policy.d/canonicalization), acct_unique /
@@ -10,7 +10,7 @@
 ######################################################################
 
 #
-#  Server-side facts ECLOUD needs for tenant/NAS resolution (AAA §3, §4.1):
+#  Server-side facts EZECLOUD needs for tenant/NAS resolution (AAA §3, §4.1):
 #  the UDP source address is the PRIMARY client identity; NAS-IP-Address is
 #  only an attribute the NAS fills in. rlm_rest `body = json` serialises the
 #  request list, and the Packet-* attributes are virtual (not in that list),
@@ -28,7 +28,7 @@ ecloud_request_context {
 }
 
 #
-#  Authentication of FreeRADIUS towards ECLOUD: shared service token in an
+#  Authentication of FreeRADIUS towards EZECLOUD: shared service token in an
 #  HTTP header (DEPLOYMENT_ARCHITECTURE.md §4.2; mods-available/rest).
 #  control:REST-HTTP-Header attributes are consumed by the next rlm_rest
 #  call, so this policy runs before EVERY rest call.

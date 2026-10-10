@@ -13,7 +13,7 @@ const OFF: MerakiCloudRadiusStatus = {
   enabled: false,
   state: 'disabled',
   message:
-    'OFF (platform setting MERAKI_CLOUD_RADIUS_ENABLED=false). RADIUS from the Meraki Cloud cannot reach ECLOUD.',
+    'OFF (platform setting MERAKI_CLOUD_RADIUS_ENABLED=false). RADIUS from the Meraki Cloud cannot reach EZECLOUD.',
   source_cidrs: [],
   port_range: null,
   das_port: 3799,

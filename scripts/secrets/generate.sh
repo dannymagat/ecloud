@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Generate per-environment ECLOUD secrets LOCALLY (P10-A; SECURITY_ARCHITECTURE.md §9 pilot stage).
+# Generate per-environment EZECLOUD secrets LOCALLY (P10-A; SECURITY_ARCHITECTURE.md §9 pilot stage).
 #
 #   bash scripts/secrets/generate.sh <env> [--out DIR] [--rotate NAME]... [--db-host H]
 #                                         [--db-name N] [--redis-host H]

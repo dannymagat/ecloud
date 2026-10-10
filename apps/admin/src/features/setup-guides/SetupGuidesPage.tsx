@@ -109,7 +109,7 @@ function Gallery() {
     <div>
       <PageHeader
         title="Setup guides"
-        description="How to configure your access points: pick your vendor for step-by-step settings with the ECLOUD values filled in. Secrets are never shown here; a NAS secret is shown once when you add the NAS."
+        description="How to configure your access points: pick your vendor for step-by-step settings with the EZECLOUD values filled in. Secrets are never shown here; a NAS secret is shown once when you add the NAS."
         actions={
           <Link to={accessPointsHref(orgId, siteId)} className={BACK_LINK}>
             <ArrowLeft aria-hidden="true" className="h-4 w-4" />
@@ -196,7 +196,7 @@ function Gallery() {
         )}
       </div>
       <p className="mt-4 text-xs text-subtle">
-        Status comes from ECLOUD&apos;s own evidence: &quot;Tested on device&quot; appears only
+        Status comes from EZECLOUD&apos;s own evidence: &quot;Tested on device&quot; appears only
         after a recorded lab or production device test. Vendor names are used for identification
         only. {LOGO_NOTICE}
       </p>

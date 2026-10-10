@@ -99,7 +99,7 @@ const NetworkDeviceCreate = z.strictObject({
   hardware_model_id: z.uuid().nullable().optional(),
   firmware_version_id: z.uuid().nullable().optional(),
   controller_id: z.uuid().nullable().optional(),
-  /** false for third-party APs behind a gateway that ECLOUD does not configure. */
+  /** false for third-party APs behind a gateway that EZECLOUD does not configure. */
   managed: z.boolean().optional(),
 });
 const NetworkDeviceUpdate = NetworkDeviceCreate.partial().omit({ serial: true });

@@ -1,5 +1,5 @@
 # ============================================================================
-#  ECLOUD LOCAL DEVELOPMENT STACK  --  DEV ONLY
+#  EZECLOUD LOCAL DEVELOPMENT STACK  --  DEV ONLY
 #
 #  This file is for the developer workstation. It is NEVER used on the VPS
 #  as-is (the pilot deployment is a separate, owner-approved Compose project,

@@ -1,5 +1,5 @@
 /**
- * RFC 9457 problem details as returned by the ECLOUD API (`application/problem+json`).
+ * RFC 9457 problem details as returned by the EZECLOUD API (`application/problem+json`).
  * Validation problems carry `errors: [{ path, message }]` (packages/shared ValidationError).
  */
 export interface ProblemFieldError {

@@ -4,7 +4,7 @@
  *
  * The Meraki Cloud sends every customer's splash RADIUS from the same shared public ranges, and
  * FreeRADIUS chooses a client (and so a shared secret) by source address. One global client would
- * give every ECLOUD tenant the same secret. Instead each Meraki NAS gets its OWN listener pair
+ * give every EZECLOUD tenant the same secret. Instead each Meraki NAS gets its OWN listener pair
  * whose private client list holds the Meraki ranges with THAT NAS's secret and shortname:
  *
  *   clients meraki_<uuid-hex> {
@@ -39,7 +39,7 @@ export const MERAKI_ADAPTER = 'meraki-splash';
 export const DEFAULT_MERAKI_RADIUS_FILE = '/var/lib/ecloud/radius-meraki/ecloud-meraki.conf';
 
 export const MERAKI_RENDERED_HEADER =
-  '# ECLOUD rendered FreeRADIUS Meraki cloud listeners (apps/api radius-clients). DO NOT EDIT:\n' +
+  '# EZECLOUD rendered FreeRADIUS Meraki cloud listeners (apps/api radius-clients). DO NOT EDIT:\n' +
   '# regenerated from nas_clients (adapter meraki-splash); contains shared secrets (0640).\n';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;

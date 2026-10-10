@@ -1,5 +1,5 @@
 /**
- * ECLOUD captive portal (`portal.ezecloud.ezelink.ai`, D-029). Server-rendered pages only; all
+ * EZECLOUD captive portal (`portal.ezecloud.ezelink.ai`, D-029). Server-rendered pages only; all
  * decisions are made by the api over `/internal/portal/*` (the portal has no DB credentials and
  * never sees a UAM secret or a subscriber password at rest).
  *

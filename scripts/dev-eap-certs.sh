@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Dev-only EAP-TTLS certificate set for the ECLOUD FreeRADIUS container (Cycle A, D-044).
+# Dev-only EAP-TTLS certificate set for the EZECLOUD FreeRADIUS container (Cycle A, D-044).
 #
 #   bash scripts/dev-eap-certs.sh [out-dir]     # default: var/freeradius-eap-certs (gitignored)
 #
@@ -22,7 +22,7 @@ umask 077
 tmp="$(mktemp -d)"
 trap 'rm -rf "$tmp"' EXIT
 
-openssl req -x509 -newkey rsa:2048 -nodes -days 30 -subj "/CN=ECLOUD dev EAP CA" \
+openssl req -x509 -newkey rsa:2048 -nodes -days 30 -subj "/CN=EZECLOUD dev EAP CA" \
   -keyout "$tmp/ca.key" -out "$OUT/ca.pem" 2>/dev/null
 openssl req -newkey rsa:2048 -nodes -subj "/CN=radius.ecloud.invalid" \
   -keyout "$OUT/server.key" -out "$tmp/server.csr" 2>/dev/null

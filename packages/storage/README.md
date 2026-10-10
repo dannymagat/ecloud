@@ -1,6 +1,6 @@
 # @ecloud/storage
 
-Object storage abstraction for ECLOUD (D-026). The pilot may keep non-critical assets (branding,
+Object storage abstraction for EZECLOUD (D-026). The pilot may keep non-critical assets (branding,
 development files) on the local filesystem; production uses external S3-compatible storage. The
 switch is configuration only (`STORAGE_DRIVER`) — no business-logic change.
 

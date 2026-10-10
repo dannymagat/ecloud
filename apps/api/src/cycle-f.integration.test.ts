@@ -4,7 +4,7 @@
  * database:
  *  - catalogue: every required vendor / product line, adapter + profile, evidence-derived status
  *    (no "Tested on device" today), long-tail vendors on the generic profile;
- *  - guide: ECLOUD values from configuration (portal origin, RADIUS_ADVERTISED_*), never a
+ *  - guide: EZECLOUD values from configuration (portal origin, RADIUS_ADVERTISED_*), never a
  *    secret (a freshly created NAS secret appears in no guide), honest warnings;
  *  - tenant scope (another organization's admin, another organization's site) and permission
  *    (`nas:read`; a custom role without it gets 403; a site-scoped admin is limited to its site).
@@ -141,7 +141,7 @@ await describeIntegration('@ecloud/api multi-vendor Cycle F (setup-guide gallery
     expect((res.body.families as { key: string }[]).map((f) => f.key)).toContain('external-portal');
   });
 
-  it('guide: Cambium with ECLOUD values from configuration and warnings, no secret', async () => {
+  it('guide: Cambium with EZECLOUD values from configuration and warnings, no secret', async () => {
     const { orgId, siteId, agent } = await orgAdmin();
     const res = await agent.get(`/api/v1/orgs/${orgId}/setup-guides/cambium?site_id=${siteId}`);
     expect(res.status).toBe(200);

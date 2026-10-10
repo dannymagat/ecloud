@@ -1,7 +1,7 @@
 /**
  * Cisco Meraki cloud-sourced RADIUS in the admin UI (multi-vendor Cycle E, D-044):
  *  - `MerakiCloudRadiusNotice`: the platform state (MERAKI_CLOUD_RADIUS_ENABLED, default OFF),
- *    stated plainly. Never claims reachability ECLOUD cannot observe.
+ *    stated plainly. Never claims reachability EZECLOUD cannot observe.
  *  - `SetupGuideButton`: the NAS setup guide from the API (non-secret values resolved, warnings
  *    first). The RADIUS secret is never shown here (it is shown once at create / rotate).
  */
@@ -38,7 +38,8 @@ export interface SetupGuide {
 /** Banner text per state: the platform flag is the first thing a Meraki operator must know. */
 export function merakiStatusTitle(s: MerakiCloudRadiusStatus): string {
   if (s.state === 'enabled') return 'Meraki cloud RADIUS: enabled (reachability not verified)';
-  if (s.state === 'disabled') return 'Meraki cloud RADIUS: OFF — Meraki RADIUS cannot reach ECLOUD';
+  if (s.state === 'disabled')
+    return 'Meraki cloud RADIUS: OFF — Meraki RADIUS cannot reach EZECLOUD';
   return 'Meraki cloud RADIUS: enabled but incomplete — no listener is rendered';
 }
 

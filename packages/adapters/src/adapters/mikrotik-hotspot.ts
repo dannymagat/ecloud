@@ -1,6 +1,6 @@
 /**
  * `mikrotik-hotspot` (Cycle B, D-044; docs/VENDOR_INTEGRATION_RESEARCH.md §2 F2, §3.3): MikroTik
- * RouterOS HotSpot with an ECLOUD-generated `login.html` that sends the client to the ECLOUD
+ * RouterOS HotSpot with an ECLOUD-generated `login.html` that sends the client to the EZECLOUD
  * portal, which completes the login by POSTing back to the router's `$(link-login-only)`
  * (HTTP-CHAP when the router issued a `chap-id`, else PAP). The router is the RADIUS client
  * (`/radius` service=hotspot) and enforces the reply attributes itself, in front of any AP brand
@@ -97,7 +97,7 @@ const COA_RDT = sourced(
   RAD,
 );
 const MAC_AUTH_UNSUPPORTED = sourced(
-  'HotSpot `login-by=mac` is not wired to ECLOUD MAC authentication in Cycle B (User-Name / password format of MAC login REQUIRES_CLARIFICATION; docs/VENDOR_INTEGRATION_RESEARCH.md §3.3)',
+  'HotSpot `login-by=mac` is not wired to EZECLOUD MAC authentication in Cycle B (User-Name / password format of MAC login REQUIRES_CLARIFICATION; docs/VENDOR_INTEGRATION_RESEARCH.md §3.3)',
   [MIKROTIK_HOTSPOT_DOC, F2],
 );
 

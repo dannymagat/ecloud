@@ -6,7 +6,7 @@
 import { generateSecret, generateURI, verify } from 'otplib';
 import { Envelope, randomVoucherCode, sha256Hex } from '../crypto.js';
 
-export const TOTP_ISSUER = 'ECLOUD';
+export const TOTP_ISSUER = 'EZECLOUD';
 export const RECOVERY_CODE_COUNT = 10;
 
 export class MfaCodec {

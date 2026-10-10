@@ -1,4 +1,4 @@
-# DRAFT (not applied; D-031 VPS change list). Prometheus scrape config for the ECLOUD pilot.
+# DRAFT (not applied; D-031 VPS change list). Prometheus scrape config for the EZECLOUD pilot.
 # DEPLOYMENT_ARCHITECTURE.md §6 defers Prometheus (+~400-600 MiB) until memory allows; the
 # targets below are what it would scrape. All endpoints are loopback / compose-network only and
 # never routed through Caddy:

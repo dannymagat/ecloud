@@ -2,7 +2,7 @@
   "name": "@ecloud/admin",
   "version": "0.1.0",
   "private": true,
-  "description": "ECLOUD admin web app (Vite + React SPA, same-origin /api/v1, cookie session)",
+  "description": "EZECLOUD admin web app (Vite + React SPA, same-origin /api/v1, cookie session)",
   "type": "module",
   "scripts": {
     "dev": "vite",

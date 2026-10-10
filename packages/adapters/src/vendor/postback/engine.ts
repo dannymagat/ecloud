@@ -4,16 +4,16 @@
  * profile (profiles.ts) and the NAS's validated `adapter_config` (config.ts):
  *
  *  1. `parseRedirect`: keeps the raw query byte-for-byte; decoded values are display copies.
- *     The NAS identifier may come from the ECLOUD portal URL path (`/pb/<profile>/<nasid>/`).
+ *     The NAS identifier may come from the EZECLOUD portal URL path (`/pb/<profile>/<nasid>/`).
  *  2. `validateContext`: NAS resolved server-side (nasid when present, otherwise a VERIFIED AP
  *     MAC — enforced by the injected `findNas`), adapter + profile must match the registered
  *     NAS, tenant check, the login URL must name the AP / controller (private IPv4, the
  *     registered NAS address, an operator-configured login host, or a documented vendor
  *     intercept name; never an arbitrary site), and the vendor nonce (if any) is not replayed.
  *  3. `authorizeSession`: the single-use broker credential (`pc-…`, bound to NAS + client MAC)
- *     goes into a browser form posted to the validated login URL; ECLOUD never fetches it.
+ *     goes into a browser form posted to the validated login URL; EZECLOUD never fetches it.
  *
- * The ECLOUD login token (vendor/login-token.ts) is issued and consumed by the API around the
+ * The EZECLOUD login token (vendor/login-token.ts) is issued and consumed by the API around the
  * credential issue; this module is pure (no network, no store, no logging).
  */
 import { canonicalUnicastMac, type EvidenceRef } from '@ecloud/shared';
@@ -402,7 +402,7 @@ export function loginOriginOf(loginUrl: string): string | null {
 }
 
 // ------------------------------------------------------------------------------------------
-// Setup guide (ECLOUD wording; filled values; placeholders for every secret)
+// Setup guide (EZECLOUD wording; filled values; placeholders for every secret)
 // ------------------------------------------------------------------------------------------
 
 function guideStep(
@@ -438,14 +438,14 @@ function vendorSteps(profile: PostbackProfile, nasId: string): SetupStep[] {
         ),
         guideStep(
           'cambium-access-policy',
-          'Guests are authorised by RADIUS (ECLOUD)',
+          'Guests are authorised by RADIUS (EZECLOUD)',
           'Guest Access > Access Policy',
           'Radius',
           ev,
         ),
         guideStep(
           'cambium-external-url',
-          'External portal URL (ECLOUD)',
+          'External portal URL (EZECLOUD)',
           'Guest Access > External Portal URL',
           portalUrl,
           ev,
@@ -454,12 +454,12 @@ function vendorSteps(profile: PostbackProfile, nasId: string): SetupStep[] {
           'cambium-server-protocol',
           'Protocol the browser uses to post back to the AP (HTTPS needs a trusted AP certificate)',
           'AP Server Protocol',
-          'HTTP (port 880); HTTPS (port 444) only with https=true in ECLOUD',
+          'HTTP (port 880); HTTPS (port 444) only with https=true in EZECLOUD',
           ev,
         ),
         guideStep(
           'cambium-nas-id',
-          'WLAN NAS-ID = the ECLOUD NAS identifier (sent as ga_nas_id)',
+          'WLAN NAS-ID = the EZECLOUD NAS identifier (sent as ga_nas_id)',
           'WLAN > RADIUS > NAS-ID',
           nasId,
           ev,
@@ -469,28 +469,28 @@ function vendorSteps(profile: PostbackProfile, nasId: string): SetupStep[] {
       return [
         guideStep(
           'aruba-ecp-profile',
-          'External captive portal profile: ECLOUD portal host, HTTPS, port 443',
+          'External captive portal profile: EZECLOUD portal host, HTTPS, port 443',
           'External Captive Portal > Server / URL / Port / Use HTTPS',
           portalUrl,
           ev,
         ),
         guideStep(
           'aruba-auth',
-          'Authentication through RADIUS (ECLOUD); the AP posts to securelogin.arubanetworks.com',
+          'Authentication through RADIUS (EZECLOUD); the AP posts to securelogin.arubanetworks.com',
           'Captive portal type / Authentication server',
           'RADIUS Authentication, <ECLOUD_RADIUS_ADDRESS>',
           ev,
         ),
         guideStep(
           'aruba-url-hash',
-          'Leave url-hash-key unset (algorithm not documented; ECLOUD cannot verify it)',
+          'Leave url-hash-key unset (algorithm not documented; EZECLOUD cannot verify it)',
           'url-hash-key',
           '<UNSET>',
           ev,
         ),
         guideStep(
           'aruba-redirect-options',
-          'AOS 8 only: include AP MAC and switch IP in the redirection URL; set login_target=switchip in ECLOUD',
+          'AOS 8 only: include AP MAC and switch IP in the redirection URL; set login_target=switchip in EZECLOUD',
           'ap-mac-in-redirection-url, switchip-in-redirection-url',
           'enabled',
           ev,
@@ -500,7 +500,7 @@ function vendorSteps(profile: PostbackProfile, nasId: string): SetupStep[] {
       return [
         guideStep(
           'cisco-param-map',
-          'Web-auth parameter map: type webauth, ECLOUD portal as login URL',
+          'Web-auth parameter map: type webauth, EZECLOUD portal as login URL',
           'parameter-map type webauth <NAME> > redirect for-login',
           portalUrl,
           ev,
@@ -514,14 +514,14 @@ function vendorSteps(profile: PostbackProfile, nasId: string): SetupStep[] {
         ),
         guideStep(
           'cisco-virtual-ip',
-          'Virtual IP: add it to the ECLOUD NAS login hosts unless it is an RFC 1918 address',
+          'Virtual IP: add it to the EZECLOUD NAS login hosts unless it is an RFC 1918 address',
           'virtual-ip ipv4',
           '<VIRTUAL_IP>',
           ev,
         ),
         guideStep(
           'cisco-preauth',
-          'Pre-auth URL filter / ACL allowing the ECLOUD portal',
+          'Pre-auth URL filter / ACL allowing the EZECLOUD portal',
           'URL filter PRE_AUTH / Portal IPv4',
           'portal.ezecloud.ezelink.ai',
           ev,
@@ -531,14 +531,14 @@ function vendorSteps(profile: PostbackProfile, nasId: string): SetupStep[] {
       return [
         guideStep(
           'fortinet-portal',
-          'SSID / interface security: captive portal, external portal URL (ECLOUD)',
+          'SSID / interface security: captive portal, external portal URL (EZECLOUD)',
           'Security mode Captive Portal > Portal type External',
           portalUrl,
           ev,
         ),
         guideStep(
           'fortinet-radius',
-          'User group with the ECLOUD RADIUS server',
+          'User group with the EZECLOUD RADIUS server',
           'User & Authentication > RADIUS Servers',
           '<ECLOUD_RADIUS_ADDRESS>, <RADIUS_SECRET>',
           ev,
@@ -552,7 +552,7 @@ function vendorSteps(profile: PostbackProfile, nasId: string): SetupStep[] {
         ),
         guideStep(
           'fortinet-exempt',
-          'Exempt destinations: the ECLOUD portal',
+          'Exempt destinations: the EZECLOUD portal',
           'Exempt Destinations/Services',
           'portal.ezecloud.ezelink.ai',
           ev,
@@ -562,7 +562,7 @@ function vendorSteps(profile: PostbackProfile, nasId: string): SetupStep[] {
       return [
         guideStep(
           'ruckus-hotspot',
-          'Hotspot (WISPr) service: login page = ECLOUD portal',
+          'Hotspot (WISPr) service: login page = EZECLOUD portal',
           'Hotspot Services > Login Page',
           portalUrl,
           ev,
@@ -576,7 +576,7 @@ function vendorSteps(profile: PostbackProfile, nasId: string): SetupStep[] {
         ),
         guideStep(
           'ruckus-walled-garden',
-          'Walled garden: the ECLOUD portal',
+          'Walled garden: the EZECLOUD portal',
           'Walled Garden',
           'portal.ezecloud.ezelink.ai',
           ev,
@@ -586,29 +586,29 @@ function vendorSteps(profile: PostbackProfile, nasId: string): SetupStep[] {
       return [
         guideStep(
           'omada-portal',
-          'Portal: authentication by an external RADIUS server, external web portal (ECLOUD)',
+          'Portal: authentication by an external RADIUS server, external web portal (EZECLOUD)',
           'Portal > Authentication Type / External Web Portal URL',
           portalUrl,
           ev,
         ),
         guideStep(
           'omada-radius',
-          'RADIUS profile with ECLOUD (PAP)',
+          'RADIUS profile with EZECLOUD (PAP)',
           'RADIUS Profile',
           '<ECLOUD_RADIUS_ADDRESS>, 1812/1813, <RADIUS_SECRET>',
           ev,
         ),
         guideStep(
           'omada-preauth',
-          'Pre-Authentication Access: the ECLOUD portal',
+          'Pre-Authentication Access: the EZECLOUD portal',
           'Pre-Authentication Access',
           'portal.ezecloud.ezelink.ai',
           ev,
         ),
         guideStep(
           'omada-cloud',
-          'Cloud-based controller: add the controller host to the ECLOUD NAS login hosts (HTTPS only)',
-          'login hosts (ECLOUD)',
+          'Cloud-based controller: add the controller host to the EZECLOUD NAS login hosts (HTTPS only)',
+          'login hosts (EZECLOUD)',
           '<CONTROLLER_HOST>',
           ev,
         ),
@@ -617,7 +617,7 @@ function vendorSteps(profile: PostbackProfile, nasId: string): SetupStep[] {
       return [
         guideStep(
           'huawei-template',
-          'Relay authentication URL template: ECLOUD portal',
+          'Relay authentication URL template: EZECLOUD portal',
           'URL template > URL',
           portalUrl,
           ev,
@@ -634,14 +634,14 @@ function vendorSteps(profile: PostbackProfile, nasId: string): SetupStep[] {
       return [
         guideStep(
           'generic-names',
-          'Portal parameter names: enter the names your device sends (from a captured redirect) in the ECLOUD NAS profile editor',
-          'ECLOUD NAS > Post-back profile',
+          'Portal parameter names: enter the names your device sends (from a captured redirect) in the EZECLOUD NAS profile editor',
+          'EZECLOUD NAS > Post-back profile',
           '<CAPTURED_PARAMETER_NAMES>',
           ev,
         ),
         guideStep(
           'generic-portal',
-          'External portal URL (ECLOUD; the path names this NAS)',
+          'External portal URL (EZECLOUD; the path names this NAS)',
           'External portal / splash URL',
           portalUrl,
           ev,
@@ -672,7 +672,7 @@ export function postbackSetupGuide(
       : [
           guideStep(
             'portal-url',
-            'External portal URL (ECLOUD; includes this NAS identifier)',
+            'External portal URL (EZECLOUD; includes this NAS identifier)',
             'External portal URL',
             portalUrl,
             ev,
@@ -702,29 +702,29 @@ export function postbackSetupGuide(
     ),
     guideStep(
       'walled-garden',
-      'Walled garden / pre-authentication allow-list: the ECLOUD portal host',
+      'Walled garden / pre-authentication allow-list: the EZECLOUD portal host',
       'Walled garden',
       'portal.ezecloud.ezelink.ai',
       ev,
     ),
     guideStep(
       'access-points',
-      'Register each AP MAC under Access points in ECLOUD (verified automatically after its first RADIUS request)',
-      'ECLOUD > Access points',
+      'Register each AP MAC under Access points in EZECLOUD (verified automatically after its first RADIUS request)',
+      'EZECLOUD > Access points',
       '<AP_MAC>',
       ev,
     ),
     guideStep(
       'login-hosts',
       'Login host check: by default the browser may post to any RFC 1918 address (needed when every AP serves its own login page, e.g. Cambium ga_srvr). When all guests log in at one controller / gateway address, enter it as a login host and enable "strict login hosts" so no other LAN address is accepted',
-      'ECLOUD NAS > login hosts / strict login hosts',
+      'EZECLOUD NAS > login hosts / strict login hosts',
       '<CONTROLLER_OR_GATEWAY_IP>',
       ev,
     ),
     guideStep(
       'transport',
       'Prefer HTTPS to the device when it has a trusted certificate: over http:// the single-use credential (valid 90 s, bound to this NAS and client MAC) crosses the guest network in clear text',
-      'Device login protocol / ECLOUD NAS "post back over HTTPS"',
+      'Device login protocol / EZECLOUD NAS "post back over HTTPS"',
       profile.httpsDefault ? 'HTTPS' : 'HTTP (HTTPS when the device certificate is trusted)',
       ev,
     ),

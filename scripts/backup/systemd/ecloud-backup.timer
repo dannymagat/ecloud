@@ -1,6 +1,6 @@
 # DRAFT (not applied; VPS change list, D-031). RPO 24 h (DEPLOYMENT_ARCHITECTURE.md §5).
 [Unit]
-Description=Nightly ECLOUD backup
+Description=Nightly EZECLOUD backup
 
 [Timer]
 OnCalendar=*-*-* 02:15:00 UTC

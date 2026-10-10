@@ -1,8 +1,8 @@
-# WireGuard Architecture — ECLOUD ↔ Site Connectivity (Phase 2 design, nothing installed)
+# WireGuard Architecture — EZECLOUD ↔ Site Connectivity (Phase 2 design, nothing installed)
 
 Status: PROPOSED design, Phase 2 (design + protocol validation only). No WireGuard has been installed, configured or loaded on any host. Every capability statement carries a label: **VERIFIED FROM EXISTING CODE**, **VERIFIED FROM OFFICIAL DOCUMENTATION**, **VERIFIED ON VPS (read-only)**, **PROPOSED**, **UNKNOWN**, **REQUIRES DEVICE TEST**.
 
-Owner requirement (BRIEF.md): "Cloud-to-site connectivity: WireGuard VPN between ECLOUD VPS and site networks. Investigate/propose topology (VPS hub → site peers?) and its effect on RADIUS, CoA, device management, monitoring, API. Do not install WireGuard."
+Owner requirement (BRIEF.md): "Cloud-to-site connectivity: WireGuard VPN between EZECLOUD VPS and site networks. Investigate/propose topology (VPS hub → site peers?) and its effect on RADIUS, CoA, device management, monitoring, API. Do not install WireGuard."
 
 ---
 
@@ -13,7 +13,7 @@ Owner requirement (BRIEF.md): "Cloud-to-site connectivity: WireGuard VPN between
 | W1 | WireGuard encapsulates IP packets over **UDP**; an interface has one private key and a list of peers, each identified by a public key. | VERIFIED FROM OFFICIAL DOCUMENTATION | https://www.wireguard.com/ ("Cryptokey Routing", "Simple & Easy-to-use") |
 | W2 | **Cryptokey routing**: each peer's public key is bound to a list of tunnel IPs/CIDRs (`AllowedIPs`). Incoming decrypted packets are accepted only if their source is in the sending peer's AllowedIPs; outgoing packets are routed to the peer whose AllowedIPs match the destination. | VERIFIED FROM OFFICIAL DOCUMENTATION | https://www.wireguard.com/ ; wg(8) "AllowedIPs — … from which incoming traffic for this peer is allowed and to which outgoing traffic for this peer is directed" https://man7.org/linux/man-pages/man8/wg.8.html |
 | W3 | **Built-in roaming**: a peer's `Endpoint` is updated automatically to the most recent source IP:port of correctly authenticated packets. | VERIFIED FROM OFFICIAL DOCUMENTATION | wg(8) "Endpoint … will be updated automatically to the most recent source IP address and port of correctly authenticated packets" |
-| W4 | **No dynamic peer management / key distribution**: "All issues of key distribution and pushed configurations are out of scope of WireGuard." Peers must be added/removed by an external system (ECLOUD). | VERIFIED FROM OFFICIAL DOCUMENTATION | https://www.wireguard.com/ |
+| W4 | **No dynamic peer management / key distribution**: "All issues of key distribution and pushed configurations are out of scope of WireGuard." Peers must be added/removed by an external system (EZECLOUD). | VERIFIED FROM OFFICIAL DOCUMENTATION | https://www.wireguard.com/ |
 | W5 | **NAT traversal**: WireGuard is silent when idle; a peer behind NAT/stateful firewall must send `PersistentKeepalive` packets to keep the mapping alive; the quickstart recommends a 25-second interval. | VERIFIED FROM OFFICIAL DOCUMENTATION | https://www.wireguard.com/quickstart/ ("NAT and Firewall Traversal Persistence") |
 | W6 | `ListenPort` is optional; if unspecified a random port is chosen. The hub must therefore fix a port and open it in its firewall. | VERIFIED FROM OFFICIAL DOCUMENTATION | wg(8) |
 | W7 | **No TCP mode** (UDP only); if a site blocks outbound UDP, WireGuard will not work without an external UDP-over-TCP wrapper. | VERIFIED FROM OFFICIAL DOCUMENTATION | https://www.wireguard.com/known-limitations/ ("TCP Mode") |
@@ -104,7 +104,7 @@ Labels: schema structure **VERIFIED FROM EXISTING CODE** (local file) and **VERI
 
 ```mermaid
 flowchart LR
-  subgraph VPS["ECLOUD VPS (hub) 57.129.69.122"]
+  subgraph VPS["EZECLOUD VPS (hub) 57.129.69.122"]
     WG0["wg0 100.100.0.1/16 (PROPOSED)\nUDP 51820 (PROPOSED)"]
     FR["FreeRADIUS 1812/1813 + CoA client"]
     API["API / Portal / Workers"]
@@ -127,7 +127,7 @@ flowchart LR
   GW2 -- "UDP/WireGuard" --> WG0
 ```
 
-- One tunnel per site; APs reach ECLOUD through the site LAN and the gateway's route to the overlay (`AllowedIPs` on the hub for that peer = gateway tunnel IP **plus the site LAN prefix(es)** that must be reachable from the hub, e.g. for CoA to an AP).
+- One tunnel per site; APs reach EZECLOUD through the site LAN and the gateway's route to the overlay (`AllowedIPs` on the hub for that peer = gateway tunnel IP **plus the site LAN prefix(es)** that must be reachable from the hub, e.g. for CoA to an AP).
 - Works with any Linux/OpenWrt gateway (W13). EZEGATE/EZEOS gateways: WireGuard availability **UNKNOWN** (no precedent in repo).
 - RADIUS from APs: NAS source address as seen by FreeRADIUS is the AP's LAN IP (if the gateway routes, no NAT) or the gateway tunnel IP (if the gateway NATs into the tunnel). **Design rule (PROPOSED):** gateway must route, not NAT, so each AP keeps a stable NAS-IP; otherwise `clients.conf` must use the gateway tunnel IP as the shared client entry and `NAS-Identifier` to tell APs apart.
 
@@ -137,7 +137,7 @@ Pros: smallest peer count (= sites), independent of AP firmware, ordinary OpenWr
 
 ```mermaid
 flowchart LR
-  subgraph VPS["ECLOUD VPS (hub)"]
+  subgraph VPS["EZECLOUD VPS (hub)"]
     WG0["wg0 / unetd root node?"]
     FR["FreeRADIUS"]
   end
@@ -149,7 +149,7 @@ flowchart LR
 
 - Via `service.wireguard-overlay` the AP side is **unetd**, which expects a unetd root node ("gateway"). Whether a plain WireGuard hub works, or whether the hub must also run unetd (OpenWrt project; Linux build on Ubuntu not verified), is **UNKNOWN / REQUIRES DEVICE TEST**.
 - Whether EZEAP images include `unetd`/`wireguard-tools`: **REQUIRES DEVICE TEST** (not in the TIP default profile).
-- Scaling: peers = APs (hundreds/thousands). WireGuard itself handles many peers (W2 is a lookup, no per-peer daemon), but the hub's key inventory, AllowedIPs table and keepalive traffic (1 small packet / 25 s / AP) scale linearly; ECLOUD must provision one keypair per AP.
+- Scaling: peers = APs (hundreds/thousands). WireGuard itself handles many peers (W2 is a lookup, no per-peer daemon), but the hub's key inventory, AllowedIPs table and keepalive traffic (1 small packet / 25 s / AP) scale linearly; EZECLOUD must provision one keypair per AP.
 - Pros: no gateway dependency; each AP has a stable tunnel IP (ideal NAS-IP); per-AP isolation by AllowedIPs. Cons: unverified on this firmware; hub becomes critical for *all* AP↔cloud traffic including the uCentral websocket if routed through it; one overlay per device only.
 
 ### 4.3 Option C — No VPN: public RADIUS/RadSec + OpenWiFi gateway websocket
@@ -203,13 +203,13 @@ Underlay: hub endpoint `57.129.69.122:51820/udp` (port PROPOSED; any free UDP po
 
 ---
 
-## 6. Impact on each ECLOUD function
+## 6. Impact on each EZECLOUD function
 
 | Function | With tunnel (A/B) | Without tunnel (C) | Label |
 |---|---|---|---|
-| **RADIUS auth/acct** | NAS IP = stable tunnel IP (B) or AP LAN IP (A). FreeRADIUS `clients.conf` entries can be CIDR (`ipaddr` accepts IPv4/IPv6 with CIDR — v3.2.x raddb/clients.conf line 53) → one `client` per tenant block `100.100.T.0/24` with a per-tenant secret, or per-NAS entries. FreeRADIUS `rlm_sql` can load clients from the `nas` table (`read_clients = yes`, `client_table = "nas"`, mods-available/sql lines 374–377) so ECLOUD provisions NAS records in PostgreSQL. | NAS IP = site WAN IP (dynamic); prefer RadSec (TLS, cert-based) via `service.radius-proxy`. | FreeRADIUS: VERIFIED FROM OFFICIAL DOCUMENTATION (https://raw.githubusercontent.com/FreeRADIUS/freeradius-server/v3.2.x/raddb/clients.conf , …/mods-available/sql). Per-NAS secret: PROPOSED (SECURITY.md "Protect RADIUS shared secrets"). |
+| **RADIUS auth/acct** | NAS IP = stable tunnel IP (B) or AP LAN IP (A). FreeRADIUS `clients.conf` entries can be CIDR (`ipaddr` accepts IPv4/IPv6 with CIDR — v3.2.x raddb/clients.conf line 53) → one `client` per tenant block `100.100.T.0/24` with a per-tenant secret, or per-NAS entries. FreeRADIUS `rlm_sql` can load clients from the `nas` table (`read_clients = yes`, `client_table = "nas"`, mods-available/sql lines 374–377) so EZECLOUD provisions NAS records in PostgreSQL. | NAS IP = site WAN IP (dynamic); prefer RadSec (TLS, cert-based) via `service.radius-proxy`. | FreeRADIUS: VERIFIED FROM OFFICIAL DOCUMENTATION (https://raw.githubusercontent.com/FreeRADIUS/freeradius-server/v3.2.x/raddb/clients.conf , …/mods-available/sql). Per-NAS secret: PROPOSED (SECURITY.md "Protect RADIUS shared secrets"). |
 | **CoA / Disconnect (RFC 5176)** | Hub sends CoA-Request/Disconnect-Request to the NAS DAS address:port over the tunnel. FreeRADIUS: `home_server { type = coa; port = 3799 }` + `originate-coa` virtual server, or `radclient … coa|disconnect` (default port 3799). **Route requirement:** the NAS DAS IP must be inside the peer's AllowedIPs on the hub and the site gateway must route it. Which address the AP listens on and which port is configured by `interface.ssid.radius.dynamic-authorization {host, port, secret}` (schema) — whether the AP honours CoA at all is **D-006 / REQUIRES DEVICE TEST** (A2). | Blocked by NAT unless port-forwarded; the NAS public IP changes. | FreeRADIUS CoA: VERIFIED FROM OFFICIAL DOCUMENTATION (https://raw.githubusercontent.com/FreeRADIUS/freeradius-server/v3.2.x/raddb/sites-available/originate-coa ; …/sites-available/coa ; …/man/man1/radclient.1). AP support: REQUIRES DEVICE TEST. |
-| **Device management (uCentral websocket to controller)** | Today EZEAPs talk to the EZE controller (`ssh controller`) — not the VPS. Keep that path **public/unchanged** in the pilot; the tunnel carries only ECLOUD traffic. Later, controller endpoint could be given a tunnel address (unetd `root-node.ipaddr`). | Public TLS websocket (OWGW uses server + device certificates — https://raw.githubusercontent.com/Telecominfraproject/wlan-cloud-ucentralgw/main/README.md). | PROPOSED; OWGW: VERIFIED FROM OFFICIAL DOCUMENTATION |
+| **Device management (uCentral websocket to controller)** | Today EZEAPs talk to the EZE controller (`ssh controller`) — not the VPS. Keep that path **public/unchanged** in the pilot; the tunnel carries only EZECLOUD traffic. Later, controller endpoint could be given a tunnel address (unetd `root-node.ipaddr`). | Public TLS websocket (OWGW uses server + device certificates — https://raw.githubusercontent.com/Telecominfraproject/wlan-cloud-ucentralgw/main/README.md). | PROPOSED; OWGW: VERIFIED FROM OFFICIAL DOCUMENTATION |
 | **Monitoring** | Hub can ICMP-ping gateways/APs, poll SNMP (`service.snmpd` exists in schema — VERIFIED FROM EXISTING CODE; enabling it on EZEAP REQUIRES DEVICE TEST), and read `wg show … latest-handshakes` as a per-site liveness signal (wg(8)). | Only cloud-side signals (RADIUS accounting liveness, controller telemetry). | PROPOSED |
 | **API communication (site→cloud)** | Portal/API hostnames resolve publicly; captive clients must reach `portal.ezecloud.ezelink.ai` via the walled garden — this is *subscriber* traffic and should **not** traverse the management tunnel (keeps hub bandwidth off the subscriber path and honours "VPS is not the enforcement point"). Only AP/gateway-originated API calls (if any) may use tunnel IPs. | Public HTTPS. | PROPOSED |
 | **Multi-tenancy isolation** | Tenant = `/24` block. (1) AllowedIPs: a peer can only inject/receive its own prefixes (W2) — a compromised site cannot spoof another tenant's NAS IP. (2) nftables on hub: `FORWARD` from `wg0` to `wg0` **drop** (no site-to-site, no cross-tenant), `INPUT` from `wg0` limited to RADIUS/CoA-reply/ICMP/SNMP ports. (3) Production: one `wgN` interface + UDP port per tenant (or per-tenant VRF/netns per W10) for hard separation and per-tenant rate limits. | Application-level only. | PROPOSED |
@@ -223,7 +223,7 @@ Underlay: hub endpoint `57.129.69.122:51820/udp` (port PROPOSED; any free UDP po
 | Kernel module | same host module either way (W9; module present — VERIFIED ON VPS) | same |
 | Boot ordering | networkd creates `wg0` early → Docker can bind published ports to `100.100.0.1` reliably | `wg0` appears only when the container starts; services binding to its IP must wait |
 | Secrets | `/etc/systemd/network/wg0.netdev` 0640 root:systemd-network (PrivateKey) or `/etc/wireguard/wg0.conf` 0600 | key inside container env/volume; container needs NET_ADMIN (wider privilege) |
-| Peer changes at runtime | `wg set wg0 peer <pub> allowed-ips …` from the ECLOUD worker via a tiny root helper (sudoers-limited) or `networkctl reload` | `docker exec` into privileged container |
+| Peer changes at runtime | `wg set wg0 peer <pub> allowed-ips …` from the EZECLOUD worker via a tiny root helper (sudoers-limited) or `networkctl reload` | `docker exec` into privileged container |
 | Fit with existing host | VPS already uses systemd-networkd (REMOTE_ENVIRONMENT.md §3) → W11 is the natural fit | adds a privileged container to a host that today has only loopback-bound containers |
 | Recommendation | **Use host-native systemd-networkd `.netdev`** (PROPOSED). Fallback: `wg-quick@wg0.service` from `wireguard-tools`. | Only if the hub must later move into Kubernetes/other orchestrators |
 
@@ -239,7 +239,7 @@ MTUBytes=1420
 [WireGuard]
 PrivateKeyFile=/etc/systemd/network/wg0.key   # 0600, never committed
 ListenPort=51820
-# one [WireGuardPeer] per site peer, generated by ECLOUD
+# one [WireGuardPeer] per site peer, generated by EZECLOUD
 [WireGuardPeer]
 PublicKey=<SITE_T1_S1_PUBLIC_KEY>
 AllowedIPs=100.100.1.1/32,<SITE_LAN_PREFIX_IF_OPTION_A>
@@ -261,8 +261,8 @@ Site peer (any Linux/OpenWrt gateway, PROPOSED): `[Interface] Address=100.100.1.
 
 ```mermaid
 sequenceDiagram
-  participant Admin as Site Admin (ECLOUD UI)
-  participant API as ECLOUD API
+  participant Admin as Site Admin (EZECLOUD UI)
+  participant API as EZECLOUD API
   participant DB as PostgreSQL
   participant W as Worker (hub host helper)
   participant GW as Site gateway / AP
@@ -278,7 +278,7 @@ sequenceDiagram
 
 | Topic | Design |
 |---|---|
-| Key generation | Preferred: site generates its own keypair and uploads only the public key (hub never sees private keys). Fallback: ECLOUD generates with `wg genkey`, shows once, stores only the public key + hash of the config bundle. For option B the AP's `private-key` must be in the uCentral config (schema requires it) — the controller therefore holds AP private keys; store encrypted at rest, per-tenant KMS key in production. |
+| Key generation | Preferred: site generates its own keypair and uploads only the public key (hub never sees private keys). Fallback: EZECLOUD generates with `wg genkey`, shows once, stores only the public key + hash of the config bundle. For option B the AP's `private-key` must be in the uCentral config (schema requires it) — the controller therefore holds AP private keys; store encrypted at rest, per-tenant KMS key in production. |
 | Storage | Table `vpn_peers(tenant_id, site_id, device_id?, public_key UNIQUE, tunnel_ip UNIQUE, allowed_ips[], psk_ref?, status, created_at, rotated_at, revoked_at, last_handshake_at)`; private keys never stored except as described above. (Schema ownership: A6.) |
 | Reconciliation | Worker renders the desired peer set from DB and applies the diff with `wg set` (add/remove peers without bouncing the interface); also writes the `.netdev` so a reboot restores the full set. Runs on change and every N minutes. |
 | Rotation | Per-peer: add new public key as a second peer entry with the same AllowedIPs is **not** possible (AllowedIPs are unique per interface — moving an IP to a new key removes it from the old one, W2) → rotation = site switches key, hub's reconcile swaps the key atomically; schedule yearly or on staff change. Hub key rotation = all sites update `[Peer] PublicKey` → do via dual hub interfaces (`wg0` old, `wg1` new port) during a migration window. |
@@ -316,7 +316,7 @@ sequenceDiagram
 | Hub public IP changes | Sites keep sending to old IP; `Endpoint` on sites is resolved from config | Use a DNS name for the hub endpoint and a documented re-resolve procedure; pilot uses the static /32 |
 | MTU blackhole (PPPoE/LTE uplinks < 1500) | Large RADIUS packets (EAP) or TCP stalls | MTU 1420 default (W8); lower to 1280 per site if needed; MSS clamp |
 | Key compromise at a site | Attacker can source only that peer's AllowedIPs (W2) | Per-tenant RADIUS secrets, nftables input filter, revoke peer, rotate RADIUS secret |
-| Overlapping site LANs (option A) | Hub routing ambiguity | Enforce uniqueness per tenant in ECLOUD allocator; or gateway NAT; or option B |
+| Overlapping site LANs (option A) | Hub routing ambiguity | Enforce uniqueness per tenant in EZECLOUD allocator; or gateway NAT; or option B |
 | Pending kernel upgrade (6.8.0-136 → 142) | Module path changes; nothing breaks (in-tree) | Re-run `modinfo wireguard` after reboot |
 | Clock/time | WireGuard handshakes carry a timestamp for replay protection (protocol page) — a device with badly wrong time after cold boot may fail to re-handshake until NTP syncs | Ensure NTP on APs/gateways (`service.ntp` in schema) |
 
@@ -352,7 +352,7 @@ flowchart TB
 | Isolation | Per-tenant `wgN` interfaces or netns/VRF (W10), per-tenant nftables sets, per-tenant UDP port or shared port |
 | Secrets | Hub private keys and per-tenant RADIUS secrets in a secrets manager; peer public keys in DB |
 | Observability | `wg show wg0 dump` exporter → Prometheus (`latest-handshake`, `transfer-rx/tx` per peer) |
-| Exit from WireGuard | Because the design treats the tunnel as "transport for management/AAA" only, option C remains viable; no ECLOUD core model couples to tunnel IPs (adapters map NAS identity → policy) |
+| Exit from WireGuard | Because the design treats the tunnel as "transport for management/AAA" only, option C remains viable; no EZECLOUD core model couples to tunnel IPs (adapters map NAS identity → policy) |
 
 ---
 

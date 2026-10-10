@@ -104,10 +104,10 @@ export function buildOpenApiDocument(routes: readonly AnyRouteSpec[], version: s
   return createDocument({
     openapi: '3.1.0',
     info: {
-      title: 'ECLOUD API',
+      title: 'EZECLOUD API',
       version,
       description:
-        'ECLOUD admin/integration API. Errors are RFC 9457 application/problem+json. ' +
+        'EZECLOUD admin/integration API. Errors are RFC 9457 application/problem+json. ' +
         'Cookie sessions require Origin + X-Requested-With on mutations; API keys use Bearer.',
     },
     components: {

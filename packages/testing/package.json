@@ -2,7 +2,7 @@
   "name": "@ecloud/testing",
   "version": "0.1.0",
   "private": true,
-  "description": "ECLOUD test helpers: integration gating, database truncation, fixture factories",
+  "description": "EZECLOUD test helpers: integration gating, database truncation, fixture factories",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",

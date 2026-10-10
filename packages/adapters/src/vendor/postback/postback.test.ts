@@ -379,7 +379,7 @@ describe('validateContext and hand-off per profile', () => {
     const v = await built.adapter.validateContext(parsed, lookup(nas(cfg), { log }));
     if (!v.ok) throw new Error(v.detail);
     expect(log.findNas).toEqual([{ nasid: null, called: null, apMac: AP }]);
-    expect(log.replay).toEqual([]); // no vendor nonce: the ECLOUD login token covers replay
+    expect(log.replay).toEqual([]); // no vendor nonce: the EZECLOUD login token covers replay
     const h = built.adapter.authorizeSession(v.context, credential);
     if ('unsupported' in h) throw new Error(h.reason);
     expect(h.browser).toEqual({
@@ -839,7 +839,7 @@ describe('review fixes (M1, M2, L2, L3, L4)', () => {
 });
 
 describe('setup guides', () => {
-  it('every profile has filled ECLOUD values and placeholders only for secrets', () => {
+  it('every profile has filled EZECLOUD values and placeholders only for secrets', () => {
     for (const p of [...BUILTIN_POSTBACK_PROFILES]) {
       const steps = postbackSetupGuide(p, { siteId: SITE, nasId: 'site1-ap' });
       const url = `https://portal.ezecloud.ezelink.ai/pb/${p.key}/site1-ap/`;

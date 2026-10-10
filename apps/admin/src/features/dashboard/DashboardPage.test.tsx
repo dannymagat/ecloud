@@ -261,7 +261,7 @@ describe('DashboardPage', () => {
     expect(within(defs).getByText(/at most 20 min old/)).toBeInTheDocument();
     expect(screen.getByText(/2 NAS registered · 1 recent activity/)).toBeInTheDocument();
     expect(
-      screen.getByText(/4 network devices registered · device state observed by ECLOUD for 0/),
+      screen.getByText(/4 network devices registered · device state observed by EZECLOUD for 0/),
     ).toBeInTheDocument();
 
     expect(screen.getByRole('table', { name: 'Top reject reasons' })).toHaveTextContent(

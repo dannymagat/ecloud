@@ -1,6 +1,6 @@
 /**
  * `generic-radius-8021x` (Cycle A, D-044; docs/VENDOR_INTEGRATION_RESEARCH.md §2 F9, §3.1):
- * vendor-neutral WPA2/WPA3-Enterprise (802.1X / EAP terminated by ECLOUD FreeRADIUS) and
+ * vendor-neutral WPA2/WPA3-Enterprise (802.1X / EAP terminated by EZECLOUD FreeRADIUS) and
  * MAC-authentication (MAB) NAS of ANY vendor. No captive portal.
  *
  * Only IETF-standard reply attributes are declared (plus the WISPr bandwidth pair, which many
@@ -69,7 +69,7 @@ const COA_RDT = sourced(
   [F9, RFC5176],
 );
 const MAC_AUTH_RDT = sourced(
-  `MAC authentication (MAB): the NAS sends User-Name = client MAC (format per vendor), usually with Service-Type = Call-Check or User-Password = MAC; ECLOUD accepts it only when it equals Calling-Station-Id and the device has MAC auth enabled (AAA_ARCHITECTURE.md §2.3; ${R31})`,
+  `MAC authentication (MAB): the NAS sends User-Name = client MAC (format per vendor), usually with Service-Type = Call-Check or User-Password = MAC; EZECLOUD accepts it only when it equals Calling-Station-Id and the device has MAC auth enabled (AAA_ARCHITECTURE.md §2.3; ${R31})`,
   [F9],
 );
 

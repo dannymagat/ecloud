@@ -1,4 +1,4 @@
--- ECLOUD pilot database roles (DRAFT, NOT APPLIED). Run by the one-shot `db-roles` service of
+-- EZECLOUD pilot database roles (DRAFT, NOT APPLIED). Run by the one-shot `db-roles` service of
 -- compose.pilot.yaml on EVERY deploy: idempotent, and re-applying the role passwords is how a
 -- rotated password file takes effect (docs/SECRETS_MANAGEMENT.md R7).
 -- Differences from the DEV-only infra/compose/postgres-init/01_roles.sql: no ecloud_test

@@ -1,14 +1,14 @@
 /**
  * `meraki-splash` (multi-vendor Cycle E, D-044; docs/VENDOR_INTEGRATION_RESEARCH.md §2 F4, §3.5):
  * Cisco Meraki MR access points with the splash page "Sign-on with my RADIUS server" and a
- * custom-hosted splash URL pointing at the ECLOUD portal. The browser POSTs the broker credential
+ * custom-hosted splash URL pointing at the EZECLOUD portal. The browser POSTs the broker credential
  * to the Meraki-hosted `login_url`; the **Meraki Cloud** (not the AP) then sends a PAP
- * Access-Request and accounting to ECLOUD, and accepts RFC 5176 **Disconnect only** on the
+ * Access-Request and accounting to EZECLOUD, and accepts RFC 5176 **Disconnect only** on the
  * organization's dashboard host, UDP 3799.
  *
  * Every device-side cell is DOCUMENTED / REQUIRES_DEVICE_TEST (no lab test, D-028). Bandwidth:
  * Meraki applies per-user limits only through a `Filter-Id` naming a pre-defined Dashboard group
- * policy, so ECLOUD cannot push arbitrary rates; no rate family is declared.
+ * policy, so EZECLOUD cannot push arbitrary rates; no rate family is declared.
  */
 import type { AdapterCapabilities } from '@ecloud/policy-engine';
 import type { EvidenceRef } from '@ecloud/shared';
@@ -62,7 +62,7 @@ export const MERAKI_DOCS = {
 const R35 = 'docs/VENDOR_INTEGRATION_RESEARCH.md §3.5';
 
 const RATE_UNSUPPORTED = sourced(
-  `Meraki applies per-user bandwidth only through Filter-Id naming a pre-defined Dashboard group policy (documented for 802.1X SSIDs; on splash sign-on REQUIRES_DEVICE_TEST); arbitrary ECLOUD rate values cannot be pushed (${R35})`,
+  `Meraki applies per-user bandwidth only through Filter-Id naming a pre-defined Dashboard group policy (documented for 802.1X SSIDs; on splash sign-on REQUIRES_DEVICE_TEST); arbitrary EZECLOUD rate values cannot be pushed (${R35})`,
   [F4, MERAKI_DOCS.groupPolicy],
 );
 const QUOTA_UNSUPPORTED = sourced(
@@ -82,7 +82,7 @@ const CLASS_RDT = sourced(
   [F4],
 );
 const VLAN_UNSUPPORTED = sourced(
-  `no VLAN reply attribute is documented for splash sign-on (${R35}: VLAN UNKNOWN); ECLOUD sends none`,
+  `no VLAN reply attribute is documented for splash sign-on (${R35}: VLAN UNKNOWN); EZECLOUD sends none`,
   [F4],
 );
 const DISCONNECT_RDT = sourced(

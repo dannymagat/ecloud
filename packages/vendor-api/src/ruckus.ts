@@ -26,7 +26,7 @@ export const RUCKUS_NBI_STATUS = 'REQUIRES_CLARIFICATION' as const;
 export const RUCKUS_NBI_OPEN_QUESTIONS: readonly string[] = Object.freeze([
   'Complete NBI response-code table (only 101/201/301 seen) and error semantics',
   'SmartZone / vSZ NBI host, port (9080/9443 per third party) and path; Ruckus One regional hosts',
-  'Handling of encrypted UE-IP / UE-MAC values and whether ECLOUD must decrypt them',
+  'Handling of encrypted UE-IP / UE-MAC values and whether EZECLOUD must decrypt them',
   'Binding rule for the redirect-supplied nbiIP to the registered controller base_url',
   'Which credential fields (Vendor, RequestPassword) are per controller vs per tenant',
 ]);

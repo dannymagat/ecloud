@@ -1,4 +1,4 @@
-# ECLOUD — Testing guide
+# EZECLOUD — Testing guide
 
 Status: Phase 3 (M7, owner A9). Design sources: `TEST_PLAN.md`, `PHASE2_VALIDATION.md` §5–§6,
 `MULTITENANCY.md` §5 (T-01…T-15), `SECURITY_ARCHITECTURE.md` §3 (S-01…S-10),
@@ -69,7 +69,7 @@ shared dev volume. Tests never drop shared schemas; only the `@ecloud/db` schema
 | `ECLOUD_TEST_AAA_STUB_HOST` | aaa-contract stub bind address | `127.0.0.1` (macOS Docker Desktop), `0.0.0.0` on Linux (host-gateway) |
 | `ECLOUD_TEST_COMPOSE_FILE` | aaa-contract `docker compose -f` | `infra/compose/docker-compose.dev.yml` |
 
-The derived URLs rely on the dev/CI convention that every ECLOUD role has the same
+The derived URLs rely on the dev/CI convention that every EZECLOUD role has the same
 obviously-fake password (`ecloud_dev_password`). Real deployments never use these variables.
 
 ## 4. Helpers (`@ecloud/testing`)
@@ -199,7 +199,7 @@ migration/seed that cites the evidence file (D-028), which re-runs unit/contract
 | DT-24 | Secret exposure on the device and in controller state | REQUIRES_DEVICE_TEST |
 
 The aaa-contract suite uses the DT-03/DT-16 attribute files with **placeholder** values; it
-verifies FreeRADIUS ↔ ECLOUD wiring only and resolves no DT.
+verifies FreeRADIUS ↔ EZECLOUD wiring only and resolves no DT.
 
 ### 7.1 Measurement harness for DT-04 / DT-05 / DT-06 (`tests/device/`, Phase 7)
 
@@ -266,7 +266,7 @@ false until DT-02 lab-validates the rate-limit keys.
 
 Design source: `MULTI_VENDOR_INTEGRATION_PLAN.md` §8.3 (SIM-01…SIM-18), §4 (evidence model).
 
-> **Simulator evidence proves ECLOUD code behaviour, not hardware compatibility.** The simulated
+> **Simulator evidence proves EZECLOUD code behaviour, not hardware compatibility.** The simulated
 > NAS is written from documented parameter lists (CAPTIVE_PORTAL_ARCHITECTURE.md §3.2/§3.3/§4/§7.3,
 > PHASE2_VALIDATION V-054/V-070/V-071) and the FreeRADIUS accounting fixtures; it is not a device
 > capture. A passing scenario may back `SIMULATOR_TESTED` only on the operation capabilities
@@ -314,9 +314,9 @@ scenario outcomes; `checkSimulatorResults` rejects a file whose results were edi
 or copied from another run. It never edits the registry; the promotion is a separate orchestrator
 step.
 
-**`authorizationHandoff` evidence is PAP only.** ECLOUD's hand-off emits the PAP `password` (XOR)
+**`authorizationHandoff` evidence is PAP only.** EZECLOUD's hand-off emits the PAP `password` (XOR)
 form; the CHAP vectors in `handoff.test.ts` check the simulator's reference implementation only,
-not ECLOUD code.
+not EZECLOUD code.
 
 The DB group drives `drainOnce` with an in-memory cursor and no lock (production serialises the
 drainer with `state.withLock`). Run it alone against `ecloud_test`: another process draining the

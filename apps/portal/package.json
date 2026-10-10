@@ -2,7 +2,7 @@
   "name": "@ecloud/portal",
   "version": "0.1.0",
   "private": true,
-  "description": "ECLOUD captive portal server (server-rendered pages, UAM hand-off via /internal/portal)",
+  "description": "EZECLOUD captive portal server (server-rendered pages, UAM hand-off via /internal/portal)",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",

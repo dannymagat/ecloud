@@ -1,7 +1,7 @@
 # -*- text -*-
 ##############################################################################
 #
-#  ECLOUD dictionary additions -- AAA_ARCHITECTURE.md §4.3 ("Gap") and §12 Q7.
+#  EZECLOUD dictionary additions -- AAA_ARCHITECTURE.md §4.3 ("Gap") and §12 Q7.
 #
 #  1. ChilliSpot vendor 14559: attributes that FreeRADIUS 3.2.10
 #     share/dictionary.chillispot does NOT define (it stops at 1-9, 100-102)
@@ -21,7 +21,7 @@
 #     Naming: FreeRADIUS 3.x has no attribute aliases and a second VENDOR with
 #     the same number (CoovaChilli = 14559) would change the names used when
 #     DECODING vendor 14559 attributes, so everything is defined once under the
-#     existing "ChilliSpot" vendor. ECLOUD adapters therefore emit
+#     existing "ChilliSpot" vendor. EZECLOUD adapters therefore emit
 #     "ChilliSpot-*" names for both uspot and CoovaChilli; on the wire the
 #     result is identical to CoovaChilli's own "CoovaChilli-*" definitions.
 #
@@ -34,7 +34,7 @@
 #
 #  3. Internal attributes (numbers 3000-3999 are never put in a RADIUS packet;
 #     see the comment in the stock raddb/dictionary). They carry server-side
-#     facts into the JSON rlm_rest posts to ECLOUD (policy.d/ecloud,
+#     facts into the JSON rlm_rest posts to EZECLOUD (policy.d/ecloud,
 #     docs/contracts/aaa-authorize.md).
 #
 ##############################################################################
@@ -66,7 +66,7 @@ END-VENDOR	ChilliSpot
 # TIP vendor 0x0000e608 (58888): REQUIRES DEVICE TEST, not defined (see header).
 
 #
-#  ECLOUD internal attributes (never on the wire)
+#  EZECLOUD internal attributes (never on the wire)
 #
 ATTRIBUTE	ECLOUD-Packet-Src-IP-Address	3000	string
 ATTRIBUTE	ECLOUD-Packet-Src-Port		3001	integer

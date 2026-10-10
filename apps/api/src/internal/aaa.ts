@@ -289,7 +289,7 @@ interface Identity {
 }
 
 /**
- * NAS adapters whose 802.1X EAP inner identities ECLOUD decides on (Cycle A). FreeRADIUS marks
+ * NAS adapters whose 802.1X EAP inner identities EZECLOUD decides on (Cycle A). FreeRADIUS marks
  * an inner-tunnel request with `ECLOUD-EAP-Inner` (sites-available/ecloud-inner); any other
  * adapter (captive portals) never authenticates through EAP.
  */
@@ -418,7 +418,7 @@ async function identify(
   const password = attr(body, 'User-Password');
   if (userName === '') throw new Reject('missing_username', 'Access denied');
   if (hasAttr(body, 'CHAP-Password') && !isPortalCredentialUsername(userName)) {
-    // ECLOUD stores only one-way hashes: CHAP cannot be verified (contract §2.1). Cycle B: the
+    // EZECLOUD stores only one-way hashes: CHAP cannot be verified (contract §2.1). Cycle B: the
     // only CHAP path is a broker credential issued for a CHAP hand-off (portal-credential.ts).
     throw new Reject('chap_unsupported', 'Authentication method not supported');
   }

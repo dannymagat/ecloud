@@ -13,7 +13,7 @@
  * NOT documented / REQUIRES_DEVICE_TEST (never assumed silently):
  *  - the URL prefix in front of `/v1` (typically the console's Network integration path): it is
  *    part of the operator-entered `base_url`, never guessed here;
- *  - rx/tx direction of the two rate fields (research §6 item 7). ECLOUD maps rx = client
+ *  - rx/tx direction of the two rate fields (research §6 item 7). EZECLOUD maps rx = client
  *    download, tx = client upload as a labelled ASSUMPTION (policy-engine api-limits.ts);
  *  - the `/v1/sites/{siteId}/devices` inventory list (used only by the AP verification job);
  *  - the client object's `access` shape (used only as an extra refusal, never to accept).

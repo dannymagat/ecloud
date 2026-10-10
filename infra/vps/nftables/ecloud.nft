@@ -1,6 +1,6 @@
 #!/usr/sbin/nft -f
 # =============================================================================================
-#  ECLOUD host firewall -- table `inet ecloud`  (DRAFT, NOT APPLIED; docs/VPS_CHANGE_LIST.md)
+#  EZECLOUD host firewall -- table `inet ecloud`  (DRAFT, NOT APPLIED; docs/VPS_CHANGE_LIST.md)
 #  Target: /etc/nftables.d/ecloud.nft on vps (Ubuntu 24.04, iptables-nft backend, Docker 29).
 #  Sources: SECURITY_ARCHITECTURE.md §2.2-2.5, D-031, D-032 (tunnel-only RADIUS, hub
 #  100.100.0.1, UDP 51820), REMOTE_ENVIRONMENT.md §3-4 (ens3 dual-stack, Caddy 80/443 tcp +

@@ -19,7 +19,7 @@
  *  - A direction the policy leaves unset is rendered as `0`. "0 = unlimited" is documented for
  *    `Ascend-Data-Rate` / `Ascend-Xmit-Rate` on the same page, NOT explicitly for
  *    `Mikrotik-Rate-Limit`: REQUIRES_DEVICE_TEST (see {@link MIKROTIK_RATE_ATTRIBUTE}).
- *  - Units: ECLOUD intent is integer kbit/s (1 kbit = 1,000 bit). A multiple of 1,000 kbit/s is
+ *  - Units: EZECLOUD intent is integer kbit/s (1 kbit = 1,000 bit). A multiple of 1,000 kbit/s is
  *    written `<n>M`, any other value `<n>k`.
  *  - Burst is expressible in the syntax, but the policy engine has no burst enforcement (D-028
  *    stage 10, POLICY_ENGINE §3.1), so `translate()` never emits it. The renderer accepts an
@@ -73,7 +73,7 @@ export const MIKROTIK_RATE_ATTRIBUTE: AttributeDeclaration = Object.freeze({
 });
 
 const BURST_EVIDENCE =
-  'POLICY_ENGINE.md §3.1 / D-028 stage 10: the engine has no burst enforcement; the MikroTik syntax supports burst (vendor doc) but ECLOUD does not emit it';
+  'POLICY_ENGINE.md §3.1 / D-028 stage 10: the engine has no burst enforcement; the MikroTik syntax supports burst (vendor doc) but EZECLOUD does not emit it';
 
 function field(
   name: PolicyField,

@@ -1,4 +1,4 @@
-# ECLOUD Policy Engine (Phase 2, A5b — design only, nothing deployed)
+# EZECLOUD Policy Engine (Phase 2, A5b — design only, nothing deployed)
 
 > **Owner amendments 2026-10-07 (D-022, D-028).** (1) Canonical specificity order is `temporary > client_device > user > voucher_batch > user_group > site > organization default`; field-level fall-through semantics in this document are retained. (2) All policy types in §1 are modelled from the start; enforcement is staged in this order: up/down rate, session timeout, idle timeout, validity/expiry, vouchers; then quotas, concurrency, schedules, VLAN, burst/advanced. (3) Every adapter reports each policy field with exactly one of `VERIFIED_SUPPORTED`, `REQUIRES_DEVICE_TEST`, `UNSUPPORTED`, `ECLOUD_SIDE_ONLY` (this supersedes the label vocabulary used in the capability table below; mapping: VERIFIED → VERIFIED_SUPPORTED, REQUIRES DEVICE TEST / UNKNOWN → REQUIRES_DEVICE_TEST, UNSUPPORTED → UNSUPPORTED, ECLOUD-side → ECLOUD_SIDE_ONLY). A field is never shown as device-enforced unless its status is VERIFIED_SUPPORTED. (4) Permission keys use `resource:action` (D-021).
 
@@ -17,7 +17,7 @@ Design principle (BRIEF rule 4, A2 §7.1): **the core stores policy intent; adap
 |---|---|---|---|
 | D1 | Merge semantics | **Single winner, field-level fall-through** (not "most restrictive") | Explainable ("this phone got 2 Mbit/s because policy X v3 won"); allows temporary *boost* policies; aligns with A6 §3.4 "take the first". Site-wide hard ceilings belong on the SSID `rate-limit` (device-side, always applies) not in the merge. |
 | D2 | Specificity order | `temporary > client_device > user > voucher_batch > user_group > site > org default` | Matches A6 §3.4 (`client_device > user > voucher_batch > group > site`). The brief suggested `user > client-device`; see Open Question Q1. |
-| D3 | Quota on NAS without octet attributes | Session-Timeout sized to **worst-case drain time**, floor 300 s, plus ECLOUD accounting watcher | Bounds overshoot without claiming any unverified device feature. |
+| D3 | Quota on NAS without octet attributes | Session-Timeout sized to **worst-case drain time**, floor 300 s, plus EZECLOUD accounting watcher | Bounds overshoot without claiming any unverified device feature. |
 | D4 | Concurrency breach | Default **reject new** (`max_concurrent_*`); `disconnect_oldest` selectable per policy only once Disconnect is VERIFIED on that adapter | Disconnect end-to-end is REQUIRES DEVICE TEST on every adapter (A2 §5, A4 §3.5). |
 | D5 | Unenforceable field | Default **fallback-to-ECLOUD-side if a watcher exists, else allow-and-flag**; tenant may set `strict` → reject | Keeps Wi-Fi working on day one while the enforceability preview (A7) shows the gaps. |
 | D6 | Quota reset clock | Daily at 00:00 **site timezone** (A6 §5), monthly on calendar day 1 site TZ; per-tenant `billing_anchor_day` later | Site TZ is already the schedule TZ; one clock per site. |
@@ -349,7 +349,7 @@ interface EnforcementPlan {
 | `*_rate_kbps` → `WISPr-Bandwidth-Max-Down/Up` (bit/s, A4 §3.4) | `kbps × 1000` | integer; clamp to `4 294 967 295` (32-bit RADIUS integer) → `overflow_clamped` |
 | `*_rate_kbps` → `ChilliSpot-/CoovaChilli-Bandwidth-Max-Down/Up` (kbit/s, A4 §3.4) | `kbps` | as is. Emit **one** family per adapter (`adapter.rate_limit.attrs[0]`, default WISPr); emitting both is avoided because the order in which uspot applies them is not verified |
 | `*_rate_kbps` → `rate-limit.egress-rate` (download) / `ingress-rate` (upload), Mbit/s int (A2 §7.3) | `ceil(kbps / 1000)` | **round up** so the device never under-delivers the promised rate; `< 1000 kbps` cannot be expressed → `unenforceable(reason='unsupported', detail='sub-Mbit')` (A2 §7.3). Direction mapping ingress=client upload / egress=client download is per A2 §7.3; end-to-end direction REQUIRES DEVICE TEST (A2 §11 item 2) |
-| `remaining_bytes` → `ChilliSpot-Max-Total-Octets` on TIP fork (32-bit, A4 §3.4) | `min(remaining, 4 294 967 295)` | if clamped → `overflow_clamped`; ECLOUD watcher covers the remainder and the session is re-sized at next auth |
+| `remaining_bytes` → `ChilliSpot-Max-Total-Octets` on TIP fork (32-bit, A4 §3.4) | `min(remaining, 4 294 967 295)` | if clamped → `overflow_clamped`; EZECLOUD watcher covers the remainder and the session is re-sized at next auth |
 | `remaining_bytes` → `…-Max-Total-Octets` + `…-Max-Total-Gigawords` (upstream uspot / CoovaChilli) | `Octets = remaining mod 2^32`, `Gigawords = floor(remaining / 2^32)` | none |
 | time bounds → `Session-Timeout` | `min(policy.session_timeout_s, until(window_end)+grace, until(valid_until), until(voucher expiry), drain_time_s)` | integer seconds, floor `tenant.min_session_s` (300) unless the bound is a hard validity end (then exact, min 60) |
 | `idle_timeout_s` → `Idle-Timeout` | as is | min 60 |
@@ -478,25 +478,25 @@ Default for all: **never** silently rewrite a live session's snapshot; create a 
 stateDiagram-v2
   [*] --> Authorizing : Access-Request (device → AAA → engine)
   Authorizing --> Rejected : schedule / quota / concurrency / strict-unenforceable
-  Authorizing --> Authorized : Access-Accept + EnforcementPlan (ECLOUD stores snapshot, arms timers)
+  Authorizing --> Authorized : Access-Accept + EnforcementPlan (EZECLOUD stores snapshot, arms timers)
   Authorized --> Active : Acct-Start (device)  [or portal res=success]
-  Authorized --> Stale : no Acct-Start within 2×interim (ECLOUD job)
-  Active --> Active : Acct-Interim (device) → counters delta (ECLOUD)
-  Active --> QuotaWarn : used ≥ 90 % (ECLOUD) → quota.warning
-  QuotaWarn --> Active : period reset at site midnight (ECLOUD)
-  QuotaWarn --> Disconnecting : used ≥ 100 % and adapter.disconnect VERIFIED (ECLOUD → Disconnect-Request)
+  Authorized --> Stale : no Acct-Start within 2×interim (EZECLOUD job)
+  Active --> Active : Acct-Interim (device) → counters delta (EZECLOUD)
+  Active --> QuotaWarn : used ≥ 90 % (EZECLOUD) → quota.warning
+  QuotaWarn --> Active : period reset at site midnight (EZECLOUD)
+  QuotaWarn --> Disconnecting : used ≥ 100 % and adapter.disconnect VERIFIED (EZECLOUD → Disconnect-Request)
   QuotaWarn --> Expired : NAS octet limit / Session-Timeout fires (device, Stop cause 5)
   Active --> Expired : Session-Timeout / Idle-Timeout (device)
-  Active --> Disconnecting : schedule end / temp policy expiry / disconnect_oldest / operator (ECLOUD)
-  Disconnecting --> Stopped : Disconnect-ACK; ECLOUD closes session itself if no Acct-Stop (TIP uspot path)
+  Active --> Disconnecting : schedule end / temp policy expiry / disconnect_oldest / operator (EZECLOUD)
+  Disconnecting --> Stopped : Disconnect-ACK; EZECLOUD closes session itself if no Acct-Stop (TIP uspot path)
   Disconnecting --> Active : NAK / timeout → session_actions.status, fall back to deny-at-re-auth
-  Expired --> Stopped : Acct-Stop (device) → final counters (ECLOUD)
-  Active --> Stale : interim missing > 3×interval (ECLOUD job)
+  Expired --> Stopped : Acct-Stop (device) → final counters (EZECLOUD)
+  Active --> Stale : interim missing > 3×interval (EZECLOUD job)
   Stale --> Stopped : Accounting-Off for NAS or late Acct-Stop
   Stopped --> [*]
 ```
 
-Device responsibilities (all VERIFIED per adapter in §3.1 unless flagged): admit/deny, apply rate ceiling, count octets, enforce `Session-Timeout`/`Idle-Timeout`/octet limit, send accounting, act on Disconnect (REQUIRES DEVICE TEST). ECLOUD responsibilities: resolution, snapshot, counters, period resets, concurrency, schedule/validity timers, Disconnect/CoA issuance, closing sessions whose kick path yields no Acct-Stop, audit.
+Device responsibilities (all VERIFIED per adapter in §3.1 unless flagged): admit/deny, apply rate ceiling, count octets, enforce `Session-Timeout`/`Idle-Timeout`/octet limit, send accounting, act on Disconnect (REQUIRES DEVICE TEST). EZECLOUD responsibilities: resolution, snapshot, counters, period resets, concurrency, schedule/validity timers, Disconnect/CoA issuance, closing sessions whose kick path yields no Acct-Stop, audit.
 
 ---
 
@@ -668,7 +668,7 @@ export type Unsupported = { unsupported: true; reason: string };
 7. Interaction between SSID `rate-limit` ceiling and a higher per-client RADIUS rate (which wins?).
 8. Effect of a `configure` re-push on existing uspot sessions and ratelimit state (confirms the batching rule in §5.3).
 9. Which uspot code base ships on EZEAP (decides between adapters (a) and (b)).
-10. CoovaChilli on the EZE gateway: `coaport` enabled? Source-IP check vs ECLOUD's WireGuard address; CoA re-apply of bandwidth/quota confirmed live.
+10. CoovaChilli on the EZE gateway: `coaport` enabled? Source-IP check vs EZECLOUD's WireGuard address; CoA re-apply of bandwidth/quota confirmed live.
 
 ---
 

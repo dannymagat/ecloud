@@ -156,7 +156,7 @@ function selectsGenericProfile(value: string): boolean {
 }
 
 /**
- * The post-back profile editor with the "Any vendor" portal URL taken from this ECLOUD
+ * The post-back profile editor with the "Any vendor" portal URL taken from this EZECLOUD
  * instance's configuration (the setup-guide values: PUBLIC_PORTAL_ORIGIN), not a constant.
  */
 export function PostbackProfileField(props: {
@@ -248,7 +248,7 @@ export function NasPage() {
       label: 'NAS-Identifier',
       type: 'text',
       nullable: true,
-      hint: 'Cisco Meraki: leave empty. ECLOUD generates ecloud-<16 hex> (read-only); set it as the custom NAS-ID in Meraki. Requests with another NAS-Identifier are rejected.',
+      hint: 'Cisco Meraki: leave empty. EZECLOUD generates ecloud-<16 hex> (read-only); set it as the custom NAS-ID in Meraki. Requests with another NAS-Identifier are rejected.',
     },
     {
       name: 'das_host',

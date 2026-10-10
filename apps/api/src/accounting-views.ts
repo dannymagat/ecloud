@@ -338,7 +338,7 @@ export function operationAvailability(input: OperationInput): OperationAvailabil
   if (adapter === null || mechanism === null || input.adapterKey === null) {
     return refuse(
       'no_adapter',
-      `${name} is not available: the NAS has no engine adapter, so ECLOUD cannot address it (D-035).`,
+      `${name} is not available: the NAS has no engine adapter, so EZECLOUD cannot address it (D-035).`,
     );
   }
   const disconnectTargetNone =

@@ -59,7 +59,7 @@ export const CONTROLLER_CREDENTIAL_PURPOSE = 'ecloud:controller:credential:v1';
  */
 export const VENDOR_API_SECRET_PURPOSE = 'ecloud:vendor-api:secret:v1'; // check-no-secrets: allow
 
-/** Controller APIs ECLOUD will call in Cycles D/E (research §2 F5–F8, D-044 Meraki). */
+/** Controller APIs EZECLOUD will call in Cycles D/E (research §2 F5–F8, D-044 Meraki). */
 export const VENDOR_API_KINDS = [
   'unifi-network',
   'omada-controller',

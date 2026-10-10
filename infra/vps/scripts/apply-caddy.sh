@@ -32,7 +32,7 @@ fix_log_ownership() {
   find "$LOG_DIR" -maxdepth 1 -type f ! -user caddy -exec chown caddy:caddy {} + 2>/dev/null || true
 }
 
-# Restore the previous Caddyfile, drop the ECLOUD site, reload, re-verify. Used by `rollback` and
+# Restore the previous Caddyfile, drop the EZECLOUD site, reload, re-verify. Used by `rollback` and
 # automatically when the post-swap reload/verify fails, so a broken config is never left live
 # (D-030) - not even one that only bites at the next restart.
 restore() {
@@ -73,7 +73,7 @@ case "${1:-}" in
     if ! { systemctl reload caddy && sleep 3 && systemctl is-active caddy && verify_existing; }; then
       echo "reload/verify FAILED - restoring $backup" >&2
       restore "$backup"
-      echo "restored previous Caddyfile; ECLOUD site NOT applied" >&2
+      echo "restored previous Caddyfile; EZECLOUD site NOT applied" >&2
       exit 1
     fi
     echo "applied; backup: $backup"

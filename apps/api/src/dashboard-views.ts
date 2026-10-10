@@ -29,7 +29,7 @@ export function activityThresholds(interimIntervalS: number | null): ActivityThr
 
 export function activityDefinition(t: ActivityThresholds): string {
   return (
-    'Observed RADIUS activity only (ECLOUD has no device telemetry; this is not an online/offline state): ' +
+    'Observed RADIUS activity only (EZECLOUD has no device telemetry; this is not an online/offline state): ' +
     `active = an Access-Request or accounting record from this NAS within the last ${String(t.active_within_s)} s; ` +
     `quiet = newest activity older than that but within ${String(t.quiet_within_s)} s; ` +
     'silent = newest activity older than that; never = no auth request or accounting record from this NAS is retained.'
@@ -42,7 +42,7 @@ export function newestOf(...dates: readonly (Date | null | undefined)[]): Date |
   return out;
 }
 
-/** Status derived only from what ECLOUD itself observed from the NAS. */
+/** Status derived only from what EZECLOUD itself observed from the NAS. */
 export function classifyActivity(
   now: Date,
   lastActivity: Date | null,

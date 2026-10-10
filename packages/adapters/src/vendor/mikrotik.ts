@@ -6,24 +6,24 @@
  * https://help.mikrotik.com/docs/spaces/ROS/pages/87162881/Hotspot+customisation):
  *
  *  1. The router serves the ECLOUD-generated `login.html` ({@link renderMikrotikLoginHtml}). It
- *     sends the browser to the ECLOUD portal with the documented servlet variables as query
+ *     sends the browser to the EZECLOUD portal with the documented servlet variables as query
  *     parameters. The parameter NAMES are exactly the RouterOS variable names (`mac`, `ip`,
  *     `identity`, `link-login-only`, `link-orig`, `chap-id`, `chap-challenge`, `error`); each value
  *     is inserted with the documented `$(<name>-esc)` URL-escaped form. Nothing else is assumed.
- *  2. ECLOUD resolves the NAS by `identity` (= RADIUS NAS-Identifier, "Router's identity name";
+ *  2. EZECLOUD resolves the NAS by `identity` (= RADIUS NAS-Identifier, "Router's identity name";
  *     registered as the NAS identifier), validates the login target, issues a single-use broker
  *     credential bound to NAS + client MAC.
  *  3. The browser POSTs `username`, `password`, `dst`, `popup` (documented login.html parameters)
  *     to `$(link-login-only)`. With a `chap-id` the password is "an MD5 hash of the chap-id
  *     variable, password, and CHAP challenge" ({@link computeMikrotikChapPassword}); without it,
- *     plain PAP, which ECLOUD sends only to an `https:` login target (research §3.3).
+ *     plain PAP, which EZECLOUD sends only to an `https:` login target (research §3.3).
  *
  * `$(chap-id)` / `$(chap-challenge)` are octal-escaped byte strings in the vendor doc examples
  * ("\371", "\357\015\330..."): {@link decodeMikrotikOctal} turns them into bytes. Whether the
  * `-esc` form preserves the backslashes exactly is REQUIRES_DEVICE_TEST.
  *
  * Anti-forgery: the redirect is static and unsigned. The CHAP challenge (when present) is the
- * replay nonce (`vendor-nonce`); without CHAP an ECLOUD login token (Cycle A) is the nonce. The
+ * replay nonce (`vendor-nonce`); without CHAP an EZECLOUD login token (Cycle A) is the nonce. The
  * real gate stays the RADIUS binding: the credential only works in an Access-Request from the
  * registered router (packet source + per-NAS secret) for the bound client MAC.
  */
@@ -107,7 +107,7 @@ export function computeMikrotikChapPassword(
 }
 
 // ------------------------------------------------------------------------------------------
-// Login target ($(link-login-only)) — a browser target only, never fetched by ECLOUD
+// Login target ($(link-login-only)) — a browser target only, never fetched by EZECLOUD
 // ------------------------------------------------------------------------------------------
 
 export interface MikrotikLoginTarget {
@@ -380,7 +380,7 @@ export function mikrotikRedirectTemplateQuery(): string {
 }
 
 /**
- * The `login.html` ECLOUD generates for the router's HotSpot HTML directory. Static (the router
+ * The `login.html` EZECLOUD generates for the router's HotSpot HTML directory. Static (the router
  * fills the `$(...)` variables): a meta refresh plus a plain link, no script, no secret.
  * `portalUrl` must be an absolute https URL ending in {@link MIKROTIK_PORTAL_PATH}.
  */
@@ -424,7 +424,7 @@ export function mikrotikSetupGuide(portalOrigin: string): readonly SetupStep[] {
   return [
     step(
       'identity',
-      'Router identity = the NAS identifier registered in ECLOUD (sent as RADIUS NAS-Identifier; a different value is rejected)',
+      'Router identity = the NAS identifier registered in EZECLOUD (sent as RADIUS NAS-Identifier; a different value is rejected)',
       '/system identity set name=',
       '<REGISTERED_NAS_IDENTIFIER>',
       RAD,
@@ -438,43 +438,43 @@ export function mikrotikSetupGuide(portalOrigin: string): readonly SetupStep[] {
     ),
     step(
       'radius-incoming',
-      `Accept Disconnect / CoA from ECLOUD (default accept=no). ECLOUD sends to the NAS CoA port, default ${String(MIKROTIK_DEFAULT_COA_PORT)} for this adapter (REQUIRES_DEVICE_TEST, D-006)`,
+      `Accept Disconnect / CoA from EZECLOUD (default accept=no). EZECLOUD sends to the NAS CoA port, default ${String(MIKROTIK_DEFAULT_COA_PORT)} for this adapter (REQUIRES_DEVICE_TEST, D-006)`,
       '/radius incoming set accept=yes port=',
       `<DAS_PORT> (RouterOS default ${String(MIKROTIK_DEFAULT_COA_PORT)})`,
       RAD,
     ),
     step(
       'hotspot-profile',
-      'HotSpot server profile: RADIUS authentication + accounting, interim interval from RADIUS, HTTP-CHAP login (no cookie login: ECLOUD credentials are single use); add https only with a router certificate',
+      'HotSpot server profile: RADIUS authentication + accounting, interim interval from RADIUS, HTTP-CHAP login (no cookie login: EZECLOUD credentials are single use); add https only with a router certificate',
       '/ip hotspot profile set <HOTSPOT_PROFILE> use-radius= radius-accounting= radius-interim-update= login-by=',
       'yes, yes, received, http-chap',
       HS,
     ),
     step(
       'walled-garden',
-      'Walled garden: the ECLOUD portal and the identity-provider hosts the tenant enabled',
+      'Walled garden: the EZECLOUD portal and the identity-provider hosts the tenant enabled',
       '/ip hotspot walled-garden add dst-host=',
       `${portalHost}, <IDP_HOSTS>`,
       HS,
     ),
     step(
       'login-html',
-      'Replace login.html in the profile html-directory with the ECLOUD-generated file (redirects to the ECLOUD portal with the RouterOS variables; no secret inside)',
+      'Replace login.html in the profile html-directory with the ECLOUD-generated file (redirects to the EZECLOUD portal with the RouterOS variables; no secret inside)',
       '/ip hotspot profile html-directory → login.html',
       `<ECLOUD_GENERATED_LOGIN_HTML> (redirect target ${portalOrigin}${MIKROTIK_PORTAL_PATH})`,
       HC,
     ),
     step(
       'ecloud-nas',
-      'Register the router in ECLOUD: adapter mikrotik-hotspot, NAS IP = RADIUS source address, NAS identifier = router identity, hotspot address = the router HotSpot interface IP (the host of its login page; ECLOUD posts logins nowhere else), CoA port 1700 unless changed above',
-      'ECLOUD NAS {nas_ip, nas_identifier, adapter_key, hotspot_address, hotspot_port?, coa_port}',
+      'Register the router in EZECLOUD: adapter mikrotik-hotspot, NAS IP = RADIUS source address, NAS identifier = router identity, hotspot address = the router HotSpot interface IP (the host of its login page; EZECLOUD posts logins nowhere else), CoA port 1700 unless changed above',
+      'EZECLOUD NAS {nas_ip, nas_identifier, adapter_key, hotspot_address, hotspot_port?, coa_port}',
       `<REGISTERED_NAS_IP>, <REGISTERED_NAS_IDENTIFIER>, mikrotik-hotspot, <HOTSPOT_INTERFACE_IP>, <LOGIN_PORT_IF_NOT_80_443>, ${String(MIKROTIK_DEFAULT_COA_PORT)}`,
       [F2],
     ),
     step(
       'ecloud-portal',
-      'ECLOUD captive portal of type mikrotik for the site (optionally pinned to this NAS)',
-      'ECLOUD captive portal {portal_type, nas_client_id}',
+      'EZECLOUD captive portal of type mikrotik for the site (optionally pinned to this NAS)',
+      'EZECLOUD captive portal {portal_type, nas_client_id}',
       'mikrotik, <NAS_ID>',
       [F2],
     ),

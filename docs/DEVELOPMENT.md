@@ -1,4 +1,4 @@
-# ECLOUD — Development Guide
+# EZECLOUD — Development Guide
 
 Phase 3 foundation, **LOCAL development only** (DECISIONS.md D-031: nothing here is deployed
 to the VPS without a separate, explicit owner approval).

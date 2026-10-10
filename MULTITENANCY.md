@@ -1,4 +1,4 @@
-# ECLOUD — Multi-tenancy, Isolation and RBAC Data Model (Phase 2, A6)
+# EZECLOUD — Multi-tenancy, Isolation and RBAC Data Model (Phase 2, A6)
 
 Status: **PROPOSED** unless labelled otherwise. Table definitions referenced here live in `DATABASE_DESIGN.md`. Nothing has been created on any host.
 
@@ -91,10 +91,10 @@ Design invariants that keep the dedicated-DB escape hatch open: every tenant tab
 | Option | How | Verification status | Notes |
 |---|---|---|---|
 | **A. NAS identity** (primary) | Source IP of the Access-Request (`NAS-IP-Address` attribute and/or the actual UDP source) → `nas_clients.nas_ip` → `organization_id`, `site_id`. `NAS-Identifier` as secondary key when IPs collide. | `NAS-IP-Address` (type 4) and `NAS-Identifier` (type 32) are standard RADIUS attributes defined in RFC 2865 §5.4 and §5.32 — **VERIFIED FROM OFFICIAL DOCUMENTATION** (`https://www.rfc-editor.org/rfc/rfc2865`). Whether EZEAP/uspot/CoovaChilli populate `NAS-Identifier` — **REQUIRES DEVICE TEST** (A2/A4). | The RADIUS shared secret is per NAS, so the trust anchor and the tenant key are the same object. This is why `nas_clients.nas_ip` is globally unique and why WireGuard tunnel IPs are planned platform-wide. |
-| B. Realm suffix | Portal or supplicant sends `user@org-slug`; FreeRADIUS strips the realm; ECLOUD maps realm → organization. | Realm handling in FreeRADIUS (`rlm_realm`/`suffix`) exists as a module — its exact behaviour for this flow is for A3 to cite. Whether uspot/CoovaChilli append a realm — **UNKNOWN / REQUIRES DEVICE TEST**. | Only useful if one NAS must serve several tenants (shared venue). Kept as an optional refinement. |
+| B. Realm suffix | Portal or supplicant sends `user@org-slug`; FreeRADIUS strips the realm; EZECLOUD maps realm → organization. | Realm handling in FreeRADIUS (`rlm_realm`/`suffix`) exists as a module — its exact behaviour for this flow is for A3 to cite. Whether uspot/CoovaChilli append a realm — **UNKNOWN / REQUIRES DEVICE TEST**. | Only useful if one NAS must serve several tenants (shared venue). Kept as an optional refinement. |
 | C. SSID / VLAN hint | `Called-Station-Id` carrying the AP MAC and SSID; or `NAS-Port-Id`/VLAN. | RFC 3580 §3.20 describes `Called-Station-Id` as the AP MAC, optionally with SSID appended, for IEEE 802.1X — **VERIFIED FROM OFFICIAL DOCUMENTATION** (`https://www.rfc-editor.org/rfc/rfc3580`). Format sent by uspot / CoovaChilli / OpenWiFi — **REQUIRES DEVICE TEST** (A4). | Refines **site/SSID** within a tenant already identified by A; must never be the sole tenant key (client-influenced values). |
 
-Decision (PROPOSED): **A is mandatory, C refines within the tenant, B is optional.** A request from an unknown NAS IP is rejected by FreeRADIUS before reaching ECLOUD (no shared secret), and if it does reach ECLOUD it is logged to `auth_events` with `organization_id NULL`, `result='error'`.
+Decision (PROPOSED): **A is mandatory, C refines within the tenant, B is optional.** A request from an unknown NAS IP is rejected by FreeRADIUS before reaching EZECLOUD (no shared secret), and if it does reach EZECLOUD it is logged to `auth_events` with `organization_id NULL`, `result='error'`.
 
 ---
 

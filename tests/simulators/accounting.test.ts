@@ -6,7 +6,7 @@
  * applied between packets is the drainer's: `counterDelta(stored, incoming)` then
  * `maxCounters` (apps/worker/src/accounting/drain.ts).
  *
- * Simulator evidence: ECLOUD code behaviour only, NOT hardware compatibility. How the real TIP
+ * Simulator evidence: EZECLOUD code behaviour only, NOT hardware compatibility. How the real TIP
  * firmware wraps its 32-bit counters is REQUIRES_DEVICE_TEST.
  */
 import { describe, expect, it } from 'vitest';

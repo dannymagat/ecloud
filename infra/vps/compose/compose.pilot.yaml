@@ -1,5 +1,5 @@
 # =============================================================================================
-#  ECLOUD pilot Compose project (DRAFT, NOT APPLIED; docs/VPS_CHANGE_LIST.md, D-031)
+#  EZECLOUD pilot Compose project (DRAFT, NOT APPLIED; docs/VPS_CHANGE_LIST.md, D-031)
 #  Host: vps, deploy root /opt/ecloud (D-030). Derived from infra/compose/docker-compose.dev.yml
 #  (M9) with production settings: NODE_ENV=production, secrets ONLY as files (Compose
 #  `secrets:` -> /run/secrets/<name>, apps read <NAME>_FILE), nothing published except loopback
@@ -288,7 +288,7 @@ services:
         limits: { memory: 128M, cpus: '0.25', pids: 32 }
 
   # RADIUS front-end. Opt-in profile `radius` (VPS-RADIUS-1): needs the WireGuard hub address
-  # below and at least one NAS in ECLOUD. Clients come ONLY from the rendered volume mounted
+  # below and at least one NAS in EZECLOUD. Clients come ONLY from the rendered volume mounted
   # over clients.d/ (the entrypoint refuses to start without it, RADIUS_CLIENTS_RENDERED=1).
   freeradius:
     <<: *hardening

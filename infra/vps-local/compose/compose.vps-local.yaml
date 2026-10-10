@@ -1,5 +1,5 @@
 # =============================================================================================
-#  ECLOUD on vps-local (EZEOS v2.1 / Oracle Linux 8 appliance) — Compose OVERRIDE
+#  EZECLOUD on vps-local (EZEOS v2.1 / Oracle Linux 8 appliance) — Compose OVERRIDE
 #  DRAFT, NOT APPLIED (docs/VPS_LOCAL_CHANGE_LIST.md, per-id owner approval).
 #
 #  Used ON TOP OF infra/vps/compose/compose.pilot.yaml (unchanged, reused):

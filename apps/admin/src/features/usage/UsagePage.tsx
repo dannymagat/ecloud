@@ -111,7 +111,7 @@ export function QuotaPanel({ quota }: { quota: QuotaPosition | null }) {
       <p className="text-xs text-subtle">
         Policy {display(quota.policy_name ?? quota.policy_id)} (
         {quota.policy_source === 'open_session' ? 'current session' : 'most recent session'}).
-        Quotas are enforced by ECLOUD at authorization and from accounting, not by the device.
+        Quotas are enforced by EZECLOUD at authorization and from accounting, not by the device.
       </p>
       {quota.periods.map((q) => (
         <QuotaBar key={q.period} quota={q} />

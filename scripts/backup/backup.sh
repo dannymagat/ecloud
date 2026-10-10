@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# ECLOUD backup: PostgreSQL custom-format dump + config tarball, encrypted client-side with age
+# EZECLOUD backup: PostgreSQL custom-format dump + config tarball, encrypted client-side with age
 # BEFORE anything touches disk, SHA-256 checksums, keep-N retention, off-site upload hook.
 #
 #   scripts/backup/backup.sh [--env-file FILE]

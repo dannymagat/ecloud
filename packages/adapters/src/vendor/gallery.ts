@@ -6,7 +6,7 @@
  * builder, steps written here.
  *
  * Rules (research §5):
- *  - ECLOUD's own wording only; vendor menu / field names are factual identifiers and may be
+ *  - EZECLOUD's own wording only; vendor menu / field names are factual identifiers and may be
  *    quoted. No third-party guide text, scripts, screenshots or file names; no vendor logos.
  *  - The status comes from evidence: "Tested on device" ONLY when a registry cell is
  *    VERIFIED_SUPPORTED with LAB_VALIDATED / PRODUCTION_VALIDATED evidence and a device-test
@@ -74,17 +74,17 @@ export interface GalleryEntry {
   readonly registryVendorKey: string;
   /** Served by the configurable `postback-generic` profile (no documented parameter names). */
   readonly longTail: boolean;
-  /** Pre-flight checklist (ECLOUD wording). */
+  /** Pre-flight checklist (EZECLOUD wording). */
   readonly preflight: readonly string[];
   /** Vendor-specific notes for long-tail entries (factual UI labels only). */
   readonly vendorNotes?: readonly string[];
 }
 
 const pf = {
-  nas: 'Create the NAS in ECLOUD first ("Add this access point"): the RADIUS shared secret is shown once at that moment.',
+  nas: 'Create the NAS in EZECLOUD first ("Add this access point"): the RADIUS shared secret is shown once at that moment.',
   radiusReach:
-    'The device must reach the ECLOUD RADIUS address over UDP (LAN or the site WireGuard tunnel).',
-  portalReach: 'Guest devices must reach the ECLOUD portal host before login (walled garden).',
+    'The device must reach the EZECLOUD RADIUS address over UDP (LAN or the site WireGuard tunnel).',
+  portalReach: 'Guest devices must reach the EZECLOUD portal host before login (walled garden).',
   apMacs:
     'Register each AP MAC under Access points; it is verified after its first RADIUS request.',
   controller:
@@ -94,7 +94,7 @@ const pf = {
 const POSTBACK = 'external-portal-postback';
 
 const LONG_TAIL_PREFLIGHT = [
-  'Capture one real redirect from the device in a lab (D-034): ECLOUD has no documented parameter names for this vendor.',
+  'Capture one real redirect from the device in a lab (D-034): EZECLOUD has no documented parameter names for this vendor.',
   'Enter the captured parameter names in the NAS post-back profile editor (profile "Any vendor").',
   pf.nas,
   pf.radiusReach,
@@ -156,7 +156,7 @@ export const GALLERY_ENTRIES: readonly GalleryEntry[] = Object.freeze([
     longTail: false,
     preflight: [
       'Firmware with the TIP uspot captive portal (registry row EZE-AP1832 r32912).',
-      'A UAM secret is mandatory: ECLOUD refuses unsigned redirects.',
+      'A UAM secret is mandatory: EZECLOUD refuses unsigned redirects.',
       pf.nas,
       pf.radiusReach,
     ],
@@ -172,7 +172,7 @@ export const GALLERY_ENTRIES: readonly GalleryEntry[] = Object.freeze([
     longTail: false,
     preflight: [
       'OpenWrt with the uspot package installed and a captive SSID / interface.',
-      'A UAM secret is mandatory: ECLOUD refuses unsigned redirects.',
+      'A UAM secret is mandatory: EZECLOUD refuses unsigned redirects.',
       pf.nas,
       pf.radiusReach,
     ],
@@ -188,7 +188,7 @@ export const GALLERY_ENTRIES: readonly GalleryEntry[] = Object.freeze([
     longTail: false,
     preflight: [
       'CoovaChilli 1.2.9 or later in front of the access points (gateway mode).',
-      'A UAM secret is mandatory: ECLOUD refuses unsigned redirects.',
+      'A UAM secret is mandatory: EZECLOUD refuses unsigned redirects.',
       pf.nas,
       pf.radiusReach,
     ],
@@ -204,7 +204,7 @@ export const GALLERY_ENTRIES: readonly GalleryEntry[] = Object.freeze([
     longTail: false,
     preflight: [
       'RutOS with the Hotspot service; RutOS menu labels are REQUIRES_CLARIFICATION (vendor wiki not readable).',
-      'A UAM secret is mandatory: ECLOUD refuses unsigned redirects.',
+      'A UAM secret is mandatory: EZECLOUD refuses unsigned redirects.',
       pf.nas,
       pf.radiusReach,
     ],
@@ -262,7 +262,7 @@ export const GALLERY_ENTRIES: readonly GalleryEntry[] = Object.freeze([
     longTail: false,
     preflight: [
       'RADIUS comes from the Meraki Cloud, not from the site: the platform must enable Meraki cloud RADIUS (OFF by default) and expose the listener ports.',
-      'Leave the NAS IP empty: ECLOUD generates the NAS-Identifier and allocates the listener ports.',
+      'Leave the NAS IP empty: EZECLOUD generates the NAS-Identifier and allocates the listener ports.',
       pf.nas,
     ],
   },
@@ -272,7 +272,7 @@ export const GALLERY_ENTRIES: readonly GalleryEntry[] = Object.freeze([
     'FortiGate / FortiWiFi (and FortiAP managed by FortiGate)',
     'fortinet-ecp',
     'fortinet',
-    ['The form post is limited to 125 characters; ECLOUD keeps its fields within it.'],
+    ['The form post is limited to 125 characters; EZECLOUD keeps its fields within it.'],
   ),
   postback(
     'ruckus',
@@ -303,7 +303,7 @@ export const GALLERY_ENTRIES: readonly GalleryEntry[] = Object.freeze([
     longTail: false,
     preflight: [
       'Omada controller 6.2.10 or later (the 5.x request body is not built).',
-      'ECLOUD must reach the controller over HTTPS (LAN or WireGuard); TLS is always verified.',
+      'EZECLOUD must reach the controller over HTTPS (LAN or WireGuard); TLS is always verified.',
       pf.controller,
       pf.apMacs,
     ],
@@ -319,7 +319,7 @@ export const GALLERY_ENTRIES: readonly GalleryEntry[] = Object.freeze([
     longTail: false,
     preflight: [
       'UniFi Network 9.1.105 or later with an API key (Network API).',
-      'ECLOUD must reach the controller over HTTPS (LAN or WireGuard); TLS is always verified.',
+      'EZECLOUD must reach the controller over HTTPS (LAN or WireGuard); TLS is always verified.',
       pf.controller,
       pf.apMacs,
     ],
@@ -334,7 +334,7 @@ export const GALLERY_ENTRIES: readonly GalleryEntry[] = Object.freeze([
     registryVendorKey: 'juniper-mist',
     longTail: false,
     preflight: [
-      'A guest WLAN whose portal forwards to an external portal; its API secret signs ECLOUD grants.',
+      'A guest WLAN whose portal forwards to an external portal; its API secret signs EZECLOUD grants.',
       pf.controller,
       pf.apMacs,
     ],
@@ -464,7 +464,7 @@ export interface GuideValues {
   readonly acctPort: number;
   /** Default Disconnect / CoA port on the NAS. */
   readonly coaPort: number;
-  /** Acct-Interim-Interval ECLOUD sends; null = not configured. */
+  /** Acct-Interim-Interval EZECLOUD sends; null = not configured. */
   readonly interimS: number | null;
 }
 
@@ -523,43 +523,43 @@ function controllerApiSteps(entry: GalleryEntry): SetupStep[] {
       return [
         s(
           'unifi-portal',
-          'Hotspot: send guests to an external portal server (ECLOUD)',
+          'Hotspot: send guests to an external portal server (EZECLOUD)',
           'Hotspot Manager > Portal > External Portal Server',
           '<PORTAL_HOST>',
           [R36],
         ),
         s(
           'unifi-path',
-          'UniFi adds /guest/s/<site>/ and the guest parameters itself; ECLOUD accepts this path',
+          'UniFi adds /guest/s/<site>/ and the guest parameters itself; EZECLOUD accepts this path',
           'Redirect path (sent by UniFi)',
           '<PORTAL_ORIGIN>/guest/s/<UNIFI_SITE>/',
           [R36],
         ),
         s(
           'unifi-preauth',
-          'Pre-authorization access: the ECLOUD portal host',
+          'Pre-authorization access: the EZECLOUD portal host',
           'Pre-Authorization Allowances',
           '<PORTAL_HOST>',
           [R36],
         ),
         s(
           'unifi-api-key',
-          'Create a Network API key and store it on the ECLOUD controller (write-only, sealed)',
+          'Create a Network API key and store it on the EZECLOUD controller (write-only, sealed)',
           'Integrations > API key',
           '<UNIFI_API_KEY>',
           [R36],
         ),
         s(
           'unifi-controller',
-          'Register the controller in ECLOUD: UniFi Network API, base URL, Network API site id and the UniFi site name of the redirect path',
-          'ECLOUD > Controllers {api_kind, base URL, site id, UniFi site name}',
+          'Register the controller in EZECLOUD: UniFi Network API, base URL, Network API site id and the UniFi site name of the redirect path',
+          'EZECLOUD > Controllers {api_kind, base URL, site id, UniFi site name}',
           'unifi-network, https://<CONTROLLER_HOST>, <UNIFI_SITE_ID>, <UNIFI_SITE>',
           [R36],
         ),
         s(
           'unifi-nas',
           'Register the site as a NAS with adapter unifi-external-portal, then each AP MAC under Access points (the guest is matched by a verified AP MAC)',
-          'ECLOUD > NAS + Access points',
+          'EZECLOUD > NAS + Access points',
           '<AP_MAC>',
           [R36],
         ),
@@ -568,36 +568,36 @@ function controllerApiSteps(entry: GalleryEntry): SetupStep[] {
       return [
         s(
           'omada-portal',
-          'Portal: authentication by an external portal server without RADIUS (ECLOUD)',
+          'Portal: authentication by an external portal server without RADIUS (EZECLOUD)',
           'Portal > Authentication Type > External Portal Server',
           '<PORTAL_ORIGIN>/ext/omada',
           [R37],
         ),
         s(
           'omada-preauth',
-          'Pre-Authentication Access: the ECLOUD portal host',
+          'Pre-Authentication Access: the EZECLOUD portal host',
           'Pre-Authentication Access',
           '<PORTAL_HOST>',
           [R37],
         ),
         s(
           'omada-operator',
-          'Create a Hotspot Operator account for ECLOUD and store its password on the ECLOUD controller (write-only, sealed)',
+          'Create a Hotspot Operator account for EZECLOUD and store its password on the EZECLOUD controller (write-only, sealed)',
           'Hotspot Manager > Operators {name, password}',
           '<OMADA_OPERATOR_NAME>, <OMADA_OPERATOR_PASSWORD>',
           [R37],
         ),
         s(
           'omada-controller',
-          'Register the controller in ECLOUD: Omada controller (operator), base URL and the CONTROLLER_ID path segment',
-          'ECLOUD > Controllers {api_kind, base URL, username, CONTROLLER_ID}',
+          'Register the controller in EZECLOUD: Omada controller (operator), base URL and the CONTROLLER_ID path segment',
+          'EZECLOUD > Controllers {api_kind, base URL, username, CONTROLLER_ID}',
           'omada-controller, https://<CONTROLLER_HOST>:<PORT>, <OMADA_OPERATOR_NAME>, <OMADA_CONTROLLER_ID>',
           [R37],
         ),
         s(
           'omada-nas',
           'Register the site as a NAS with adapter omada-api, then each AP MAC under Access points',
-          'ECLOUD > NAS + Access points',
+          'EZECLOUD > NAS + Access points',
           '<AP_MAC>',
           [R37],
         ),
@@ -606,36 +606,36 @@ function controllerApiSteps(entry: GalleryEntry): SetupStep[] {
       return [
         s(
           'mist-forward',
-          'Guest portal: forward to external portal (ECLOUD)',
+          'Guest portal: forward to external portal (EZECLOUD)',
           'WLAN > Guest Portal > Forward to external portal > Portal URL',
           '<PORTAL_ORIGIN>/ext/mist',
           [R38],
         ),
         s(
           'mist-allowed',
-          'Allowed hostnames before login: the ECLOUD portal host',
+          'Allowed hostnames before login: the EZECLOUD portal host',
           'WLAN > Guest Portal > Allowed Hostnames',
           '<PORTAL_HOST>',
           [R38],
         ),
         s(
           'mist-secret',
-          'Copy the guest WLAN API secret into the ECLOUD controller (write-only, sealed); it signs the time-limited authorise URL',
+          'Copy the guest WLAN API secret into the EZECLOUD controller (write-only, sealed); it signs the time-limited authorise URL',
           'WLAN > Guest Portal > API secret',
           '<MIST_WLAN_API_SECRET>',
           [R38],
         ),
         s(
           'mist-controller',
-          'Register the controller in ECLOUD: Juniper Mist, portal host of your Mist cloud and the guest WLAN ids',
-          'ECLOUD > Controllers {api_kind, Mist portal host, guest WLAN ids}',
+          'Register the controller in EZECLOUD: Juniper Mist, portal host of your Mist cloud and the guest WLAN ids',
+          'EZECLOUD > Controllers {api_kind, Mist portal host, guest WLAN ids}',
           'mist, portal.mist.com (or portal.<region>.mist.com), <MIST_WLAN_ID>',
           [R38],
         ),
         s(
           'mist-nas',
           'Register the site as a NAS with adapter mist-guest-portal, then each AP MAC under Access points',
-          'ECLOUD > NAS + Access points',
+          'EZECLOUD > NAS + Access points',
           '<AP_MAC>',
           [R38],
         ),
@@ -688,7 +688,7 @@ function rawSteps(entry: GalleryEntry, origin: string): readonly SetupStep[] {
       return [
         s(
           'capture-redirect',
-          'Lab first: capture one real redirect from the device (parameter names and the login URL it posts to); ECLOUD does not guess them',
+          'Lab first: capture one real redirect from the device (parameter names and the login URL it posts to); EZECLOUD does not guess them',
           'Captured redirect (lab, D-034)',
           '<CAPTURED_REDIRECT>',
           [R5],
@@ -731,7 +731,7 @@ function usesSiteRadius(entry: GalleryEntry): boolean {
 }
 
 /**
- * The NAS-independent guide of an entry with ECLOUD values filled in. Per-NAS values (NAS
+ * The NAS-independent guide of an entry with EZECLOUD values filled in. Per-NAS values (NAS
  * identifier, NAS IP, AP MACs) and every secret stay placeholders.
  */
 export function buildGalleryGuide(entry: GalleryEntry, values: GuideValues): GalleryGuide {

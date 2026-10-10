@@ -253,7 +253,7 @@ export async function performDispatch(
   const isFinal = ctx.attempt >= ctx.maxAttempts;
   switch (outcome.result) {
     case 'ack': {
-      // Close the ECLOUD session only where the NAS is known NOT to send Acct-Stop (TIP uspot).
+      // Close the EZECLOUD session only where the NAS is known NOT to send Acct-Stop (TIP uspot).
       const close =
         built.kind === 'disconnect' &&
         built.acctStopEmitted === false &&

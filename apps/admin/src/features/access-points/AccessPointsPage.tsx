@@ -59,9 +59,9 @@ function MikrotikDownloads({
     <Dialog open title="Download MikroTik installation script" onClose={onClose}>
       <div className="space-y-3 text-sm">
         <p>
-          The RouterOS script sets the ECLOUD RADIUS server, Disconnect/CoA, the HotSpot profile and
-          the walled garden. It never contains the RADIUS secret: paste it where the script says.
-          Upload the generated login.html to the HotSpot html-directory.
+          The RouterOS script sets the EZECLOUD RADIUS server, Disconnect/CoA, the HotSpot profile
+          and the walled garden. It never contains the RADIUS secret: paste it where the script
+          says. Upload the generated login.html to the HotSpot html-directory.
         </p>
         <ul
           className="divide-y divide-border rounded-md border border-border"

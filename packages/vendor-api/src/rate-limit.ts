@@ -1,6 +1,6 @@
 /**
  * Per-controller outbound rate limit (token bucket). Process-local on purpose: it protects the
- * vendor controller (and ECLOUD) from a burst of portal logins or a runaway job in ONE process.
+ * vendor controller (and EZECLOUD) from a burst of portal logins or a runaway job in ONE process.
  * Each API / worker replica has its own buckets, so the fleet-wide ceiling is
  * `replicas × capacity`; the documented defaults keep that well below any vendor limit we know
  * of (vendor limits are REQUIRES_CLARIFICATION, docs/VENDOR_INTEGRATION_RESEARCH.md §6).

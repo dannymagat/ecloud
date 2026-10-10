@@ -54,7 +54,7 @@ export const SESSION_STATE_HINT: Record<SessionState, string> = {
   authorized: 'Accepted by RADIUS; no accounting received yet',
   active: 'Accounting received; session running',
   stopped: 'Accounting-Stop received',
-  stale: 'No interim accounting for several intervals; closed by ECLOUD',
+  stale: 'No interim accounting for several intervals; closed by EZECLOUD',
   expired: 'Authorized but no accounting arrived before the authorization TTL',
 };
 
@@ -237,7 +237,7 @@ export function queuedMessage(
   const head = result.deduplicated
     ? `A ${OPERATION_LABEL[operation].toLowerCase()} request for this session is already pending`
     : `${OPERATION_LABEL[operation]} request queued`;
-  return `${head}${id ? ` (action ${id})` : ''}. This records that ECLOUD sent the request; it is not a confirmation from the device.`;
+  return `${head}${id ? ` (action ${id})` : ''}. This records that EZECLOUD sent the request; it is not a confirmation from the device.`;
 }
 
 // ---------------------------------------------------------------------------------------------

@@ -1,7 +1,7 @@
 # -*- text -*-
 ######################################################################
 #
-#  ECLOUD inner-tunnel virtual server (Cycle A, D-044; AAA_ARCHITECTURE.md
+#  EZECLOUD inner-tunnel virtual server (Cycle A, D-044; AAA_ARCHITECTURE.md
 #  §2.4): the decision for an 802.1X EAP-TTLS session is taken HERE, on the
 #  inner identity, by the same rlm_rest call as the outer `ecloud` server.
 #
@@ -9,7 +9,7 @@
 #  RADIUS_EAP_ENABLED=1 (together with mods-available/eap). Not linked by
 #  default, so the default image never loads it.
 #
-#  Inner method: PAP only (EAP-TTLS/PAP). ECLOUD stores one-way Argon2id
+#  Inner method: PAP only (EAP-TTLS/PAP). EZECLOUD stores one-way Argon2id
 #  hashes (AAA §2.6), so it verifies the inner password itself and answers
 #  control:Auth-Type = Accept. PEAP / MSCHAPv2 / CHAP cannot be verified and
 #  are not offered (mods-available/eap enables TTLS only).
@@ -18,7 +18,7 @@
 #  device, not by the NAS. NAS-side facts (Calling-Station-Id, NAS-Identifier,
 #  ...) are therefore deleted from the inner request and re-copied from the
 #  OUTER request, and the ECLOUD-* server-side facts are always overwritten,
-#  so a supplicant can never spoof its MAC or the NAS identity towards ECLOUD.
+#  so a supplicant can never spoof its MAC or the NAS identity towards EZECLOUD.
 #
 ######################################################################
 
@@ -96,7 +96,7 @@ server ecloud-inner {
 		}
 
 		#
-		#  3. Decision from ECLOUD (same mapping as the outer server).
+		#  3. Decision from EZECLOUD (same mapping as the outer server).
 		#
 		ecloud_rest_headers
 		rest {
@@ -128,8 +128,8 @@ server ecloud-inner {
 	}
 
 	authenticate {
-		#  PAP against a Cleartext-Password ECLOUD returned (vouchers); an
-		#  explicit Auth-Type = Accept from ECLOUD skips this section.
+		#  PAP against a Cleartext-Password EZECLOUD returned (vouchers); an
+		#  explicit Auth-Type = Accept from EZECLOUD skips this section.
 		Auth-Type PAP {
 			pap
 		}

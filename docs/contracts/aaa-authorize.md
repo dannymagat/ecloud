@@ -1,8 +1,8 @@
-# Contract: FreeRADIUS -> ECLOUD `/internal/aaa/authorize` and `/internal/aaa/post-auth`
+# Contract: FreeRADIUS -> EZECLOUD `/internal/aaa/authorize` and `/internal/aaa/post-auth`
 
 Status: M6 part 1 (infra/freeradius). Producer: FreeRADIUS 3.2.10 `rlm_rest` as configured in
 `infra/freeradius/raddb/mods-available/rest`, `sites-enabled/ecloud`, `policy.d/ecloud`.
-Consumer: the ECLOUD api internal listener (`INTERNAL_PORT`, `apps/api`). Design source:
+Consumer: the EZECLOUD api internal listener (`INTERNAL_PORT`, `apps/api`). Design source:
 `AAA_ARCHITECTURE.md` §2.1, §4.1, §4.2. Everything marked VERIFIED below was observed on the
 dev container with a stub API on 2026-10-07 (`infra/freeradius/README.md` "Smoke verification");
 the rest is the required behaviour of the API.
@@ -62,15 +62,15 @@ Encoding rules (VERIFIED on 3.2.10):
 
 ### 2.1 Fields the API uses (authorize)
 
-| JSON key | Produced by | Use in ECLOUD (AAA §4.1) |
+| JSON key | Produced by | Use in EZECLOUD (AAA §4.1) |
 |---|---|---|
 | `ECLOUD-Packet-Src-IP-Address` (string) | server, `policy.d/ecloud` | **primary** NAS/tenant resolution (`nas_clients` by source IP, MULTITENANCY §3.3 A). Dev: the Docker bridge gateway `172.19.0.1` for host-originated packets. |
 | `ECLOUD-Client-Shortname` (string) | `clients.conf` `shortname` | secondary NAS key once production clients are rendered (renderer will set it to the `nas_clients` id). Dev: `ecloud-dev`. |
 | `NAS-Identifier`, `NAS-IP-Address`, `NAS-Port-Type`, `NAS-Port-Id` | NAS | logging and same-tenant consistency checks only: NAS-supplied, **never** used to select a NAS or tenant (`NAS-IP-Address` also differs from the source behind NAT) |
 | `ECLOUD-Packet-Dst-Port` (1812) | server | listener telemetry |
 | `User-Name` | NAS | identity: portal credential (`pc-...`), MAC, voucher, subscriber username |
-| `User-Password` (cleartext, PAP) | NAS (decrypted by FreeRADIUS) | **never log, never persist.** Needed only when ECLOUD verifies itself (Argon2 subscriber password, voucher HMAC, MAC password) and answers `Auth-Type = Accept`. For broker credentials ECLOUD returns `Cleartext-Password` instead and lets `rlm_pap` compare. |
-| `CHAP-Password`, `CHAP-Challenge` (octets) | NAS | presence means CHAP: ECLOUD can only return `Cleartext-Password` (broker credential / reversible voucher) and `Auth-Type = CHAP`; otherwise reject with `Reply-Message`. Cycle B: implemented for MikroTik HotSpot broker credentials issued for an HTTP-CHAP hand-off (`Auth-Type = CHAP` + `Cleartext-Password`); every other CHAP request is rejected (`chap_unsupported`). |
+| `User-Password` (cleartext, PAP) | NAS (decrypted by FreeRADIUS) | **never log, never persist.** Needed only when EZECLOUD verifies itself (Argon2 subscriber password, voucher HMAC, MAC password) and answers `Auth-Type = Accept`. For broker credentials EZECLOUD returns `Cleartext-Password` instead and lets `rlm_pap` compare. |
+| `CHAP-Password`, `CHAP-Challenge` (octets) | NAS | presence means CHAP: EZECLOUD can only return `Cleartext-Password` (broker credential / reversible voucher) and `Auth-Type = CHAP`; otherwise reject with `Reply-Message`. Cycle B: implemented for MikroTik HotSpot broker credentials issued for an HTTP-CHAP hand-off (`Auth-Type = CHAP` + `Cleartext-Password`); every other CHAP request is rejected (`chap_unsupported`). |
 | `Calling-Station-Id` | `rewrite_calling_station_id` | client MAC, normalised `AA-BB-CC-DD-EE-FF` (binding, MAC-auth, concurrency) |
 | `Called-Station-Id`, `Called-Station-SSID`, `Called-Station-MAC` | `rewrite_called_station_id` | when the NAS sent `mac:ssid` (TIP uspot) the id is reduced to the MAC and the SSID is split out; CoovaChilli sends only the MAC (no `Called-Station-SSID`) |
 | `Service-Type` | NAS | `Call-Check` => MAC authentication (uspot `mac-auth`); `Login-User`/`Framed-User` otherwise. Cycle A: on a `generic-radius-8021x` NAS a `User-Name` that is exactly the `Calling-Station-Id` MAC (password absent or the same MAC) is MAC authentication without `Call-Check` |
@@ -83,7 +83,7 @@ Not present in this milestone: `Stripped-User-Name` / `Realm` (no realm splittin
 AAA §7; an inner identity `user@realm` is matched as the whole username), `Chargeable-User-Identity`
 unless the NAS sends it. EAP (Cycle A): the outer request with `EAP-Message` is never posted to
 `/authorize` (anonymous outer identity); with `RADIUS_EAP_ENABLED` unset FreeRADIUS rejects it
-locally, otherwise ECLOUD decides on the inner request (`ECLOUD-EAP-Inner`). The `/post-auth` body
+locally, otherwise EZECLOUD decides on the inner request (`ECLOUD-EAP-Inner`). The `/post-auth` body
 drops `EAP-Message`.
 
 ## 3. Response to `/internal/aaa/authorize`
@@ -116,11 +116,11 @@ Rules:
    the object form with `do_xlat:false` stayed literal). Without it any `%{...}` in a value -- e.g.
    a username echoed back -- is executed by the server. The section item becomes effective on 3.2.11+.
 2. `control:Auth-Type` MUST be one of `PAP`, `CHAP`, `MS-CHAP` (FreeRADIUS verifies against
-   `control:Cleartext-Password`, which is then REQUIRED) or `Accept` (no local check; ECLOUD already
+   `control:Cleartext-Password`, which is then REQUIRED) or `Accept` (no local check; EZECLOUD already
    verified). A `200` without `control:Auth-Type` is rejected by FreeRADIUS ("No Auth-Type found").
 3. Reply attributes are emitted **per NAS adapter** (AAA §4.3). Attribute names available on the
    server: all standard RFC attributes, `WISPr-*` (vendor 14122), `ChilliSpot-*` (vendor 14559
-   incl. ECLOUD's additions `ChilliSpot-Max-{Input,Output,Total}-Gigawords` 21-23,
+   incl. EZECLOUD's additions `ChilliSpot-Max-{Input,Output,Total}-Gigawords` 21-23,
    `ChilliSpot-Session-State` 15, `ChilliSpot-VLAN-Id` 24), `Tunnel-*`. **`CoovaChilli-*` names do not
    exist**: use the `ChilliSpot-*` spelling for CoovaChilli as well (same vendor id and numbers on the wire).
    An unknown attribute name makes FreeRADIUS skip that attribute and log an error; it does not fail the request.
@@ -128,7 +128,7 @@ Rules:
    either a `"0x..."` hex string or a plain string whose bytes are used verbatim (both VERIFIED).
    Multi-valued attributes: several entries in `value` with `"op": "+="`.
 5. `reply:Class` convention: the **ASCII string** `ai:` followed by the 32 lowercase hex digits of the
-   ECLOUD session UUID (35 bytes; on the wire `0x61693a` + 64 hex digits). The stock `acct_unique`
+   EZECLOUD session UUID (35 bytes; on the wire `0x61693a` + 64 hex digits). The stock `acct_unique`
    policy recognises exactly this shape (`^0x61693a([0-9a-f]{32}|[0-9a-f]{64})$`) and keys accounting on
    `md5(<32 hex digits>,<Acct-Session-Id>)`, so the NAS echoing `Class` gives a stable `acctuniqueid`
    even if `NAS-IP-Address` changes (AAA §5.2). **Do not send the 16 raw UUID bytes**: the policy's
@@ -141,7 +141,7 @@ Rules:
 
 ## 4. HTTP status -> RADIUS outcome (VERIFIED on the dev container)
 
-| API answers | rlm_rest code | FreeRADIUS result | When ECLOUD uses it |
+| API answers | rlm_rest code | FreeRADIUS result | When EZECLOUD uses it |
 |---|---|---|---|
 | `200` + policy | `updated` | Access-Accept after the chosen `Auth-Type` succeeds; Access-Reject (without the welcome `Reply-Message`) if the local PAP/CHAP check fails | accept |
 | `401` (+ optional policy with `reply:Reply-Message`) | `reject` | Access-Reject; the body is applied, so `Reply-Message` reaches NASes that show it (CoovaChilli `reply=`) | policy rejections: unknown identity, quota, concurrency, schedule, validity, tenant mismatch, bad token |
@@ -162,7 +162,7 @@ VERIFIED absent) plus:
 |---|---|
 | `ECLOUD-Auth-Result` | `"accept"` or `"reject"` -- the final RADIUS outcome |
 | `ECLOUD-Decision` | what the authorize call produced: `"accept"` (200 applied), `"reject"` (401/403/404), never `"unavailable"` here |
-| `ECLOUD-Reply-Class` | the `Class` actually sent, as `"0x..."` hex string (ECLOUD's own or the FreeRADIUS fallback) |
+| `ECLOUD-Reply-Class` | the `Class` actually sent, as `"0x..."` hex string (EZECLOUD's own or the FreeRADIUS fallback) |
 | `ECLOUD-Reply-Message` | the `Reply-Message` sent, if any |
 | `Module-Failure-Message` | present when a FreeRADIUS module failed, e.g. `pap: Cleartext password does not match "known good" password` (local credential mismatch after a `200`) |
 

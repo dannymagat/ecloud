@@ -1,5 +1,5 @@
 /**
- * Contract test: real FreeRADIUS 3.2.10 (dev-stack container, ECLOUD raddb) <-> stub of the
+ * Contract test: real FreeRADIUS 3.2.10 (dev-stack container, EZECLOUD raddb) <-> stub of the
  * internal AAA API implementing docs/contracts/aaa-authorize.md. Requires
  * `ECLOUD_TEST_RADIUS=1`, docker and a running `freeradius` service; skips cleanly otherwise.
  *
@@ -342,7 +342,7 @@ suite(title, () => {
     expect(reply.attributes['Mikrotik-Total-Limit-Gigawords']).toEqual(['1']);
     expect(reply.attributes['Idle-Timeout']).toEqual(['600']);
     const authorize = await stub.waitForRequest(forSession(AAA_AUTHORIZE_PATH, sessionId));
-    // ECLOUD sees the CHAP request (presence) and the router identity, never a User-Password.
+    // EZECLOUD sees the CHAP request (presence) and the router identity, never a User-Password.
     expect(authorize.body?.['CHAP-Password']).toBeDefined();
     expect(attributeValue(authorize.body, 'User-Password')).toBeUndefined();
     expect(attributeValue(authorize.body, 'NAS-Identifier')).toBe('lab-mikrotik');
@@ -365,7 +365,7 @@ suite(title, () => {
     expect(reply.attributes['Mikrotik-Rate-Limit']).toBeUndefined();
   });
 
-  it('Cycle A: generic MAB (User-Name = MAC, no Call-Check) reaches ECLOUD unchanged; VLAN triplet returned', async () => {
+  it('Cycle A: generic MAB (User-Name = MAC, no Call-Check) reaches EZECLOUD unchanged; VLAN triplet returned', async () => {
     const sessionId = uniqueSessionId();
     const packet = fixture('access-request-generic-mab.txt', {
       '<mab-sessionid-placeholder>': sessionId,
@@ -396,7 +396,7 @@ suite(title, () => {
     expect(attributeValue(authorize.body, 'ECLOUD-EAP-Inner')).toBeUndefined();
   });
 
-  it('Cycle A: an EAP-Message is rejected without asking ECLOUD while 802.1X is not enabled', async () => {
+  it('Cycle A: an EAP-Message is rejected without asking EZECLOUD while 802.1X is not enabled', async () => {
     const sessionId = uniqueSessionId();
     const packet = fixture('access-request-eap-identity.txt', {
       '<eap-sessionid-placeholder>': sessionId,
@@ -406,7 +406,7 @@ suite(title, () => {
     const eapEnabled = containerEnv('RADIUS_EAP_ENABLED') === '1';
     const reply = await radclient(packet, { type: 'auth' });
     if (eapEnabled) {
-      // EAP on: the outer identity is challenged (TLS start), still never sent to ECLOUD
+      // EAP on: the outer identity is challenged (TLS start), still never sent to EZECLOUD
       expect(reply.code, reply.output).toBe('Access-Challenge');
     } else {
       expect(reply.code, reply.output).toBe('Access-Reject');

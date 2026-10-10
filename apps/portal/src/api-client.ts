@@ -31,7 +31,7 @@ export interface FlowView {
   notice: 'session_expired' | 'login_failed' | null;
   /**
    * Cycle C: post-back flows only. `loginOrigin` = validated AP / controller login origin (the
-   * only extra form-action allowed), `loginToken` = single-use ECLOUD login token for the forms.
+   * only extra form-action allowed), `loginToken` = single-use EZECLOUD login token for the forms.
    */
   postback?: { loginOrigin: string; loginToken: string } | null;
   /** Cycle E: Meraki splash flow details (null / absent for UAM flows). */

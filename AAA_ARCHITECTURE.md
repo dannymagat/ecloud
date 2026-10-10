@@ -1,4 +1,4 @@
-# AAA_ARCHITECTURE.md — ECLOUD AAA / RADIUS design (FreeRADIUS 3.2 front-end, ECLOUD as policy decision point)
+# AAA_ARCHITECTURE.md — EZECLOUD AAA / RADIUS design (FreeRADIUS 3.2 front-end, EZECLOUD as policy decision point)
 
 Author: A3 (AAA / RADIUS Agent). Phase 2 — design + protocol validation only. Nothing was installed, deployed or changed on any host or device; no secrets are recorded (placeholders only).
 Evidence labels: **VERIFIED FROM EXISTING CODE** (local path) · **VERIFIED FROM OFFICIAL DOCUMENTATION** (upstream URL) · **PROPOSED** · **UNKNOWN** · **REQUIRES DEVICE TEST**.
@@ -6,13 +6,13 @@ Verified inputs reused (not re-derived): `NETWORK_INTEGRATION.md` (A2), `CAPTIVE
 
 ## 0. Headline decisions (PROPOSED unless labelled)
 
-1. **FreeRADIUS 3.2.x is a protocol front-end only.** Every Access-Request becomes one `rlm_rest` HTTPS call to ECLOUD `POST /internal/aaa/authorize`; ECLOUD resolves tenant → NAS adapter → policy and answers with a decision plus the reply attributes for *that* NAS type. No subscriber data, policy or secret lives in FreeRADIUS config except NAS client secrets (rendered) — A6 option (c) hybrid, confirmed here.
-2. **Accounting goes through `rlm_sql` (PostgreSQL) insert-only** into `radius.radacct_raw` (A6), not through HTTP. The shipped `queries.conf` is per-status-type and editable, so insert-only is a configuration change, not a code change (§5). An ECLOUD worker drains the table.
-3. **Password handling:** all captive-portal logins use the A4 identity-broker **portal credential** (random, ≤16 bytes, 90 s, single-use). FreeRADIUS never needs the subscriber's real password for PAP/CHAP; subscriber passwords stay Argon2-hashed in ECLOUD. Only 802.1X PEAP-MSCHAPv2 would need an NT-hash (or cleartext) — rlm_mschap can authenticate "via plain-text passwords (User-Password) or NT passwords (NT-Password)" (`man/man5/rlm_mschap.5` l.27-30, VERIFIED FROM OFFICIAL DOCUMENTATION). Recommendation: offer EAP-TTLS/PAP first; PEAP only for tenants that opt in to NT-hash storage (§2.6).
+1. **FreeRADIUS 3.2.x is a protocol front-end only.** Every Access-Request becomes one `rlm_rest` HTTPS call to EZECLOUD `POST /internal/aaa/authorize`; EZECLOUD resolves tenant → NAS adapter → policy and answers with a decision plus the reply attributes for *that* NAS type. No subscriber data, policy or secret lives in FreeRADIUS config except NAS client secrets (rendered) — A6 option (c) hybrid, confirmed here.
+2. **Accounting goes through `rlm_sql` (PostgreSQL) insert-only** into `radius.radacct_raw` (A6), not through HTTP. The shipped `queries.conf` is per-status-type and editable, so insert-only is a configuration change, not a code change (§5). An EZECLOUD worker drains the table.
+3. **Password handling:** all captive-portal logins use the A4 identity-broker **portal credential** (random, ≤16 bytes, 90 s, single-use). FreeRADIUS never needs the subscriber's real password for PAP/CHAP; subscriber passwords stay Argon2-hashed in EZECLOUD. Only 802.1X PEAP-MSCHAPv2 would need an NT-hash (or cleartext) — rlm_mschap can authenticate "via plain-text passwords (User-Password) or NT passwords (NT-Password)" (`man/man5/rlm_mschap.5` l.27-30, VERIFIED FROM OFFICIAL DOCUMENTATION). Recommendation: offer EAP-TTLS/PAP first; PEAP only for tenants that opt in to NT-hash storage (§2.6).
 4. **Dynamic authorization is ECLOUD-initiated** by a `coa-dispatcher` worker using `radclient … disconnect|coa` (port 3799 default, `man/man1/radclient.1` l.134) over the WireGuard hub address; FreeRADIUS `originate-coa` is only usable when a packet is *being processed* (it is triggered from `update coa {}` in a request section, `sites-available/originate-coa` l.23-38) — useful for "reject-and-kick" cases, not for admin-initiated disconnects.
 5. **BlastRADIUS (CVE-2024-3596):** `security { require_message_authenticator = yes; limit_proxy_state = auto }` globally (3.2.x default, `raddb/radiusd.conf.in` l.840, l.931); per-NAS relaxation to `auto`/`no` only where a device test shows the NAS does not send `Message-Authenticator`. RadSec (TCP 2083, `sites-available/tls`) for any NAS reached over the public internet.
 
-## 1. Role of AAA in ECLOUD
+## 1. Role of AAA in EZECLOUD
 
 ```mermaid
 flowchart LR
@@ -21,12 +21,12 @@ flowchart LR
     US["EZEAP uspot (TIP fork)<br/>UAM portal client"]
     CH["EZE gateway CoovaChilli"]
   end
-  subgraph VPS["ECLOUD VPS — Docker Compose (A5)"]
+  subgraph VPS["EZECLOUD VPS — Docker Compose (A5)"]
     FR["freeradius 3.2.x<br/>listen auth 1812 / acct 1813 (tunnel IP)<br/>listen tls 2083 (public, optional)<br/>status 18121 (loopback)"]
-    API["ECLOUD api<br/>/internal/aaa/authorize<br/>/internal/aaa/post-auth"]
+    API["EZECLOUD api<br/>/internal/aaa/authorize<br/>/internal/aaa/post-auth"]
     PDP["Policy decision point<br/>tenant → NAS adapter → effective policy<br/>(POLICY_ENGINE.md, A5b)"]
     ADP["AAA adapters<br/>uspot-tip · coovachilli · hostapd-8021x · generic"]
-    PG[("PostgreSQL 16<br/>public.* (ECLOUD)<br/>radius.radacct_raw / radius.nas_v")]
+    PG[("PostgreSQL 16<br/>public.* (EZECLOUD)<br/>radius.radacct_raw / radius.nas_v")]
     WRK["worker<br/>acct-drainer · quota-rollup<br/>coa-dispatcher · raddb-renderer"]
   end
   AP & US & CH -- "Access-Request UDP 1812" --> FR
@@ -42,7 +42,7 @@ flowchart LR
 | Layer | Owns | Must not do | Label |
 |---|---|---|---|
 | FreeRADIUS | packet parsing, client secrets/authentication of the NAS, EAP termination (TLS), attribute normalisation, SQL accounting insert, logging | policy decisions, user lookups, tenant logic | PROPOSED |
-| ECLOUD api (`/internal/aaa/*`) | tenant resolution (A6 §3.3), identity verification (portal credential, MAC, voucher, 802.1X inner identity), policy evaluation, reply-attribute translation per NAS adapter, `auth_events` | emit attributes not verified for that NAS type | PROPOSED |
+| EZECLOUD api (`/internal/aaa/*`) | tenant resolution (A6 §3.3), identity verification (portal credential, MAC, voucher, 802.1X inner identity), policy evaluation, reply-attribute translation per NAS adapter, `auth_events` | emit attributes not verified for that NAS type | PROPOSED |
 | worker | accounting drain → `sessions`/`usage_counters`, quota breach → disconnect, `coa-dispatcher`, raddb render + reload | — | PROPOSED |
 
 Rule 4 of the brief (intent vs enforcement): policy intent is stored once; the adapter chosen by `nas_clients.adapter_type_key` (A6) decides which RADIUS attributes are emitted (§4.3). A policy field the adapter cannot express is reported as "not enforceable on this NAS" in `policy_translations` (A6), never silently dropped.
@@ -73,7 +73,7 @@ Verified mechanics (A4 §3.3/§3.4/§4): NAS `/logon` does PAP (`User-Password`,
 sequenceDiagram
   participant N as NAS (uspot T / CoovaChilli)
   participant F as FreeRADIUS
-  participant E as ECLOUD /internal/aaa/authorize
+  participant E as EZECLOUD /internal/aaa/authorize
   participant B as Identity broker store (A4)
   N->>F: Access-Request User-Name=pc-xxxx, User-Password|CHAP-*, Acct-Session-Id, Calling/Called-Station-Id, NAS-Identifier, NAS-IP-Address
   F->>F: client lookup by src IP (secret) · canonicalise MACs
@@ -92,7 +92,7 @@ sequenceDiagram
   F-->>N: Access-Accept (adapter reply matrix §4.3) + Class=<ecloud session id>
   N->>F: Accounting-Request Start (Class echoed — A4 §3.4) → rlm_sql INSERT
 ```
-Why the cleartext of the *portal credential* may be returned to FreeRADIUS: it is a random 90-second secret generated by ECLOUD, not the subscriber's password. `rlm_pap` needs a "known good" password in `control:` with one of the headers `{clear}|{crypt}|{md5}|{smd5}|{sha}|{ssha}|{sha2…}|{ssha…}|{nt}` (`man/man5/rlm_pap.5` l.40-91) — Argon2 is **not** in that list, so verifying real subscriber passwords inside FreeRADIUS would force a weaker hash. The broker approach avoids this entirely (PROPOSED). Alternative for direct username/password NAS logins (§2.5): `rlm_rest authenticate` section posts `User-Password` to ECLOUD, which verifies Argon2 itself (PAP only; CHAP needs a reversible or cleartext secret and is therefore only accepted for broker credentials).
+Why the cleartext of the *portal credential* may be returned to FreeRADIUS: it is a random 90-second secret generated by EZECLOUD, not the subscriber's password. `rlm_pap` needs a "known good" password in `control:` with one of the headers `{clear}|{crypt}|{md5}|{smd5}|{sha}|{ssha}|{sha2…}|{ssha…}|{nt}` (`man/man5/rlm_pap.5` l.40-91) — Argon2 is **not** in that list, so verifying real subscriber passwords inside FreeRADIUS would force a weaker hash. The broker approach avoids this entirely (PROPOSED). Alternative for direct username/password NAS logins (§2.5): `rlm_rest authenticate` section posts `User-Password` to EZECLOUD, which verifies Argon2 itself (PAP only; CHAP needs a reversible or cleartext secret and is therefore only accepted for broker credentials).
 
 ### 2.3 (b) MAC authentication
 
@@ -102,7 +102,7 @@ Why the cleartext of the *portal credential* may be returned to FreeRADIUS: it i
 | uspot (T) `mac-auth: true` | `User-Name = formatted MAC + mac_suffix`, `User-Password = mac_passwd || formatted MAC`, `Service-Type = 10` (Call-Check), comment cites `wiki.freeradius.org/guide/mac-auth` (`wlan-ap/feeds/ucentral/uspot/files/usr/share/uspot/handler.uc` l.23-27) | VERIFIED FROM OFFICIAL DOCUMENTATION (source) | |
 | CoovaChilli `macauth` | `macpasswd` default `password`, `macsuffix` (A4 §4) | VERIFIED FROM OFFICIAL DOCUMENTATION | |
 
-ECLOUD handling (PROPOSED): after `rewrite_calling_station_id`, the adapter treats a request as MAC-auth when `Service-Type == Call-Check` **or** `User-Name` (after stripping configured suffix) equals `Calling-Station-Id` normalised; lookup `(organization_id, mac)` in `client_devices` (A6); never compare the MAC "password" as a secret — it is public — so MAC-auth acceptance is gated on the NAS being a known client, the device being allow-listed/known and the policy allowing MAC login. Reply: `Auth-Type := Accept` (`control`) so no password check runs. Standard `Service-Type` value `Call-Check = 10` (`share/dictionary.rfc2865` l.70, VERIFIED).
+EZECLOUD handling (PROPOSED): after `rewrite_calling_station_id`, the adapter treats a request as MAC-auth when `Service-Type == Call-Check` **or** `User-Name` (after stripping configured suffix) equals `Calling-Station-Id` normalised; lookup `(organization_id, mac)` in `client_devices` (A6); never compare the MAC "password" as a secret — it is public — so MAC-auth acceptance is gated on the NAS being a known client, the device being allow-listed/known and the policy allowing MAC login. Reply: `Auth-Type := Accept` (`control`) so no password check runs. Standard `Service-Type` value `Call-Check = 10` (`share/dictionary.rfc2865` l.70, VERIFIED).
 
 ### 2.4 (c) 802.1X WPA-Enterprise (PEAP / TTLS)
 
@@ -115,10 +115,10 @@ sequenceDiagram
   participant S as Supplicant
   participant H as EZEAP hostapd
   participant F as FreeRADIUS (outer: ecloud, inner: inner-tunnel)
-  participant E as ECLOUD authorize
+  participant E as EZECLOUD authorize
   S->>H: EAPOL-Start / Identity (outer: anonymous@tenant or user)
   H->>F: Access-Request EAP-Message, Calling-Station-Id, Called-Station-Id(MAC:SSID), NAS-Identifier
-  F-->>H: Access-Challenge … TLS handshake (server cert from ECLOUD PKI)
+  F-->>H: Access-Challenge … TLS handshake (server cert from EZECLOUD PKI)
   Note over F: inner-tunnel: TTLS/PAP → User-Password visible to FreeRADIUS; PEAP → MSCHAPv2
   F->>E: POST authorize {outer_identity, inner User-Name, eap_type, nas…, inner User-Password (TTLS/PAP only)}
   alt TTLS/PAP
@@ -133,17 +133,17 @@ Status: EAP-TTLS/PAP = **PROPOSED default** (hashed passwords stay hashed); PEAP
 
 ### 2.5 (d) Direct username/password on the NAS and (e) vouchers
 
-| Flow | NAS | RADIUS shape | ECLOUD handling | Label |
+| Flow | NAS | RADIUS shape | EZECLOUD handling | Label |
 |---|---|---|---|---|
-| uspot `auth-mode: radius` local splash (A2 §4, wlan-testing `test_radius_user_and_pass_*`) | EZEAP | PAP/CHAP with the **real** subscriber username/password | PAP: `rest.authenticate` verifies Argon2 in ECLOUD. CHAP: cannot be verified against Argon2 → reject with `Reply-Message` unless the tenant enables reversible credentials (not recommended); `raddb/mods-available/chap` warns CHAP over RADIUS/UDP "can be cracked in milliseconds". | VERIFIED CODE (payload) / PROPOSED |
+| uspot `auth-mode: radius` local splash (A2 §4, wlan-testing `test_radius_user_and_pass_*`) | EZEAP | PAP/CHAP with the **real** subscriber username/password | PAP: `rest.authenticate` verifies Argon2 in EZECLOUD. CHAP: cannot be verified against Argon2 → reject with `Reply-Message` unless the tenant enables reversible credentials (not recommended); `raddb/mods-available/chap` warns CHAP over RADIUS/UDP "can be cracked in milliseconds". | VERIFIED CODE (payload) / PROPOSED |
 | Voucher | any portal NAS | voucher code never on the RADIUS wire; portal redeems → broker credential (A4 §7.6) | identity = voucher; `Session-Timeout = min(remaining validity, policy)`; quota attrs from remaining bytes | PROPOSED |
 | Voucher typed as username/password on a NAS splash | uspot radius mode | `User-Name = voucher code`, `User-Password = code` or fixed | adapter detects voucher namespace (prefix / alphabet) → `vouchers.code_hash` (HMAC, A6) → `control:Auth-Type := Accept` (PAP only; CHAP impossible with HMAC storage) | PROPOSED |
 
 ### 2.6 Password storage implications (PROPOSED policy)
 
-| Method | FreeRADIUS needs in `control:` | ECLOUD storage consequence |
+| Method | FreeRADIUS needs in `control:` | EZECLOUD storage consequence |
 |---|---|---|
-| PAP (UAM, TTLS/PAP, splash) | any `rlm_pap` header **or** nothing if ECLOUD verifies via `rest.authenticate` | Argon2id in `users.password_hash` (A6) — unchanged |
+| PAP (UAM, TTLS/PAP, splash) | any `rlm_pap` header **or** nothing if EZECLOUD verifies via `rest.authenticate` | Argon2id in `users.password_hash` (A6) — unchanged |
 | CHAP (UAM, splash) | `Cleartext-Password` | only for broker credentials / vouchers with `code_enc` (A6) — never for subscriber passwords |
 | MS-CHAPv2 (PEAP) | `NT-Password` or `Cleartext-Password` (`rlm_mschap.5` l.27-30) | optional `users.nt_hash` column (MD4) — tenant opt-in, flagged in A8 risk register |
 | EAP-TLS | none (certificate) | out of scope for pilot |
@@ -154,17 +154,17 @@ Status: EAP-TTLS/PAP = **PROPOSED default** (hashed passwords stay hashed); PEAP
 |---|---|---|
 | How FreeRADIUS learns clients | **Pilot:** worker renders `clients.conf` fragments from `nas_clients` (secret decrypted from the secret store at render time, file 0600, A5 §secrets) + `radmin add client file <file>` / container restart for changes. **Later:** `rlm_sql read_clients = yes` with `client_table = "nas"` (`mods-available/sql` l.374-377) pointed at `radius.nas_v` (A6 §4.2 item 3), or `sites-available/dynamic-clients` (`client dynamic { ipaddr = <cidr>; dynamic_clients = <vserver>; lifetime = 3600 }`, l.36-96) with the `dynamic_clients` virtual server doing `%{sql: SELECT secret FROM nas WHERE nasname='%{Packet-Src-IP-Address}'}` (l.181-192). | VERIFIED FROM OFFICIAL DOCUMENTATION; choice PROPOSED |
 | Secret per NAS | One secret per `nas_clients` row (`secret_ref`, A6). clients.conf recommends ≥16, preferably 32 random chars, up to 8 k (`raddb/clients.conf` l.97-107). Tenant-block CIDR clients (`ipaddr = 100.100.T.0/24`, l.53/357) are allowed by FreeRADIUS but **not used**: one secret per tenant would make `require_message_authenticator = auto` per-IP impossible (radiusd.conf.in l.820-826 "no effect for a client which uses a network IP/mask") and widens blast radius. | VERIFIED / PROPOSED |
-| NAS IP vs source IP | FreeRADIUS matches the **UDP source IP** to a `client`; `NAS-IP-Address` is just an attribute the NAS fills (uspot T sends its `SERVER_ADDR`, A4 §3.4; behind gateway NAT it would differ from the source). Rule: tenant resolution uses `Packet-Src-IP-Address` (sent to ECLOUD as `src_ip`) first, `NAS-Identifier` second (A6 §3.3 A); `NAS-IP-Address` is logged only. Over WireGuard option A the gateway must route (not NAT) so each AP keeps a stable LAN source (A1 §4.1); option B gives tunnel IPs. | PROPOSED on top of A1/A6 |
+| NAS IP vs source IP | FreeRADIUS matches the **UDP source IP** to a `client`; `NAS-IP-Address` is just an attribute the NAS fills (uspot T sends its `SERVER_ADDR`, A4 §3.4; behind gateway NAT it would differ from the source). Rule: tenant resolution uses `Packet-Src-IP-Address` (sent to EZECLOUD as `src_ip`) first, `NAS-Identifier` second (A6 §3.3 A); `NAS-IP-Address` is logged only. Over WireGuard option A the gateway must route (not NAT) so each AP keeps a stable LAN source (A1 §4.1); option B gives tunnel IPs. | PROPOSED on top of A1/A6 |
 | Public IP + NAT (A1 option C) | Source IP = site WAN IP (dynamic, shared by all NAS at the site) → one `client` per site, `NAS-Identifier` mandatory for per-NAS resolution, and radiusd.conf.in l.828-838 warns that multiple NAS behind one NAT force the *most insecure* Message-Authenticator setting. Hence option C is **RadSec-only** for Access-Requests. | VERIFIED (FreeRADIUS text) / PROPOSED |
-| RadSec | `listen { ipaddr = *; port = 2083; type = auth+acct; proto = tcp; clients = radsec; tls { private_key_file; certificate_file; ca_file; fragment_size = 8192; require_client_cert = yes } }`, `clients radsec { client … { proto = tls; secret = radsec } }` (`sites-available/tls` l.52-76, l.189-256, l.441, l.547-564). Client identity = certificate; per-NAS certs issued by ECLOUD PKI (A8). EZEAP side: `service.radius-proxy` realm `protocol: radsec` (A1/A2 — VERIFIED schema, REQUIRES DEVICE TEST). | VERIFIED FROM OFFICIAL DOCUMENTATION |
+| RadSec | `listen { ipaddr = *; port = 2083; type = auth+acct; proto = tcp; clients = radsec; tls { private_key_file; certificate_file; ca_file; fragment_size = 8192; require_client_cert = yes } }`, `clients radsec { client … { proto = tls; secret = radsec } }` (`sites-available/tls` l.52-76, l.189-256, l.441, l.547-564). Client identity = certificate; per-NAS certs issued by EZECLOUD PKI (A8). EZEAP side: `service.radius-proxy` realm `protocol: radsec` (A1/A2 — VERIFIED schema, REQUIRES DEVICE TEST). | VERIFIED FROM OFFICIAL DOCUMENTATION |
 | Tenant resolution | A6 §3.3: A (NAS identity) mandatory, C (`Called-Station-Id` SSID via `Called-Station-SSID` from `rewrite_called_station_id`) refines, B (realm) optional. | A6 |
-| Unknown client | FreeRADIUS does not answer packets from an IP without a `client` (no secret → cannot validate); nothing reaches ECLOUD. Dynamic-clients comment: the cache "with a configurable lifetime" is "part of protection from Denial of Service" (`dynamic-clients` l.15-26). nftables on the hub limits 1812/1813 to `100.100.0.0/16` (A1 §9). | VERIFIED / A1 |
+| Unknown client | FreeRADIUS does not answer packets from an IP without a `client` (no secret → cannot validate); nothing reaches EZECLOUD. Dynamic-clients comment: the cache "with a configurable lifetime" is "part of protection from Denial of Service" (`dynamic-clients` l.15-26). nftables on the hub limits 1812/1813 to `100.100.0.0/16` (A1 §9). | VERIFIED / A1 |
 
 ## 4. Authorization
 
 ### 4.1 `rlm_rest` → `POST https://api-internal/internal/aaa/authorize` (PROPOSED contract)
 
-Config (`mods-available/rest`): `connect_uri`, `body = json`, `method = post`, `timeout = 1.5`, `do_xlat = no`, `tls { ca_file; certificate_file; private_key_file }` (mTLS to the api container) or `auth = basic` with a service token from the secret store; `pool { start; min; max; spare; uses; lifetime; idle_timeout }` (l.326-380). With `body = json` the module serialises **all request attributes** as `{"<attr>":{"type":…,"value":[…]}}` (l.150-172); ECLOUD reads the fields below and ignores the rest.
+Config (`mods-available/rest`): `connect_uri`, `body = json`, `method = post`, `timeout = 1.5`, `do_xlat = no`, `tls { ca_file; certificate_file; private_key_file }` (mTLS to the api container) or `auth = basic` with a service token from the secret store; `pool { start; min; max; spare; uses; lifetime; idle_timeout }` (l.326-380). With `body = json` the module serialises **all request attributes** as `{"<attr>":{"type":…,"value":[…]}}` (l.150-172); EZECLOUD reads the fields below and ignores the rest.
 
 | Payload field (JSON key) | Source | Purpose |
 |---|---|---|
@@ -176,7 +176,7 @@ Config (`mods-available/rest`): `connect_uri`, `body = json`, `method = post`, `
 | `Acct-Session-Id`, `Framed-IP-Address` | request | correlation with UAM `sessionid` (A4) and portal binding |
 | `Service-Type`, `Chargeable-User-Identity` | request | MAC-auth detection, CUI |
 | `User-Password` (TTLS/PAP inner, UAM PAP) | request | only in `authenticate`-style verification; **never logged** |
-| `CHAP-Password`, `CHAP-Challenge` presence flags | request | tells ECLOUD CHAP is in use (ECLOUD returns cleartext only for broker credentials) |
+| `CHAP-Password`, `CHAP-Challenge` presence flags | request | tells EZECLOUD CHAP is in use (EZECLOUD returns cleartext only for broker credentials) |
 | `EAP-Type`, outer `User-Name` (`outer.request:User-Name`) | inner-tunnel | 802.1X policy, anonymous outer |
 | `Message-Authenticator` present (bool) | request | per-NAS BlastRADIUS posture telemetry |
 | `WISPr-Logoff-URL`, `WISPr-Location-Name`, `ChilliSpot-*`/`CoovaChilli-*` request VSAs | request | adapter fingerprinting (chilli vs uspot) |
@@ -192,11 +192,11 @@ Config (`mods-available/rest`): `connect_uri`, `body = json`, `method = post`, `
   "reply:Class": "0x<ecloud-session-uuid-hex>",
   "reply:Reply-Message": {"value": ["Welcome"], "op": ":="} }
 ```
-HTTP code → module code mapping (rest l.236-248): `2xx` body processed → `ok/updated`; `204` → ok (no body); `401` → **reject** (body processed, so `Reply-Message` can be set); `403` → `userlock`; `404/410` → `notfound`; `5xx` → `fail`. ECLOUD therefore answers **401** for policy rejections (quota exhausted, concurrency, schedule, validity, tenant mismatch) and **200** with `control:Auth-Type` for accepts. A `fail` (api down) is handled in FreeRADIUS unlang with `rest { fail = 1 } if (fail) { reject }` plus `linelog` alert — no "fail-open" (PROPOSED). `op` defaults to `:=`; multi-valued attributes use `"op":"+="` (l.184-199). The status code is readable as `%{reply:REST-HTTP-Status-Code}` (l.250).
+HTTP code → module code mapping (rest l.236-248): `2xx` body processed → `ok/updated`; `204` → ok (no body); `401` → **reject** (body processed, so `Reply-Message` can be set); `403` → `userlock`; `404/410` → `notfound`; `5xx` → `fail`. EZECLOUD therefore answers **401** for policy rejections (quota exhausted, concurrency, schedule, validity, tenant mismatch) and **200** with `control:Auth-Type` for accepts. A `fail` (api down) is handled in FreeRADIUS unlang with `rest { fail = 1 } if (fail) { reject }` plus `linelog` alert — no "fail-open" (PROPOSED). `op` defaults to `:=`; multi-valued attributes use `"op":"+="` (l.184-199). The status code is readable as `%{reply:REST-HTTP-Status-Code}` (l.250).
 
 ### 4.3 Reply attribute matrix per NAS adapter
 
-Dictionary facts (VERIFIED FROM OFFICIAL DOCUMENTATION, `share/dictionary.wispr`, `share/dictionary.chillispot`, `share/dictionary.rfc2865/2868/2869/3580`): WISPr vendor **14122** — `WISPr-Redirection-URL 4`, `WISPr-Bandwidth-Max-Up 7`, `WISPr-Bandwidth-Max-Down 8` (integer), `WISPr-Session-Terminate-Time 9`; ChilliSpot vendor **14559** — `Max-Input/Output/Total-Octets 1/2/3`, `Bandwidth-Max-Up/Down 4/5`, `Config 6`, `UAM-Allowed 100`, `MAC-Allowed 101`, `Interval 102`; standard `Session-Timeout 27`, `Idle-Timeout 28`, `Class 25`, `Acct-Interim-Interval 85`, `Tunnel-Type 64` (`VLAN = 13`, rfc3580 l.18), `Tunnel-Medium-Type 65` (`IEEE-802 = 6`), `Tunnel-Private-Group-Id 81` (tagged). **Gap:** FreeRADIUS's `dictionary.chillispot` has **no** `ChilliSpot-Max-*-Gigawords 21/22/23`, which uspot upstream's radcli dictionary defines (`f00b4r0/uspot files/etc/radcli/dictionary.chillispot`) and CoovaChilli uses as `CoovaChilli-Max-*-Gigawords` (A4 §4); ECLOUD ships `raddb/dictionary` additions for 21-23 (and `CoovaChilli-*` aliases, same vendor id) — PROPOSED.
+Dictionary facts (VERIFIED FROM OFFICIAL DOCUMENTATION, `share/dictionary.wispr`, `share/dictionary.chillispot`, `share/dictionary.rfc2865/2868/2869/3580`): WISPr vendor **14122** — `WISPr-Redirection-URL 4`, `WISPr-Bandwidth-Max-Up 7`, `WISPr-Bandwidth-Max-Down 8` (integer), `WISPr-Session-Terminate-Time 9`; ChilliSpot vendor **14559** — `Max-Input/Output/Total-Octets 1/2/3`, `Bandwidth-Max-Up/Down 4/5`, `Config 6`, `UAM-Allowed 100`, `MAC-Allowed 101`, `Interval 102`; standard `Session-Timeout 27`, `Idle-Timeout 28`, `Class 25`, `Acct-Interim-Interval 85`, `Tunnel-Type 64` (`VLAN = 13`, rfc3580 l.18), `Tunnel-Medium-Type 65` (`IEEE-802 = 6`), `Tunnel-Private-Group-Id 81` (tagged). **Gap:** FreeRADIUS's `dictionary.chillispot` has **no** `ChilliSpot-Max-*-Gigawords 21/22/23`, which uspot upstream's radcli dictionary defines (`f00b4r0/uspot files/etc/radcli/dictionary.chillispot`) and CoovaChilli uses as `CoovaChilli-Max-*-Gigawords` (A4 §4); EZECLOUD ships `raddb/dictionary` additions for 21-23 (and `CoovaChilli-*` aliases, same vendor id) — PROPOSED.
 
 Units: WISPr-Bandwidth = **bit/s**; ChilliSpot-Bandwidth = **kbit/s** (×1000 in uspot, A2 §2/A4 §3.4). Max-Total-Octets on TIP uspot is a 32-bit integer (≈4 GiB cap, A4).
 
@@ -204,14 +204,14 @@ Units: WISPr-Bandwidth = **bit/s**; ChilliSpot-Bandwidth = **kbit/s** (×1000 in
 |---|---|---|---|---|
 | Download rate | `WISPr-Bandwidth-Max-Down` bit/s (alt. `ChilliSpot-Bandwidth-Max-Down` kbit/s) | same (also `CoovaChilli-Bandwidth-Max-Down`) | **none verified** → fall back to per-SSID `rate-limit` via config adapter (A2 §7.2) | VERIFIED DOCS (uspot/chilli) · UNKNOWN (hostapd) |
 | Upload rate | `WISPr-Bandwidth-Max-Up` | same | none verified | as above |
-| Burst | ECLOUD stores; **not expressible** (ratelimit fixed `burst 2k`, A2 §2) | not via RADIUS (A4 §7.5) | — | VERIFIED (absence) |
+| Burst | EZECLOUD stores; **not expressible** (ratelimit fixed `burst 2k`, A2 §2) | not via RADIUS (A4 §7.5) | — | VERIFIED (absence) |
 | Session timeout / validity | `Session-Timeout = min(policy, remaining validity)` | same, or `WISPr-Session-Terminate-Time` | `Session-Timeout` candidate | VERIFIED (uspot/chilli) · REQUIRES DEVICE TEST (hostapd) |
 | Idle timeout | `Idle-Timeout` | `Idle-Timeout` | hostapd `max-inactivity` is per-SSID config only | VERIFIED · UNKNOWN |
 | Interim interval | `Acct-Interim-Interval` — only effective if uCentral `acct-interval` unset (`uspot.uc` l.216-222: local `acct_interval` wins) | `Acct-Interim-Interval` (<60 ignored) | hostapd `acct_interval` from config `radius.accounting.interval` 60-600 | VERIFIED |
 | Per-session quota | `ChilliSpot-Max-Total-Octets` (32-bit) | `CoovaChilli-Max-{Input,Output,Total}-Octets` + `-Gigawords` | — | VERIFIED |
 | Daily / monthly / total quota | **ECLOUD-side**: emit remaining as session quota + reject at authorize when exhausted; disconnect on breach from accounting | same (+ CoA to tighten) | ECLOUD-side reject / Disconnect | PROPOSED |
-| Concurrent devices/sessions | ECLOUD counts active `sessions` per subject at authorize → 401; or Disconnect oldest | same | same | PROPOSED |
-| Schedule | ECLOUD: reject outside window; `Session-Timeout` = seconds to window end | same | same | PROPOSED |
+| Concurrent devices/sessions | EZECLOUD counts active `sessions` per subject at authorize → 401; or Disconnect oldest | same | same | PROPOSED |
+| Schedule | EZECLOUD: reject outside window; `Session-Timeout` = seconds to window end | same | same | PROPOSED |
 | VLAN | not honoured (A4 §3.4) | `CoovaChilli-VLAN-Id` | `Tunnel-Type=VLAN(13)`, `Tunnel-Medium-Type=IEEE-802(6)`, `Tunnel-Private-Group-Id=<vid>`; renderer sets `dynamic_vlan=1` | REQUIRES DEVICE TEST |
 | Correlation | `Class = ecloud session id` (copied to accounting, A4) | `Class` echoed | `Class` (standard) | VERIFIED (uspot/chilli) |
 | Post-login redirect | none via RADIUS (portal `res=success`) | `WISPr-Redirection-URL` | — | VERIFIED |
@@ -230,7 +230,7 @@ Adapter `generic_radius` (A6 `adapter_types`) emits only standard attributes (`S
 
 ### 5.2 Insert-only queries (VERIFIED editable, PROPOSED content)
 
-Shipped PostgreSQL `accounting { type { start { query = INSERT…; query = UPDATE… } interim-update { query = UPDATE…; query = INSERT… } stop { query = UPDATE…; query = INSERT… } accounting-on/off { UPDATE … bulk close } } }` (`raddb/mods-config/sql/main/postgresql/queries.conf` l.284-622) — each type is an ordered list where the next query runs if the previous affected 0 rows. ECLOUD's `queries.conf` replaces every list with a **single** `INSERT INTO radius.radacct_raw (…, acctstatustype, received_at) VALUES (…) ON CONFLICT DO NOTHING`, including `accounting-on/off` rows, so `radacct` semantics (mutable row per session) move to the worker. Idempotency key (unique index): `(acctuniqueid, acctstatustype, acctsessiontime, acctinputoctets, acctoutputoctets)` — a NAS retransmit of the same packet is a no-op; a genuinely new Interim differs in `Acct-Session-Time`. `AcctUniqueId` comes from the shipped `acct_unique` policy: `md5(User-Name, Acct-Session-ID, NAS-IP(v6)-Address, NAS-Identifier, NAS-Port-ID, NAS-Port)` or, when the NAS echoes a server-generated `Class`, `md5(Class, Acct-Session-ID)` (`raddb/policy.d/accounting` l.40-60; `insert_acct_class` l.72-79). Since uspot and CoovaChilli echo `Class` (A4), ECLOUD enables `insert_acct_class` in post-auth so `Acct-Unique-Session-Id` is stable even if the NAS changes `NAS-IP-Address` after a reconnect (PROPOSED).
+Shipped PostgreSQL `accounting { type { start { query = INSERT…; query = UPDATE… } interim-update { query = UPDATE…; query = INSERT… } stop { query = UPDATE…; query = INSERT… } accounting-on/off { UPDATE … bulk close } } }` (`raddb/mods-config/sql/main/postgresql/queries.conf` l.284-622) — each type is an ordered list where the next query runs if the previous affected 0 rows. EZECLOUD's `queries.conf` replaces every list with a **single** `INSERT INTO radius.radacct_raw (…, acctstatustype, received_at) VALUES (…) ON CONFLICT DO NOTHING`, including `accounting-on/off` rows, so `radacct` semantics (mutable row per session) move to the worker. Idempotency key (unique index): `(acctuniqueid, acctstatustype, acctsessiontime, acctinputoctets, acctoutputoctets)` — a NAS retransmit of the same packet is a no-op; a genuinely new Interim differs in `Acct-Session-Time`. `AcctUniqueId` comes from the shipped `acct_unique` policy: `md5(User-Name, Acct-Session-ID, NAS-IP(v6)-Address, NAS-Identifier, NAS-Port-ID, NAS-Port)` or, when the NAS echoes a server-generated `Class`, `md5(Class, Acct-Session-ID)` (`raddb/policy.d/accounting` l.40-60; `insert_acct_class` l.72-79). Since uspot and CoovaChilli echo `Class` (A4), EZECLOUD enables `insert_acct_class` in post-auth so `Acct-Unique-Session-Id` is stable even if the NAS changes `NAS-IP-Address` after a reconnect (PROPOSED).
 
 ### 5.3 Worker (`acct-drainer`, PROPOSED; schema per A6 §5)
 
@@ -249,7 +249,7 @@ sequenceDiagram
     W->>W: quota/validity breach? → enqueue session_actions(disconnect)
   end
 ```
-Rules: event time = `Event-Timestamp` if present else `received_at − Acct-Delay-Time` (`Acct-Delay-Time 41`, `Event-Timestamp 55` — `share/dictionary.rfc2866/2869`); clock skew: NAS clocks are untrusted — store both, use `received_at` for ordering and the derived event time only for display/billing within ±5 min tolerance (PROPOSED). Counters monotonic per session (A6). Missing Stop: (1) uspot (T) Disconnect via hostapd DAS `client_kick(…, true)` sends **no Acct-Stop** (A4 §3.5) → `coa-dispatcher` closes the session on Disconnect-ACK; (2) `last_interim_at < now − 3 × interval` → `stale` (A6); (3) `Accounting-On/Off` from a NAS closes all its active sessions (uspot T sends On at start/Off at stop, A4 §3.4; chilli: UNKNOWN); (4) optional reconciliation against OpenWiFi `state.captive{}`/associations telemetry (A2 §6) — PROPOSED. Interim policy: ECLOUD emits `Acct-Interim-Interval = 300` (A6 sizing) but the uCentral `acct-interval` default 600 overrides it on uspot (A4 §1, device test #5), and hostapd uses `radius.accounting.interval`; recommendation to A2's config adapter: set NAS intervals explicitly to the plan value and treat the RADIUS attribute as informational. Backpressure: `rlm_sql` pool and PostgreSQL absorb bursts; if PG is down FreeRADIUS returns no Accounting-Response and the NAS retransmits (standard RADIUS) — acceptable loss tolerance for the pilot; optional `detail` module spool (`mods-available/detail`) as a disk buffer later.
+Rules: event time = `Event-Timestamp` if present else `received_at − Acct-Delay-Time` (`Acct-Delay-Time 41`, `Event-Timestamp 55` — `share/dictionary.rfc2866/2869`); clock skew: NAS clocks are untrusted — store both, use `received_at` for ordering and the derived event time only for display/billing within ±5 min tolerance (PROPOSED). Counters monotonic per session (A6). Missing Stop: (1) uspot (T) Disconnect via hostapd DAS `client_kick(…, true)` sends **no Acct-Stop** (A4 §3.5) → `coa-dispatcher` closes the session on Disconnect-ACK; (2) `last_interim_at < now − 3 × interval` → `stale` (A6); (3) `Accounting-On/Off` from a NAS closes all its active sessions (uspot T sends On at start/Off at stop, A4 §3.4; chilli: UNKNOWN); (4) optional reconciliation against OpenWiFi `state.captive{}`/associations telemetry (A2 §6) — PROPOSED. Interim policy: EZECLOUD emits `Acct-Interim-Interval = 300` (A6 sizing) but the uCentral `acct-interval` default 600 overrides it on uspot (A4 §1, device test #5), and hostapd uses `radius.accounting.interval`; recommendation to A2's config adapter: set NAS intervals explicitly to the plan value and treat the RADIUS attribute as informational. Backpressure: `rlm_sql` pool and PostgreSQL absorb bursts; if PG is down FreeRADIUS returns no Accounting-Response and the NAS retransmits (standard RADIUS) — acceptable loss tolerance for the pilot; optional `detail` module spool (`mods-available/detail`) as a disk buffer later.
 
 ## 6. Dynamic authorization (RFC 5176)
 
@@ -262,15 +262,15 @@ Rules: event time = `Event-Timestamp` if present else `received_at − Acct-Dela
 
 FreeRADIUS tooling (VERIFIED FROM OFFICIAL DOCUMENTATION): `radclient <host[:port]> {auth|acct|status|coa|disconnect|auto} <secret>`, `-r retries`, `-t timeout` (default 3 s), port 3799 for coa/disconnect (`man/man1/radclient.1` l.35, 111-134, 159-166); `home_server x { type = coa; port = 3799; secret; coa { irt = 2; mrt = 16; mrc = 5; mrd = 30 } }` + `update coa|disconnect { … }` in any non-proxy section, destination defaults to the originating client or `coa_server` / `Packet-Dst-IP-Address`/`Packet-Dst-Port` (`sites-available/originate-coa` l.23-110; `clients.conf` l.254).
 
-`coa-dispatcher` worker (PROPOSED): consumes `session_actions` (A6); builds the packet per adapter (`User-Name` for chilli; `Calling-Station-Id` + `NAS-Identifier` for hostapd/uspot; always `Acct-Session-Id`, `Event-Timestamp`, `Message-Authenticator`), sends `radclient -r 3 -t 2 <nas_ip>:<coa_port> disconnect` from the worker container (which binds the hub tunnel address `100.100.0.1` so that the AP's `dynamic-authorization.host` `uc-ip` matches — A1 §5/A2 §4), records ACK/NAK + `Error-Cause` (`101`; `503 Session-Context-Not-Found`, `401 Unsupported-Attribute`, `402 Missing-Attribute`, `403 NAS-Identification-Mismatch` — `share/dictionary.rfc3576`), and on ACK closes the ECLOUD session when the adapter is known not to send Acct-Stop. Reachability: hub → site route must exist (AllowedIPs incl. AP LAN for option A, A1 §4.1); over public internet CoA is blocked by NAT (A1 option C) → status `unsupported`.
+`coa-dispatcher` worker (PROPOSED): consumes `session_actions` (A6); builds the packet per adapter (`User-Name` for chilli; `Calling-Station-Id` + `NAS-Identifier` for hostapd/uspot; always `Acct-Session-Id`, `Event-Timestamp`, `Message-Authenticator`), sends `radclient -r 3 -t 2 <nas_ip>:<coa_port> disconnect` from the worker container (which binds the hub tunnel address `100.100.0.1` so that the AP's `dynamic-authorization.host` `uc-ip` matches — A1 §5/A2 §4), records ACK/NAK + `Error-Cause` (`101`; `503 Session-Context-Not-Found`, `401 Unsupported-Attribute`, `402 Missing-Attribute`, `403 NAS-Identification-Mismatch` — `share/dictionary.rfc3576`), and on ACK closes the EZECLOUD session when the adapter is known not to send Acct-Stop. Reachability: hub → site route must exist (AllowedIPs incl. AP LAN for option A, A1 §4.1); over public internet CoA is blocked by NAT (A1 option C) → status `unsupported`.
 
 Policy-change propagation when CoA is unsupported (PROPOSED): the adapter caps `Session-Timeout` at `policy_refresh_s` (e.g. 900-3600 s) so re-authentication returns new attributes; on uspot the client re-passes the portal unless MAC-auth is on — owner decision (Q4). Disconnect + forced re-login is the fallback for immediate changes. Secrets: DAS/coa secret per NAS stored as `nas_clients.coa_secret_ref` (extension to A6 schema) and "SHOULD NOT be the same as the shared secret in a client section" (`originate-coa` l.93-94).
 
 ## 7. Realms / proxying for multi-tenancy
 
-- Default: **no realm on the wire** (A6 Q2, §3.2); tenant from NAS identity. `rlm_realm` instance `suffix` (`mods-available/realm`) + `proxy.conf` `realm LOCAL { }` / `realm example.com { auth_pool … }` (l.888-966) are shipped; a realm with no pool is handled locally and `Stripped-User-Name` is set. ECLOUD does **not** proxy to other RADIUS servers in the pilot; `pre-proxy/post-proxy` disabled. VERIFIED FROM OFFICIAL DOCUMENTATION (files) / PROPOSED (use).
-- Optional realm suffix for shared venues (A6 M2): `split_username_nai` policy yields `Stripped-User-Domain` → ECLOUD maps to `organizations.slug`; realm must agree with NAS-derived tenant or the request is rejected (A6 G2).
-- EAP identities: outer `User-Name` may be `anonymous@<org-slug>` (RFC 7542 style); inner-tunnel `User-Name` is authoritative; ECLOUD receives both. Accounting from hostapd carries the **outer** identity unless the inner is promoted — enable `update outer.session-state { User-Name := … }` in inner-tunnel post-auth (`sites-available/inner-tunnel` l.363-408) and rely on `Class`/`Chargeable-User-Identity` (`radius.chargeable-user-id` in uCentral, A2 §4) for correlation. PROPOSED.
+- Default: **no realm on the wire** (A6 Q2, §3.2); tenant from NAS identity. `rlm_realm` instance `suffix` (`mods-available/realm`) + `proxy.conf` `realm LOCAL { }` / `realm example.com { auth_pool … }` (l.888-966) are shipped; a realm with no pool is handled locally and `Stripped-User-Name` is set. EZECLOUD does **not** proxy to other RADIUS servers in the pilot; `pre-proxy/post-proxy` disabled. VERIFIED FROM OFFICIAL DOCUMENTATION (files) / PROPOSED (use).
+- Optional realm suffix for shared venues (A6 M2): `split_username_nai` policy yields `Stripped-User-Domain` → EZECLOUD maps to `organizations.slug`; realm must agree with NAS-derived tenant or the request is rejected (A6 G2).
+- EAP identities: outer `User-Name` may be `anonymous@<org-slug>` (RFC 7542 style); inner-tunnel `User-Name` is authoritative; EZECLOUD receives both. Accounting from hostapd carries the **outer** identity unless the inner is promoted — enable `update outer.session-state { User-Name := … }` in inner-tunnel post-auth (`sites-available/inner-tunnel` l.363-408) and rely on `Class`/`Chargeable-User-Identity` (`radius.chargeable-user-id` in uCentral, A2 §4) for correlation. PROPOSED.
 
 ## 8. Security of AAA
 
@@ -281,8 +281,8 @@ Policy-change propagation when CoA is unsupported (PROPOSED): the adapter caps `
 | Weak auth methods | CHAP / MS-CHAP over RADIUS/UDP crackable "in milliseconds" (`mods-available/chap`; ChangeLog 3.2.11 notes) → tunnel (WireGuard) or RadSec mandatory for every NAS; PAP exposes the broker credential only (90 s, single-use). | VERIFIED |
 | RadSec for public NAS | §3; `require_client_cert = yes`; certificate CN/SAN bound to `nas_clients` row | `sites-available/tls` |
 | Replay / duplicates | FreeRADIUS deduplicates retransmits by `(src, id, authenticator)` while the request is live (`cleanup_delay = 5`, `max_request_time = 30`, `radiusd.conf.in` l.236-255); accounting idempotency in SQL (§5.2); broker credential single-use + `Calling-Station-Id`/`NAS-Identifier`/`Acct-Session-Id` binding (A4 §7.7) | VERIFIED / PROPOSED |
-| Rate limiting unknown clients | unknown source IPs are ignored (no secret); nftables allows 1812/1813 only from `wg0`/`100.100.0.0/16` (A1 §9) or from an allowlist set for option C; `max_requests = 16384` (l.274), `max_attributes = 200` (l.683), `reject_delay = 1` (l.712) slow brute force; ECLOUD per-`nasid+mac` login throttle (A4) | VERIFIED / A1 |
-| Logging without secrets | `log { auth = no; auth_badpass = no; auth_goodpass = no }` (radiusd.conf.in l.454-479) stays off; `linelog` with explicit `format` excluding `User-Password`/`CHAP-Password`/secrets, `permissions = 0600` (file warns logs "may contain secret or private information", `mods-available/linelog` l.33-36, l.95-133); never run `-X` in production; ECLOUD redacts `User-Password` from the rest payload before persisting `auth_events.reply_summary` | VERIFIED / PROPOSED |
+| Rate limiting unknown clients | unknown source IPs are ignored (no secret); nftables allows 1812/1813 only from `wg0`/`100.100.0.0/16` (A1 §9) or from an allowlist set for option C; `max_requests = 16384` (l.274), `max_attributes = 200` (l.683), `reject_delay = 1` (l.712) slow brute force; EZECLOUD per-`nasid+mac` login throttle (A4) | VERIFIED / A1 |
+| Logging without secrets | `log { auth = no; auth_badpass = no; auth_goodpass = no }` (radiusd.conf.in l.454-479) stays off; `linelog` with explicit `format` excluding `User-Password`/`CHAP-Password`/secrets, `permissions = 0600` (file warns logs "may contain secret or private information", `mods-available/linelog` l.33-36, l.95-133); never run `-X` in production; EZECLOUD redacts `User-Password` from the rest payload before persisting `auth_events.reply_summary` | VERIFIED / PROPOSED |
 | Firewall / exposure | UDP 1812/1813 published on `100.100.0.1` only; 2083/tcp public only if option C is approved; 3799 **not** listened on the VPS (CoA originates from the worker); Status-Server 18121 loopback | A1 §9, A5 §2.1 |
 | Response attribute filtering | `attr_filter.access_reject` in `Post-Auth-Type REJECT`, `attr_filter.coa` for outgoing CoA (`mods-config/attr_filter/*`) | VERIFIED (files) |
 
@@ -307,7 +307,7 @@ Policy-change propagation when CoA is unsupported (PROPOSED): the adapter caps `
 | T-A1 | UAM PAP via broker credential (uspot T) | portal → `/logon`; `radclient auth` replay of captured request | Accept; attrs per §4.3; `auth_events.accept`; second use of same credential → 401/Reject |
 | T-A2 | UAM CHAP via broker credential (chilli) | `/json/logon` CHAP; `radclient` with `CHAP-Password` | Accept; CHAP with real subscriber password → Reject + `Reply-Message` |
 | T-A3 | MAC-auth hostapd `mac-filter` / uspot `mac-auth` / chilli `macauth` | real devices + capture | observe `User-Name`/password format and `Service-Type`; known MAC → Accept; unknown → Reject |
-| T-A4 | 802.1X EAP-TTLS/PAP and PEAP-MSCHAPv2 | `eapol_test` (wpa_supplicant) against FreeRADIUS; then real EZEAP SSID | inner identity reaches ECLOUD; Accept with `Class`; PEAP without NT-hash → Reject |
+| T-A4 | 802.1X EAP-TTLS/PAP and PEAP-MSCHAPv2 | `eapol_test` (wpa_supplicant) against FreeRADIUS; then real EZEAP SSID | inner identity reaches EZECLOUD; Accept with `Class`; PEAP without NT-hash → Reject |
 | T-A5 | Tenant isolation | `radclient` from NAS of A with user of B (A6 T-05/06/08) | Reject; `auth_events.organization_id = A` |
 | T-A6 | Accounting Start/Interim/Stop, Gigawords, duplicates | `radclient acct` scripted incl. retransmit and >4 GiB octets | one `radacct_raw` row per distinct packet; `sessions` monotonic; `usage_counters` delta correct |
 | T-A7 | Missing Stop / stale / Acct-On-Off | kill uspot client via DAS; restart uspot | session closed by dispatcher ACK or stale job; On/Off bulk close |
@@ -345,8 +345,8 @@ Not fetched / not claimed: hostapd DAS packet handling details, uspot radcli `Me
 ## 12. Open questions for owner
 
 1. Is 802.1X WPA-Enterprise in scope for the pilot? If yes, is PEAP-MSCHAPv2 (requires storing NT-hashes of subscriber passwords) acceptable, or EAP-TTLS/PAP only?
-2. Confirm "no fail-open": when ECLOUD api is unreachable, FreeRADIUS rejects new logins (existing sessions unaffected). Alternative is a cached-decision mode (not designed).
-3. Is RADIUS over the public internet (A1 option C) allowed at all in the pilot? If yes, RadSec with per-NAS client certificates is mandatory for Access-Requests — who issues device certificates (ECLOUD PKI vs OpenWiFi certs)?
+2. Confirm "no fail-open": when EZECLOUD api is unreachable, FreeRADIUS rejects new logins (existing sessions unaffected). Alternative is a cached-decision mode (not designed).
+3. Is RADIUS over the public internet (A1 option C) allowed at all in the pilot? If yes, RadSec with per-NAS client certificates is mandatory for Access-Requests — who issues device certificates (EZECLOUD PKI vs OpenWiFi certs)?
 4. Policy-change latency without CoA: acceptable to cap `Session-Timeout` at 15-60 min (forces re-auth; on uspot without MAC-auth the user sees the portal again)?
 5. Secrets model: one RADIUS secret per NAS (recommended) vs one per site; and a separate DAS/CoA secret per NAS (recommended)?
 6. Retention of raw `radius.radacct_raw` after draining (proposal: 7 days, then truncate partitions) — separate from A6's 13-month `accounting_records`.
@@ -375,7 +375,7 @@ Status: implemented and tested locally (unit + integration against the dev stack
 | W2 | Idempotency | unique raw key collapses NAS retransmits | Raw unique index (unchanged) + `accounting_records.raw->>'radacctid'` checked before normalising, so a crash between commit and cursor save never double-counts; counters are monotonic per session (`GREATEST`), deltas never negative | `accounting_records` is partitioned and has no unique key |
 | W3 | Session resolution | `acct_unique_id` join key | `Class` (`ai:<32 hex>`, stored by FreeRADIUS as `0x61693a<64 hex>`) → session id, else `acct_unique_id`, else (NAS, `Acct-Session-Id`) of an `active`/`stale` session; a match must belong to the NAS's organization. A session pre-created by `/internal/aaa/authorize` (placeholder `acct_unique_id` = Class, `acct_session_id` = '') adopts the real identifiers and the Start time on its first accounting packet; unknown NAS → `accounting_records` row with `organization_id NULL` | NAS binding is the truth (`infra/freeradius/README.md` §6 item 2) |
 | W4 | Event time | `Event-Timestamp` else `received_at − Acct-Delay-Time`, ±5 min | As designed; billing buckets use the event time only within ±5 min of receipt, otherwise receipt − delay. Daily/monthly `usage_counters.period_start` in the site's IANA timezone (DST-safe via `@ecloud/policy-engine` `toLocal`), plus `total` | §5.3 rule |
-| W5 | Missing Stop | (1) dispatcher ACK, (2) `stale` after 3 × interval, (3) On/Off closes NAS sessions | (1) on Disconnect-ACK the session is closed only for adapters with `acctStopEmitted === false` (TIP uspot); (2) `sessions.reap` sets **`stopped` / `lost_interim`** after 2 × `WORKER_INTERIM_INTERVAL_S` (default 600) + `WORKER_REAP_GRACE_S` (120); a later Interim revives it; (3) Accounting-On/Off marks the NAS's active sessions **`stale`** (a late Stop still closes them) | Phase 3 task wording; 600 s default because uCentral's `acct-interval` overrides ECLOUD's 300 (§5.3) |
+| W5 | Missing Stop | (1) dispatcher ACK, (2) `stale` after 3 × interval, (3) On/Off closes NAS sessions | (1) on Disconnect-ACK the session is closed only for adapters with `acctStopEmitted === false` (TIP uspot); (2) `sessions.reap` sets **`stopped` / `lost_interim`** after 2 × `WORKER_INTERIM_INTERVAL_S` (default 600) + `WORKER_REAP_GRACE_S` (120); a later Interim revives it; (3) Accounting-On/Off marks the NAS's active sessions **`stale`** (a late Stop still closes them) | Phase 3 task wording; 600 s default because uCentral's `acct-interval` overrides EZECLOUD's 300 (§5.3) |
 | W6 | Quota enforcement | breach → `session_actions(disconnect)` | `policy.enforce` (30 s) + after every drain tick for touched sessions; one `quota.exceeded` per session/period/period_start (Redis marker). Disconnect is queued only if `ECLOUD_COA_ENABLED=true` **and** the adapter declares a Disconnect target that is not UNSUPPORTED/ECLOUD_SIDE_ONLY **and** `nas_clients.coa_supported` is not `false`; otherwise "enforcement pending" (Redis hash) and the NAS-side limit / deny-at-next-auth apply (POLICY_ENGINE.md §5.2) | D-006 |
 | W7 | Dispatcher | `radclient -r 3 -t 2 … disconnect` | `coa.disconnect` / `coa.change` queues; secret from `nas_clients.secret_ref` written to a 0600 file in a 0700 temp dir and passed with `-S`, deleted in `finally`; adds `Event-Timestamp` and `Message-Authenticator = 0x00`. Success = literal `Received Disconnect-ACK`/`CoA-ACK` with exit 0 only; NAK records `Error-Cause`; no reply → BullMQ retry (3 × fixed 5 s) then `timeout` + DLQ `dead.coa`. Disabled → `status = 'unsupported'`, `error = 'skipped_disabled'`, nothing sent | D-006 / D-034; schema CHECK lacks `skipped_disabled` (proposed below) |
 | W8 | Source address | worker binds the hub tunnel address `100.100.0.1` | Not implemented: the `radclient` option list (`man/man1/radclient.1`) shows no source-address option (re-check on the image); the worker container's routing must make the tunnel address the source | REQUIRES DEVICE TEST together with §13 item 4 |

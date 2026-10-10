@@ -77,7 +77,7 @@ export const capabilities: AdapterCapabilities = {
     acctStopEmitted: false,
     evidence: DISCONNECT_RDT,
     evidenceLevel: 'DOCUMENTED',
-    note: 'ECLOUD must close the session itself after Disconnect-ACK (no Acct-Stop, A4 §3.5 / POLICY_ENGINE.md §2.6)',
+    note: 'EZECLOUD must close the session itself after Disconnect-ACK (no Acct-Stop, A4 §3.5 / POLICY_ENGINE.md §2.6)',
   },
   coaChange: {
     status: 'UNSUPPORTED',
@@ -200,5 +200,5 @@ export const capabilities: AdapterCapabilities = {
 export const adapter: NasAdapter = createAdapter(capabilities, {
   disconnectMandatory: ['Calling-Station-Id'],
   disconnectNote:
-    'Send to the hostapd DAS of the captive SSID (ssid.radius.dynamic-authorization); expect ACK; ECLOUD closes the session (no Acct-Stop). REQUIRES DEVICE TEST.',
+    'Send to the hostapd DAS of the captive SSID (ssid.radius.dynamic-authorization); expect ACK; EZECLOUD closes the session (no Acct-Stop). REQUIRES DEVICE TEST.',
 });

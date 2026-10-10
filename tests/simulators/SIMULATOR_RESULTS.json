@@ -1,6 +1,6 @@
 {
   "format": "ecloud-simulator-results/v1",
-  "scope": "Simulator evidence: ECLOUD code behaviour against a simulated NAS (fixtures derived from documented parameter lists). It is NOT hardware compatibility evidence, never LAB_VALIDATED, and never applies to an enforcement capability or to Disconnect/CoA (D-006).",
+  "scope": "Simulator evidence: EZECLOUD code behaviour against a simulated NAS (fixtures derived from documented parameter lists). It is NOT hardware compatibility evidence, never LAB_VALIDATED, and never applies to an enforcement capability or to Disconnect/CoA (D-006).",
   "generatedAt": "2026-10-08T08:09:33.362Z",
   "run": {
     "runId": "dafbef1e73f3be7aa4304183317ef009",

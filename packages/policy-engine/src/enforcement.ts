@@ -9,7 +9,7 @@
  *   - `disconnect_reauth` likewise for Disconnect (the client re-authenticates into the new policy);
  *   - `next_reauth`       otherwise: the change applies at the session's next Access-Request,
  *                         bounded by the emitted Session-Timeout (capped per Q44);
- *   - `none`              the session's NAS has no engine adapter: nothing ECLOUD sends can
+ *   - `none`              the session's NAS has no engine adapter: nothing EZECLOUD sends can
  *                         carry the change (state `unsupported`).
  * Pure; no I/O.
  */
@@ -74,7 +74,7 @@ export function chooseEnforcementStrategy(input: StrategyInput): StrategyDecisio
       strategy: 'none',
       state: 'unsupported',
       reason:
-        'NAS has no engine adapter (D-035): ECLOUD sends no policy attributes to it, so no change can be applied',
+        'NAS has no engine adapter (D-035): EZECLOUD sends no policy attributes to it, so no change can be applied',
     };
   }
   if (usable(input.coaChange, input.dispatcherEnabled)) {

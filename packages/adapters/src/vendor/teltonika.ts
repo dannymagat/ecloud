@@ -45,26 +45,26 @@ export function teltonikaSetupGuide(
   return [
     step(
       'landing-page',
-      `External landing page = the ECLOUD CoovaChilli portal entry (${RC})`,
+      `External landing page = the EZECLOUD CoovaChilli portal entry (${RC})`,
       'Hotspot landing page: external URL (uamserver)',
       `${portalOrigin}/uam/chilli/`,
     ),
     step('uam-port', 'UAM port (research: default 3990)', 'UAM port', '3990'),
     step(
       'uam-secret',
-      'UAM secret: REQUIRED (ECLOUD refuses unsigned redirects, SECURITY §5.2); store the same value on the ECLOUD captive portal',
+      'UAM secret: REQUIRED (EZECLOUD refuses unsigned redirects, SECURITY §5.2); store the same value on the EZECLOUD captive portal',
       'UAM secret',
       '<UAM_SECRET>',
     ),
     step(
       'password-encoding',
-      'Password encoding must match ECLOUD (CoovaChilli PAP-XOR with the UAM secret); option semantics REQUIRES_DEVICE_TEST',
+      'Password encoding must match EZECLOUD (CoovaChilli PAP-XOR with the UAM secret); option semantics REQUIRES_DEVICE_TEST',
       'Password encoding',
       '<MATCH_COOVACHILLI_PAP_XOR> (REQUIRES_DEVICE_TEST)',
     ),
     step(
       'nasid',
-      `NAS identifier = the identifier registered in ECLOUD (CoovaChilli radiusnasid; ${RC})`,
+      `NAS identifier = the identifier registered in EZECLOUD (CoovaChilli radiusnasid; ${RC})`,
       'NAS identifier (radiusnasid)',
       site.nasId,
     ),
@@ -82,20 +82,20 @@ export function teltonikaSetupGuide(
     ),
     step(
       'walled-garden',
-      'Walled garden in Allowlist mode: the ECLOUD portal and enabled identity-provider hosts',
+      'Walled garden in Allowlist mode: the EZECLOUD portal and enabled identity-provider hosts',
       'Walled garden (Allowlist)',
       `${portalHost}, <IDP_HOSTS>`,
     ),
     step(
       'coa',
-      'Disconnect / CoA: whether RutOS exposes CoovaChilli coaport is REQUIRES_CLARIFICATION; leave ECLOUD CoA off until a device test (D-006)',
+      'Disconnect / CoA: whether RutOS exposes CoovaChilli coaport is REQUIRES_CLARIFICATION; leave EZECLOUD CoA off until a device test (D-006)',
       'CoA port (coaport)',
       '<REQUIRES_CLARIFICATION>',
     ),
     step(
       'ecloud-nas',
-      'Register the router in ECLOUD: adapter coovachilli-uam, NAS IP = RADIUS source address, NAS identifier as above; captive portal type coovachilli with the UAM secret',
-      'ECLOUD NAS {nas_ip, nas_identifier, adapter_key}',
+      'Register the router in EZECLOUD: adapter coovachilli-uam, NAS IP = RADIUS source address, NAS identifier as above; captive portal type coovachilli with the UAM secret',
+      'EZECLOUD NAS {nas_ip, nas_identifier, adapter_key}',
       `<REGISTERED_NAS_IP>, ${site.nasId}, coovachilli-uam`,
     ),
   ];

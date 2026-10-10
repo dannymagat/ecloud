@@ -13,7 +13,7 @@
  * in 198.18.0.0/15, random session ids). Each accounting scenario uses its own epoch far in the
  * past (2020/2021/2022) so the reaper's cutoff can only reach this run's sessions.
  *
- * Simulator evidence: ECLOUD code behaviour only, NOT hardware compatibility.
+ * Simulator evidence: EZECLOUD code behaviour only, NOT hardware compatibility.
  */
 import { randomBytes } from 'node:crypto';
 import { createDb, createPool, type Db } from '@ecloud/db';

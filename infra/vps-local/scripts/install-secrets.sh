@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Install unsealed ECLOUD secrets on vps-local (DRAFT, NOT RUN). docs/VPS_LOCAL_CHANGE_LIST.md
+# Install unsealed EZECLOUD secrets on vps-local (DRAFT, NOT RUN). docs/VPS_LOCAL_CHANGE_LIST.md
 # LCL-APP-2, docs/SECRETS_MANAGEMENT.md §2. The owner unseals on the workstation (sops + age,
 # never on this host), copies the directory with scp into ezeadmin's home, then:
 #

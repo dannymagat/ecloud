@@ -21,7 +21,7 @@ import { splitStatements } from './sql.js';
 
 export const MIGRATION_FILE_RE = /^(\d{3,})_([A-Za-z0-9._-]+)\.sql$/;
 export const NO_TRANSACTION_DIRECTIVE = 'ecloud:no-transaction';
-/** Arbitrary constant; every ECLOUD runner takes the same session-level advisory lock. */
+/** Arbitrary constant; every EZECLOUD runner takes the same session-level advisory lock. */
 export const MIGRATION_LOCK_KEY = 8_120_371_001;
 export const DEFAULT_MIGRATIONS_DIR = fileURLToPath(new URL('../migrations/', import.meta.url));
 

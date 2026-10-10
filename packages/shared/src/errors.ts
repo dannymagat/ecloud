@@ -1,6 +1,6 @@
 /**
  * RFC 9457 "Problem Details for HTTP APIs" representation of an error.
- * `type` is a URI identifying the problem type; ECLOUD uses `urn:ecloud:problem:<slug>`.
+ * `type` is a URI identifying the problem type; EZECLOUD uses `urn:ecloud:problem:<slug>`.
  */
 export interface ProblemDetails {
   type: string;

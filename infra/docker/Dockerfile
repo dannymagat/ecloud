@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1
 #
-#  ECLOUD application images (M9) -- one multi-target Dockerfile, build context = repo root.
+#  EZECLOUD application images (M9) -- one multi-target Dockerfile, build context = repo root.
 #
 #    docker build -f infra/docker/Dockerfile --target api    -t ecloud-api:local    .
 #    docker build -f infra/docker/Dockerfile --target worker -t ecloud-worker:local .
@@ -101,7 +101,7 @@ FROM node-runtime AS api
 ARG VCS_REF=unknown
 ARG SOURCE_URL=https://github.com/dannymagat/ecloud
 LABEL org.opencontainers.image.title="ecloud-api" \
-      org.opencontainers.image.description="ECLOUD REST API (/api/v1) and internal listener" \
+      org.opencontainers.image.description="EZECLOUD REST API (/api/v1) and internal listener" \
       org.opencontainers.image.source="${SOURCE_URL}" \
       org.opencontainers.image.revision="${VCS_REF}" \
       org.opencontainers.image.licenses="UNLICENSED"
@@ -145,7 +145,7 @@ FROM node-runtime AS worker
 ARG VCS_REF=unknown
 ARG SOURCE_URL=https://github.com/dannymagat/ecloud
 LABEL org.opencontainers.image.title="ecloud-worker" \
-      org.opencontainers.image.description="ECLOUD BullMQ workers and schedulers" \
+      org.opencontainers.image.description="EZECLOUD BullMQ workers and schedulers" \
       org.opencontainers.image.source="${SOURCE_URL}" \
       org.opencontainers.image.revision="${VCS_REF}" \
       org.opencontainers.image.licenses="UNLICENSED"
@@ -191,7 +191,7 @@ FROM node-runtime AS portal
 ARG VCS_REF=unknown
 ARG SOURCE_URL=https://github.com/dannymagat/ecloud
 LABEL org.opencontainers.image.title="ecloud-portal" \
-      org.opencontainers.image.description="ECLOUD captive portal server" \
+      org.opencontainers.image.description="EZECLOUD captive portal server" \
       org.opencontainers.image.source="${SOURCE_URL}" \
       org.opencontainers.image.revision="${VCS_REF}" \
       org.opencontainers.image.licenses="UNLICENSED"
@@ -224,7 +224,7 @@ FROM ${NGINX_IMAGE} AS admin
 ARG VCS_REF=unknown
 ARG SOURCE_URL=https://github.com/dannymagat/ecloud
 LABEL org.opencontainers.image.title="ecloud-admin" \
-      org.opencontainers.image.description="ECLOUD admin SPA static files (local testing image)" \
+      org.opencontainers.image.description="EZECLOUD admin SPA static files (local testing image)" \
       org.opencontainers.image.source="${SOURCE_URL}" \
       org.opencontainers.image.revision="${VCS_REF}" \
       org.opencontainers.image.licenses="UNLICENSED"

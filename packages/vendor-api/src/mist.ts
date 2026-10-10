@@ -13,7 +13,7 @@
  * undocumented and always `0` (never assumed to be quota / rate, research §6 item 9). Mist also
  * documents a JWT (HS256) alternative; it is not implemented (one mechanism is enough).
  *
- * No outbound call: ECLOUD builds the URL server-side (the WLAN API secret never leaves the
+ * No outbound call: EZECLOUD builds the URL server-side (the WLAN API secret never leaves the
  * process) and the guest's browser follows it with a 302. The URL expires quickly (`expires`),
  * which is the anti-forgery mechanism toward Mist. The inbound Mist redirect is NOT signed.
  */

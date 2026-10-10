@@ -153,7 +153,7 @@ await describeIntegration('@ecloud/api multi-vendor Cycle B (MikroTik / Teltonik
     query: string;
   }
 
-  /** What the ECLOUD login.html makes the browser request (names = RouterOS variables). */
+  /** What the EZECLOUD login.html makes the browser request (names = RouterOS variables). */
   function routerRedirect(f: Fixture, over: Record<string, string> = {}): Router {
     const mac = routerMac();
     const chapId = randomBytes(1);

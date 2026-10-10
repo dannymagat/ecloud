@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# docker compose for the ECLOUD project on vps-local (DRAFT). Installed as
+# docker compose for the EZECLOUD project on vps-local (DRAFT). Installed as
 # /opt/ecloud/bin/ecloud-compose so owner commands stay short, e.g.
 #   ssh -t vps-local 'sudo /opt/ecloud/bin/ecloud-compose ps'
 # Settings (IMAGE_TAG, ECLOUD_REGISTRY, ECLOUD_LAN_IP, ...) live in /opt/ecloud/ecloud.env

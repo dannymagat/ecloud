@@ -218,7 +218,7 @@ describe('Access Points page (D-045)', () => {
     ) as HTMLElement;
     expect(within(card).getByText('3 of 5')).toBeInTheDocument();
     expect(within(card).getByRole('progressbar')).toHaveAttribute('aria-valuenow', '3');
-    expect(within(card).getByText(/To use ECLOUD at your venue/)).toBeInTheDocument();
+    expect(within(card).getByText(/To use EZECLOUD at your venue/)).toBeInTheDocument();
     expect(within(card).getByRole('link', { name: 'Invite a member' })).toHaveAttribute(
       'href',
       `/orgs/${ORG_A}/administrators?invite=1&invite_role=read_only`,
@@ -657,7 +657,7 @@ describe('Add Access Point wizard', () => {
     expect(
       await within(dialog).findByText(/1 access point added behind Lobby router/),
     ).toBeVisible();
-    expect(within(dialog).getByText(/unverified until ECLOUD receives/)).toBeInTheDocument();
+    expect(within(dialog).getByText(/unverified until EZECLOUD receives/)).toBeInTheDocument();
     fireEvent.click(within(dialog).getByRole('button', { name: 'Done' }));
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
   });

@@ -7,7 +7,7 @@
  *    status derived from registry evidence ("Tested on device" only with LAB_VALIDATED /
  *    PRODUCTION_VALIDATED device-test evidence, none today).
  *  - `GET /api/v1/orgs/{orgId}/setup-guides/{vendorKey}[?site_id=]`: a NAS-independent guide with
- *    the ECLOUD values filled in from configuration (PUBLIC_PORTAL_ORIGIN, RADIUS_ADVERTISED_*,
+ *    the EZECLOUD values filled in from configuration (PUBLIC_PORTAL_ORIGIN, RADIUS_ADVERTISED_*,
  *    RADIUS_COA_PORT). Secrets are NEVER returned: they stay placeholders and the guide points to
  *    the NAS secret that is shown once when the NAS is added (D-033).
  *
@@ -149,14 +149,14 @@ export function guideWarnings(
     out.push({
       code: 'not_device_tested',
       message:
-        'Built from vendor documentation only: ECLOUD has not tested this on a device yet. Validate it in a lab before production use.',
+        'Built from vendor documentation only: EZECLOUD has not tested this on a device yet. Validate it in a lab before production use.',
     });
   }
   if (guide.portalUrl !== null && guide.portalUrl.startsWith('http://')) {
     out.push({
       code: 'http_portal_cleartext',
       message:
-        'The ECLOUD portal origin uses http:// (cleartext): guest logins cross the network unencrypted. Use it only in a lab; production portals need https://.',
+        'The EZECLOUD portal origin uses http:// (cleartext): guest logins cross the network unencrypted. Use it only in a lab; production portals need https://.',
     });
   }
   const profile = entry.profile === null ? null : builtinPostbackProfile(entry.profile);
@@ -171,7 +171,7 @@ export function guideWarnings(
     out.push({
       code: 'radius_address_not_configured',
       message:
-        'The RADIUS address for access points is not configured on this ECLOUD instance (RADIUS_ADVERTISED_ADDRESS): REQUIRES_CLARIFICATION. Ask your platform operator.',
+        'The RADIUS address for access points is not configured on this EZECLOUD instance (RADIUS_ADVERTISED_ADDRESS): REQUIRES_CLARIFICATION. Ask your platform operator.',
     });
   }
   if (guide.radius !== null) {
@@ -185,7 +185,7 @@ export function guideWarnings(
     out.push({
       code: 'no_radius_accounting',
       message:
-        'No RADIUS in this mode: ECLOUD authorises guests through the controller API, so there is no RADIUS accounting or RFC 5176 Disconnect.',
+        'No RADIUS in this mode: EZECLOUD authorises guests through the controller API, so there is no RADIUS accounting or RFC 5176 Disconnect.',
     });
   }
   if (entry.adapterKey === 'meraki-splash') {
@@ -197,7 +197,7 @@ export function guideWarnings(
     out.push({
       code: 'meraki_public_address_unknown',
       message:
-        'The public ECLOUD RADIUS address for Meraki is not defined for this deployment (REQUIRES_CLARIFICATION, D-043).',
+        'The public EZECLOUD RADIUS address for Meraki is not defined for this deployment (REQUIRES_CLARIFICATION, D-043).',
     });
   }
   return out;
@@ -243,7 +243,7 @@ export function setupGuideRoutes(deps: AppDeps): AnyRouteSpec[] {
   const guide = defineRoute({
     method: 'get',
     path: '/api/v1/orgs/:orgId/setup-guides/:vendorKey',
-    summary: 'Setup guide of a vendor, ECLOUD values filled in, secrets never shown (Cycle F)',
+    summary: 'Setup guide of a vendor, EZECLOUD values filled in, secrets never shown (Cycle F)',
     tags: ['nas'],
     auth: 'principal',
     permission: 'nas:read',

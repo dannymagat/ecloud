@@ -1,6 +1,6 @@
 #!/bin/sh
 #
-#  ECLOUD FreeRADIUS entrypoint wrapper.
+#  EZECLOUD FreeRADIUS entrypoint wrapper.
 #
 #  1. Resolves *_FILE secrets (Compose `secrets:` -> /run/secrets/<name>,
 #     DEPLOYMENT_ARCHITECTURE.md §4.2) into the environment variables the
@@ -100,7 +100,7 @@ if [ -n "${RADIUS_CLIENTS_RENDERED:-}" ]; then
 	fi
 fi
 
-#  802.1X / EAP-TTLS (Cycle A, D-044): opt-in. The ECLOUD eap module and the
+#  802.1X / EAP-TTLS (Cycle A, D-044): opt-in. The EZECLOUD eap module and the
 #  ecloud-inner site are linked only when RADIUS_EAP_ENABLED=1 AND the mounted
 #  certificate set is readable BY freerad; otherwise they are unlinked (a
 #  restarted container keeps its filesystem) and every EAP-Message is rejected

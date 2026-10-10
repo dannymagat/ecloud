@@ -5,7 +5,7 @@
  * harness models their documented rules; the NAS — and so the tenant — is resolved from the real
  * `nas_clients` table by the authenticated packet source, as `/internal/aaa/authorize` does
  * (`apps/api/src/internal/aaa.ts resolveNas`, SECURITY §3.2). It is a stand-in for the AAA
- * stub's decision, not ECLOUD's AAA implementation.
+ * stub's decision, not EZECLOUD's AAA implementation.
  */
 import type { BrokerCredential, NasLookup, RegisteredNas } from '@ecloud/adapters';
 import type { Db } from '@ecloud/db';

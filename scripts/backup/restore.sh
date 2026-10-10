@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# ECLOUD restore: verify checksums, decrypt with an age identity, pg_restore into a target DB.
+# EZECLOUD restore: verify checksums, decrypt with an age identity, pg_restore into a target DB.
 #
 #   scripts/backup/restore.sh --set DIR --identity FILE --target-db NAME
 #                             [--pg-container NAME] [--pg-user ROLE] [--create] [--skip-empty-check [--allow-live-target]]

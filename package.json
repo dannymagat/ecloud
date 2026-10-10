@@ -2,7 +2,7 @@
   "name": "ecloud",
   "version": "0.1.0",
   "private": true,
-  "description": "ECLOUD cloud bandwidth management platform - npm workspaces monorepo",
+  "description": "EZECLOUD cloud bandwidth management platform - npm workspaces monorepo",
   "type": "module",
   "engines": {
     "node": ">=22 <23",

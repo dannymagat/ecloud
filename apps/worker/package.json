@@ -2,7 +2,7 @@
   "name": "@ecloud/worker",
   "version": "0.1.0",
   "private": true,
-  "description": "ECLOUD BullMQ workers and schedulers",
+  "description": "EZECLOUD BullMQ workers and schedulers",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",

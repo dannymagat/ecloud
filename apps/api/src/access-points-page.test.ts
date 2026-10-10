@@ -103,7 +103,7 @@ describe('MikroTik installation script', () => {
   it('renders the RADIUS entry, incoming, hotspot profile and walled garden', () => {
     const text = renderMikrotikScript(input());
     expect(text).toContain(
-      '/radius add service=hotspot address=$radiusAddress secret=$radiusSecret authentication-port=1812 accounting-port=1813 src-address=10.20.30.40 comment="ECLOUD"',
+      '/radius add service=hotspot address=$radiusAddress secret=$radiusSecret authentication-port=1812 accounting-port=1813 src-address=10.20.30.40 comment="EZECLOUD"',
     );
     expect(text).toContain(':local radiusAddress "192.0.2.53"');
     expect(text).toContain('/radius incoming set accept=yes port=1700');

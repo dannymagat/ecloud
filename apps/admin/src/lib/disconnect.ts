@@ -36,7 +36,7 @@ export function disconnectGate(input: DisconnectGateInput): DisconnectGate {
   if (!p.deviceEnforced) {
     return {
       enabled: false,
-      reason: `Adapter ${input.adapterKey ?? '(unknown)'} disconnect is ${p.status} (${p.evidenceLevel ?? 'no evidence level'}): not validated on a lab device, so ECLOUD does not offer it.`,
+      reason: `Adapter ${input.adapterKey ?? '(unknown)'} disconnect is ${p.status} (${p.evidenceLevel ?? 'no evidence level'}): not validated on a lab device, so EZECLOUD does not offer it.`,
     };
   }
   if (!input.endpointAvailable) {

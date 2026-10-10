@@ -1,8 +1,8 @@
 /**
  * "Download MikroTik installation script" (Access Points page, D-045): a RouterOS script for one
- * `mikrotik-hotspot` NAS that applies the ECLOUD side of the MikroTik setup guide
+ * `mikrotik-hotspot` NAS that applies the EZECLOUD side of the MikroTik setup guide
  * (`@ecloud/adapters` mikrotikSetupGuide): RADIUS server entry, `/radius incoming`, HotSpot
- * profile RADIUS settings and the walled-garden entry of the ECLOUD portal host.
+ * profile RADIUS settings and the walled-garden entry of the EZECLOUD portal host.
  *
  * NEVER contains the RADIUS shared secret (D-033 / D-045): the administrator pastes it into the
  * marked variable (the script refuses to run with the placeholder). Values that are not known
@@ -67,11 +67,11 @@ export function renderMikrotikScript(input: MikrotikScriptInput): string {
   const identity = safe(nas.nasIdentifier);
   const dasPort = nas.coaPort ?? MIKROTIK_DEFAULT_DAS_PORT;
   const lines = [
-    `# ECLOUD RouterOS HotSpot configuration for NAS "${commentText(nas.name)}" (${nas.id})`,
+    `# EZECLOUD RouterOS HotSpot configuration for NAS "${commentText(nas.name)}" (${nas.id})`,
     `# Generated ${input.generatedAt.toISOString()}. Status: documented, not yet device-tested.`,
     '# Review every line before running it on the router.',
     '#',
-    '# The RADIUS shared secret is NOT in this file. In ECLOUD open Access Points > RADIUS Secret,',
+    '# The RADIUS shared secret is NOT in this file. In EZECLOUD open Access Points > RADIUS Secret,',
     `# "Reveal and copy" it, paste it in place of ${SECRET_PLACEHOLDER} below, then upload the`,
     '# file to the router and run: /import file-name=<this file>',
     '{',
@@ -79,34 +79,34 @@ export function renderMikrotikScript(input: MikrotikScriptInput): string {
     `:local radiusAddress "${address ?? ADDRESS_PLACEHOLDER}"`,
     '# The HotSpot server profile of the guest network (RouterOS default: hsprof1).',
     `:local hotspotProfile "${DEFAULT_HOTSPOT_PROFILE}"`,
-    `:if ($radiusSecret = "${SECRET_PLACEHOLDER}") do={ :error "ECLOUD: paste the RADIUS shared secret into radiusSecret first" }`,
-    `:if ($radiusAddress = "${ADDRESS_PLACEHOLDER}") do={ :error "ECLOUD: set radiusAddress (the ECLOUD RADIUS address is not configured)" }`,
+    `:if ($radiusSecret = "${SECRET_PLACEHOLDER}") do={ :error "EZECLOUD: paste the RADIUS shared secret into radiusSecret first" }`,
+    `:if ($radiusAddress = "${ADDRESS_PLACEHOLDER}") do={ :error "EZECLOUD: set radiusAddress (the EZECLOUD RADIUS address is not configured)" }`,
   ];
   if (identity !== null) {
     lines.push(
-      '# 1. Router identity = the NAS identifier registered in ECLOUD (sent as NAS-Identifier).',
+      '# 1. Router identity = the NAS identifier registered in EZECLOUD (sent as NAS-Identifier).',
       `/system identity set name="${identity}"`,
     );
   } else {
     lines.push(
-      '# 1. Router identity: no NAS identifier is registered in ECLOUD for this NAS; set one in',
-      '#    ECLOUD and the same value here with /system identity set name=<NAS identifier>.',
+      '# 1. Router identity: no NAS identifier is registered in EZECLOUD for this NAS; set one in',
+      '#    EZECLOUD and the same value here with /system identity set name=<NAS identifier>.',
     );
   }
   lines.push(
     '# 2. RADIUS server for the HotSpot service (authentication + accounting).',
-    `/radius add service=hotspot address=$radiusAddress secret=$radiusSecret authentication-port=${String(input.authPort)} accounting-port=${String(input.acctPort)}${nasIp !== null ? ` src-address=${nasIp}` : ''} comment="ECLOUD"`,
-    '# 3. Accept Disconnect / CoA from ECLOUD (RouterOS default accept=no).',
+    `/radius add service=hotspot address=$radiusAddress secret=$radiusSecret authentication-port=${String(input.authPort)} accounting-port=${String(input.acctPort)}${nasIp !== null ? ` src-address=${nasIp}` : ''} comment="EZECLOUD"`,
+    '# 3. Accept Disconnect / CoA from EZECLOUD (RouterOS default accept=no).',
     `/radius incoming set accept=yes port=${String(dasPort)}`,
     '# 4. HotSpot profile: RADIUS authentication + accounting, HTTP-CHAP login.',
     '/ip hotspot profile set [find name=$hotspotProfile] use-radius=yes radius-accounting=yes radius-interim-update=received login-by=http-chap',
-    '# 5. Walled garden: guests must reach the ECLOUD portal before they log in.',
+    '# 5. Walled garden: guests must reach the EZECLOUD portal before they log in.',
     portalHost !== null
-      ? `/ip hotspot walled-garden add dst-host="${portalHost}" comment="ECLOUD portal"`
+      ? `/ip hotspot walled-garden add dst-host="${portalHost}" comment="EZECLOUD portal"`
       : '# (the portal host name has unusual characters: add its walled-garden entry by hand)',
     '}',
     '#',
-    '# 6. login.html: in ECLOUD download "MikroTik login.html" for this NAS and upload it to the',
+    '# 6. login.html: in EZECLOUD download "MikroTik login.html" for this NAS and upload it to the',
     '#    HotSpot html-directory of the profile (Files > hotspot/login.html), replacing the file',
     `#    there. It redirects guests to ${commentText(input.portalOrigin)}${MIKROTIK_PORTAL_PATH} (no secret inside).`,
     '',

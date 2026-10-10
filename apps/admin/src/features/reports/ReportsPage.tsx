@@ -288,7 +288,7 @@ function ReportsScreen() {
     <div>
       <PageHeader
         title="Reports"
-        description="On-demand reports from ECLOUD's RADIUS, accounting and captive-portal records. Days and months follow each site's time zone."
+        description="On-demand reports from EZECLOUD's RADIUS, accounting and captive-portal records. Days and months follow each site's time zone."
       />
       {doc.isPending ? (
         <Spinner label="Loading…" />

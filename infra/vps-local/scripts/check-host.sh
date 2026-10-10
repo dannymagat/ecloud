@@ -3,7 +3,7 @@
 # LCL-PRE-4 (run before AND after every step) and LCL-MON-1 (timer). Changes nothing.
 #
 #   check-host.sh baseline   EZEOS must-not-break services (works without root; more with sudo)
-#   check-host.sh ecloud     baseline + ECLOUD containers, edge endpoints, certificate expiry
+#   check-host.sh ecloud     baseline + EZECLOUD containers, edge endpoints, certificate expiry
 #
 # Exit 0 = all OK, 1 = at least one FAIL. With CHECK_PUSH_URL set (uptime-kuma push monitor,
 # REQUIRES_CLARIFICATION where it runs) a successful `ecloud` run is pushed; failures are logged

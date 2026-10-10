@@ -78,7 +78,7 @@ export const ADAPTER_LABELS: Readonly<Record<(typeof ADAPTER_KEYS)[number], stri
   'uspot-upstream-uam': 'OpenWrt uspot captive portal',
   'coovachilli-uam': 'CoovaChilli gateway captive portal',
   'generic-radius-8021x': 'Any vendor: 802.1X / MAC auth (generic RADIUS)',
-  'mikrotik-hotspot': 'MikroTik RouterOS Hotspot (ECLOUD login page)',
+  'mikrotik-hotspot': 'MikroTik RouterOS Hotspot (EZECLOUD login page)',
   'external-portal-postback':
     'External captive portal (Cambium, Aruba, Cisco, Fortinet, Ruckus, Omada, Huawei, any vendor)',
   'unifi-external-portal': 'UniFi external portal (controller API, no RADIUS accounting)',
@@ -140,9 +140,9 @@ const OTHER: Record<'UNSUPPORTED' | 'ECLOUD_SIDE_ONLY', Base> = {
     deviceEnforced: false,
   },
   ECLOUD_SIDE_ONLY: {
-    label: 'ECLOUD side',
-    previewLabel: 'ECLOUD side',
-    description: 'Tracked and enforced by ECLOUD (e.g. at authorization), not by the device.',
+    label: 'EZECLOUD side',
+    previewLabel: 'EZECLOUD side',
+    description: 'Tracked and enforced by EZECLOUD (e.g. at authorization), not by the device.',
     tone: 'info',
     variant: 'solid',
     deviceEnforced: false,

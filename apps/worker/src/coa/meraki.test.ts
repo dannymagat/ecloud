@@ -2,7 +2,7 @@
  * Cycle E (D-044): Meraki Disconnect through the existing CoA/Disconnect dispatcher.
  * Meraki doc "CoA Disconnect for Splash Sign-on": Disconnect only, to the organization's
  * dashboard host on UDP 3799, Acct-Session-Id + Event-Timestamp. REQUIRES_DEVICE_TEST: these
- * tests only prove what ECLOUD sends; nothing reaches a real Meraki service (fake runner).
+ * tests only prove what EZECLOUD sends; nothing reaches a real Meraki service (fake runner).
  */
 import { describe, expect, it, vi } from 'vitest';
 import type { RadclientRunner } from './radclient.js';

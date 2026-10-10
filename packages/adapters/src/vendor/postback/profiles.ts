@@ -4,7 +4,7 @@
  *
  * A profile is DATA: which redirect parameters carry the client MAC / AP MAC / NAS-ID / SSID /
  * client IP / continue URL / vendor token, where the browser posts the credential back (a login
- * URL on the AP or controller, never fetched by ECLOUD), the form field names, constant fields,
+ * URL on the AP or controller, never fetched by EZECLOUD), the form field names, constant fields,
  * and the documented RADIUS behaviour. Every name below is taken from the research document,
  * which cites the vendor source; names that were not found in a vendor / vendor-community source
  * are listed in `requiresClarification` and are NOT part of the profile (never invented).
@@ -16,7 +16,7 @@ import type { EvidenceRef } from '@ecloud/shared';
 /** Engine adapter key of the family (policy-engine ADAPTER_KEYS). */
 export const POSTBACK_ADAPTER_KEY = 'external-portal-postback';
 
-/** Where the browser sends the ECLOUD credential. */
+/** Where the browser sends the EZECLOUD credential. */
 export type PostbackLoginTarget =
   | {
       /** A redirect parameter carries the complete login URL (Cisco `switch_url`, Fortinet `post`). */
@@ -185,9 +185,9 @@ const CAMBIUM: PostbackProfile = {
     R34,
   ],
   requiresClarification: [
-    'Query appended to the POST URL (C2) vs carried only in Referer (C1): ECLOUD appends it byte-for-byte; REQUIRES_DEVICE_TEST (plan OQ-10/OQ-12).',
+    'Query appended to the POST URL (C2) vs carried only in Referer (C1): EZECLOUD appends it byte-for-byte; REQUIRES_DEVICE_TEST (plan OQ-10/OQ-12).',
     'HTTPS port 444 depends on the AP certificate (UNKNOWN); default is HTTP port 880.',
-    'ga_srvr may be a public IP when an external web server is used (C1); ECLOUD accepts private, registered-NAS or configured login hosts only (plan OQ-8).',
+    'ga_srvr may be a public IP when an external web server is used (C1); EZECLOUD accepts private, registered-NAS or configured login hosts only (plan OQ-8).',
     'Client IP parameter: none documented.',
   ],
 };
@@ -258,7 +258,7 @@ const ARUBA: PostbackProfile = {
     },
   ],
   requiresClarification: [
-    'url-hash-key (AOS 8): the hash algorithm, the hashed bytes and the parameter carrying the hash are not documented in any source read (HPE CLI-Bank, HPE community thread "Configuring url-hash-key on Instant AP", HPE Central help page 403). Not verified; do NOT enable url-hash-key on the controller for ECLOUD. Unsigned redirects rely on the ECLOUD login token + RADIUS binding.',
+    'url-hash-key (AOS 8): the hash algorithm, the hashed bytes and the parameter carrying the hash are not documented in any source read (HPE CLI-Bank, HPE community thread "Configuring url-hash-key on Instant AP", HPE Central help page 403). Not verified; do NOT enable url-hash-key on the controller for EZECLOUD. Unsigned redirects rely on the EZECLOUD login token + RADIUS binding.',
     'POST target `cgi-bin/login` vs `swarm.cgi` and the field names come from vendor-community / third-party sources (confidence M): REQUIRES_DEVICE_TEST.',
     'AOS 8 AP MAC / client IP parameters appear only when the profile options ap-mac-in-redirection-url / ip-addr-in-redirection-url are enabled; their names on AOS 8: REQUIRES_DEVICE_TEST.',
     'Aruba Instant On: intercept hostname is firmware-dependent; not part of this profile.',
@@ -430,7 +430,7 @@ const RUCKUS: PostbackProfile = {
     },
   ],
   requiresClarification: [
-    'ZoneDirector / Unleashed redirects (2009 app note) carry no client MAC; ECLOUD binds the credential to the client MAC, so such a redirect is refused. `client_mac` is the Ruckus One / SmartZone name and must be sent unencrypted.',
+    'ZoneDirector / Unleashed redirects (2009 app note) carry no client MAC; EZECLOUD binds the credential to the client MAC, so such a redirect is refused. `client_mac` is the Ruckus One / SmartZone name and must be sent unencrypted.',
     'SmartZone browser-login path: research §6 item 8. The ZD/Unleashed `/login` on :9997 / :9998 is used.',
     'NBI (backend) login is Cycle D, not this profile.',
   ],
@@ -539,7 +539,7 @@ const HUAWEI: PostbackProfile = {
   radius: STD_TIMERS('PAP + real-time accounting (third-party); untested'),
   evidence: [R1, R34],
   requiresClarification: [
-    'Huawei parameter names are operator-configurable URL template keywords; the names here are the ones the ECLOUD setup guide tells the operator to configure (third-party source only, confidence L).',
+    'Huawei parameter names are operator-configurable URL template keywords; the names here are the ones the EZECLOUD setup guide tells the operator to configure (third-party source only, confidence L).',
     'Huawei AC (V200R019/R020) HTTP-based mode: the AC login path on port 8000 and whether it works without the Huawei Portal protocol (UDP 50100) are REQUIRES_CLARIFICATION (research §6 item 10); use the generic profile after a lab capture.',
     'Huawei Portal 2.0 (UDP) protocol: out of scope.',
   ],

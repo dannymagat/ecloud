@@ -108,7 +108,7 @@ function uspotSetup(nasId: string): readonly SetupStep[] {
       'captive.uam-secret',
       '<UAM_SECRET>',
     ),
-    step('nasid', 'NAS identifier = ECLOUD NAS id', 'captive.nasid', nasId),
+    step('nasid', 'NAS identifier = EZECLOUD NAS id', 'captive.nasid', nasId),
     step(
       'auth-server',
       'RADIUS authentication server',
@@ -173,14 +173,14 @@ function genericRadiusSetup(): readonly SetupStep[] {
     ),
     step(
       'nas-source',
-      'Send RADIUS from the address registered as the NAS IP (ECLOUD identifies the NAS by packet source)',
+      'Send RADIUS from the address registered as the NAS IP (EZECLOUD identifies the NAS by packet source)',
       'RADIUS source interface / NAS-IP',
       '<REGISTERED_NAS_IP>',
       [F9],
     ),
     step(
       'nas-identifier',
-      'NAS-Identifier: leave unset or use the value registered in ECLOUD (a different value is rejected)',
+      'NAS-Identifier: leave unset or use the value registered in EZECLOUD (a different value is rejected)',
       'NAS-Identifier',
       '<REGISTERED_NAS_IDENTIFIER>',
       [F9],
@@ -201,28 +201,28 @@ function genericRadiusSetup(): readonly SetupStep[] {
     ),
     step(
       'eap-method',
-      'WPA2/WPA3-Enterprise EAP method: EAP-TTLS with inner PAP (ECLOUD stores only one-way password hashes, so PEAP-MSCHAPv2 cannot be verified)',
+      'WPA2/WPA3-Enterprise EAP method: EAP-TTLS with inner PAP (EZECLOUD stores only one-way password hashes, so PEAP-MSCHAPv2 cannot be verified)',
       'EAP method / inner method',
       'EAP-TTLS / PAP',
       [F9, AAA24],
     ),
     step(
       'eap-ca',
-      'Client trust: the CA that signed the ECLOUD RADIUS server certificate (production certificate REQUIRES_CLARIFICATION)',
+      'Client trust: the CA that signed the EZECLOUD RADIUS server certificate (production certificate REQUIRES_CLARIFICATION)',
       'Server certificate validation / CA',
       '<ECLOUD_RADIUS_CA_CERT>',
       [F9, AAA24],
     ),
     step(
       'mac-auth',
-      'MAC authentication (MAB): User-Name = client MAC; enable "MAC auth" on the client device in ECLOUD',
+      'MAC authentication (MAB): User-Name = client MAC; enable "MAC auth" on the client device in EZECLOUD',
       'MAC authentication username format',
       '<CLIENT_MAC> (any of aa:bb:cc:dd:ee:ff, AA-BB-CC-DD-EE-FF, aabbccddeeff)',
       [F9],
     ),
     step(
       'das',
-      'Dynamic authorization (Disconnect: REQUIRES_DEVICE_TEST, D-006); port = the NAS CoA port registered in ECLOUD',
+      'Dynamic authorization (Disconnect: REQUIRES_DEVICE_TEST, D-006); port = the NAS CoA port registered in EZECLOUD',
       'RADIUS dynamic authorization / CoA {client, port, secret}',
       '<ECLOUD_COA_SOURCE>, <DAS_PORT>, <RADIUS_SECRET>',
       [F9],
@@ -286,7 +286,7 @@ const SPECS: readonly FirstPartySpec[] = [
     setup: (site) => [
       step('uamserver', 'Portal URL', 'uamserver', `${PORTAL_ORIGIN}/uam/chilli/`),
       step('uamsecret', 'UAM secret', 'uamsecret', '<UAM_SECRET>'),
-      step('radiusnasid', 'NAS identifier = ECLOUD NAS id', 'radiusnasid', site.nasId),
+      step('radiusnasid', 'NAS identifier = EZECLOUD NAS id', 'radiusnasid', site.nasId),
       step('nasmac', 'NAS MAC', 'nasmac', '<GATEWAY_MAC>'),
       step('radiusserver1', 'RADIUS server', 'radiusserver1', '<ECLOUD_RADIUS_ADDRESS>'),
       step('radiussecret', 'RADIUS secret', 'radiussecret', '<RADIUS_SECRET>'),
@@ -312,7 +312,7 @@ const SPECS: readonly FirstPartySpec[] = [
     uam: null,
     defaultDeployment: 'native',
     radius: false,
-    // Config-only: ECLOUD pushes per-SSID keys through the EZE controller; nothing to set by hand.
+    // Config-only: EZECLOUD pushes per-SSID keys through the EZE controller; nothing to set by hand.
     setup: () => [],
   },
   {

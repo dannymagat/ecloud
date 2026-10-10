@@ -119,7 +119,7 @@ export async function request<T>(
       type: 'about:blank',
       title: 'Network error',
       status: 0,
-      detail: 'The ECLOUD API could not be reached. Check your connection and try again.',
+      detail: 'The EZECLOUD API could not be reached. Check your connection and try again.',
     });
   }
   const text = res.status === 204 ? '' : await res.text();
@@ -190,7 +190,7 @@ export async function uploadFile<T>(
       type: 'about:blank',
       title: 'Network error',
       status: 0,
-      detail: 'The ECLOUD API could not be reached. Check your connection and try again.',
+      detail: 'The EZECLOUD API could not be reached. Check your connection and try again.',
     });
   }
   const text = await res.text();
@@ -238,7 +238,7 @@ export async function downloadFile(
       type: 'about:blank',
       title: 'Network error',
       status: 0,
-      detail: 'The ECLOUD API could not be reached. Check your connection and try again.',
+      detail: 'The EZECLOUD API could not be reached. Check your connection and try again.',
     });
   }
   if (!res.ok) {

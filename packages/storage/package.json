@@ -2,7 +2,7 @@
   "name": "@ecloud/storage",
   "version": "0.1.0",
   "private": true,
-  "description": "ECLOUD object storage abstraction (D-026): tenant-scoped keys, local filesystem and S3-compatible drivers",
+  "description": "EZECLOUD object storage abstraction (D-026): tenant-scoped keys, local filesystem and S3-compatible drivers",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",

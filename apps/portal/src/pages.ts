@@ -58,7 +58,7 @@ export interface FormTarget {
   readonly action: string;
   readonly csrf: string;
   /**
-   * Single-use ECLOUD login token: Cycle C post-back flow (hidden field `lt`) or Cycle E Meraki
+   * Single-use EZECLOUD login token: Cycle C post-back flow (hidden field `lt`) or Cycle E Meraki
    * flow (hidden field `login_token`), bound to NAS + client + flow.
    */
   readonly loginToken?: string | null;

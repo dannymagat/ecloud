@@ -56,7 +56,7 @@ const AVAILABLE = {
     errors: [],
   },
   device_enforced: false,
-  warnings: ['Export/preview only: ECLOUD did not push this fragment to any controller.'],
+  warnings: ['Export/preview only: EZECLOUD did not push this fragment to any controller.'],
   adapter: 'openwifi-config',
   adapter_version: '0.1.0',
 };

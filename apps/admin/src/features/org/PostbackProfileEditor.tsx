@@ -99,7 +99,7 @@ export function PostbackProfileEditor({
   error?: string;
   onChange: (value: string) => void;
   /**
-   * Portal URL of the "Any vendor" profile as configured on this ECLOUD instance (from the API:
+   * Portal URL of the "Any vendor" profile as configured on this EZECLOUD instance (from the API:
    * the setup-guide values, PUBLIC_PORTAL_ORIGIN); null = not known yet (a placeholder is shown).
    */
   genericPortalUrl?: string | null;
@@ -170,7 +170,7 @@ export function PostbackProfileEditor({
             Enter the names your device uses (from a captured redirect). The portal URL must name
             this NAS:{' '}
             <code className="break-all font-mono">
-              {genericPortalUrl ?? '<ECLOUD portal origin>/pb/postback-generic/<NAS_IDENTIFIER>/'}
+              {genericPortalUrl ?? '<EZECLOUD portal origin>/pb/postback-generic/<NAS_IDENTIFIER>/'}
             </code>
           </p>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">

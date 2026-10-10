@@ -1,14 +1,14 @@
-# ECLOUD Multi-Vendor Hotspot, Captive Portal and RADIUS Integration Specification
+# EZECLOUD Multi-Vendor Hotspot, Captive Portal and RADIUS Integration Specification
 
-This document extends the approved ECLOUD architecture with a multi-vendor hotspot integration roadmap. It is subordinate to CLAUDE.md, DECISIONS.md, STATUS.md, PHASE2_VALIDATION.md, POLICY_ENGINE.md, MULTITENANCY.md, AAA_ARCHITECTURE.md, CAPTIVE_PORTAL_ARCHITECTURE.md, NETWORK_INTEGRATION.md and SECURITY_ARCHITECTURE.md. Where this document conflicts with an approved ECLOUD decision, the approved decision register wins. A vendor adapter is never considered supported until its required real-device validation passes.
+This document extends the approved EZECLOUD architecture with a multi-vendor hotspot integration roadmap. It is subordinate to CLAUDE.md, DECISIONS.md, STATUS.md, PHASE2_VALIDATION.md, POLICY_ENGINE.md, MULTITENANCY.md, AAA_ARCHITECTURE.md, CAPTIVE_PORTAL_ARCHITECTURE.md, NETWORK_INTEGRATION.md and SECURITY_ARCHITECTURE.md. Where this document conflicts with an approved EZECLOUD decision, the approved decision register wins. A vendor adapter is never considered supported until its required real-device validation passes.
 
 ## Prompt
 
-You are working on ECLOUD, EzeLink's multi-tenant cloud bandwidth management and hotspot platform. Extend ECLOUD so third-party hardware can use its captive portal, AAA/RADIUS, accounting, policy engine and vendor-specific enforcement adapters. Preserve the approved EZEAP/TIP OpenWiFi + uSpot + CoovaChilli architecture as the first-party path. Cambium is the first new third-party integration. Social WiFi may be studied as a functional reference for hardware onboarding patterns, but ECLOUD must use its own architecture, implementation, security model and branding.
+You are working on EZECLOUD, EzeLink's multi-tenant cloud bandwidth management and hotspot platform. Extend EZECLOUD so third-party hardware can use its captive portal, AAA/RADIUS, accounting, policy engine and vendor-specific enforcement adapters. Preserve the approved EZEAP/TIP OpenWiFi + uSpot + CoovaChilli architecture as the first-party path. Cambium is the first new third-party integration. Social WiFi may be studied as a functional reference for hardware onboarding patterns, but EZECLOUD must use its own architecture, implementation, security model and branding.
 
-### 0. ECLOUD governance and non-negotiable decisions
+### 0. EZECLOUD governance and non-negotiable decisions
 
-- ECLOUD is multi-tenant: Platform → Organization → Site → Device/NAS → subscriber/client/session/policy. Tenant isolation applies to API, database, cache, workers, credentials, accounting and audit data.
+- EZECLOUD is multi-tenant: Platform → Organization → Site → Device/NAS → subscriber/client/session/policy. Tenant isolation applies to API, database, cache, workers, credentials, accounting and audit data.
 - Canonical permissions use `resource:action`. Authorization must not depend on hard-coded role names.
 - Canonical policy specificity is `temporary > client_device > user > voucher_batch > user_group > site > organization default`, with approved field-level fall-through.
 - The cloud VPS is a control/AAA plane, not the subscriber packet-path shaper. Enforcement occurs only through a verified AP/controller/gateway mechanism.
@@ -22,13 +22,13 @@ You are working on ECLOUD, EzeLink's multi-tenant cloud bandwidth management and
 
 ### 1. Discover before implementation
 
-Read CLAUDE.md, AGENTS.md, DECISIONS.md, STATUS.md, QUESTIONS.md, PHASE2_VALIDATION.md, POLICY_ENGINE.md, MULTITENANCY.md, AAA_ARCHITECTURE.md, CAPTIVE_PORTAL_ARCHITECTURE.md, NETWORK_INTEGRATION.md, SECURITY_ARCHITECTURE.md, DATABASE_DESIGN.md, API_ARCHITECTURE.md, DEPLOYMENT_ARCHITECTURE.md, and the existing repository/deployment configuration before changing code. Inspect existing identity, tenancy, RBAC, sites, devices, SSIDs, portal, policy, RADIUS, CoovaChilli/uspot and TIP/uCentral components. Reuse ECLOUD tenant identity, RBAC, policy resolution, session/accounting and portal services rather than creating a competing identity or policy system. Identify whether hotspot services belong inside EZECONTROL or an existing companion service with authenticated APIs.
+Read CLAUDE.md, AGENTS.md, DECISIONS.md, STATUS.md, QUESTIONS.md, PHASE2_VALIDATION.md, POLICY_ENGINE.md, MULTITENANCY.md, AAA_ARCHITECTURE.md, CAPTIVE_PORTAL_ARCHITECTURE.md, NETWORK_INTEGRATION.md, SECURITY_ARCHITECTURE.md, DATABASE_DESIGN.md, API_ARCHITECTURE.md, DEPLOYMENT_ARCHITECTURE.md, and the existing repository/deployment configuration before changing code. Inspect existing identity, tenancy, RBAC, sites, devices, SSIDs, portal, policy, RADIUS, CoovaChilli/uspot and TIP/uCentral components. Reuse EZECLOUD tenant identity, RBAC, policy resolution, session/accounting and portal services rather than creating a competing identity or policy system. Identify whether hotspot services belong inside EZECONTROL or an existing companion service with authenticated APIs.
 
 Produce a concise discovery report, architecture proposal, compatibility matrix and phased implementation plan. Distinguish observed facts, proposed defaults and unresolved items. Continue with reversible foundation work using reasonable documented defaults. Ask only for information that truly blocks dependent work. Do not modify a remote server or deploy unless the session has authorized that target and deployment.
 
 ### 2. Scope and hardware roadmap
 
-Preserve and complete the approved EZEAP/TIP OpenWiFi + uSpot + CoovaChilli path. Add Cambium as the first third-party adapter. Do not refactor the first-party path merely to make Cambium fit; both must implement the same vendor-neutral ECLOUD capability/adapter contracts.
+Preserve and complete the approved EZEAP/TIP OpenWiFi + uSpot + CoovaChilli path. Add Cambium as the first third-party adapter. Do not refactor the first-party path merely to make Cambium fit; both must implement the same vendor-neutral EZECLOUD capability/adapter contracts.
 
 Design the same adapter contract for the following roadmap candidates: MikroTik, Ubiquiti UniFi, TP-Link Omada, Aruba, Cisco including a separate Meraki variant, Ruckus, Grandstream, EnGenius, Fortinet, Huawei, Ruijie, Zyxel, Juniper Mist, Extreme Networks, Alcatel, DCN, DrayTek, OpenMesh, Tanaza and Teltonika. Aerohive and IgniteNet may be investigated as legacy candidates; do not assume current support.
 
@@ -89,7 +89,7 @@ Design for many sites behind NAT: source IP alone is insufficient for tenant res
 
 Translate a canonical policy into verified vendor attributes or API actions. Policies include upload/download rate, session and idle timeout, expiry, schedule, data allowance and concurrent-device limit. Detect unsupported policy features and offer a gateway path or clear rejection. Never silently accept an unenforceable quota or bandwidth setting.
 
-Use one deterministic policy resolver; preserve existing precedence if defined. Use the already-approved ECLOUD precedence: temporary > client_device > user > voucher_batch > user_group > site > organization default, with field-level fall-through as defined by POLICY_ENGINE.md. Do not change this precedence without a new owner-approved architecture decision.
+Use one deterministic policy resolver; preserve existing precedence if defined. Use the already-approved EZECLOUD precedence: temporary > client_device > user > voucher_batch > user_group > site > organization default, with field-level fall-through as defined by POLICY_ENGINE.md. Do not change this precedence without a new owner-approved architecture decision.
 
 Identify exactly where enforcement occurs: AP, controller or gateway. A portal/RADIUS server outside the packet path cannot itself shape client traffic. Test upload/download attribute direction and units per vendor. Separate supported login-time limits from live policy changes. Enable CoA/disconnect only after verification of hardware, firmware, addressing and acknowledgement; otherwise apply changes at the next login and show that limitation.
 
@@ -97,7 +97,7 @@ Normalize and deduplicate accounting records. Handle retransmissions, out-of-ord
 
 ### 7. Security and operations
 
-Enforce tenant isolation at API, database, worker, cache and credential levels. Use the approved ECLOUD permission catalogue with canonical resource:action naming and scoped role bindings. Do not authorize by hard-coded role names. Encrypt controller/RADIUS secrets at rest, redact logs and support rotation.
+Enforce tenant isolation at API, database, worker, cache and credential levels. Use the approved EZECLOUD permission catalogue with canonical resource:action naming and scoped role bindings. Do not authorize by hard-coded role names. Encrypt controller/RADIUS secrets at rest, redact logs and support rotation.
 
 Use signed short-lived portal state, replay protection, rate limits, OTP/voucher abuse controls, safe input parsing and allowlisted callback/redirect destinations. Never use user-supplied ga_srvr or a controller URL as an arbitrary backend fetch target. Validate registered authorization destinations and prevent SSRF/open redirects. Do not expose long-lived API keys in client HTML.
 
@@ -113,8 +113,8 @@ Diagnostics should distinguish portal reachability, redirect parsing, OTP/OAuth 
 
 ### 9. Implementation phases and verification
 
-ECLOUD Phase 3 foundation: implement the shared adapter/capability registry, simulator contracts and multi-vendor data structures without claiming hardware compatibility.
-ECLOUD device validation: execute the existing PHASE2_VALIDATION.md EZEAP/uSpot/CoovaChilli tests and promote capabilities only from evidence.
+EZECLOUD Phase 3 foundation: implement the shared adapter/capability registry, simulator contracts and multi-vendor data structures without claiming hardware compatibility.
+EZECLOUD device validation: execute the existing PHASE2_VALIDATION.md EZEAP/uSpot/CoovaChilli tests and promote capabilities only from evidence.
 Third-party Phase A: research and implement Cambium adapter + onboarding wizard, followed by real-device validation.
 Third-party Phase B: MikroTik, UniFi and Omada, each gated by protocol research and real-device validation.
 Third-party Phase C: additional enterprise adapters, optional marketing/CRM functions and production hardening.
@@ -129,7 +129,7 @@ Deliver working code, additive migrations, configuration examples with placehold
 
 Finish with implemented behavior, tests run/results, device evidence, remaining integration gaps and exact commands to run locally. Do not claim all listed brands work. Do not deploy merely because code is complete. The pilot VPS deployment remains behind the explicit VPS deployment gate in the owner-approved Phase 3 authorization. Preserve q-mira.com and existing VPS workloads. Preserve existing EZECONTROL wireless profiles and current working portal services throughout.
 
-Start by reconciling this specification against the approved ECLOUD governance artifacts. Produce a MULTI_VENDOR_INTEGRATION_PLAN.md and update the compatibility registry. Then proceed only with Phase 3 foundation work already authorized. Third-party device-facing implementation and validation must preserve all existing device-test evidence states and approval gates.
+Start by reconciling this specification against the approved EZECLOUD governance artifacts. Produce a MULTI_VENDOR_INTEGRATION_PLAN.md and update the compatibility registry. Then proceed only with Phase 3 foundation work already authorized. Third-party device-facing implementation and validation must preserve all existing device-test evidence states and approval gates.
 
 ### 11. Controlled agentic implementation loop (mandatory)
 

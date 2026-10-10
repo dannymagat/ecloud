@@ -29,8 +29,8 @@ export function VoucherCodes({ batch, onDone }: { batch: CreatedBatch; onDone: (
     <section aria-label="Voucher codes" className="space-y-4">
       <div className="space-y-3 print:hidden">
         <Notice tone="warning" title={`${batch.codes.length} voucher codes for “${batch.name}”`}>
-          These codes are shown only now; ECLOUD keeps only a hash of each code. Print or copy them
-          before leaving this view.
+          These codes are shown only now; EZECLOUD keeps only a hash of each code. Print or copy
+          them before leaving this view.
         </Notice>
         <div className="flex flex-wrap items-center gap-2">
           <Button variant="primary" onClick={() => window.print()}>

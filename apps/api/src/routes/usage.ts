@@ -4,7 +4,7 @@
  * quota position against the policy the worker evaluates, CSV export (`report:export`).
  *
  * Every response carries the freshness fields: usage comes from RADIUS accounting, which reaches
- * ECLOUD at the NAS interim interval, so figures always lag (spec §6).
+ * EZECLOUD at the NAS interim interval, so figures always lag (spec §6).
  */
 import { ForbiddenError, NotFoundError, ValidationError } from '@ecloud/shared';
 import type { DbTransaction, UsagePeriodType } from '@ecloud/db';

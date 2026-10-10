@@ -30,7 +30,7 @@ let parsersConfigured = false;
 
 /**
  * Driver-wide type parsers (idempotent): int8 -> number, date -> 'YYYY-MM-DD' string.
- * Octet counters exceed 2^53 only beyond ~9 PB, so `number` is exact for ECLOUD's values.
+ * Octet counters exceed 2^53 only beyond ~9 PB, so `number` is exact for EZECLOUD's values.
  */
 export function configureTypeParsers(): void {
   if (parsersConfigured) return;

@@ -2,7 +2,7 @@
  * L4 simulator catalogue and the SIMULATOR_RESULTS record format
  * (MULTI_VENDOR_INTEGRATION_PLAN.md §8.3, §4.1, §4.5 V2).
  *
- * Simulator evidence proves ECLOUD code behaviour against a simulated NAS. It is never hardware
+ * Simulator evidence proves EZECLOUD code behaviour against a simulated NAS. It is never hardware
  * compatibility evidence: it may only ever back `SIMULATOR_TESTED` on the three operation
  * capabilities (`redirectParse`, `authorizationHandoff`, `accountingNormalize`) of the two
  * first-party UAM adapters, never an enforcement capability, never `LAB_VALIDATED`, and never
@@ -14,7 +14,7 @@ import { OPERATION_CAPABILITIES, type OperationCapability } from '@ecloud/shared
 export const SIMULATOR_RESULTS_FORMAT = 'ecloud-simulator-results/v1';
 
 export const SIMULATOR_SCOPE_STATEMENT =
-  'Simulator evidence: ECLOUD code behaviour against a simulated NAS (fixtures derived from documented parameter lists). It is NOT hardware compatibility evidence, never LAB_VALIDATED, and never applies to an enforcement capability or to Disconnect/CoA (D-006).';
+  'Simulator evidence: EZECLOUD code behaviour against a simulated NAS (fixtures derived from documented parameter lists). It is NOT hardware compatibility evidence, never LAB_VALIDATED, and never applies to an enforcement capability or to Disconnect/CoA (D-006).';
 
 /** The two first-party UAM adapters the simulator covers (plan §8.3 AC2). */
 export const SIM_ADAPTERS = ['openwifi-uspot-uam', 'coovachilli-uam'] as const;
@@ -176,7 +176,7 @@ export interface SimulatorClaim {
   readonly evidenceLevel: 'SIMULATOR_TESTED';
   /**
    * Status the orchestrator should use when it adds the cell: rule V1 forbids
-   * VERIFIED_SUPPORTED with SIMULATOR_TESTED, and the operation is ECLOUD's own code path.
+   * VERIFIED_SUPPORTED with SIMULATOR_TESTED, and the operation is EZECLOUD's own code path.
    */
   readonly proposedStatus: 'ECLOUD_SIDE_ONLY';
   readonly scenarios: readonly ScenarioId[];

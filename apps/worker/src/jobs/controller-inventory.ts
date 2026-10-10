@@ -10,7 +10,7 @@
  *     MAC of someone else's AP. Verification needs the platform confirmation
  *     (`POST /api/v1/platform/access-points/confirm-inventory`) or RADIUS observation.
  *     TENANT-SCOPED: only AP rows of the SAME organization whose NAS is managed by THIS controller.
- *  2. Expires `vendor_api_sessions` whose granted duration has passed (ECLOUD's view only).
+ *  2. Expires `vendor_api_sessions` whose granted duration has passed (EZECLOUD's view only).
  *
  * Verification is additive: an AP that disappears from the inventory is NOT un-verified here
  * (a MAC / NAS change already resets `verified_at`, Cycle A). Omada (hotspot operator API has no

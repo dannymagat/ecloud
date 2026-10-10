@@ -1749,8 +1749,8 @@
     }
   },
   "info": {
-    "description": "ECLOUD admin/integration API. Errors are RFC 9457 application/problem+json. Cookie sessions require Origin + X-Requested-With on mutations; API keys use Bearer.",
-    "title": "ECLOUD API",
+    "description": "EZECLOUD admin/integration API. Errors are RFC 9457 application/problem+json. Cookie sessions require Origin + X-Requested-With on mutations; API keys use Bearer.",
+    "title": "EZECLOUD API",
     "version": "0.1.0"
   },
   "openapi": "3.1.0",
@@ -6575,7 +6575,7 @@
             "description": "Not a mikrotik-hotspot NAS (application/problem+json)"
           }
         },
-        "summary": "Download the ECLOUD login.html of a MikroTik NAS HotSpot (Cycle B generator)",
+        "summary": "Download the EZECLOUD login.html of a MikroTik NAS HotSpot (Cycle B generator)",
         "tags": ["nas"]
       }
     },
@@ -16247,7 +16247,7 @@
             "description": "Not found (also returned for objects of other tenants)"
           }
         },
-        "summary": "Setup guide of a vendor, ECLOUD values filled in, secrets never shown (Cycle F)",
+        "summary": "Setup guide of a vendor, EZECLOUD values filled in, secrets never shown (Cycle F)",
         "tags": ["nas"]
       }
     },

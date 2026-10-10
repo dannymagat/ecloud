@@ -287,7 +287,7 @@ const authOutcomes: ReportDef = {
       label_basis: `${localBasis(scope)}; RADIUS requests without a NAS row of the scope on UTC days (organization-level only)`,
       notes: [
         'Portal lockouts are recorded from migration 026 on (attempts that activated a lock).',
-        'Reasons are ECLOUD reason codes; free-text RADIUS module messages (which may echo a username) are reported as module_message.',
+        'Reasons are EZECLOUD reason codes; free-text RADIUS module messages (which may echo a username) are reported as module_message.',
       ],
     };
   },
@@ -384,7 +384,7 @@ const nasActivityReport: ReportDef = {
   key: 'nas_activity',
   title: 'NAS activity (observed)',
   description:
-    'Per NAS: newest RADIUS auth request and accounting record seen by ECLOUD, the observed-activity status, open sessions and window counts. Not a device online/offline state.',
+    'Per NAS: newest RADIUS auth request and accounting record seen by EZECLOUD, the observed-activity status, open sessions and window counts. Not a device online/offline state.',
   params: [...dateParams('the last 7 days', 'at most 31 days'), SITE_PARAM],
   columns: [
     col('nas_client_id', 'NAS ID', 'string'),

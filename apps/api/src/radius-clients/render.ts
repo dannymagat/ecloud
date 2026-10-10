@@ -67,7 +67,7 @@ export const SECRET_RE = /^[A-Za-z0-9._~+/=-]{16,128}$/;
 export const SECRET_RULE = 'shared secret must be 16-128 characters of [A-Za-z0-9._~+/=-]';
 
 export const RENDERED_HEADER =
-  '# ECLOUD rendered FreeRADIUS clients (apps/api radius-clients). DO NOT EDIT: regenerated\n' +
+  '# EZECLOUD rendered FreeRADIUS clients (apps/api radius-clients). DO NOT EDIT: regenerated\n' +
   '# from nas_clients; contains shared secrets (keep 0640, never commit, never print).\n';
 
 function block(entry: NasClientEntry, address: string, prefix: number): string {

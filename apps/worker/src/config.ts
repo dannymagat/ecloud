@@ -35,7 +35,7 @@ export const workerEnvSchema = z.object({
   RADCLIENT_RETRIES: z.coerce.number().int().min(0).max(10).default(3),
   /** D-025 retention runs as a dry-run plan unless this is true. */
   RETENTION_APPLY: boolFlag(false),
-  /** Expected Acct-Interim-Interval (uCentral default 600 s overrides ECLOUD's 300, AAA §5.3). */
+  /** Expected Acct-Interim-Interval (uCentral default 600 s overrides EZECLOUD's 300, AAA §5.3). */
   WORKER_INTERIM_INTERVAL_S: positiveInt(600, 86_400),
   WORKER_REAP_GRACE_S: z.coerce.number().int().min(0).max(86_400).default(120),
   /** D-036: an `authorized` session without accounting for this long becomes `expired`. */

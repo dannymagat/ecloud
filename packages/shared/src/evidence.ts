@@ -69,7 +69,7 @@ export interface EvidenceRef {
 }
 
 /**
- * Operation capabilities (ECLOUD's own adapter code paths). `SIMULATOR_TESTED` is allowed only
+ * Operation capabilities (EZECLOUD's own adapter code paths). `SIMULATOR_TESTED` is allowed only
  * on these, never on an enforcement capability (rule V2).
  */
 export const OPERATION_CAPABILITIES = [

@@ -1,4 +1,4 @@
-# ECLOUD — Database Design (Phase 2, A6)
+# EZECLOUD — Database Design (Phase 2, A6)
 
 Status: **PROPOSED** unless a row is labelled otherwise. Nothing in this document has been created on any host. Companion document: `MULTITENANCY.md` (tenant model, RBAC data model, isolation rules).
 
@@ -190,7 +190,7 @@ Voucher codes are **hashed, not stored in plain** (PROPOSED). Reasoning: a vouch
 
 ### 3.7 Intentionally not included
 
-- `firmware`: device lifecycle/upgrade is owned by the EZE controller today (ezecontroller `025_ap_upgrade_on_connect.sql`); ECLOUD stores `network_devices.firmware` as reported, nothing more. Add only if the owner moves firmware management into ECLOUD.
+- `firmware`: device lifecycle/upgrade is owned by the EZE controller today (ezecontroller `025_ap_upgrade_on_connect.sql`); EZECLOUD stores `network_devices.firmware` as reported, nothing more. Add only if the owner moves firmware management into EZECLOUD.
 - Per-tenant `radcheck/radreply` tables: see §4.
 - Billing/invoices: future; `organizations.max_*` and `usage_counters` are the hooks.
 
@@ -213,26 +213,26 @@ Source: `https://github.com/FreeRADIUS/freeradius-server/blob/v3.2.x/raddb/mods-
 | `nas` | `id serial, nasname text NOT NULL, shortname text NOT NULL, type text DEFAULT 'other', ports int, secret text NOT NULL, server, community, description` | `(nasname)` |
 | `nasreload` | `NASIPAddress inet PK, ReloadTime timestamptz` | — |
 
-Two facts in that schema drive the design: `radacct` is a **mutable** table (stop/interim rows update the start row — the official partial indexes exist for exactly those updates), and `nas.secret` is **plaintext** (FreeRADIUS needs the clear secret). Neither matches ECLOUD's append-only / secret-ref rules, so the official tables cannot simply be the ECLOUD tables.
+Two facts in that schema drive the design: `radacct` is a **mutable** table (stop/interim rows update the start row — the official partial indexes exist for exactly those updates), and `nas.secret` is **plaintext** (FreeRADIUS needs the clear secret). Neither matches EZECLOUD's append-only / secret-ref rules, so the official tables cannot simply be the EZECLOUD tables.
 
 ### 4.2 Options — **PROPOSED**, final choice belongs to A3 (AAA); A6 owns the data side
 
-| | (a) `rlm_sql` only — FreeRADIUS reads/writes ECLOUD-owned tables shaped like the official schema | (b) `rlm_rest` only — FreeRADIUS calls the ECLOUD API for authorize/accounting | (c) Hybrid — `rlm_rest` for authorize/post-auth, `rlm_sql` for accounting |
+| | (a) `rlm_sql` only — FreeRADIUS reads/writes ECLOUD-owned tables shaped like the official schema | (b) `rlm_rest` only — FreeRADIUS calls the EZECLOUD API for authorize/accounting | (c) Hybrid — `rlm_rest` for authorize/post-auth, `rlm_sql` for accounting |
 |---|---|---|---|
 | Policy resolution (priority, quotas, schedule, concurrency) | Must be pre-materialised into `radcheck/radreply`-shaped rows per user; every intent change re-renders rows; schedule/quota checks need SQL hacks or `rlm_sqlcounter` | Done in TypeScript against the intent model at request time; full `policy_translations` logging | As (b) |
-| Tenant resolution | FreeRADIUS queries are templated with request attributes; which attributes are available for the query is an A3 fact | ECLOUD receives NAS-IP / NAS-Identifier / Called-Station-Id and resolves tenant itself | As (b) |
+| Tenant resolution | FreeRADIUS queries are templated with request attributes; which attributes are available for the query is an A3 fact | EZECLOUD receives NAS-IP / NAS-Identifier / Called-Station-Id and resolves tenant itself | As (b) |
 | Accounting durability | FreeRADIUS writes straight to PG; proven, buffered by `rlm_sql` pools; works when the API is down | Every packet is an HTTP call; API outage = lost or retried accounting | SQL path for the high-volume stream; API outage only affects new logins |
 | Latency per auth | One SQL round trip | One HTTP + SQL round trip | One HTTP + SQL round trip |
 | Secrets | `nas.secret` plaintext in a table | `clients.conf` rendered from secret store, or dynamic clients via REST | As (b) |
-| Fit with "intent vs enforcement" (brief rule 4) | Weak — adapters would emit rows into FreeRADIUS tables | Strong — adapter runs inside ECLOUD | Strong |
+| Fit with "intent vs enforcement" (brief rule 4) | Weak — adapters would emit rows into FreeRADIUS tables | Strong — adapter runs inside EZECLOUD | Strong |
 | **Recommendation** | pilot fallback only | acceptable | **recommended** |
 
 Data-side consequences of (c), which also keep (a) possible as a fallback:
 
-1. A dedicated PostgreSQL schema `radius` owned by ECLOUD, with a DB role `freeradius` that has **only** `INSERT` on `radius.radacct_raw`/`radius.radpostauth_raw` and `SELECT` on `radius.nas_v` — nothing in `public`.
-2. `radius.radacct_raw` is **not** the official mutable `radacct`; it is a thin append table (official column names, plus `received_at`, `acctstatustype`) that an ECLOUD worker drains by `RadAcctId` watermark into `accounting_records` and `sessions`. This keeps `radius` disposable and `public` canonical. **Dependency on A3:** confirm that FreeRADIUS 3.2 `rlm_sql` accounting queries can be configured as insert-only (the shipped `queries.conf` is per-status-type and editable — A3 to cite the file).
+1. A dedicated PostgreSQL schema `radius` owned by EZECLOUD, with a DB role `freeradius` that has **only** `INSERT` on `radius.radacct_raw`/`radius.radpostauth_raw` and `SELECT` on `radius.nas_v` — nothing in `public`.
+2. `radius.radacct_raw` is **not** the official mutable `radacct`; it is a thin append table (official column names, plus `received_at`, `acctstatustype`) that an EZECLOUD worker drains by `RadAcctId` watermark into `accounting_records` and `sessions`. This keeps `radius` disposable and `public` canonical. **Dependency on A3:** confirm that FreeRADIUS 3.2 `rlm_sql` accounting queries can be configured as insert-only (the shipped `queries.conf` is per-status-type and editable — A3 to cite the file).
 3. `radius.nas_v`: if A3 chooses `rlm_sql` NAS lookup, the view must expose a clear secret; the only acceptable source is a worker-populated table in the `radius` schema with the secret decrypted from the secret store at render time and the schema readable solely by `freeradius`. If A3 chooses a rendered `clients.conf` instead, `nas_v` is not needed. **UNKNOWN until A3 decides.**
-4. If A3 falls back to (a) for authorize, ECLOUD renders `radius.radcheck/radreply/radusergroup/radgroupreply` from `users`, `policies` and `policy_assignments` via a worker (not views — views would run the whole priority algorithm per packet). Username scoping for those rows is then the open question Q1/Q2 in `MULTITENANCY.md`.
+4. If A3 falls back to (a) for authorize, EZECLOUD renders `radius.radcheck/radreply/radusergroup/radgroupreply` from `users`, `policies` and `policy_assignments` via a worker (not views — views would run the whole priority algorithm per packet). Username scoping for those rows is then the open question Q1/Q2 in `MULTITENANCY.md`.
 
 ---
 
@@ -347,7 +347,7 @@ Reproducibility: migrations run from the API image at container start (`migrate`
 
 | Phase | Method (PROPOSED) | Notes |
 |---|---|---|
-| Pilot (this VPS) | Nightly `pg_dump -Fc` of the ECLOUD database to an encrypted off-host location; `--exclude-table-data='accounting_records_*'` older than 2 months to keep dumps small; weekly restore drill into a scratch container | 31 GB free, no second disk — off-host copy is mandatory |
+| Pilot (this VPS) | Nightly `pg_dump -Fc` of the EZECLOUD database to an encrypted off-host location; `--exclude-table-data='accounting_records_*'` older than 2 months to keep dumps small; weekly restore drill into a scratch container | 31 GB free, no second disk — off-host copy is mandatory |
 | Production | Continuous WAL archiving + base backups (pgBackRest or WAL-G — A5/A7 to choose) for PITR; `pg_dump` kept weekly as a logical safety copy and for per-tenant exports | PITR needed because accounting is money-relevant; logical dump needed because PITR cannot restore one tenant |
 | Per-tenant export | `COPY (SELECT … WHERE organization_id = $1) TO STDOUT` per table, driven by the same table catalogue the RLS migration uses | Also the mechanism for a future move of a tenant to a dedicated database (`MULTITENANCY.md §3`) |
 | Archival | Detached monthly partitions are dumped to compressed CSV/parquet before `DROP` | cheap long-term storage, re-loadable |

@@ -85,7 +85,7 @@ export const credentialFields: FieldDef[] = [
     name: 'external_site_id',
     label: 'Vendor site id',
     type: 'text',
-    hint: 'UniFi: the Network API site id (needed before ECLOUD can call the controller).',
+    hint: 'UniFi: the Network API site id (needed before EZECLOUD can call the controller).',
   },
   {
     name: 'unifi_site_name',
@@ -326,7 +326,7 @@ export function ControllersPage() {
       type: 'text',
       required: true,
       placeholder: 'https://controller.example:8443/',
-      hint: 'https only. ECLOUD calls the controller only through the API credential below (SSRF-guarded, TLS verified).',
+      hint: 'https only. EZECLOUD calls the controller only through the API credential below (SSRF-guarded, TLS verified).',
     },
     {
       name: 'site_id',

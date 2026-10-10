@@ -18,14 +18,14 @@
 #      ECLOUD_WEB_CIDRS;
 #    - NEW udp 1812/1813 (freeradius) whose original destination is ECLOUD_LAN_IP pass only
 #      from ECLOUD_RADIUS_CIDRS;
-#    - every other NEW connection from outside the ECLOUD bridge into it is logged + dropped
+#    - every other NEW connection from outside the EZECLOUD bridge into it is logged + dropped
 #      (WAN interfaces included, whatever address they get later);
 #    - container-originated traffic (egress, CoA to the NAS) and container<->container traffic
 #      on br-ecloud are not matched here.
 #  Settings come from the environment (the systemd unit reads /etc/ecloud/docker-user.env,
 #  host-local, never committed): ECLOUD_LAN_IP, ECLOUD_WEB_CIDRS, ECLOUD_RADIUS_CIDRS
 #  (space-separated), ECLOUD_BRIDGE (default br-ecloud).
-#  IPv6: Docker's ip6tables support is off by default and the ECLOUD network is IPv4-only; the
+#  IPv6: Docker's ip6tables support is off by default and the EZECLOUD network is IPv4-only; the
 #  ip6tables chain is only reset to Docker's default if it exists.
 # =============================================================================================
 set -euo pipefail

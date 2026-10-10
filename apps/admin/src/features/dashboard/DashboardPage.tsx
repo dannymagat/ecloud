@@ -5,7 +5,7 @@
  * breakdown, enforcement / anomaly callouts and the NAS activity table. Polled every 30 s (Q73);
  * polling stops while a query is in error.
  *
- * Honesty: NAS status is ECLOUD's observation of RADIUS traffic, never device up/down state
+ * Honesty: NAS status is EZECLOUD's observation of RADIUS traffic, never device up/down state
  * (spec §8); registered network devices are shown with no observed state; usage figures carry
  * freshness and the period label basis (spec §6, Q65); enforcement counts are ECLOUD-side
  * pending records, not device confirmations (D-028 / V12).
@@ -379,7 +379,7 @@ function StatTiles({ d, orgId, siteId }: { d: OrgDashboard; orgId: string; siteI
           ))}
         </ul>
         <p className="mt-2 text-xs text-subtle">
-          NAS status comes from the RADIUS activity ECLOUD observes (active / quiet / silent /
+          NAS status comes from the RADIUS activity EZECLOUD observes (active / quiet / silent /
           never); it says nothing about the state of an access point. Figures follow the scope and
           time zone shown below.
         </p>
@@ -409,7 +409,7 @@ function Callouts({ d, orgId }: { d: OrgDashboard; orgId: string }) {
             {d.enforcement.oldest_pending_at
               ? `Oldest recorded ${formatDateTime(d.enforcement.oldest_pending_at)}. `
               : ''}
-            ECLOUD records these changes and they take effect when the session re-authorizes; this
+            EZECLOUD records these changes and they take effect when the session re-authorizes; this
             is an ECLOUD-side record, not a confirmation from the device.{' '}
             <Link className="text-primary hover:underline" to={`/orgs/${orgId}/sessions`}>
               Sessions
@@ -728,8 +728,8 @@ function NasActivityCard({
         </p>
         <p className="text-sm" data-network-devices>
           {formatExact(d.network_devices.registered)} network devices registered · device state
-          observed by ECLOUD for {formatExact(d.network_devices.online_status_known)} (ECLOUD does
-          not monitor access points)
+          observed by EZECLOUD for {formatExact(d.network_devices.online_status_known)} (EZECLOUD
+          does not monitor access points)
         </p>
         <DataTable<NasActivity>
           caption="NAS activity"
@@ -762,7 +762,7 @@ function NasActivityCard({
             {
               key: 'admin_status',
               header: 'Admin status',
-              render: (r) => (r.admin_status === 'disabled' ? 'Disabled in ECLOUD' : 'Enabled'),
+              render: (r) => (r.admin_status === 'disabled' ? 'Disabled in EZECLOUD' : 'Enabled'),
             },
           ]}
         />
@@ -944,7 +944,7 @@ function DashboardView({ orgId, siteId }: { orgId: string; siteId?: string }) {
       <PageHeader
         title={siteId ? `Site dashboard${siteName ? ` · ${siteName}` : ''}` : 'Dashboard'}
         subtitle={siteId ? 'site dashboard' : 'organization dashboard'}
-        description="Sessions, usage and authentication outcomes as observed by ECLOUD from RADIUS, accounting and the captive portal. Days and months follow each site's time zone."
+        description="Sessions, usage and authentication outcomes as observed by EZECLOUD from RADIUS, accounting and the captive portal. Days and months follow each site's time zone."
         actions={
           allowed && available ? (
             <ScopePicker orgId={orgId} siteId={siteId} covered={dash.data?.sites ?? []} />

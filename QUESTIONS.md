@@ -69,7 +69,7 @@ Legend: **ANSWERED** · **PARTIAL** (owner gave the principle; details still ope
 | Q29 | Platform admin identity: one global account with bindings into many orgs, or per-org accounts? | global | DB Q7 |
 | Q30 | Will one physical site/NAS ever serve two organizations (shared venue)? If yes, realm/SSID tenant resolution and NAS↔org many-to-many are needed now. | no | MT M2 |
 | Q31 | Secrets model: one RADIUS secret per NAS (not per site) and a separate DAS/CoA secret per NAS (`nas_clients.coa_secret_ref`)? | yes to both | AAA Q5, SEC §4.1 |
-| Q32 | Fail mode when ECLOUD api/DB is unreachable: fail-closed for unknown subjects + cached-allow (≤15 min) for recently authorized subjects; no fail-open? | fail-closed + cached-allow (PE D7, AAA Q2) | AAA Q2, PE Q7 |
+| Q32 | Fail mode when EZECLOUD api/DB is unreachable: fail-closed for unknown subjects + cached-allow (≤15 min) for recently authorized subjects; no fail-open? | fail-closed + cached-allow (PE D7, AAA Q2) | AAA Q2, PE Q7 |
 | Q33 | SPA calls the API same-origin via `ezecloud.ezelink.ai/api/v1` (`__Host-` cookie) while `api.ecloud.` stays for integrations? | yes (C-08) | API Q1 |
 | Q34 | Redis in the pilot (sessions, queues, rate limits, policy cache) or defer to save memory? | include Redis (needed for Idempotency-Key, cached-allow, BullMQ) | DEP Q9 |
 | Q35 | Frontend: React + TypeScript + Tailwind SPA (team precedent) — any objection? | React SPA | A7 Q1 |
@@ -84,21 +84,21 @@ Legend: **ANSWERED** · **PARTIAL** (owner gave the principle; details still ope
 | Q39 | Plan units/granularity: integer Mbit/s (SSID `rate-limit`) vs bit/s (RADIUS WISPr); sub-1-Mbit plans need the RADIUS path. | store kbit/s; WISPr bit/s for portal clients; SSID cap rounds up to integer Mbit/s | NI Q3, PE §4.1 |
 | Q40 | Which captive deployment comes first: uspot on EZEAP or CoovaChilli on an EZE gateway? | uspot on EZEAP | CP Q1 |
 | Q41 | Is the EZE gateway CoovaChilli 1.2.9 still in service and may it be upgraded to current master (`coaport`/JSON behaviour verified on master only)? | keep 1.2.9; DT-15 documents gaps | CP Q2 |
-| Q42 | Is `radius-gw-proxy`/RadSec via the OpenWiFi gateway in scope, or will EZEAP reach ECLOUD RADIUS directly (tunnel)? | direct over tunnel; RadSec fallback only | CP Q6, WG Q3 |
+| Q42 | Is `radius-gw-proxy`/RadSec via the OpenWiFi gateway in scope, or will EZEAP reach EZECLOUD RADIUS directly (tunnel)? | direct over tunnel; RadSec fallback only | CP Q6, WG Q3 |
 | Q43 | Is 802.1X WPA-Enterprise in pilot scope? If yes: PEAP-MSCHAPv2 (requires NT-hash storage) or EAP-TTLS/PAP only? Who issues the RADIUS server certificate? | out of pilot; EAP-TTLS/PAP first if added | AAA Q1, SEC Q4 |
 | Q44 | Policy-change latency without CoA: acceptable to cap `Session-Timeout` at 15–60 min (forces re-auth; uspot users without MAC-auth see the portal again)? | 30 min cap | AAA Q4 |
 | Q45 | `min_session_s` floor (300 s) for drain-time Session-Timeout on NAS without octet attributes — acceptable re-auth cadence? | 300 s | PE Q6 |
 | Q46 | Does every site have a Linux/OpenWrt-capable gateway (EZEGATE/EZEOS) that can run WireGuard, or are some sites AP-only (forcing topology B or C)? | gateway present at pilot site; AP-only sites use RadSec | WG Q2 |
 | Q47 | Is CoA/Disconnect a must-have for the pilot? If yes and NAS are behind NAT, a tunnel is mandatory. | nice-to-have; Disconnect only | WG Q4, D-006 |
 | Q48 | Will two sites ever present the same RADIUS source IP (NAT without WireGuard)? Changes `uq_nas_clients_ip` to `(nas_ip, nas_identifier)`. | no (tunnel gives unique IPs); DT-20 verifies | DB Q3, MT §9 |
-| Q49 | Who owns and schedules the ezecontroller "policy fragment" API + state webhook (Option A), and which controller API key would ECLOUD use? | pilot = Option C, no controller change | NI Q4, API Q2 |
+| Q49 | Who owns and schedules the ezecontroller "policy fragment" API + state webhook (Option A), and which controller API key would EZECLOUD use? | pilot = Option C, no controller change | NI Q4, API Q2 |
 | Q50 | Lab availability for device tests: one EZEAP with three lab SSIDs (or one per mode), a NAT router, controller test SSIDs, and optionally an EZE gateway with CoovaChilli re-pointed to lab FreeRADIUS. Who executes and signs the results (PHASE2_VALIDATION §5.4)? | — (extends Q9) | NI Q5, CP Q1–Q2, A9 |
 
 ## C. Hardening / operations
 
 | ID | Question | Default | Source |
 |---|---|---|---|
-| Q51 | RADIUS exposure: tunnel-only in pilot (recommended) or public UDP with allowlist? If any site cannot run WireGuard, approve RadSec with per-NAS client certificates — who issues device certs (ECLOUD PKI vs OpenWiFi certs)? | tunnel-only; RadSec work in Phase 5 if needed | AAA Q3, SEC Q3, DEP Q10 |
+| Q51 | RADIUS exposure: tunnel-only in pilot (recommended) or public UDP with allowlist? If any site cannot run WireGuard, approve RadSec with per-NAS client certificates — who issues device certs (EZECLOUD PKI vs OpenWiFi certs)? | tunnel-only; RadSec work in Phase 5 if needed | AAA Q3, SEC Q3, DEP Q10 |
 | Q52 | Should CoA/Disconnect originate only from the WireGuard hub IP (fixed `uc-ip` requirement of `dynamic-authorization.host`)? | yes (`100.100.0.1`) | NI Q6 |
 | Q53 | Hub UDP port (51820 proposed) and OVH edge behaviour for UDP 51820/1812/1813/3799 (ties Q17). | 51820 | WG Q3, Q8 |
 | Q54 | Who owns site gateway configuration — ECLOUD-generated bundle applied by site staff, or ECLOUD-managed? | bundle applied by site staff | WG Q5 |

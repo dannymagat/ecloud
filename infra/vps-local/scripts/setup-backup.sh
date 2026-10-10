@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# One-shot host setup for the ECLOUD backup (DRAFT, NOT RUN). docs/VPS_LOCAL_CHANGE_LIST.md
+# One-shot host setup for the EZECLOUD backup (DRAFT, NOT RUN). docs/VPS_LOCAL_CHANGE_LIST.md
 # LCL-BK-2 / LCL-BK-3. Run from /opt/ecloud/infra/vps-local/scripts:
 #
 #   sudo ECLOUD_APPROVED_CHANGE=LCL-BK-3 ./setup-backup.sh key          # deploy key + print PUBLIC key

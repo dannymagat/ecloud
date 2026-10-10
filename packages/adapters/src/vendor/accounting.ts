@@ -104,7 +104,7 @@ function hexToUuid(hex: string): string | null {
 }
 
 /**
- * Parses the ECLOUD `Class` convention (docs/contracts/aaa-authorize.md §3 rule 5): ASCII
+ * Parses the EZECLOUD `Class` convention (docs/contracts/aaa-authorize.md §3 rule 5): ASCII
  * `ai:` + 32 lowercase hex digits of the session UUID. FreeRADIUS writes the octets attribute
  * as `0x61693a<64 hex>`; the legacy 16-raw-byte form `0x61693a<32 hex>` and a plain `ai:<hex>`
  * string are accepted too. The nil UUID (lab placeholder) and anything else yield null.

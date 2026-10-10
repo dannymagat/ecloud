@@ -1,6 +1,6 @@
 /**
  * One vendor's setup guide (multi-vendor Cycle F). Numbered steps with copy buttons for the
- * values ECLOUD fills in (portal URL, RADIUS server and ports, walled garden), honest warnings
+ * values EZECLOUD fills in (portal URL, RADIUS server and ports, walled garden), honest warnings
  * (cleartext http, lab mode, Meraki OFF state, untested), a pre-flight checklist and an
  * "Add this access point" button that opens the Access Points Add wizard on this vendor. Part of
  * Access Points (`access-points/setup-guides/:vendorKey`), with a way back to Access Points.
@@ -41,7 +41,7 @@ export function ValueText({ value }: { value: string }) {
           <span
             key={i}
             className="rounded bg-warning/10 px-1 font-semibold text-warning"
-            title="Placeholder: fill in from your device or from ECLOUD"
+            title="Placeholder: fill in from your device or from EZECLOUD"
           >
             {p}
           </span>
@@ -105,7 +105,7 @@ export function EcloudValues({ guide }: { guide: VendorGuide }) {
     </div>,
   );
   return (
-    <Card title="ECLOUD values">
+    <Card title="EZECLOUD values">
       <dl>{rows}</dl>
     </Card>
   );

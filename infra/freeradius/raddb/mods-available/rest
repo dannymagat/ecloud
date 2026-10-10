@@ -1,10 +1,10 @@
 # -*- text -*-
 ######################################################################
 #
-#  rlm_rest -> ECLOUD internal API (AAA_ARCHITECTURE.md §4.1/§4.2;
+#  rlm_rest -> EZECLOUD internal API (AAA_ARCHITECTURE.md §4.1/§4.2;
 #  contract: docs/contracts/aaa-authorize.md).
 #
-#  ECLOUD_INTERNAL_URL  base URL of the ECLOUD internal listener
+#  ECLOUD_INTERNAL_URL  base URL of the EZECLOUD internal listener
 #                       (dev: http://host.docker.internal:3001 -- the api
 #                       process runs on the developer host, INTERNAL_PORT;
 #                       prod: the api container on the compose network, or
@@ -13,11 +13,11 @@
 #
 #  `body = json` serialises EVERY attribute of the request list as
 #  {"<Attr>":{"type":"<type>","value":[...]}} -- including User-Password
-#  (ECLOUD must never log it). Responses are JSON policies
+#  (EZECLOUD must never log it). Responses are JSON policies
 #  {"<list>:<Attr>": {"value":[...],"op":":=","do_xlat":false}}.
 #
 #  `do_xlat = no` disables xlat expansion of response values for requests
-#  made from the section (documented for 3.2.x; ECLOUD additionally sets
+#  made from the section (documented for 3.2.x; EZECLOUD additionally sets
 #  "do_xlat": false per attribute so an API echoing untrusted input can
 #  never become an injection vector -- see README "do_xlat").
 #

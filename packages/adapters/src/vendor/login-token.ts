@@ -4,7 +4,7 @@
  *
  * UAM redirects carry a NAS challenge that makes every hand-off single-use. Post-back vendors
  * (F3 Cisco/Aruba/Fortinet/Ruckus/Cambium/Omada, F4 Meraki, F7 Mist) send no challenge and an
- * unsigned redirect. ECLOUD therefore issues its own anti-forgery token when it accepts the
+ * unsigned redirect. EZECLOUD therefore issues its own anti-forgery token when it accepts the
  * redirect and requires it back exactly once before it hands out a broker credential:
  *
  *   token = "lt1." + base64url(JSON payload) + "." + base64url(HMAC-SHA256(key, "lt1." + payload))

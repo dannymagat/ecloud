@@ -1,6 +1,6 @@
 # Cycle A (D-044) -- first round of an 802.1X exchange: EAP-Response/Identity "anonymous"
 # (EAP code 2, id 1, length 14, type 1 Identity). With RADIUS_EAP_ENABLED unset (default) the
-# ECLOUD outer server must reject it WITHOUT asking /internal/aaa/authorize.
+# EZECLOUD outer server must reject it WITHOUT asking /internal/aaa/authorize.
 User-Name = "anonymous"
 EAP-Message = 0x0201000e01616e6f6e796d6f7573
 Calling-Station-Id = "AA-BB-CC-DD-EE-02"

@@ -4,7 +4,7 @@
  * activity figures; zero-filled hour / day chart series in the site timezone (Q65); the platform
  * per-organization summary (counts only).
  *
- * ECLOUD has no device telemetry: NAS status is the observed RADIUS activity (active / quiet /
+ * EZECLOUD has no device telemetry: NAS status is the observed RADIUS activity (active / quiet /
  * silent / never with explicit thresholds), never an online/offline state (spec §8).
  */
 import { ValidationError } from '@ecloud/shared';
@@ -507,7 +507,7 @@ export function dashboardRoutes(deps: AppDeps): AnyRouteSpec[] {
           network_devices: {
             registered: devices,
             online_status_known: 0 as const,
-            note: 'ECLOUD does not observe access point or device state; registered devices are listed, their online status is unknown.',
+            note: 'EZECLOUD does not observe access point or device state; registered devices are listed, their online status is unknown.',
           },
           measured_at: at.toISOString(),
         };

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # =============================================================================================
-#  Off-host copy of the ECLOUD backup sets to GitHub (DRAFT, NOT RUN).
+#  Off-host copy of the EZECLOUD backup sets to GitHub (DRAFT, NOT RUN).
 #  docs/VPS_LOCAL_CHANGE_LIST.md LCL-BK-3. Called by scripts/backup/backup.sh (unchanged) as
 #    BACKUP_UPLOAD=command  BACKUP_UPLOAD_COMMAND=/opt/ecloud/bin/upload-github.sh
 #  i.e. `upload-github.sh <new-set-dir>`.
@@ -111,7 +111,7 @@ for s in "${sets[@]}"; do
   [ "$n_age" -ge 1 ] || die "no *.age file in set $s"
 done
 cat >"$WORK/tree/README.md" <<EOF
-ECLOUD vps-local backup sets (age-encrypted, newest ${#sets[@]}). Force-pushed by
+EZECLOUD vps-local backup sets (age-encrypted, newest ${#sets[@]}). Force-pushed by
 infra/vps-local/backup/upload-github.sh; restore: docs/RESTORE_DRILL.md (the age key is offline).
 EOF
 

@@ -53,7 +53,7 @@ export function SecretOnce({
       <div>
         <h3 className="text-sm font-semibold">{title}</h3>
         <p className="mt-0.5 text-xs text-subtle">
-          {description ?? 'Shown once. Copy it now; ECLOUD stores only a protected form.'}
+          {description ?? 'Shown once. Copy it now; EZECLOUD stores only a protected form.'}
         </p>
       </div>
       {typeof value === 'string' ? (

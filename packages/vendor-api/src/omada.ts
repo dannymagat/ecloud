@@ -15,13 +15,13 @@
  * Doc facts that are NOT settled and therefore REQUIRES_DEVICE_TEST:
  *  - `time` is "Authentication Expiration time, unit millisecond" in 6.2.10 but "microsecond"
  *    in the 5.0.15–6.2.0 document (13080), and the PHP template passes a duration ("the time
- *    allowed"). ECLOUD sends a DURATION in milliseconds (6.2.10 unit + template semantics);
+ *    allowed"). EZECLOUD sends a DURATION in milliseconds (6.2.10 unit + template semantics);
  *  - JSON value types: the doc's JSON examples quote every value, its PHP template sends
- *    numbers for `time` / `authType`. ECLOUD sends the template's types (numbers);
+ *    numbers for `time` / `authType`. EZECLOUD sends the template's types (numbers);
  *  - the case variants seen in older Omada examples (`clientIP`, `GatewayMac`,
  *    `originalUrl`) are never sent; the 5.x body (with `site`, without limits) is not built.
  *
- * The vendor sample disables certificate verification ("Allow Self Signed Certs"); ECLOUD
+ * The vendor sample disables certificate verification ("Allow Self Signed Certs"); EZECLOUD
  * never does: an on-prem self-signed controller is trusted by a pinned CA or fingerprint.
  */
 import { VendorApiError } from './errors.js';

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# ECLOUD secrets scan (D-033: no secrets in git). Used by CI and runnable locally:
+# EZECLOUD secrets scan (D-033: no secrets in git). Used by CI and runnable locally:
 #
 #   bash scripts/check-no-secrets.sh            # scan the repository
 #   bash scripts/check-no-secrets.sh <dir>      # scan another tree (self-test)

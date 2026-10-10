@@ -7,7 +7,7 @@
  * and challenge 0123456789abcdef0123456789abcdef; the simulator's own reference functions are
  * checked against them too, so neither implementation is trusted alone.
  *
- * Simulator evidence: ECLOUD code behaviour only, NOT hardware compatibility. Disconnect stays
+ * Simulator evidence: EZECLOUD code behaviour only, NOT hardware compatibility. Disconnect stays
  * REQUIRES_DEVICE_TEST (D-006) whatever happens here.
  */
 import { describe, expect, it } from 'vitest';
@@ -147,9 +147,9 @@ for (const t of TARGETS) {
       for (const c of cases) expect(c).toMatchObject({ unsupported: true });
     });
 
-    it(`SIM-09 ${tag} CHAP: ECLOUD emits PAP only; CHAP reference checked, no response= sent`, async () => {
+    it(`SIM-09 ${tag} CHAP: EZECLOUD emits PAP only; CHAP reference checked, no response= sent`, async () => {
       // CP §7.4 makes CHAP optional for CoovaChilli; the L2 hand-off implements PAP only, so the
-      // CHAP half of SIM-09 is a reference-vector check of the simulator, not of ECLOUD code.
+      // CHAP half of SIM-09 is a reference-vector check of the simulator, not of EZECLOUD code.
       const h = t.adapter.authorizeSession(await validContext(t), credential(t), {
         uamSecret: SIM_UAM_SECRET,
       });

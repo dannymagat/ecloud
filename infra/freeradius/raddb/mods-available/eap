@@ -1,12 +1,12 @@
 # -*- text -*-
 ######################################################################
 #
-#  ECLOUD EAP module (Cycle A, D-044; AAA_ARCHITECTURE.md §2.4). Replaces the
+#  EZECLOUD EAP module (Cycle A, D-044; AAA_ARCHITECTURE.md §2.4). Replaces the
 #  stock mods-available/eap of the image. OPT-IN: docker-entrypoint.sh links
 #  it into mods-enabled/ only when RADIUS_EAP_ENABLED=1.
 #
-#  Only EAP-TTLS (inner PAP, decided by ECLOUD in sites-available/ecloud-inner).
-#  PEAP-MSCHAPv2 / EAP-MD5 / LEAP are NOT offered: ECLOUD stores one-way
+#  Only EAP-TTLS (inner PAP, decided by EZECLOUD in sites-available/ecloud-inner).
+#  PEAP-MSCHAPv2 / EAP-MD5 / LEAP are NOT offered: EZECLOUD stores one-way
 #  Argon2id hashes and cannot verify challenge-response methods (AAA §2.6).
 #  EAP-TLS (client certificates) is out of scope (REQUIRES_CLARIFICATION).
 #

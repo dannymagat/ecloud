@@ -565,7 +565,7 @@ export function accessPointsPageRoutes(deps: AppDeps): AnyRouteSpec[] {
   const loginHtml = defineRoute({
     method: 'get',
     path: '/api/v1/orgs/:orgId/nas/:id/mikrotik-login-html',
-    summary: 'Download the ECLOUD login.html of a MikroTik NAS HotSpot (Cycle B generator)',
+    summary: 'Download the EZECLOUD login.html of a MikroTik NAS HotSpot (Cycle B generator)',
     tags: ['nas'],
     auth: 'principal',
     permission: 'nas:read',

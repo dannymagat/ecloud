@@ -1,7 +1,7 @@
 /**
  * uCentral SSID rate-limit fragment export (Phase 7 P7-B AC2): preview and download the
  * `interfaces[].ssids[].rate-limit` fragment of a site's baseline policy for the
- * `openwifi-config` adapter. EXPORT ONLY: ECLOUD never pushes it to the EZE controller in
+ * `openwifi-config` adapter. EXPORT ONLY: EZECLOUD never pushes it to the EZE controller in
  * Phase 7; an operator applies it out of band. The values are source-verified, not lab
  * validated (DT-02 pending), and the screen says so.
  */
@@ -204,7 +204,7 @@ function Screen() {
     <div>
       <PageHeader
         title="SSID rate-limit export"
-        description="uCentral config fragment (openwifi-config) for a site's baseline download/upload rate. ECLOUD does not push it to the controller: download it and apply it through the EZE controller."
+        description="uCentral config fragment (openwifi-config) for a site's baseline download/upload rate. EZECLOUD does not push it to the controller: download it and apply it through the EZE controller."
       />
       {doc.isPending ? (
         <Spinner label="Loading…" />

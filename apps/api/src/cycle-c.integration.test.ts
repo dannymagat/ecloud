@@ -256,7 +256,7 @@ await describeIntegration('@ecloud/api multi-vendor Cycle C (post-back engine)',
     expect(replay.status).toBe(403);
     expect(replay.body).toEqual({ result: 'login_token_invalid' });
 
-    // the AP posts the credential to ECLOUD RADIUS (PAP)
+    // the AP posts the credential to EZECLOUD RADIUS (PAP)
     const access = radius({
       'User-Name': fields.ga_user ?? '',
       'User-Password': fields.ga_pass ?? '',
@@ -297,7 +297,7 @@ await describeIntegration('@ecloud/api multi-vendor Cycle C (post-back engine)',
     // the vendor nonce (ga_Qv) is now consumed: the same redirect is a replay
     expect((await postback('cambium-hotspot', q)).body).toEqual({ kind: 'error' });
 
-    // setup guide: ECLOUD portal URL with this NAS identifier, secrets as placeholders only
+    // setup guide: EZECLOUD portal URL with this NAS identifier, secrets as placeholders only
     const guide = await f.agent.get(`/api/v1/orgs/${f.orgId}/nas/${f.nasId}/setup-guide`);
     expect(guide.status).toBe(200);
     expect(guide.body.profile).toBe('cambium-hotspot');

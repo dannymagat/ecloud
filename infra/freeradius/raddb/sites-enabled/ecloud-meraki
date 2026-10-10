@@ -1,7 +1,7 @@
 # -*- text -*-
 ######################################################################
 #
-#  ECLOUD: per-NAS listeners for Cisco Meraki cloud-sourced RADIUS
+#  EZECLOUD: per-NAS listeners for Cisco Meraki cloud-sourced RADIUS
 #  (multi-vendor Cycle E, D-044; SECURITY_ARCHITECTURE.md §3.5).
 #
 #  Every rendered file in meraki.d/ holds, per Meraki NAS:

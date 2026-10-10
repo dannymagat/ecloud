@@ -65,7 +65,7 @@ export interface PortalFlow {
    */
   readonly nonceKind?: 'uam-challenge' | 'vendor-nonce' | 'ecloud-login-token';
   /**
-   * Cycle B: ECLOUD login token (vendor/login-token.ts) issued with the flow; consumed once
+   * Cycle B: EZECLOUD login token (vendor/login-token.ts) issued with the flow; consumed once
    * before a broker credential is handed to a post-back vendor. Server-side only.
    */
   readonly loginToken?: string;
@@ -83,7 +83,7 @@ export interface PostbackFlowData {
   readonly nasIp: string | null;
   /** Registered `nas_clients.hotspot_address` (known login host); absent on older flows. */
   readonly hotspotAddress?: string | null;
-  /** Raw vendor nonce (`magic`, `ga_Qv`), the replay identity; null = ECLOUD login token. */
+  /** Raw vendor nonce (`magic`, `ga_Qv`), the replay identity; null = EZECLOUD login token. */
   readonly vendorNonce: string | null;
 }
 
@@ -132,7 +132,7 @@ export interface ReplayIdentity {
   sessionId: string | null;
   challenge: string;
   clientMac: string;
-  /** Cycle A: vendor / ECLOUD nonces get their own namespace. */
+  /** Cycle A: vendor / EZECLOUD nonces get their own namespace. */
   nonceKind?: 'uam-challenge' | 'vendor-nonce' | 'ecloud-login-token';
 }
 
@@ -144,7 +144,7 @@ function isUamKind(k: ReplayIdentity): boolean {
  * Unambiguous replay key (Cycle A review L4): SHA-256 over the JSON array
  * `[kind, nasId, sessionId, challenge, clientMac]`, so no field value (a NAS-chosen `sessionid`
  * may contain anything) can shift into another field. UAM challenges are hex and compared
- * case-insensitively; vendor / ECLOUD nonces exactly.
+ * case-insensitively; vendor / EZECLOUD nonces exactly.
  */
 export function replayKey(k: ReplayIdentity): string {
   const uam = isUamKind(k);

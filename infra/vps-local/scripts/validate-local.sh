@@ -220,7 +220,7 @@ dockeruser_check() {
       for bad in "0.0.0.0/0" "" "192.168.203.0/24;reboot" "8.8.8.0/24" "10.0.0.0/7" "192.168.0.0/8" "192.168.203.300" "172.32.0.0/16"; do
         if ECLOUD_WEB_CIDRS="$bad" bash $S apply >/dev/null 2>&1; then echo "accepted bad CIDR [$bad]"; exit 1; fi
       done
-      # firewalld reload (nft backend) must not drop the ECLOUD rules.
+      # firewalld reload (nft backend) must not drop the EZECLOUD rules.
       bash $S apply; firewall-cmd --reload >/dev/null; iptables -w -S DOCKER-USER | grep -q ctorigdst
       bash $S rollback >/dev/null
       [ "$(iptables -w -S DOCKER-USER | tail -n +2)" = "-A DOCKER-USER -j RETURN" ]

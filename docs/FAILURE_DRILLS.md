@@ -2,7 +2,7 @@
 
 Status: **executed 2026-10-09 on the LOCAL dev stack**, all 40 checks passed after two fixes found
 by the drills (§3). Nothing ran against the VPS, EZEAP devices or the EZE controller (D-031).
-These are SIMULATOR/LOCAL results: they prove ECLOUD's own behaviour (fail-closed AAA, recovery,
+These are SIMULATOR/LOCAL results: they prove EZECLOUD's own behaviour (fail-closed AAA, recovery,
 drain idempotency), not any device's retry/fallback behaviour (D-034).
 
 ## 1. Harness
@@ -105,6 +105,6 @@ table (1 M rows ≈ minutes of DB work) — see §4.
    + start (~1.4 s) of RADIUS rejects on a single-instance pilot. Options: shorter
    `shutdownGraceMs` for the internal listener, or `Connection: close` once shutdown starts.
 3. Outage behaviour of the NAS itself (does it retry, fall back, cache?) is a device test
-   (DT list, D-034) — the drills only prove ECLOUD never answers Accept while degraded.
+   (DT list, D-034) — the drills only prove EZECLOUD never answers Accept while degraded.
 4. The drills run on the developer workstation; repeat on the pilot host after approval
    (VPS change list), with Docker `restart: unless-stopped` covering process crashes.

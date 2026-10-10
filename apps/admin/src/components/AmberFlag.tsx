@@ -8,7 +8,7 @@ import { Badge } from './ui';
 export function AmberFlag({ status }: { status: unknown }) {
   if (!isAmberStatus(status)) return null;
   const reason = amberReason(status);
-  const label = status === 'ECLOUD_SIDE_ONLY' ? 'ECLOUD side only' : 'Not device-verified';
+  const label = status === 'ECLOUD_SIDE_ONLY' ? 'EZECLOUD side only' : 'Not device-verified';
   return (
     <span data-amber-flag={typeof status === 'string' ? status : 'UNKNOWN'}>
       <Badge tone="warning" title={reason}>

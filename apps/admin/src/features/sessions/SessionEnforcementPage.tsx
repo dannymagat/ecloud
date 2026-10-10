@@ -61,8 +61,8 @@ function View({ view }: { view: SessionEnforcementView }) {
     <div className="space-y-4">
       <Notice tone="info">
         A field is device-enforced only when it is verified supported with lab-validated evidence
-        (D-028); none is yet. Amber-flagged fields are sent or tracked by ECLOUD but not proven on a
-        device.
+        (D-028); none is yet. Amber-flagged fields are sent or tracked by EZECLOUD but not proven on
+        a device.
       </Notice>
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">

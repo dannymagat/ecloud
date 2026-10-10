@@ -186,7 +186,7 @@ export class S3ObjectStorage implements ObjectStorage {
       );
       for (const item of page.Contents ?? []) {
         if (item.Key === undefined) continue;
-        // Skip anything in the bucket that is not a valid ECLOUD key under this prefix.
+        // Skip anything in the bucket that is not a valid EZECLOUD key under this prefix.
         let key: ObjectKey;
         try {
           key = parseObjectKey(item.Key).key;

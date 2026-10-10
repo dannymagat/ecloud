@@ -27,4 +27,4 @@ has no Disconnect path.
 Attribute names are exactly the FreeRADIUS dictionary names (`WISPr-Bandwidth-Max-Down`,
 `ChilliSpot-Max-Total-Octets`, `CoovaChilli-Max-Total-Gigawords`, `Session-Timeout`, …). The
 `ChilliSpot-Max-*-Gigawords` attributes (21–23) are missing from FreeRADIUS's `dictionary.chillispot`
-and need the ECLOUD dictionary additions described in `AAA_ARCHITECTURE.md §4.3`.
+and need the EZECLOUD dictionary additions described in `AAA_ARCHITECTURE.md §4.3`.

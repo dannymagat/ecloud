@@ -1,4 +1,4 @@
-# ECLOUD — Target Architecture (Phase 2)
+# EZECLOUD — Target Architecture (Phase 2)
 
 Status: **PROPOSED — awaiting owner approval before Phase 3.** Nothing has been installed, deployed or changed on any host, device or DNS zone. This document is the top-level synthesis; each section points to the detailed artifact that holds the evidence, diagrams and open items.
 
@@ -24,11 +24,11 @@ Evidence labels used across all Phase 2 artifacts: **VERIFIED FROM EXISTING CODE
 
 ## 1. Cloud control plane
 
-ECLOUD is a multi-tenant control plane. It owns **policy intent**, identities, sessions and accounting; it never carries subscriber traffic. Enforcement happens on the site device (EZEAP or gateway) through mechanisms that have been verified, with ECLOUD-side controls covering what devices cannot do.
+EZECLOUD is a multi-tenant control plane. It owns **policy intent**, identities, sessions and accounting; it never carries subscriber traffic. Enforcement happens on the site device (EZEAP or gateway) through mechanisms that have been verified, with ECLOUD-side controls covering what devices cannot do.
 
 ```mermaid
 flowchart LR
-  subgraph Cloud["ECLOUD control plane (pilot: one VPS; production: regional)"]
+  subgraph Cloud["EZECLOUD control plane (pilot: one VPS; production: regional)"]
     Caddy["Caddy edge\n80/443 TLS"]
     API["api\nREST · RBAC · policy engine · adapters"]
     PORTAL["portal\nserver-rendered captive pages"]
@@ -72,7 +72,7 @@ PostgreSQL 16, UUID v7 application-generated ids for entities, bigint identity f
 
 ## 4. AAA architecture
 
-FreeRADIUS 3.2.x is a pure protocol front-end. Every Access-Request is posted by rlm_rest to the internal authorize endpoint; ECLOUD resolves tenant, NAS adapter and effective policy and returns the decision plus adapter-specific reply attributes. API unavailable means Reject (no fail-open). Accounting is written insert-only by rlm_sql into an isolated `radius` schema and drained by the worker. Subscriber passwords never reach RADIUS: portal logins use a single-use broker credential, so Argon2id hashing stays intact. 802.1X defaults to EAP-TTLS/PAP with PEAP-MSCHAPv2 as a tenant opt-in because it needs NT-hash storage. BlastRADIUS (CVE-2024-3596) mitigations are on by default in 3.2.x; RadSec is mandatory for any NAS reached over the public internet. Dynamic authorization is a worker-driven `radclient` dispatcher from the hub address; every CoA/Disconnect path is REQUIRES DEVICE TEST, with capped Session-Timeout re-auth as the fallback. Details: AAA_ARCHITECTURE.md.
+FreeRADIUS 3.2.x is a pure protocol front-end. Every Access-Request is posted by rlm_rest to the internal authorize endpoint; EZECLOUD resolves tenant, NAS adapter and effective policy and returns the decision plus adapter-specific reply attributes. API unavailable means Reject (no fail-open). Accounting is written insert-only by rlm_sql into an isolated `radius` schema and drained by the worker. Subscriber passwords never reach RADIUS: portal logins use a single-use broker credential, so Argon2id hashing stays intact. 802.1X defaults to EAP-TTLS/PAP with PEAP-MSCHAPv2 as a tenant opt-in because it needs NT-hash storage. BlastRADIUS (CVE-2024-3596) mitigations are on by default in 3.2.x; RadSec is mandatory for any NAS reached over the public internet. Dynamic authorization is a worker-driven `radclient` dispatcher from the hub address; every CoA/Disconnect path is REQUIRES DEVICE TEST, with capped Session-Timeout re-auth as the fallback. Details: AAA_ARCHITECTURE.md.
 
 ```mermaid
 sequenceDiagram
@@ -134,7 +134,7 @@ Topology A (hub on the VPS, one peer per site gateway) is primary; topology C (R
 
 ## 11. EZEAP / TIP OpenWiFi integration
 
-Verified device facts: per-SSID `rate-limit` is a per-station HTB ceiling in both modes; uspot honours WISPr/ChilliSpot bandwidth, Session/Idle-Timeout, Acct-Interim-Interval and Max-Total-Octets; `dynamic-authorization` maps to hostapd DAS and opens a CoA firewall rule; RADIUS MAC-auth and dynamic VLAN are configurable; the existing EZE controller already runs the uCentral gateway and emits all of these keys. Unknowns: whether hostapd (802.1X/MAC-auth) clients honour any bandwidth attribute, CoA attribute changes, aggregate WAN QoS semantics. Pilot path is Option C (ECLOUD as RADIUS/UAM/DAE target, SSIDs configured in the EZE controller), evolving to Option A (narrow policy-fragment API on the controller). No second OpenWiFi gateway. Details: NETWORK_INTEGRATION.md.
+Verified device facts: per-SSID `rate-limit` is a per-station HTB ceiling in both modes; uspot honours WISPr/ChilliSpot bandwidth, Session/Idle-Timeout, Acct-Interim-Interval and Max-Total-Octets; `dynamic-authorization` maps to hostapd DAS and opens a CoA firewall rule; RADIUS MAC-auth and dynamic VLAN are configurable; the existing EZE controller already runs the uCentral gateway and emits all of these keys. Unknowns: whether hostapd (802.1X/MAC-auth) clients honour any bandwidth attribute, CoA attribute changes, aggregate WAN QoS semantics. Pilot path is Option C (EZECLOUD as RADIUS/UAM/DAE target, SSIDs configured in the EZE controller), evolving to Option A (narrow policy-fragment API on the controller). No second OpenWiFi gateway. Details: NETWORK_INTEGRATION.md.
 
 ## 12. Admin management
 

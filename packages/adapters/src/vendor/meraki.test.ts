@@ -222,7 +222,7 @@ describe('meraki-splash VendorAdapter', () => {
     expect(adapter.engine?.describeDisconnect().target).toBe('meraki-cloud-das');
   });
 
-  it('validates context: NAS from the ECLOUD path segment, login_url as vendor nonce', async () => {
+  it('validates context: NAS from the EZECLOUD path segment, login_url as vendor nonce', async () => {
     const parsed = parse(signOnQuery());
     if ('unsupported' in parsed) throw new Error(parsed.reason);
     const l = lookup(NAS);

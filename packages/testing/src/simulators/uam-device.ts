@@ -2,7 +2,7 @@
  * Simulated UAM NAS (MULTI_VENDOR_INTEGRATION_PLAN.md §8.3). Builds the redirect a uspot or
  * CoovaChilli device sends to the portal and decodes the `/logon` hand-off the way the device
  * would. Written independently of `@ecloud/adapters` (no import from it) so the simulator checks
- * ECLOUD's code against a second implementation of the documented formulas:
+ * EZECLOUD's code against a second implementation of the documented formulas:
  *
  * - parameter lists and order: CAPTIVE_PORTAL_ARCHITECTURE.md §3.2 (uspot T/U), §4 (CoovaChilli,
  *   `redir.c bstring_buildurl`), PHASE2_VALIDATION.md V-070;
@@ -12,7 +12,7 @@
  *   uspot U XORs MIN(len,16) bytes (CP §3.3); CHAP: MD5(0x00 + password + MD5(challenge bytes +
  *   uamsecret)) (CP §3.3; coova `doc/hotspotlogin.cgi` L74-120, V-071).
  *
- * This is NOT a capture of a real device: it proves ECLOUD code behaviour only, never hardware
+ * This is NOT a capture of a real device: it proves EZECLOUD code behaviour only, never hardware
  * compatibility (plan §4.1 `SIMULATOR_TESTED`).
  */
 import { createHash } from 'node:crypto';

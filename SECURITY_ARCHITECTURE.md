@@ -1,4 +1,4 @@
-# ECLOUD Security Architecture (Phase 2 — A8 Security Agent)
+# EZECLOUD Security Architecture (Phase 2 — A8 Security Agent)
 
 Status: **PROPOSED** design and review. Nothing was installed, changed or tested on `vps`, `controller`, `dev-controller` or any EZEAP. Every control below is to be applied in Phase 3+ only after owner approval (Q17, Q21). Labels: **VERIFIED ON VPS (read-only, Phase 1)**, **VERIFIED FROM EXISTING CODE**, **VERIFIED FROM OFFICIAL DOCUMENTATION**, **PROPOSED**, **UNKNOWN**, **REQUIRES DEVICE TEST**. Secrets appear only as `<PLACEHOLDER>`.
 
@@ -16,12 +16,12 @@ Assets: **A1** admin accounts/sessions, **A2** subscriber credentials and vouche
 | T2 | Subscriber credential attacks | S | A2 | Brute force of username/password or voucher via portal; offline cracking after DB leak; voucher enumeration | Portal rate limits per `nasid+mac`, per client IP, per site (§5.4); voucher codes ≥ 8 chars from 32-symbol alphabet (≥ 40 bits) stored as HMAC-SHA-256 with pepper (`vouchers.code_hash`, A6 §3.6); subscriber `password_hash` Argon2id; lockout + CAPTCHA-free back-off (mini-browsers break CAPTCHAs); no enumeration in error text (A7 §4) | PAP over the AP LAN hop is XOR-MD5 only (UAM protocol limit) — 90 s single-use credential bounds the damage | A8/A4 |
 | T3 | Portal spoofing / phishing | S, I | A8 | Evil-twin SSID redirecting to a look-alike portal; HTTP-only redirect chain intercepted; open redirect via `userurl` | HTTPS-only portal with HSTS; fixed known hostname `portal.ezecloud.ezelink.ai` in device walled garden; per-site branding only from DB (no user-supplied HTML); `userurl` allow-list (§5.3); CSP `default-src 'self'` | Users cannot distinguish an evil twin before connecting — document to tenants; no technical fix at portal level | A8/A4 |
 | T4 | RADIUS client impersonation | S | A3, A9 | Attacker sends Access-/Accounting-Requests from an IP that matches a `nas_clients.nas_ip`; spoofed UDP source | Tunnel-only RADIUS by default (FreeRADIUS bound to `100.100.0.1`), cryptokey routing prevents source spoofing inside the overlay (A1 W2); per-NAS secret (`nas_clients.secret_ref`); `require_message_authenticator = yes` (§4.2); unknown NAS → packet dropped by FreeRADIUS, logged to `auth_events` with `organization_id NULL` (A6 §3.3) | Public RADIUS fallback (topology C) relies on secret + allowlist only; RadSec required there | A8/A3 |
-| T5 | Stolen / shared RADIUS secrets | S, T | A3 | Secret read from device config (uCentral JSON holds `auth-secret` in clear), from the EZE controller DB, from a backup, from FreeRADIUS logs | One secret per NAS, never per tenant/site; ≥ 32 chars; encrypted at rest with envelope encryption (§4.1); never in git, images, logs or dumps; rotation with dual-secret window; BlastRADIUS defence; a stolen secret only impersonates one NAS and only via its tunnel IP | Controller-side storage of the clear secret is outside ECLOUD (UNKNOWN how ezecontroller protects it) | A8/A3/owner |
+| T5 | Stolen / shared RADIUS secrets | S, T | A3 | Secret read from device config (uCentral JSON holds `auth-secret` in clear), from the EZE controller DB, from a backup, from FreeRADIUS logs | One secret per NAS, never per tenant/site; ≥ 32 chars; encrypted at rest with envelope encryption (§4.1); never in git, images, logs or dumps; rotation with dual-secret window; BlastRADIUS defence; a stolen secret only impersonates one NAS and only via its tunnel IP | Controller-side storage of the clear secret is outside EZECLOUD (UNKNOWN how ezecontroller protects it) | A8/A3/owner |
 | T6 | API abuse | D, I, E | A7 | Scraping, credential stuffing on `api.ezecloud.ezelink.ai`, leaked API key in client code, mass export | API keys hashed (`key_prefix` + `key_hash`), role-scoped, `allowed_cidrs`, `expires_at`, revocation; per-key and per-tenant rate limits (Redis); exports are async jobs scoped and audited (`report:export`, `accounting:export`, G7); 404 not 403 for foreign objects (G9) | Redis optional in pilot → in-memory limiter per process until Redis is added | A5/A8 |
 | T7 | Injection (SQL, header, template, command) | T, E | A6, A8 | Portal/UI input into SQL; `userurl`/`reply` reflected; `radclient` invoked with attacker-controlled attributes; FreeRADIUS SQL queries templated from RADIUS attributes | Parameterised `pg` queries only; JSON-schema validation (ajv precedent) on every route; templates auto-escape; `radclient` fed via stdin attribute list, values escaped per `radclient(1)` syntax, never shell-concatenated; FreeRADIUS `rlm_sql` safe-characters configuration; MAC via `macaddr` type (A6 §1) | `accounting_records.raw` JSONB keeps hostile strings — rendered escaped only | A5/A3/A8 |
 | T8 | Privilege escalation | E | A1, A10 | Site Admin creates an API key with wider role; custom role edited to include platform keys; impersonating Support changes admins or secrets | Deny-by-default `authorize()` (MULTITENANCY §4.4); API key creation requires creator to hold every permission of the key's role; `is_platform_only` keys unreachable without platform binding; impersonation uses `org_admin` template, `platform_access` off, cannot touch `administrator:*`, `role:*`, `nas:secret:rotate`, `api_key:*` (PROPOSED guardrail, A7 §5); copy-on-write role templates | Logic bugs in permission evaluation → A9 tests T-11, T-14, plus §3.5 list | A6/A8 |
 | T9 | Cross-tenant / cross-site exposure | I | A10 | Missing `WHERE organization_id`; webhook fan-out; voucher of tenant A on portal of B; NAS of A proxied as B; report aggregate without scope | App filter + PostgreSQL RLS with `FORCE`, `SET LOCAL app.current_org`, `ecloud_app` without `BYPASSRLS` (A6 §8); tenant from NAS identity, never from username; `vouchers.code_hash` global unique + tenant equality check (T-07); per-tenant WireGuard /24 + nftables no site-to-site (§3.2); guards G1–G10 | RLS "fails closed" to 0 rows — monitor for silent empty results (§8) | A6/A8 |
-| T10 | Session hijacking | S | A1, A8 | Admin cookie theft via XSS; portal flow hijack by replaying `sessionid`/`challenge`; subscriber Wi-Fi session hijack by MAC spoofing after login | Cookie `HttpOnly; Secure; SameSite=Lax; Path=/; __Host-` prefix, no `Domain`; CSP without inline scripts; idle 30 min / absolute 12 h; portal flows bound to `mac+nasid+sessionid` with signed `state` (A4 §7.2); MAC spoofing on open SSIDs is inherent (§4.8) | Open-SSID MAC hijack cannot be prevented by ECLOUD — only detected (duplicate MAC on two NAS) | A8/A4 |
+| T10 | Session hijacking | S | A1, A8 | Admin cookie theft via XSS; portal flow hijack by replaying `sessionid`/`challenge`; subscriber Wi-Fi session hijack by MAC spoofing after login | Cookie `HttpOnly; Secure; SameSite=Lax; Path=/; __Host-` prefix, no `Domain`; CSP without inline scripts; idle 30 min / absolute 12 h; portal flows bound to `mac+nasid+sessionid` with signed `state` (A4 §7.2); MAC spoofing on open SSIDs is inherent (§4.8) | Open-SSID MAC hijack cannot be prevented by EZECLOUD — only detected (duplicate MAC on two NAS) | A8/A4 |
 | T11 | Replay | S, T | A2, A9 | Replayed `/logon` URL with captured portal credential; replayed Accounting-Request; replayed Disconnect-Request to NAS | Portal credential single-use, TTL 90 s, ≤ 16 bytes (A4 §7.1); FreeRADIUS duplicate detection + `acct_unique_id` idempotency; CoA from hub only over tunnel; `Event-Timestamp` in Disconnect where NAS supports it (upstream uspot DAS NAKs it — A4 §3.5, VERIFIED in source) | NAS without Event-Timestamp support accepts replayed Disconnect inside the tunnel window — low impact (DoS of one client) | A4/A3 |
 | T12 | Unauthorized policy modification | T, E | A10 | Operator edits policy intent; API key with `policy:update`; direct DB write; tampered `policy_translations` | `policy:*` permissions org-scoped; every mutation audited with `before/after`; `policy_translations` append-only shows what was actually sent; DB roles least privilege (§3.1); migrations only as `ecloud_owner` from CI | Insider with Org Admin role — mitigated only by audit + optional 4-eyes (future) | A6/A8 |
 | T13 | Accounting tampering | T, R | A9 | NAS or MITM forges Accounting-Stop with low octets; operator deletes rows; worker bug rewrites counters | Per-NAS secret + Message-Authenticator; append-only `accounting_records` (INSERT-only role, trigger, partition-drop retention — A6 §3.5); `freeradius` DB role INSERT-only on `radius` schema; monotonic counters; nightly reconciliation logs discrepancies; optional hash chain (§4.6) | Accounting authenticator is MD5-based (RFC 2866) — integrity vs. a party holding the secret is nil; tunnel + RadSec are the real controls | A3/A6 |
@@ -95,7 +95,7 @@ Trust statements (PROPOSED): Zone 4 is **tenant-controlled and hostile to other 
 | 6379/tcp Redis | none | internal only, `requirepass` from secret file | same | PROPOSED |
 | 2019/tcp Caddy admin | `127.0.0.1` | unchanged | unchanged | VERIFIED ON VPS |
 | 9100/8080/3002 monitoring | `127.0.0.1` | via Caddy `basic_auth` + IP allowlist, or SSH tunnel | Prometheus over wg/private | PROPOSED |
-| 15002 uCentral WSS | n/a on VPS | lives on EZE controller, not ECLOUD | — | VERIFIED FROM EXISTING CODE (ezecontroller) |
+| 15002 uCentral WSS | n/a on VPS | lives on EZE controller, not EZECLOUD | — | VERIFIED FROM EXISTING CODE (ezecontroller) |
 | Everything else | — | drop (v4 and v6), ICMP echo + ICMPv6 ND allowed | drop | PROPOSED |
 
 ### 2.3 Host firewall design (PROPOSED nftables outline — NOT to be applied before Q17/Q21 approval)
@@ -171,7 +171,7 @@ fail2ban must action via the `inet ecloud` table (`nftables-multiport` action) s
 
 1. Confirm OVH KVM console access works (Q17) and that a second operator SSH key is registered (Q22).
 2. Fix sshd first (`AllowUsers`, `PermitRootLogin no`), `sshd -t`, reload, **open a second session and verify**.
-3. Write the ECLOUD rules into their own table (`table inet ecloud`) with the SSH rule first; `nft -c -f` (syntax check) then `nft -f` from an `at now + 10 minutes` dead-man job that removes **only the ECLOUD table and the ECLOUD rules in Docker's `DOCKER-USER` chain** (`nft delete table inet ecloud`) **unless cancelled**; verify SSH from a new session, then cancel the job. **Never use `nft flush ruleset`** (here or in a stock `/etc/nftables.conf`): it also deletes Docker's NAT and filter tables and would take q-mira.com and every container offline. Corrected 2026-10-09 per P10-A finding F-P10-13; the implemented procedure is `infra/vps/scripts/apply-nftables.sh`.
+3. Write the EZECLOUD rules into their own table (`table inet ecloud`) with the SSH rule first; `nft -c -f` (syntax check) then `nft -f` from an `at now + 10 minutes` dead-man job that removes **only the EZECLOUD table and the EZECLOUD rules in Docker's `DOCKER-USER` chain** (`nft delete table inet ecloud`) **unless cancelled**; verify SSH from a new session, then cancel the job. **Never use `nft flush ruleset`** (here or in a stock `/etc/nftables.conf`): it also deletes Docker's NAT and filter tables and would take q-mira.com and every container offline. Corrected 2026-10-09 per P10-A finding F-P10-13; the implemented procedure is `infra/vps/scripts/apply-nftables.sh`.
 4. Add `DOCKER-USER` rules only after verifying `curl -sI https://q-mira.com` still works (Caddy → 127.0.0.1:8088 is loopback, unaffected).
 5. Install fail2ban with `ignoreip` = operator IPs; start `sshd` jail only; add app jails when logs exist.
 6. Reboot test (pending kernel upgrade, A5 §2.3) and confirm rules persist.
@@ -238,7 +238,7 @@ and FreeRADIUS chooses a client — hence the shared secret — by source addres
 
 **Options considered.**
 
-| Option | Packet authenticated with | Forgery by another ECLOUD tenant | Verdict |
+| Option | Packet authenticated with | Forgery by another EZECLOUD tenant | Verdict |
 |---|---|---|---|
 | A. One platform-level Meraki client/secret; tenant by NAS-Identifier | a secret **every** Meraki tenant must type into its Dashboard | any tenant knows the secret and can set any NAS-Identifier (Meraki allows a custom NAS-ID); NAS-Identifier travels in clear text; blind accounting forgery with a spoofed source works | **rejected**: NAS-Identifier would be the only tenant key and it is neither secret nor authenticated |
 | B. Per-request secret lookup (choose the secret from the unverified NAS-Identifier) | per-NAS secret | none | **not feasible** on FreeRADIUS 3.2: the client (and secret) is selected by source address before the packet is decoded; User-Password decryption and Message-Authenticator need the secret first. Would need a custom RADIUS front end |
@@ -265,9 +265,9 @@ and FreeRADIUS chooses a client — hence the shared secret — by source addres
    client; the drainer attributes a Meraki row by it and requires the registered NAS-Identifier,
    never falling back to the source address.
 5. Portal: `login_url` / `base_grant_url` are accepted only as `https://n<digits>.network-auth.com`
-   (documented example shape; no userinfo, port, fragment, backslash); ECLOUD never fetches them;
+   (documented example shape; no userinfo, port, fragment, backslash); EZECLOUD never fetches them;
    the portal's CSP `form-action` names exactly that origin. The unsigned redirect is countered by
-   the `login_url` vendor nonce (replay store), a single-use ECLOUD login token on every
+   the `login_url` vendor nonce (replay store), a single-use EZECLOUD login token on every
    credential form (Cycle A primitive), and the NAS-bound credential.
 6. Disconnect only (Meraki documents no CoA change): RFC 5176 to `das_host:3799` with
    `Acct-Session-Id` + `Event-Timestamp`, only when `ECLOUD_COA_ENABLED` **and** the flag are on.
@@ -283,7 +283,7 @@ and FreeRADIUS chooses a client — hence the shared secret — by source addres
   item (REQUIRES_CLARIFICATION).
 - **Range drift**: Meraki may change its source addresses; a stale `MERAKI_RADIUS_SOURCE_CIDRS`
   fails closed (requests dropped), not open.
-- **Message-Authenticator**: whether the Meraki Cloud sends it is unknown; ECLOUD requires it
+- **Message-Authenticator**: whether the Meraki Cloud sends it is unknown; EZECLOUD requires it
   (BlastRADIUS, §4.2); relaxing needs the platform flag `MERAKI_ALLOW_RELAXED_MSGAUTH=true` and is
   then per NAS with `limit_proxy_state = yes`.
 - **Disconnect source**: Meraki accepts Disconnect only "from the public IP address of the client
@@ -310,10 +310,10 @@ and FreeRADIUS chooses a client — hence the shared secret — by source addres
 |---|---|
 | Generation | 32–48 chars from `[A-Za-z0-9]` via CSPRNG (`crypto.randomBytes`), one per NAS; never reused across NAS, sites or tenants |
 | Storage | Envelope encryption: a per-record data key (XChaCha20-Poly1305 or AES-256-GCM via libsodium `crypto_secretbox`/`crypto_aead`) wrapped by the master key read from `ENCRYPTION_KEY_FILE` (`/run/secrets/data_encryption_key`, A5 §4.1). `nas_clients.secret_ref` points at the ciphertext row in `secret_blobs(id, kid, nonce, ciphertext, created_at)`; `kid` allows master-key rotation. Production: master key in cloud KMS / Vault transit (same `*_FILE` contract via an agent). |
-| Where the clear secret exists | (a) in FreeRADIUS memory and the rendered `clients.conf` (0600, tmpfs or `fr_config` ro volume, re-rendered by worker on change, `radmin`/HUP reload); (b) on the NAS; (c) transiently in the admin UI at creation/rotation (`nas:secret:rotate`, `voucher:reveal`-style permission, audited). Never in logs, API responses (write-only field), backups (only ciphertext), or the uCentral config stored by ECLOUD (A2 §7.3: injected at push time). |
+| Where the clear secret exists | (a) in FreeRADIUS memory and the rendered `clients.conf` (0600, tmpfs or `fr_config` ro volume, re-rendered by worker on change, `radmin`/HUP reload); (b) on the NAS; (c) transiently in the admin UI at creation/rotation (`nas:secret:rotate`, `voucher:reveal`-style permission, audited). Never in logs, API responses (write-only field), backups (only ciphertext), or the uCentral config stored by EZECLOUD (A2 §7.3: injected at push time). |
 | Rotation (dual-secret window) | 1) admin triggers rotate → new secret generated, status `pending`; 2) worker renders **two** `client` entries if the NAS keeps its IP: FreeRADIUS 3.x allows only one secret per client IP, so the window is implemented by pointing the NAS at the **secondary RADIUS server entry** (`interface.ssid.radius.server.secondary`, schema key VERIFIED FROM EXISTING CODE; behaviour REQUIRES DEVICE TEST) bound to a second FreeRADIUS listener IP (`100.100.0.2`) rendered with the new secret; 3) push new secret to NAS via controller/config; 4) observe first Access-Accept on new listener → mark `active`, remove old entry; 5) if no success within 24 h, roll back. For CoovaChilli: `radiusserver1/2` + `radiussecret` is single — rotate via maintenance window. |
 | Cadence | yearly, on staff change, on any suspected exposure, after device RMA |
-| CoA secret | `interface.ssid.radius.dynamic-authorization.secret` (hostapd DAS) and chilli `coaport` share the NAS record's secret unless the device supports a distinct one (schema has its own `secret` field → ECLOUD stores `coa_secret_ref` separately, same encryption) |
+| CoA secret | `interface.ssid.radius.dynamic-authorization.secret` (hostapd DAS) and chilli `coaport` share the NAS record's secret unless the device supports a distinct one (schema has its own `secret` field → EZECLOUD stores `coa_secret_ref` separately, same encryption) |
 
 ### 4.2 Message-Authenticator / BlastRADIUS (CVE-2024-3596)
 
@@ -326,7 +326,7 @@ and FreeRADIUS chooses a client — hence the shared secret — by source addres
 | Path | Pilot | Production |
 |---|---|---|
 | NAS → RADIUS via tunnel | WireGuard (ChaCha20-Poly1305, authenticated) — UDP RADIUS inside is acceptable | same, or RadSec inside tunnel for defence in depth |
-| NAS → RADIUS public | not enabled unless topology C approved; if enabled: `radius_allow` set + secrets + MA required | RadSec 2083 only (`sites-available/tls`, VERIFIED FROM OFFICIAL DOCUMENTATION) with per-NAS client certificates issued by ECLOUD CA; `service.radius-proxy` on OpenWiFi (schema VERIFIED; REQUIRES DEVICE TEST) |
+| NAS → RADIUS public | not enabled unless topology C approved; if enabled: `radius_allow` set + secrets + MA required | RadSec 2083 only (`sites-available/tls`, VERIFIED FROM OFFICIAL DOCUMENTATION) with per-NAS client certificates issued by EZECLOUD CA; `service.radius-proxy` on OpenWiFi (schema VERIFIED; REQUIRES DEVICE TEST) |
 | Amplification/DoS | FreeRADIUS not reachable from Internet; `Status-Server` only from overlay/loopback; nftables rate limit on any public UDP listener | same + provider DDoS |
 
 ### 4.4 CoA / Disconnect
@@ -335,7 +335,7 @@ Hub originates CoA from the worker (`radclient`) or FreeRADIUS `originate-coa` t
 
 ### 4.5 EAP / 802.1X certificates (only if WPA-Enterprise SSIDs are in scope — Q from A2 §10.1)
 
-FreeRADIUS `mods-available/eap` `tls-config tls-common { private_key_file, certificate_file, ca_file }` (VERIFIED FROM OFFICIAL DOCUMENTATION, v3.2.x). Options: (a) public CA (Let's Encrypt) — 90-day renewals break supplicant trust pinning on many clients and any cert from that CA is accepted by supplicants configured with "trust CA" only; (b) **private ECLOUD RADIUS CA** (PROPOSED): offline root 10 y, server cert 2–3 y, SAN `radius.ezecloud.ezelink.ai`, distributed to clients through onboarding profiles; per-tenant intermediate optional. Client trust implication: subscribers must accept/import the CA once; document for tenants. `default_eap_type` must be set to `peap`/`ttls` with MSCHAPv2/PAP inner methods, TLS ≥ 1.2, `md5` never.
+FreeRADIUS `mods-available/eap` `tls-config tls-common { private_key_file, certificate_file, ca_file }` (VERIFIED FROM OFFICIAL DOCUMENTATION, v3.2.x). Options: (a) public CA (Let's Encrypt) — 90-day renewals break supplicant trust pinning on many clients and any cert from that CA is accepted by supplicants configured with "trust CA" only; (b) **private EZECLOUD RADIUS CA** (PROPOSED): offline root 10 y, server cert 2–3 y, SAN `radius.ezecloud.ezelink.ai`, distributed to clients through onboarding profiles; per-tenant intermediate optional. Client trust implication: subscribers must accept/import the CA once; document for tenants. `default_eap_type` must be set to `peap`/`ttls` with MSCHAPv2/PAP inner methods, TLS ≥ 1.2, `md5` never.
 
 ### 4.6 Accounting integrity
 
@@ -355,7 +355,7 @@ MAC is spoofable on open SSIDs; `mac-auth` (uspot) / `mac-filter` (hostapd) prov
 
 | # | Control (PROPOSED) | Detail / evidence |
 |---|---|---|
-| 5.1 HTTPS + captive detection | Portal served only over HTTPS with HSTS (`max-age=31536000`); HTTP → 302 only. CPD hijack is TCP/80 on the AP (A4 §3.6), the AP's own `/hotspot` page is HTTP on a LAN IP — ECLOUD cannot change that. `portal.ezecloud.ezelink.ai` + its IPs in `walled-garden-fqdn/ipaddr` (wildcards skipped by renderer, A4 §3.1). Separate origin from admin (A5 §3.1) so admin cookies never reach the portal. |
+| 5.1 HTTPS + captive detection | Portal served only over HTTPS with HSTS (`max-age=31536000`); HTTP → 302 only. CPD hijack is TCP/80 on the AP (A4 §3.6), the AP's own `/hotspot` page is HTTP on a LAN IP — EZECLOUD cannot change that. `portal.ezecloud.ezelink.ai` + its IPs in `walled-garden-fqdn/ipaddr` (wildcards skipped by renderer, A4 §3.1). Separate origin from admin (A5 §3.1) so admin cookies never reach the portal. |
 | 5.2 UAM secret / CHAP | `uam-secret` mandatory for uspot NAS records (else PAP is cleartext over LAN); per NAS, encrypted like RADIUS secrets (`captive_portals.uam_secret_ref`). Prefer CHAP (`response=`) where the device path supports it (CoovaChilli yes; uspot CHAP VERIFIED in handler); PAP XOR path keeps credential ≤ 16 bytes (A4 §3.3). `challenge` is per client and stable until re-render (uspot) — do not treat it as a nonce. |
 | 5.3 Open redirect on `userurl` | Accept only `http(s)://`, host not equal to `uamip`/private ranges, no credentials in URL, length ≤ 2 KB, else replace with tenant landing page; uspot T sends `userurl` **not URL-encoded** (A4 §3.2) → parse `md` as the last parameter first, then treat the remainder as hostile. Never reflect `reply=` unescaped. |
 | 5.4 Brute force / rate limits | Sliding windows in Redis (or in-process in pilot): 5 failures per `nasid+mac` / 5 min then exponential back-off to 15 min; 60 attempts per client IP / 10 min (site NAT); 2 000 attempts per site / 10 min → alert; identical limits on `/json/*` and form endpoints; per-flow attempt counter in `portal_flows`. |
@@ -407,7 +407,7 @@ MAC is spoofable on open SSIDs; `mac-auth` (uspot) / `mac-filter` (hostapd) prov
 | Hub key | `wg genkey` on the host, `/etc/systemd/network/wg0.key` 0600 root (A1 §7); never in DB, backups encrypted with `age` (A5 §5); rotation via dual interface `wg0`/`wg1` migration window (A1 §8) |
 | Peer keys | Preferred: site generates its keypair, uploads public key only; hub never holds private keys. Fallback: server-generated, shown once, not stored. Topology B would force the controller to hold AP private keys → store encrypted per §4.1, flagged as elevated risk (A1 §8) |
 | Provisioning channel | One-time bundle download link (signed, 15 min, single-use) from the admin UI over HTTPS, or QR; bundle contains hub pubkey, endpoint, AllowedIPs, PSK; delivery to site staff is out-of-band (not e-mail with secrets); audit `wireguard_peer:create` |
-| PSK | `PresharedKey` per peer (post-quantum hedge, wg(8)); generated by ECLOUD, stored as `preshared_key_ref` (encrypted), included in the bundle once |
+| PSK | `PresharedKey` per peer (post-quantum hedge, wg(8)); generated by EZECLOUD, stored as `preshared_key_ref` (encrypted), included in the bundle once |
 | AllowedIPs minimal | Hub: peer `/32` + explicit site LAN prefixes only (topology A); site: `100.100.0.0/24` only, never `0.0.0.0/0` (A1 §7) |
 | Forwarding | default-deny between tenants and to Internet (§2.3) |
 | Revocation | `wg set wg0 peer <pub> remove` + `.netdev` re-render + `revoked_at`; also disable NAS record and rotate its RADIUS/UAM/CoA secrets (§10.2) |
@@ -508,7 +508,7 @@ Rotation table (PROPOSED):
 | Host hardening F-35..F-45 | §2.3–2.5, §6.10, auditd/AIDE (F-45) | 3, 10 | Lynis score, `nft list ruleset` review |
 | Security review of all external services and auth paths | A8 review before Phase 11 against the live `ss -lntup`, Caddyfile, nftables, FreeRADIUS config, RLS catalogue | 11 | signed checklist in STATUS.md |
 
-Compliance notes (PROPOSED; jurisdiction REQUIRES CLARIFICATION): subscriber PII = MAC, IP, username/email/phone, voucher use, usage volumes, timestamps. Data minimisation: store MAC as `macaddr` only where needed (sessions/devices), hash MAC in platform logs, no DHCP hostname/UA storage by default, no location beyond site. Retention defaults as A6 §5 with per-tenant override later; subject access/erasure via per-tenant export and `users.deleted_at` + pseudonymisation of `accounting_records.username` after retention (append-only tables are pseudonymised by partition rewrite only at retention boundaries — document this limit). Tenants are data controllers; ECLOUD operator is processor → DPA template needed. Lawful-intercept/data-retention obligations for hotspot operators differ by country (owner to confirm).
+Compliance notes (PROPOSED; jurisdiction REQUIRES CLARIFICATION): subscriber PII = MAC, IP, username/email/phone, voucher use, usage volumes, timestamps. Data minimisation: store MAC as `macaddr` only where needed (sessions/devices), hash MAC in platform logs, no DHCP hostname/UA storage by default, no location beyond site. Retention defaults as A6 §5 with per-tenant override later; subject access/erasure via per-tenant export and `users.deleted_at` + pseudonymisation of `accounting_records.username` after retention (append-only tables are pseudonymised by partition rewrite only at retention boundaries — document this limit). Tenants are data controllers; EZECLOUD operator is processor → DPA template needed. Lawful-intercept/data-retention obligations for hotspot operators differ by country (owner to confirm).
 
 ---
 
@@ -565,7 +565,7 @@ Compliance notes (PROPOSED; jurisdiction REQUIRES CLARIFICATION): subscriber PII
 
 ## 13. Outbound vendor-API calls (multi-vendor Cycle D, 2026-10-10)
 
-Scope: ECLOUD → tenant-configured vendor controllers (UniFi Network API, Omada hotspot operator
+Scope: EZECLOUD → tenant-configured vendor controllers (UniFi Network API, Omada hotspot operator
 API) and the Mist signed grant. Implementation `packages/vendor-api` (`VendorHttpClient`); plan
 OQ-17 rules made binding. Every rule below is enforced per request and covered by mocked-server
 tests (`packages/vendor-api/src/http.test.ts`, `apps/api/src/cycle-d.integration.test.ts`).

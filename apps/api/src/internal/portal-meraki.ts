@@ -6,11 +6,11 @@
  *    its documented parameters. The portal forwards the raw query plus the path segment.
  *  - Anti-forgery: the redirect is unsigned. (1) `login_url` is the vendor nonce (replay store,
  *    marked consumed when AAA accepts the credential); (2) every credential form carries an
- *    ECLOUD login token (vendor/login-token.ts) bound to {org, site, NAS, client MAC, flow},
+ *    EZECLOUD login token (vendor/login-token.ts) bound to {org, site, NAS, client MAC, flow},
  *    single use, consumed before any identity check; (3) the broker credential is bound to the
  *    NAS and client MAC and is only accepted on that NAS's own listener with its own secret.
  *  - Hand-off: an auto-submitted POST form to the allow-listed `login_url` (sign-on) or a 302 to
- *    the allow-listed `base_grant_url` (click-through). ECLOUD never fetches either URL.
+ *    the allow-listed `base_grant_url` (click-through). EZECLOUD never fetches either URL.
  */
 import {
   LOGIN_TOKEN_MAX_TTL_S,
@@ -28,7 +28,7 @@ export const MERAKI_ADAPTER_KEY = 'meraki-splash';
 export const MERAKI_PORTAL_TYPE = 'external' as const;
 /** Portal path (API_ARCHITECTURE.md "Portal public"). */
 export const MERAKI_PORTAL_PATH = '/meraki/';
-/** ECLOUD page Meraki redirects to after a successful sign-on (`success_url`). */
+/** EZECLOUD page Meraki redirects to after a successful sign-on (`success_url`). */
 export const MERAKI_SUCCESS_PATH = '/meraki-done';
 
 export function isMerakiFlow(flow: Pick<PortalFlow, 'adapterKey'>): boolean {

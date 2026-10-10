@@ -4,7 +4,7 @@
  * `coovachilli-uam` (CoovaChilli `redir.c` shape). The simulated NAS is `@ecloud/testing`
  * `buildUamRedirect`, written independently of `@ecloud/adapters`.
  *
- * Simulator evidence: ECLOUD code behaviour only, NOT hardware compatibility.
+ * Simulator evidence: EZECLOUD code behaviour only, NOT hardware compatibility.
  */
 import { describe, expect, it } from 'vitest';
 import { signUamQuery, SIM_UAM_SECRET } from '@ecloud/testing';

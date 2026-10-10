@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1
 #
-#  ECLOUD FreeRADIUS -- AAA_ARCHITECTURE.md §9 "FreeRADIUS container design".
+#  EZECLOUD FreeRADIUS -- AAA_ARCHITECTURE.md §9 "FreeRADIUS container design".
 #
 #  Base: official image, pinned by tag AND digest (P10-A); OS packages upgraded at build
 #  time (the pinned base carried fixable OpenSSL CVEs, docs/SECURITY_REVIEW_P10.md).
@@ -25,10 +25,10 @@ RUN apt-get update \
 
 ARG RADDB=/etc/freeradius
 
-#  1. Remove what ECLOUD does not run: the stock `default` and
+#  1. Remove what EZECLOUD does not run: the stock `default` and
 #     `inner-tunnel` virtual servers (replaced by `ecloud`) and the stock
 #     `eap` module (its test certificates in /etc/freeradius/certs are
-#     expired, root-only and never used). 802.1X (Cycle A) uses ECLOUD's own
+#     expired, root-only and never used). 802.1X (Cycle A) uses EZECLOUD's own
 #     mods-available/eap + sites-available/ecloud-inner, linked in at start-up
 #     by the entrypoint only with RADIUS_EAP_ENABLED=1 and mounted certs.
 RUN rm -f "${RADDB}/sites-enabled/default" \

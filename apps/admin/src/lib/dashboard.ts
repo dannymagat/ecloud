@@ -6,11 +6,11 @@
  * screen says "Not available in this API version" instead of failing requests.
  *
  * Honesty rules (TASK P9, ECLOUD_MULTI_VENDOR_HOTSPOT.md §8, D-028):
- *  - ECLOUD has no device telemetry. NAS status is the *observed activity* the API derives from
- *    RADIUS requests and accounting ECLOUD itself received (`active|quiet|silent|never`, explicit
+ *  - EZECLOUD has no device telemetry. NAS status is the *observed activity* the API derives from
+ *    RADIUS requests and accounting EZECLOUD itself received (`active|quiet|silent|never`, explicit
  *    thresholds), labelled "last RADIUS / accounting activity". It is never worded as a device
  *    being up or down (`FORBIDDEN_DEVICE_WORDS`, asserted by tests).
- *  - Registered network devices are counted, with "state observed: 0" (ECLOUD observes none).
+ *  - Registered network devices are counted, with "state observed: 0" (EZECLOUD observes none).
  *  - Usage lags accounting by up to the interim interval: freshness and label basis are shown.
  *  - Enforcement counts are ECLOUD-side pending records, never "applied on the device".
  *  - Q73: polling (30 s) that stops while the query is in error. Q75 / D-027: CSV export needs
@@ -127,7 +127,7 @@ export function byteTickUnit(max: number): number {
 }
 
 // ---------------------------------------------------------------------------------------------
-// NAS activity (observed by ECLOUD; NOT device state)
+// NAS activity (observed by EZECLOUD; NOT device state)
 // ---------------------------------------------------------------------------------------------
 
 export const NAS_ACTIVITY_STATUSES: readonly NasActivityStatus[] = [
@@ -183,15 +183,15 @@ export function nasActivityDefinitions(
 }
 
 export const NAS_ACTIVITY_EXPLAINER =
-  'Status reflects only the RADIUS requests and accounting ECLOUD has received from each NAS. ECLOUD does not monitor access points, so this says nothing about whether a device is reachable: a NAS without clients is legitimately quiet or silent.';
+  'Status reflects only the RADIUS requests and accounting EZECLOUD has received from each NAS. EZECLOUD does not monitor access points, so this says nothing about whether a device is reachable: a NAS without clients is legitimately quiet or silent.';
 
 /**
- * Words that would claim device state or device enforcement ECLOUD has no evidence for. Tests
+ * Words that would claim device state or device enforcement EZECLOUD has no evidence for. Tests
  * assert none appears in the rendered dashboard / reports / platform summary.
  */
 export const FORBIDDEN_DEVICE_WORDS: readonly RegExp[] = [
   // "Online Users" / "Online sessions" (owner-approved, admin redesign cycle 1) describe
-  // subscriber sessions ECLOUD holds, not device state; every other "online" stays forbidden.
+  // subscriber sessions EZECLOUD holds, not device state; every other "online" stays forbidden.
   /\bonline\b(?!\s+(users?|sessions?)\b)/i,
   /\boffline\b/i,
   /\bapplied on (the )?device\b/i,

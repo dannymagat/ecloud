@@ -1,7 +1,7 @@
 /**
  * Shared fixtures for the L4 simulator scenarios (MULTI_VENDOR_INTEGRATION_PLAN.md §8.3).
  * Every value is a documented-parameter fixture or an obvious test value; nothing comes from a
- * device capture. Simulator results prove ECLOUD code behaviour, not hardware compatibility.
+ * device capture. Simulator results prove EZECLOUD code behaviour, not hardware compatibility.
  */
 import {
   getVendorAdapter,
