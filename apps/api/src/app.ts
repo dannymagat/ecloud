@@ -22,6 +22,7 @@ import { administratorRoutes } from './routes/administrators.js';
 import { authRoutes } from './routes/auth.js';
 import { accessPointPlatformRoutes, accessPointRoutes } from './routes/access-points.js';
 import { controllerRoutes } from './routes/controllers.js';
+import { merakiPlatformRoutes, merakiRoutes } from './routes/meraki.js';
 import { enforcementRoutes } from './routes/enforcement.js';
 import { importRoutes } from './routes/imports.js';
 import { meRoutes } from './routes/me.js';
@@ -72,6 +73,8 @@ export function allRoutes(deps: AppDeps): AnyRouteSpec[] {
     ...portalAdminRoutes(deps),
     ...dashboardRoutes(deps),
     ...reportRoutes(deps),
+    ...merakiRoutes(deps),
+    ...merakiPlatformRoutes(deps),
   ];
 }
 

@@ -40,7 +40,9 @@ export async function loadNasClientRows(
         .select(['n.id', 'n.nas_ip', 'n.secret_ref', 'n.require_message_authenticator'])
         .where('n.status', '=', 'active')
         .where('n.deleted_at', 'is', null)
-        .where('o.deleted_at', 'is', null);
+        .where('o.deleted_at', 'is', null)
+        // Cycle E: Meraki NAS have no source address; they get per-NAS listeners (meraki.ts).
+        .where('n.nas_ip', 'is not', null);
       if (options.organizationIds !== undefined) {
         if (options.organizationIds.length === 0) return [];
         query = query.where('n.organization_id', 'in', [...options.organizationIds]);

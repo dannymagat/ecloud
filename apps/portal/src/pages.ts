@@ -57,6 +57,8 @@ export type PortalMethod = 'password' | 'voucher' | 'click_through';
 export interface FormTarget {
   readonly action: string;
   readonly csrf: string;
+  /** Cycle E: ECLOUD login token of a Meraki flow (single use, bound to NAS + client + flow). */
+  readonly loginToken?: string | null;
 }
 
 export interface SessionStatus {
@@ -69,7 +71,7 @@ export type PageBody =
   | {
       readonly page: 'landing';
       readonly methods: readonly { readonly method: PortalMethod; readonly href: string | null }[];
-      readonly notice: 'session_expired' | null;
+      readonly notice: 'session_expired' | 'login_failed' | null;
     }
   | {
       readonly page: 'login';
@@ -104,7 +106,17 @@ export type PageBody =
       readonly session: SessionStatus | null;
       readonly logout: FormTarget | null;
     }
-  | { readonly page: 'logout' };
+  | { readonly page: 'logout' }
+  /**
+   * Cycle E: browser POST hand-off to the vendor login URL (Meraki `login_url`). The URL was
+   * allow-listed by the API and again by the portal; the CSP `form-action` names its origin only.
+   */
+  | {
+      readonly page: 'handoff';
+      readonly url: string;
+      readonly fields: Readonly<Record<string, string>>;
+    }
+  | { readonly page: 'connected' };
 
 export type PageName = PageBody['page'];
 
@@ -129,6 +141,8 @@ const TITLE_KEYS: Readonly<Record<PageName, MessageKey>> = {
   expired: 'title.expired',
   status: 'title.status',
   logout: 'title.logout',
+  handoff: 'title.handoff',
+  connected: 'title.success',
 };
 
 function errorLine(message: string | null): string {
@@ -138,7 +152,11 @@ function errorLine(message: string | null): string {
 
 function formOpen(form: FormTarget | null): string {
   if (form === null) return '<form>';
-  return `<form method="post" action="${escapeHtml(form.action)}"><input type="hidden" name="csrf" value="${escapeHtml(form.csrf)}">`;
+  const token =
+    form.loginToken === undefined || form.loginToken === null
+      ? ''
+      : `<input type="hidden" name="login_token" value="${escapeHtml(form.loginToken)}">`;
+  return `<form method="post" action="${escapeHtml(form.action)}"><input type="hidden" name="csrf" value="${escapeHtml(form.csrf)}">${token}`;
 }
 
 function back(href: string | null, locale: string): string {
@@ -172,7 +190,9 @@ function body(theme: PageTheme, b: PageBody): string {
       const notice =
         b.notice === 'session_expired'
           ? `<p class="notice" role="status">${escapeHtml(s.expired_text)}</p>`
-          : '';
+          : b.notice === 'login_failed'
+            ? `<p class="notice" role="status">${escapeHtml(t('notice.login_failed', {}, l))}</p>`
+            : '';
       const items = b.methods
         .map(
           (m) =>
@@ -232,6 +252,15 @@ function body(theme: PageTheme, b: PageBody): string {
     }
     case 'logout':
       return `<p role="status">${escapeHtml(t('logout.text', {}, l))}</p>`;
+    case 'handoff': {
+      const inputs = Object.entries(b.fields)
+        .map(([k, v]) => `<input type="hidden" name="${escapeHtml(k)}" value="${escapeHtml(v)}">`)
+        .join('');
+      // id="handoff": submitted by the nonce'd script in renderPage; the button is the no-JS path.
+      return `<p role="status">${escapeHtml(t('handoff.text', {}, l))}</p><form id="handoff" method="post" action="${escapeHtml(b.url)}">${inputs}<button type="submit">${escapeHtml(t('handoff.continue', {}, l))}</button></form>`;
+    }
+    case 'connected':
+      return `<p role="status">${escapeHtml(t('meraki.connected', {}, l))}</p>`;
   }
 }
 
@@ -262,7 +291,12 @@ export function renderPage(
     theme.strings.footer_text === ''
       ? ''
       : `<footer class="muted">${escapeHtml(theme.strings.footer_text)}</footer>`;
-  return `<!doctype html><html lang="${escapeHtml(l)}" dir="${theme.dir}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="referrer" content="no-referrer"><title>${escapeHtml(heading)}</title>${head}</head><body><a class="skip" href="#main">${escapeHtml(t('skip.main', {}, l))}</a><main id="main"><div class="card">${logo}<h1>${escapeHtml(heading)}</h1>${site}${body(theme, page)}</div>${footer}</main></body></html>`;
+  // Cycle E hand-off: one nonce'd inline script submits the form (CSP script-src 'nonce-…').
+  const autoSubmit =
+    page.page === 'handoff' && style.mode === 'link'
+      ? `<script nonce="${escapeHtml(style.nonce)}">document.getElementById('handoff').submit();</script>`
+      : '';
+  return `<!doctype html><html lang="${escapeHtml(l)}" dir="${theme.dir}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="referrer" content="no-referrer"><title>${escapeHtml(heading)}</title>${head}</head><body><a class="skip" href="#main">${escapeHtml(t('skip.main', {}, l))}</a><main id="main"><div class="card">${logo}<h1>${escapeHtml(heading)}</h1>${site}${body(theme, page)}</div>${footer}</main>${autoSubmit}</body></html>`;
 }
 
 const DATA_IMAGE_RE = /^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/]+=*$/;

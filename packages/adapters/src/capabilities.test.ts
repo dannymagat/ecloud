@@ -50,6 +50,8 @@ const EXPECTED_VERIFIED: Record<AdapterKey, PolicyField[]> = {
   ],
   // Cycle A (D-044): vendor-neutral, no vendor source and no lab test → nothing VERIFIED.
   'generic-radius-8021x': [],
+  // Cycle E (D-044): Meraki documentation only, no lab test → nothing VERIFIED.
+  'meraki-splash': [],
 };
 
 /** Full per-field status table (the enforceability preview source), for cross-checking. */
@@ -99,6 +101,17 @@ const EXPECTED_STATUS: Record<AdapterKey, Partial<Record<PolicyField, AdapterFie
     valid_until: 'ECLOUD_SIDE_ONLY',
     schedule_id: 'ECLOUD_SIDE_ONLY',
     vlan_id: 'REQUIRES_DEVICE_TEST',
+  },
+  // Cycle E: rates only via Dashboard group policy (Filter-Id) → arbitrary values UNSUPPORTED.
+  'meraki-splash': {
+    download_rate_kbps: 'UNSUPPORTED',
+    upload_rate_kbps: 'UNSUPPORTED',
+    quota_total_bytes: 'UNSUPPORTED',
+    session_timeout_s: 'REQUIRES_DEVICE_TEST',
+    idle_timeout_s: 'REQUIRES_DEVICE_TEST',
+    vlan_id: 'UNSUPPORTED',
+    max_concurrent_sessions: 'ECLOUD_SIDE_ONLY',
+    schedule_id: 'ECLOUD_SIDE_ONLY',
   },
 };
 
@@ -150,6 +163,7 @@ describe('adapter capability declarations (D-028)', () => {
       'coovachilli-uam',
       'openwifi-config',
       'generic-radius-8021x',
+      'meraki-splash',
     ]);
   });
 

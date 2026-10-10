@@ -224,6 +224,82 @@ Review findings: (1) `SET LOCAL` inside a transaction is mandatory; the pool wra
 | S-09 | Portal request with valid `nasid` of site A but `md` computed with site B's secret | generic error, no credential issued, `portal_login_attempts` reason `md_mismatch` |
 | S-10 | Disconnect-Request from the worker for a session of tenant 2 while scoped to tenant 1 | refused before send; `session_actions` not created |
 
+### 3.5 Cloud-sourced RADIUS trust model (Cisco Meraki, multi-vendor Cycle E, D-044)
+
+Status: **implemented, build/test only.** `MERAKI_CLOUD_RADIUS_ENABLED` defaults to `false`; live
+use needs public RADIUS exposure, which the LAN-only pilot (D-043) does not allow. Every Meraki
+behaviour below is DOCUMENTED / REQUIRES_DEVICE_TEST (D-028).
+
+**Problem.** With splash "Sign-on with my RADIUS server" the **Meraki Cloud**, not the AP, sends the
+PAP Access-Request and accounting, from public addresses shared by every Meraki customer
+(Meraki doc: the ranges are listed per organization under Dashboard *Help > Firewall info* and "may
+change over time"). §3.2's rule "UDP source → NAS → tenant" therefore cannot identify a tenant,
+and FreeRADIUS chooses a client — hence the shared secret — by source address.
+
+**Options considered.**
+
+| Option | Packet authenticated with | Forgery by another ECLOUD tenant | Verdict |
+|---|---|---|---|
+| A. One platform-level Meraki client/secret; tenant by NAS-Identifier | a secret **every** Meraki tenant must type into its Dashboard | any tenant knows the secret and can set any NAS-Identifier (Meraki allows a custom NAS-ID); NAS-Identifier travels in clear text; blind accounting forgery with a spoofed source works | **rejected**: NAS-Identifier would be the only tenant key and it is neither secret nor authenticated |
+| B. Per-request secret lookup (choose the secret from the unverified NAS-Identifier) | per-NAS secret | none | **not feasible** on FreeRADIUS 3.2: the client (and secret) is selected by source address before the packet is decoded; User-Password decryption and Message-Authenticator need the secret first. Would need a custom RADIUS front end |
+| C. **Per-NAS listener**: each Meraki NAS gets its own UDP auth/acct port pair whose private client list (`clients = meraki_<id>`) holds the Meraki source ranges with **that NAS's secret** and `shortname = nas_clients.id` | per-NAS secret (43-char random, sealed at rest) | needs the victim NAS's secret: the request authenticator / Message-Authenticator fails and FreeRADIUS drops the packet (verified locally with radclient: wrong secret → dropped, same source on 1812 → unknown client) | **chosen** (D-044 "NAS-Identifier + per-NAS secret") |
+
+**Design (option C).**
+1. Registration (migration 032): `adapter_key = meraki-splash` has `nas_ip = NULL` (CHECK), a
+   mandatory NAS-Identifier unique among live Meraki NAS (generic 409), a listener pair
+   `cloud_radius_auth_port` / `cloud_radius_acct_port` (= auth + 1) allocated from
+   `MERAKI_RADIUS_PORT_RANGE` (advisory lock + global unique index) and an optional `das_host`
+   (`n<digits>.meraki.com`).
+2. FreeRADIUS (`sites-enabled/ecloud-meraki` → `meraki.d/`): the renderer writes one
+   `clients meraki_<id>` section + two `listen { clients = meraki_<id>; virtual_server = ecloud }`
+   per Meraki NAS, **only** when the flag is on and `MERAKI_RADIUS_SOURCE_CIDRS` and the port range
+   are set; otherwise a comment-only file (no listener, no client, no secret). Source CIDRs must be
+   public IPv4 networks /16–/32.
+3. AAA (`resolveNas`): a request whose client shortname is a Meraki NAS is resolved by the
+   shortname **only** — the shared source address never selects a tenant, even if another tenant
+   registered it as a `nas_ip`. Then the flag must be on (`meraki_cloud_radius_disabled`
+   otherwise) and the NAS-Identifier must be **present and equal** to the registered value
+   (`nas_identifier_missing` / `nas_identifier_mismatch`). The broker credential is bound to NAS +
+   client MAC as for every portal (§5.6).
+4. Accounting: `radius.radacct_raw.packet_client_shortname` (migration 032) carries the matched
+   client; the drainer attributes a Meraki row by it and requires the registered NAS-Identifier,
+   never falling back to the source address.
+5. Portal: `login_url` / `base_grant_url` are accepted only as `https://n<digits>.network-auth.com`
+   (documented example shape; no userinfo, port, fragment, backslash); ECLOUD never fetches them;
+   the portal's CSP `form-action` names exactly that origin. The unsigned redirect is countered by
+   the `login_url` vendor nonce (replay store), a single-use ECLOUD login token on every
+   credential form (Cycle A primitive), and the NAS-bound credential.
+6. Disconnect only (Meraki documents no CoA change): RFC 5176 to `das_host:3799` with
+   `Acct-Session-Id` + `Event-Timestamp`, only when `ECLOUD_COA_ENABLED` **and** the flag are on.
+
+**Residual risks.**
+- **Meraki Cloud is trusted** for every attribute (client MAC, AP MAC, NAS-Identifier): a
+  compromised Meraki Cloud or Meraki account can claim any client of that NAS. Same trust as an AP.
+- **Secret leakage = NAS impersonation**: anyone with the tenant's Meraki Dashboard access sees the
+  secret; rotation is per NAS (`rotate-secret` + re-render + FreeRADIUS restart).
+- **Public listener surface**: a port range open to the Meraki ranges (and, by UDP spoofing, to
+  anyone) — off-path attackers without the secret are dropped by FreeRADIUS before the API; DoS of
+  a NAS listener remains possible. Rate limiting / firewall to the Meraki ranges is a deployment
+  item (REQUIRES_CLARIFICATION).
+- **Range drift**: Meraki may change its source addresses; a stale `MERAKI_RADIUS_SOURCE_CIDRS`
+  fails closed (requests dropped), not open.
+- **Message-Authenticator**: whether the Meraki Cloud sends it is unknown; ECLOUD requires it
+  (BlastRADIUS, §4.2); relaxing needs the platform flag `MERAKI_ALLOW_RELAXED_MSGAUTH=true` and is
+  then per NAS with `limit_proxy_state = yes`.
+- **Disconnect source**: Meraki accepts Disconnect only "from the public IP address of the client
+  SSID's RADIUS authorization server"; the worker's egress address must equal it
+  (REQUIRES_DEVICE_TEST).
+- **NAS-Identifier squatting** (review F3): identifiers are generated server-side
+  (`ecloud-<16 hex>`, unguessable, read-only, shape reserved for Meraki NAS), so they cannot be
+  pre-registered; a platform release endpoint exists for support. Portal flows are limited per
+  client IP before the per-NAS budget.
+- **Stale configuration** (review F2): a client shortname naming an unknown, disabled or deleted
+  NAS is refused (AAA and accounting) and never falls back to the source address; a NAS address
+  inside the Meraki ranges is refused at registration.
+- **Listener count** (review F6): at most `MERAKI_MAX_NAS_PER_ORG` (default 50) per organization.
+- **Message-Authenticator** (review F7): forced for Meraki NAS unless
+  `MERAKI_ALLOW_RELAXED_MSGAUTH=true`.
+
 ---
 
 ## 4. AAA security

@@ -68,6 +68,8 @@ import {
 } from './radius.js';
 
 export const RETRANSMIT_TTL_S = 10;
+/** Cycle E: Meraki MR splash sign-on NAS (cloud-sourced RADIUS, D-044). */
+export const MERAKI_ADAPTER = 'meraki-splash';
 /** Decision cache of single-use portal credentials: the NAS retransmit horizon. */
 export const PORTAL_RETRANSMIT_TTL_S = 30;
 const DECISION_TTL_S = 60;
@@ -125,6 +127,9 @@ function rejectBody(message: string): unknown {
 function keyParts(body: RadiusRequestBody): string[] {
   return [
     attr(body, 'ECLOUD-Packet-Src-IP-Address') ?? '',
+    // Cycle E: Meraki Cloud source addresses are shared by every tenant; the matched client
+    // (one per Meraki NAS listener) keeps their retransmit / decision keys apart.
+    attr(body, 'ECLOUD-Client-Shortname') ?? '',
     attr(body, 'Acct-Session-Id') ?? '',
     macFrom(attr(body, 'Calling-Station-Id')) ?? attr(body, 'Calling-Station-Id') ?? '',
     attr(body, 'User-Name') ?? '',
@@ -165,6 +170,33 @@ export async function resolveNas(deps: AppDeps, body: RadiusRequestBody): Promis
         ])
         .where('status', '=', 'active')
         .where('deleted_at', 'is', null);
+    // Cycle E (D-044, SECURITY §3.5; review F2): a rendered client's shortname is a NAS id. It is
+    // looked up WITHOUT the active/deleted filters: a Meraki NAS is resolved by its shortname
+    // ONLY (the source address is shared by every Meraki customer), and a shortname that names an
+    // unknown, inactive or deleted NAS (stale listener / client file) refuses the request — the
+    // source address is never consulted for it.
+    if (shortname !== undefined && isUuid(shortname)) {
+      const named = await trx
+        .selectFrom('nas_clients')
+        .select([
+          'id',
+          'organization_id',
+          'site_id',
+          'nas_identifier',
+          'adapter_type_key',
+          'adapter_key',
+          'network_device_id',
+          'status',
+          'deleted_at',
+        ])
+        .where('id', '=', shortname)
+        .executeTakeFirst();
+      if (named === undefined || named.status !== 'active' || named.deleted_at !== null) {
+        return null;
+      }
+      const { status: _status, deleted_at: _deleted, ...row } = named;
+      if (row.adapter_key === MERAKI_ADAPTER) return row;
+    }
     if (srcIp !== undefined && srcIp !== '') {
       const byIp = await base()
         .where('nas_ip', '=', srcIp)
@@ -553,6 +585,28 @@ async function decide(deps: AppDeps, body: RadiusRequestBody, now: Date): Promis
     auth_method: null,
     reason: null,
   };
+  if (nas.adapter_key === MERAKI_ADAPTER) {
+    // Cycle E (D-044): build/test only until the platform flag is on (D-043: no public RADIUS).
+    if (!deps.config.merakiCloudRadius.enabled) {
+      return {
+        status: 401,
+        body: rejectBody('Access denied'),
+        facts: { ...baseFacts, reason: 'meraki_cloud_radius_disabled' },
+      };
+    }
+    // The NAS-Identifier MUST be present and equal the registered one (no "unset" leniency).
+    if (requestIdentifier === undefined || requestIdentifier !== nas.nas_identifier) {
+      return {
+        status: 401,
+        body: rejectBody('Access denied'),
+        facts: {
+          ...baseFacts,
+          reason:
+            requestIdentifier === undefined ? 'nas_identifier_missing' : 'nas_identifier_mismatch',
+        },
+      };
+    }
+  }
   if (
     nas.nas_identifier !== null &&
     requestIdentifier !== undefined &&

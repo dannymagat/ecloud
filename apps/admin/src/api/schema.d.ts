@@ -2177,6 +2177,66 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/api/v1/orgs/{orgId}/meraki/cloud-radius': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Meraki cloud-sourced RADIUS platform state (Cycle E, D-044)
+     * @description Permission: `nas:read`
+     */
+    get: operations['get_api_v1_orgs_orgId_meraki_cloud_radius'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/orgs/{orgId}/nas/{id}/setup-guide': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Setup guide of a NAS (non-secret values resolved; secrets never shown)
+     * @description Permission: `nas:read`
+     */
+    get: operations['get_api_v1_orgs_orgId_nas_id_setup_guide'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/platform/meraki/nas-identifiers/release': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Release a Meraki NAS-Identifier held by any organization (support path)
+     * @description Permission: `organization:update`
+     */
+    post: operations['post_api_v1_platform_meraki_nas_identifiers_release'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/healthz': {
     parameters: {
       query?: never;
@@ -5808,7 +5868,8 @@ export interface operations {
           | 'uspot-upstream-uam'
           | 'coovachilli-uam'
           | 'openwifi-config'
-          | 'generic-radius-8021x';
+          | 'generic-radius-8021x'
+          | 'meraki-splash';
       };
       header?: never;
       path: {
@@ -7390,15 +7451,17 @@ export interface operations {
             | 'openwifi-uspot-uam'
             | 'uspot-upstream-uam'
             | 'coovachilli-uam'
-            | 'generic-radius-8021x';
+            | 'generic-radius-8021x'
+            | 'meraki-splash';
           coa_port?: number | null;
           coa_supported?: boolean | null;
           controller_id?: string | null;
+          das_host?: string | null;
           /** @enum {string} */
           deployment_mode?: 'native' | 'gateway';
           name: string;
           nas_identifier?: string | null;
-          nas_ip: string;
+          nas_ip?: string | null;
           network_device_id?: string | null;
           require_message_authenticator?: boolean;
           /** Format: uuid */
@@ -7597,15 +7660,17 @@ export interface operations {
             | 'openwifi-uspot-uam'
             | 'uspot-upstream-uam'
             | 'coovachilli-uam'
-            | 'generic-radius-8021x';
+            | 'generic-radius-8021x'
+            | 'meraki-splash';
           coa_port?: number | null;
           coa_supported?: boolean | null;
           controller_id?: string | null;
+          das_host?: string | null;
           /** @enum {string} */
           deployment_mode?: 'native' | 'gateway';
           name?: string;
           nas_identifier?: string | null;
-          nas_ip?: string;
+          nas_ip?: string | null;
           network_device_id?: string | null;
           require_message_authenticator?: boolean;
           /** Format: uuid */
@@ -13691,6 +13756,239 @@ export interface operations {
       };
       /** @description Export rate limit (10 per hour per principal, shared with P8 exports) */
       429: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+    };
+  };
+  get_api_v1_orgs_orgId_meraki_cloud_radius: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        orgId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description State */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            das_port: number;
+            enabled: boolean;
+            message: string;
+            port_range: {
+              max: number;
+              min: number;
+            } | null;
+            /** @enum {string} */
+            radius_reachable_from_meraki: 'no' | 'unverified';
+            source_cidrs: string[];
+            /** @enum {string} */
+            state:
+              | 'disabled'
+              | 'enabled_missing_source_cidrs'
+              | 'enabled_missing_port_range'
+              | 'enabled';
+          };
+        };
+      };
+      /** @description Validation failed (application/problem+json) */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Authentication required */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Permission denied */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Not found (also returned for objects of other tenants) */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+    };
+  };
+  get_api_v1_orgs_orgId_nas_id_setup_guide: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        orgId: string;
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Guide */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            adapter_key: string | null;
+            meraki: {
+              das_port: number;
+              enabled: boolean;
+              message: string;
+              port_range: {
+                max: number;
+                min: number;
+              } | null;
+              /** @enum {string} */
+              radius_reachable_from_meraki: 'no' | 'unverified';
+              source_cidrs: string[];
+              /** @enum {string} */
+              state:
+                | 'disabled'
+                | 'enabled_missing_source_cidrs'
+                | 'enabled_missing_port_range'
+                | 'enabled';
+            } | null;
+            nas_id: string;
+            steps: {
+              evidence: string[];
+              id: string;
+              setting: string;
+              title: string;
+              value: string;
+            }[];
+            warnings: {
+              code: string;
+              message: string;
+            }[];
+          };
+        };
+      };
+      /** @description Validation failed (application/problem+json) */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Authentication required */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Permission denied */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Not found (also returned for objects of other tenants) */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+    };
+  };
+  post_api_v1_platform_meraki_nas_identifiers_release: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: {
+      content: {
+        'application/json': {
+          nas_identifier: string;
+          reason: string;
+        };
+      };
+    };
+    responses: {
+      /** @description Released */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            nas_identifier: string;
+            organization_id: string | null;
+            released: boolean;
+          };
+        };
+      };
+      /** @description Validation failed (application/problem+json) */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Authentication required */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Permission denied */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Not found (also returned for objects of other tenants) */
+      404: {
         headers: {
           [name: string]: unknown;
         };

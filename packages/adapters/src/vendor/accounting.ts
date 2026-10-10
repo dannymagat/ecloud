@@ -40,6 +40,11 @@ export interface RawAccountingRow {
   received_at: Date;
   /** Authenticated UDP source (migration 014); null on rows written before it. */
   packet_src_ip: string | null;
+  /**
+   * Matched FreeRADIUS client shortname (migration 032). The trusted NAS identity for Meraki
+   * cloud listeners only (one client list per Meraki NAS, shared source addresses).
+   */
+  packet_client_shortname?: string | null;
 }
 
 export interface NormalizedAccounting {
@@ -49,8 +54,10 @@ export interface NormalizedAccounting {
   acctUniqueId: string;
   /** NAS-IP-Address as sent by the NAS: stored for display, never used for attribution. */
   nasIp: string;
-  /** Authenticated packet source: the only key that resolves the NAS / tenant. */
+  /** Authenticated packet source: the key that resolves the NAS / tenant (non-Meraki NAS). */
   packetSrcIp: string | null;
+  /** Cycle E: matched client shortname; resolves a Meraki NAS (and only a Meraki NAS). */
+  packetClientShortname?: string | null;
   nasIdentifier: string | null;
   nasPortId: string | null;
   username: string | null;
@@ -165,6 +172,7 @@ export function normalizeAccounting(row: RawAccountingRow): NormalizedAccounting
     acctUniqueId: row.acctuniqueid,
     nasIp: row.nasipaddress,
     packetSrcIp: row.packet_src_ip,
+    packetClientShortname: row.packet_client_shortname ?? null,
     nasIdentifier: row.nasidentifier,
     nasPortId: row.nasportid,
     username: row.username,

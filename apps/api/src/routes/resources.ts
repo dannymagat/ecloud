@@ -26,6 +26,7 @@ import { releaseGlobalSlots } from '../global-slots.js';
 import { softDeleteAccessPointsOf } from './access-points.js';
 import { assertControllerFor, resolveDeploymentMode } from './controllers.js';
 import { crudRoutes, loose, type Row } from './crud.js';
+import { checkNasPatch, prepareNasCreate } from './meraki.js';
 
 const MAC_RE = /^([0-9A-Fa-f]{2}[:-]?){5}[0-9A-Fa-f]{2}$/;
 
@@ -94,9 +95,12 @@ const NasCreate = z.strictObject({
   site_id: z.uuid(),
   name,
   /** F-P10-07 review: a single unicast host (no mapped / loopback / link-local / multicast). */
+  /** Required except for `meraki-splash` (Cycle E: cloud-sourced RADIUS, must be absent/null). */
   nas_ip: z
     .union([z.ipv4(), z.ipv6()])
-    .refine((ip) => canonicalNasAddress(ip) !== null, { message: NAS_ADDRESS_RULE }),
+    .refine((ip) => canonicalNasAddress(ip) !== null, { message: NAS_ADDRESS_RULE })
+    .nullable()
+    .optional(),
   nas_identifier: z.string().trim().min(1).max(253).nullable().optional(),
   /** D-035: the @ecloud/adapters key; `adapter_type_key` is derived from it. */
   adapter_key: z.enum(NAS_ADAPTER_KEYS),
@@ -108,6 +112,8 @@ const NasCreate = z.strictObject({
   deployment_mode: z.enum(DEPLOYMENT_MODES).optional(),
   /** Migration 019: a controller of the same organization (and of the NAS site when site-bound). */
   controller_id: z.uuid().nullable().optional(),
+  /** Cycle E (migration 032): Meraki dashboard host receiving Disconnect on UDP 3799. */
+  das_host: z.string().trim().toLowerCase().max(64).nullable().optional(),
 });
 const NasUpdate = NasCreate.partial().extend({ status: z.enum(['active', 'disabled']).optional() });
 
@@ -313,11 +319,14 @@ export function resourceRoutes(deps: AppDeps): AnyRouteSpec[] {
         body.adapter_key as string,
         body.deployment_mode as 'native' | 'gateway' | undefined,
       );
+      // Cycle E (D-044): Meraki NAS rules + listener port pair; nas_ip required for the others.
+      const merakiColumns = await prepareNasCreate(deps, body, hook.trx);
       // 32 random bytes → 43 base64url chars; RADIUS shared secrets ≤ 128 octets.
       const secret = randomToken(32);
       hook.scratch.secret = secret;
       return {
         ...body,
+        ...merakiColumns,
         deployment_mode: deploymentMode,
         adapter_type_key: body.adapter_key,
         secret_ref: sealSecretRef(dataEnvelope, secret),
@@ -332,6 +341,7 @@ export function resourceRoutes(deps: AppDeps): AnyRouteSpec[] {
         await assertRef(trx, 'network_devices', body.network_device_id, 'network_device');
       }
       await assertControllerOnPatch(trx, body, before);
+      checkNasPatch(deps, body, before);
       const next: Row =
         typeof body.adapter_key === 'string'
           ? { ...body, adapter_type_key: body.adapter_key }

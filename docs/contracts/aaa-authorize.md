@@ -181,3 +181,21 @@ FreeRADIUS -> API  POST /internal/aaa/post-auth {..., "ECLOUD-Auth-Result":{"typ
 API -> FreeRADIUS  204
 FreeRADIUS -> NAS  Access-Accept Session-Timeout, Idle-Timeout, Acct-Interim-Interval, WISPr-*, ChilliSpot-*, Class, Message-Authenticator
 ```
+
+## Cycle E: Cisco Meraki cloud-sourced RADIUS (D-044, SECURITY_ARCHITECTURE.md §3.5)
+
+- A Meraki NAS (`adapter_key = meraki-splash`, no `nas_ip`) is reached only through its own
+  FreeRADIUS listener pair; the matched client's shortname is the NAS id. `resolveNas` resolves a
+  request whose `ECLOUD-Client-Shortname` names a Meraki NAS by that shortname **only**: the
+  (shared) `ECLOUD-Packet-Src-IP-Address` never selects a tenant for it.
+- Additional reject reasons (`auth_events` / decision facts): `meraki_cloud_radius_disabled`
+  (`MERAKI_CLOUD_RADIUS_ENABLED=false`), `nas_identifier_missing` (Meraki NAS: `NAS-Identifier`
+  absent), `nas_identifier_mismatch` (present and different; for Meraki NAS there is no "unset"
+  leniency).
+- The retransmit / decision cache keys include `ECLOUD-Client-Shortname` (Meraki source addresses
+  are shared by every tenant).
+- Accounting: `radius.radacct_raw.packet_client_shortname` = `%{client:shortname}` (queries.conf);
+  the drainer attributes a Meraki row by it and the registered NAS-Identifier, never by the source.
+
+- Review F2: an `ECLOUD-Client-Shortname` that is a UUID naming an unknown, disabled or deleted NAS
+  (stale client / listener file) is refused (`unknown_nas`); the source address is not consulted.

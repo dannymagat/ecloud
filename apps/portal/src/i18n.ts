@@ -52,6 +52,12 @@ const EN = {
   'status.logout': 'Sign out',
   'logout.text': 'You have been signed out of the Wi-Fi network.',
   'skip.main': 'Skip to content',
+  // Cycle E (Meraki splash): hand-off page and the generic "previous attempt failed" notice.
+  'title.handoff': 'Connecting',
+  'handoff.text': 'Completing your sign-in with the network.',
+  'handoff.continue': 'Continue',
+  'notice.login_failed': 'The network did not accept the last sign-in. Please try again.',
+  'meraki.connected': 'You are connected. You can close this page.',
 } as const;
 
 export type MessageKey = keyof typeof EN;

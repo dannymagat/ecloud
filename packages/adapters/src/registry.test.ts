@@ -42,8 +42,10 @@ describe('registry', () => {
       'coovachilli-uam',
       'openwifi-config',
       'generic-radius-8021x',
+      'meraki-splash',
     ]);
     expect(listCapabilities().map((c) => c.version)).toEqual([
+      '0.1.0',
       '0.1.0',
       '0.1.0',
       '0.1.0',

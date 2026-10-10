@@ -365,3 +365,37 @@ FreeRADIUS -> API  POST /internal/aaa/post-auth {..., "ECLOUD-Auth-Result":{"typ
 API -> FreeRADIUS  204
 FreeRADIUS -> NAS  Access-Accept Session-Timeout, Idle-Timeout, Acct-Interim-Interval, WISPr-*, ChilliSpot-*, Class, Message-Authenticator
 ```
+
+## 8. Cisco Meraki cloud-sourced RADIUS listeners (Cycle E, D-044) -- OFF by default
+
+Meraki splash sign-on RADIUS comes from the Meraki Cloud (shared public addresses), so a Meraki
+NAS cannot be a `clients.d/` source-address client. `sites-enabled/ecloud-meraki` includes
+`meraki.d/`; the image ships only the comment file `meraki.d/00-disabled.conf`. The renderer
+(`node apps/api/dist/radius-clients-cli.js`) also writes `MERAKI_RADIUS_FILE` (default
+`/var/lib/ecloud/radius-meraki/ecloud-meraki.conf`), to be mounted read-only **over** `meraki.d/`:
+per Meraki NAS one `clients meraki_<id>` section (one client per `MERAKI_RADIUS_SOURCE_CIDRS`
+entry, that NAS's secret, `shortname` = NAS id) and an auth + acct `listen` with
+`clients = meraki_<id>` and `virtual_server = ecloud`. Nothing is rendered unless
+`MERAKI_CLOUD_RADIUS_ENABLED=true` and the source ranges and `MERAKI_RADIUS_PORT_RANGE` are set.
+Listeners, like clients, are read at start-up only: re-render, then restart the container.
+
+`queries.conf` writes `packet_client_shortname` (`%{client:shortname}`, migration 032): apply
+migration 032 before deploying an image built from this tree.
+
+Verified locally (2026-10-10, throw-away image/container, `--network none`, no shared container
+touched): `freeradius -XC` with a rendered file → "Configuration appears to be OK"; with a loopback
+copy of the rendered shape, radclient to the NAS port with the right secret was processed with
+`ECLOUD-Client-Shortname` = the NAS id, the wrong secret was dropped ("Shared secret is
+incorrect"), and the same source on 1812 was ignored as an unknown client. Live Meraki traffic:
+REQUIRES_DEVICE_TEST (needs public exposure, D-043).
+
+**Deploy order (Cycle E review F4): run migration 032 first, then start this image.** The entrypoint
+queries `information_schema.columns` (as the RADIUS SQL user, via the bundled `psql`) and refuses
+to start with "database schema is too old: radius.radacct_raw.packet_client_shortname is missing"
+until the column exists; it waits up to `RADIUS_SCHEMA_WAIT_S` (default 60 s) so the dev stack's
+`migrate` job can finish, and reports "cannot verify the database schema" when the database is not
+reachable in that time. `RADIUS_SCHEMA_CHECK=0` skips the check (database-less configuration tests
+only). Verified locally (throw-away image): migrated test DB → starts; DB without the column →
+refused; no database → refused. Meraki NAS listeners always carry
+`require_message_authenticator = yes` unless `MERAKI_ALLOW_RELAXED_MSGAUTH=true`; the Meraki file is
+written even when the NAS clients render fails (flag off always clears the listeners).

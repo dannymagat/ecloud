@@ -16,8 +16,11 @@
 #
 FROM freeradius/freeradius-server:3.2.10@sha256:cc7fd136e7b03e7b332d94297530318e824a4ecfedbce54562cced723e71e812
 
+#  postgresql-client: the entrypoint's start-up schema check (Cycle E review F4: queries.conf
+#  writes radius.radacct_raw.packet_client_shortname, added by migration 032).
 RUN apt-get update \
  && apt-get upgrade -y --no-install-recommends \
+ && apt-get install -y --no-install-recommends postgresql-client \
  && rm -rf /var/lib/apt/lists/*
 
 ARG RADDB=/etc/freeradius
@@ -37,7 +40,7 @@ COPY --chown=freerad:freerad raddb/ ${RADDB}/
 RUN ln -s ../mods-available/rest "${RADDB}/mods-enabled/rest" \
  && ln -s ../mods-available/sql  "${RADDB}/mods-enabled/sql" \
  && chown -h freerad:freerad "${RADDB}/mods-enabled/rest" "${RADDB}/mods-enabled/sql" \
- && chmod 0750 "${RADDB}/clients.d" \
+ && chmod 0750 "${RADDB}/clients.d" "${RADDB}/meraki.d" \
  && chmod 0640 "${RADDB}/clients.conf" "${RADDB}/clients.d/dev.conf" "${RADDB}/sites-enabled/status"
 
 COPY --chown=root:root --chmod=0755 docker-entrypoint.sh /usr/local/bin/ecloud-entrypoint.sh

@@ -3,7 +3,14 @@
  * define these yet; they are read here with zod and listed in the Phase 3 report so they can
  * be moved into the shared schema.
  */
-import { ConfigError, loadConfig, type AppConfig } from '@ecloud/shared';
+import {
+  ConfigError,
+  MerakiSettingsError,
+  loadConfig,
+  parseMerakiCloudRadiusSettings,
+  type AppConfig,
+  type MerakiCloudRadiusSettings,
+} from '@ecloud/shared';
 import { z } from 'zod';
 
 const boolFlag = (fallback: boolean) =>
@@ -52,6 +59,8 @@ export interface WorkerConfig {
   retention: { apply: boolean };
   sessions: { interimIntervalS: number; reapGraceS: number; authorizationTtlS: number };
   drain: { batchSize: number; wrapMaxBps: number };
+  /** Cycle E (D-044): Meraki Disconnect is sent only while MERAKI_CLOUD_RADIUS_ENABLED is true. */
+  merakiCloudRadius: MerakiCloudRadiusSettings;
 }
 
 export function loadWorkerConfig(
@@ -65,6 +74,13 @@ export function loadWorkerConfig(
     );
   }
   const raw = parsed.data;
+  let merakiCloudRadius: MerakiCloudRadiusSettings;
+  try {
+    merakiCloudRadius = parseMerakiCloudRadiusSettings(env);
+  } catch (error) {
+    if (error instanceof MerakiSettingsError) throw new ConfigError([...error.problems]);
+    throw error;
+  }
   return {
     app,
     health: { port: raw.WORKER_HEALTH_PORT, host: raw.WORKER_HEALTH_HOST },
@@ -81,5 +97,6 @@ export function loadWorkerConfig(
       authorizationTtlS: raw.WORKER_AUTHORIZATION_TTL_S,
     },
     drain: { batchSize: raw.WORKER_DRAIN_BATCH, wrapMaxBps: raw.WORKER_COUNTER_WRAP_MAX_BPS },
+    merakiCloudRadius,
   };
 }

@@ -19,6 +19,11 @@ export const ADAPTER_KEYS = [
   'openwifi-config',
   /** Cycle A (D-044): vendor-neutral 802.1X / MAC-auth NAS (no portal). */
   'generic-radius-8021x',
+  /**
+   * Cycle E (D-044): Cisco Meraki MR splash "Sign-on with my RADIUS server"; RADIUS comes from
+   * the Meraki Cloud (per-NAS listener + secret), Disconnect only.
+   */
+  'meraki-splash',
 ] as const;
 
 export type AdapterKey = (typeof ADAPTER_KEYS)[number];
@@ -28,7 +33,9 @@ export type PortalType =
   | 'uam-chillispot'
   | 'uam-chillispot+capport'
   | 'uam-chillispot+wispr+json'
-  | 'config-only';
+  | 'config-only'
+  /** Cycle E: Meraki-hosted login endpoint (`login_url`), browser POST, cloud-sourced RADIUS. */
+  | 'meraki-splash-signon';
 
 /**
  * `mikrotik-rate-string`: one combined `rx/tx` string attribute (Mikrotik-Rate-Limit, rendered by
@@ -79,7 +86,9 @@ export interface QuotaAttributes {
 
 export interface DisconnectCapability extends AdapterFlag {
   /** `rfc5176-das`: the NAS's own RFC 5176 DAS (vendor-neutral 802.1X / MAC-auth NAS). */
-  readonly target: 'hostapd-das' | 'uspot-das' | 'coaport' | 'rfc5176-das' | 'none';
+  /** `meraki-cloud-das`: the organization's Meraki dashboard host, UDP 3799 (Cycle E). */
+  readonly target:
+    'hostapd-das' | 'uspot-das' | 'coaport' | 'rfc5176-das' | 'meraki-cloud-das' | 'none';
   /** Identification attributes the NAS needs in the Disconnect-Request. */
   readonly identifyBy: readonly string[];
   readonly acctStopEmitted: boolean | 'unknown';

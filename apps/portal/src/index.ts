@@ -9,6 +9,9 @@
  *   GET  /f/{token}/login|voucher|terms
  *   POST /f/{token}/login|voucher|click → 302 to http://uamip:uamport/logon (adapter hand-off)
  *   GET  /f/{token}/status, POST /f/{token}/logout → 302 to http://uamip:uamport/logoff
+ *   GET  /meraki/{nasid}/              Meraki splash entry (Cycle E) → 303 /f/{token}; the login
+ *                                      completes by an auto-submitted POST to Meraki `login_url`
+ *   GET  /meraki-done                  Meraki `success_url` (static "connected" page)
  *   GET  /a/{assetId}                  branding asset (nosniff; ETag/304 + Cache-Control from the API)
  *   GET  /static/portal.<hash>.css, GET /healthz
  */
@@ -68,6 +71,19 @@ const ASSET_ID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{1
 const ASSET_TYPES = new Set(['image/png', 'image/jpeg', 'image/webp']);
 const NAS_ORIGIN_RE = /^http:\/\/(\d{1,3}\.){3}\d{1,3}:\d{1,5}$/;
 
+/** Documented Meraki-hosted origin (`https://n<digits>.network-auth.com`, Cycle E). */
+const MERAKI_ORIGIN_RE = /^https:\/\/n[0-9]{1,6}\.network-auth\.com$/;
+const MERAKI_NASID_RE = /^[A-Za-z0-9._:-]{3,128}$/;
+
+/**
+ * Cycle E open-redirect / form-target guard: a Meraki hand-off is followed only when it targets
+ * the flow's allow-listed Meraki origin (set by the API) under a path.
+ */
+export function isMerakiHandoff(url: string, origin: string | null): boolean {
+  if (origin === null || !MERAKI_ORIGIN_RE.test(origin)) return false;
+  return url.startsWith(`${origin}/`) && !/[\s"'<>\\#]/.test(url);
+}
+
 /**
  * Open-redirect guard: a NAS hand-off is followed only when it targets this flow's own
  * `http://uamip:uamport` (validated by the API) and exactly the expected path.
@@ -100,6 +116,8 @@ interface Rendered {
   body: PageBody;
   /** `http://uamip:uamport` allowed as form-action (SECURITY_ARCHITECTURE.md §5.8). */
   nasOrigin?: string | null;
+  /** Cycle E: allow-listed Meraki origin allowed as form-action of the hand-off page. */
+  vendorOrigin?: string | null;
 }
 
 function themeOf(view: FlowView | null): PageTheme {
@@ -154,9 +172,17 @@ export function createServer(options: ServerOptions = {}): Express {
       page.nasOrigin !== undefined && page.nasOrigin !== null && NAS_ORIGIN_RE.test(page.nasOrigin)
         ? ` ${page.nasOrigin}`
         : '';
+    const vendor =
+      page.vendorOrigin !== undefined &&
+      page.vendorOrigin !== null &&
+      MERAKI_ORIGIN_RE.test(page.vendorOrigin)
+        ? ` ${page.vendorOrigin}`
+        : '';
+    // Only the hand-off page runs a script (one nonce'd auto-submit line).
+    const script = page.body.page === 'handoff' ? `; script-src 'nonce-${nonce}'` : '';
     res.setHeader(
       'Content-Security-Policy',
-      `default-src 'none'; style-src 'self' 'nonce-${nonce}'; img-src 'self' data:; form-action 'self'${nas}; frame-ancestors 'none'; base-uri 'none'`,
+      `default-src 'none'; style-src 'self' 'nonce-${nonce}'; img-src 'self' data:; form-action 'self'${nas}${vendor}; frame-ancestors 'none'; base-uri 'none'${script}`,
     );
     res.setHeader('Cache-Control', 'no-store');
     res
@@ -299,6 +325,50 @@ export function createServer(options: ServerOptions = {}): Express {
     });
   }
 
+  // ------------------------------------------------------------------------ Meraki entry
+  // Cycle E: Meraki success_url (static; Meraki appends logout_url, which is ignored).
+  app.get('/meraki-done', (_req, res) => {
+    send(res, { status: 200, theme: DEFAULT_THEME, branding: null, body: { page: 'connected' } });
+  });
+
+  app.get(['/meraki/:nasid', '/meraki/:nasid/'], async (req, res) => {
+    const nasid = String(req.params.nasid);
+    if (!MERAKI_NASID_RE.test(nasid)) {
+      errorPage(res, 400, t('error.generic'));
+      return;
+    }
+    const q = req.originalUrl.indexOf('?');
+    const rawQuery = q < 0 ? '' : req.originalUrl.slice(q + 1);
+    const outcome = await api.redirect({
+      flavour: 'meraki',
+      rawQuery,
+      clientIp: req.ip ?? null,
+      nasid,
+    });
+    switch (outcome.kind) {
+      case 'flow': {
+        nonceFor(req, res);
+        const token = signFlowToken(secret, outcome.flowId, outcome.expiresAt);
+        res.setHeader('Cache-Control', 'no-store');
+        res.redirect(303, flowHref(token));
+        return;
+      }
+      case 'rate_limited':
+        errorPage(
+          res,
+          429,
+          t('form.rate_limited', { minutes: Math.max(1, Math.ceil(outcome.retryAfter / 60)) }),
+        );
+        return;
+      case 'unavailable':
+        errorPage(res, 503, t('error.unavailable'));
+        return;
+      default:
+        // One page for unknown NAS, feature off, bad login_url host, replay, malformed.
+        errorPage(res, 400, t('error.generic'));
+    }
+  });
+
   // ------------------------------------------------------------------------- flow pages
   type Loaded = { token: string; view: FlowView };
 
@@ -333,7 +403,12 @@ export function createServer(options: ServerOptions = {}): Express {
   ): void {
     const nonce = nonceFor(req, res);
     const action = flowHref(l.token, page === 'terms' ? '/click' : `/${page}`);
-    const form = { action, csrf: csrfToken(secret, l.view.id, nonce) };
+    const form = {
+      action,
+      csrf: csrfToken(secret, l.view.id, nonce),
+      // Cycle E: Meraki flows carry the API-issued single-use login token.
+      loginToken: l.view.meraki?.loginToken ?? null,
+    };
     const backHref = flowHref(l.token);
     const body: PageBody =
       page === 'login'
@@ -455,11 +530,38 @@ export function createServer(options: ServerOptions = {}): Express {
           ...(clientIp === undefined ? {} : { client_ip: clientIp }),
         };
       }
+      if (l.view.meraki) input.login_token = field('login_token');
       const outcome = await api.identify(l.view.id, input);
       metrics?.logins.inc({ method: route.method, result: outcome.result });
       const username = route.method === 'password' ? field('username').slice(0, 253) : '';
       switch (outcome.result) {
         case 'ok':
+          if (l.view.meraki) {
+            // Cycle E: Meraki hand-off, only to the flow's allow-listed Meraki origin.
+            const origin = l.view.meraki.handoffOrigin;
+            if (!isMerakiHandoff(outcome.handoffUrl, origin)) {
+              logger.error({ flowId: l.view.id }, 'portal meraki hand-off URL rejected');
+              errorPage(res, 502, t('error.unavailable'), l.view);
+              return;
+            }
+            res.setHeader('Cache-Control', 'no-store');
+            if (outcome.handoffMethod === 'POST-form') {
+              send(res, {
+                status: 200,
+                theme: themeOf(l.view),
+                branding: brandingOf(l.view),
+                body: {
+                  page: 'handoff',
+                  url: outcome.handoffUrl,
+                  fields: outcome.handoffFields ?? {},
+                },
+                vendorOrigin: origin,
+              });
+              return;
+            }
+            res.redirect(302, outcome.handoffUrl);
+            return;
+          }
           if (!isNasHandoff(outcome.handoffUrl, l.view.nasOrigin, '/logon')) {
             logger.error({ flowId: l.view.id }, 'portal hand-off URL rejected');
             errorPage(res, 502, t('error.unavailable'), l.view);
@@ -503,6 +605,10 @@ export function createServer(options: ServerOptions = {}): Express {
           return;
         case 'handoff_unavailable':
           errorPage(res, 400, t('error.generic'), l.view);
+          return;
+        case 'login_token_invalid':
+          // Cycle E: stale / replayed login token: re-render the form with a fresh one.
+          formPage(req, res, l, page, 403, t('form.csrf'), username);
           return;
         case 'unavailable':
           errorPage(res, 503, t('error.unavailable'), l.view);

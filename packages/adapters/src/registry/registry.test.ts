@@ -43,6 +43,8 @@ describe('compatibility registry data', () => {
       ['coova-chilli-1.2.9-ezegate', 'coovachilli-uam', 'implemented'],
       ['coova-chilli-master', 'coovachilli-uam', 'implemented'],
       ['generic-radius-8021x', 'generic-radius-8021x', 'implemented'],
+      // Cycle E (D-044): Cisco Meraki MR splash sign-on, build/test only (flag default OFF).
+      ['cisco-meraki-mr-splash-signon', 'meraki-splash', 'implemented'],
     ]);
     const tip = row('ezelink-eze-ap1832-r32912-tip-uspot');
     expect([tip.deploymentModes, tip.enforcementPoint, tip.sourceVersionMatchesDevice]).toEqual([
@@ -201,12 +203,23 @@ describe('compatibility registry data', () => {
       expect(v.docLinks).toEqual([]);
   });
 
-  it('no third-party vendor adapter exists (engine keys only; generic-radius is vendor-neutral)', () => {
+  it('third-party adapters exist only where a cycle delivered one (Cycle E: cisco-meraki)', () => {
     const keys = new Set(COMPATIBILITY_ROWS.map((r) => r.adapterKey).filter((k) => k !== null));
     expect([...keys].sort()).toEqual([...ADAPTER_KEYS].sort());
     for (const r of COMPATIBILITY_ROWS)
-      if (!['ezelink', 'coova', 'openwrt', 'generic-radius'].includes(r.vendorKey))
+      if (!['ezelink', 'coova', 'openwrt', 'generic-radius', 'cisco-meraki'].includes(r.vendorKey))
         expect(r.adapterKey).toBeNull();
+    // Cycle E: only the MR splash row has an adapter; the roadmap row stays planned.
+    expect(
+      COMPATIBILITY_ROWS.filter((r) => r.vendorKey === 'cisco-meraki').map((r) => [
+        r.key,
+        r.adapterKey,
+        r.lifecycle,
+      ]),
+    ).toEqual([
+      ['cisco-meraki-mr-splash-signon', 'meraki-splash', 'implemented'],
+      ['cisco-meraki-planned', null, 'planned'],
+    ]);
   });
 
   it('the generic 802.1X / MAC-auth row claims no device: nothing VERIFIED, no model/firmware', () => {

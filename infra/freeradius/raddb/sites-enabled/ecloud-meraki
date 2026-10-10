@@ -1,0 +1,24 @@
+# -*- text -*-
+######################################################################
+#
+#  ECLOUD: per-NAS listeners for Cisco Meraki cloud-sourced RADIUS
+#  (multi-vendor Cycle E, D-044; SECURITY_ARCHITECTURE.md §3.5).
+#
+#  Every rendered file in meraki.d/ holds, per Meraki NAS:
+#    clients meraki_<id> { client ... { ipaddr = <Meraki source CIDR>
+#                                       secret = <that NAS's secret>
+#                                       shortname = <nas_clients.id> } }
+#    listen { type = auth, port = <auth>,     clients = meraki_<id>, virtual_server = ecloud }
+#    listen { type = acct, port = <auth + 1>, clients = meraki_<id>, virtual_server = ecloud }
+#  so a packet is authenticated with a PER-NAS secret although every Meraki
+#  customer shares the same source addresses. The `ecloud` server passes
+#  %{client:shortname} to the API, which resolves a Meraki NAS by it ONLY and
+#  also requires the registered NAS-Identifier.
+#
+#  Default (MERAKI_CLOUD_RADIUS_ENABLED=false): meraki.d/ holds only comments
+#  and nothing listens. FreeRADIUS reads listeners at start-up only, so a
+#  re-rendered file needs a container restart (same as clients.d/).
+#
+######################################################################
+
+$INCLUDE ${confdir}/meraki.d/

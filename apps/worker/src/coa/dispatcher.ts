@@ -43,6 +43,11 @@ export interface DispatcherDeps {
   timeoutS: number;
   retries: number;
   defaultCoaPort: number;
+  /**
+   * Cycle E (D-044): MERAKI_CLOUD_RADIUS_ENABLED. While false a Meraki NAS action is recorded as
+   * unsupported and nothing is sent (absent = false).
+   */
+  merakiCloudRadiusEnabled?: boolean;
   resolveSecret: SecretResolver;
   runner?: RadclientRunner;
   now?: () => Date;
@@ -114,11 +119,41 @@ export interface ActionContext {
   acct_session_id: string;
   calling_station_id: string | null;
   framed_ip: string | null;
-  nas_ip: string;
+  /** NULL for Meraki NAS (cloud-sourced RADIUS, migration 032). */
+  nas_ip: string | null;
   nas_identifier: string | null;
   coa_port: number | null;
   secret_ref: string;
   adapter_key: string | null;
+  /** Migration 032: Meraki dashboard host receiving Disconnect on UDP 3799. */
+  das_host?: string | null;
+}
+
+/** Cycle E: Meraki NAS adapter key and its documented Disconnect port. */
+export const MERAKI_ADAPTER = 'meraki-splash';
+export const MERAKI_DAS_PORT = 3799;
+const MERAKI_DAS_HOST_RE = /^n[0-9]{1,6}\.meraki\.com$/;
+
+/**
+ * Disconnect / CoA target of a NAS. Meraki (Cycle E): the organization's dashboard host on UDP
+ * 3799 (Meraki doc "CoA Disconnect for Splash Sign-on"), never a packet source address.
+ */
+export function dispatchTarget(
+  row: Pick<ActionContext, 'adapter_key' | 'nas_ip' | 'coa_port' | 'das_host'>,
+  deps: { defaultCoaPort: number; merakiCloudRadiusEnabled?: boolean },
+): { host: string; port: number } | { unsupported: string } {
+  if (row.adapter_key === MERAKI_ADAPTER) {
+    if (deps.merakiCloudRadiusEnabled !== true) {
+      return { unsupported: 'meraki_cloud_radius_disabled (MERAKI_CLOUD_RADIUS_ENABLED=false)' };
+    }
+    const host = row.das_host ?? null;
+    if (host === null || !MERAKI_DAS_HOST_RE.test(host)) {
+      return { unsupported: 'Meraki NAS has no Disconnect host (das_host) registered' };
+    }
+    return { host, port: MERAKI_DAS_PORT };
+  }
+  if (row.nas_ip === null) return { unsupported: 'NAS has no address' };
+  return { host: row.nas_ip, port: row.coa_port ?? deps.defaultCoaPort };
 }
 
 export type DispatchDecision =
@@ -138,6 +173,7 @@ export type PerformDeps = Pick<
   | 'timeoutS'
   | 'retries'
   | 'defaultCoaPort'
+  | 'merakiCloudRadiusEnabled'
   | 'resolveSecret'
   | 'runner'
 > & {
@@ -188,6 +224,13 @@ export async function performDispatch(
   if ('unsupported' in built) {
     return final('unsupported', built.reason, { status: 'unsupported', reason: built.reason });
   }
+  const target = dispatchTarget(row, deps);
+  if ('unsupported' in target) {
+    return final('unsupported', target.unsupported, {
+      status: 'unsupported',
+      reason: target.unsupported,
+    });
+  }
   const secret = await deps.resolveSecret(row.secret_ref);
   if (secret === undefined) {
     const reason = 'NAS secret reference could not be resolved';
@@ -196,8 +239,8 @@ export async function performDispatch(
   await deps.onSend?.();
   const outcome: RadclientOutcome = await sendDynamicAuthorization({
     radclientPath: deps.radclientPath,
-    host: row.nas_ip,
-    port: row.coa_port ?? deps.defaultCoaPort,
+    host: target.host,
+    port: target.port,
     command: row.action === 'disconnect' ? 'disconnect' : 'coa',
     secret,
     attributes: withRequestHygiene(built.attributes, now),
@@ -229,7 +272,7 @@ export async function performDispatch(
           })
         : {
             kind: 'retry',
-            message: `no reply from ${row.nas_ip} (attempt ${String(ctx.attempt)})`,
+            message: `no reply from ${target.host} (attempt ${String(ctx.attempt)})`,
           };
     case 'error':
       // The schema has no `error` status; an exhausted local failure is recorded as `timeout`.
@@ -271,6 +314,7 @@ export async function dispatchSessionAction(
       'n.coa_port',
       'n.secret_ref',
       'n.adapter_key',
+      'n.das_host',
     ])
     .where('a.id', '=', sessionActionId)
     .executeTakeFirst()) as ActionContext | undefined;

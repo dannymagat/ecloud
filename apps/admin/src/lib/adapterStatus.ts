@@ -59,6 +59,8 @@ export const ADAPTER_KEYS = [
   'uspot-upstream-uam',
   'coovachilli-uam',
   'generic-radius-8021x',
+  // Cycle E (D-044): Meraki MR splash sign-on; RADIUS from the Meraki Cloud (platform flag).
+  'meraki-splash',
 ] as const;
 
 /** Human labels for the NAS adapter dropdown (the key stays visible for support). */
@@ -68,6 +70,7 @@ export const ADAPTER_LABELS: Readonly<Record<(typeof ADAPTER_KEYS)[number], stri
   'uspot-upstream-uam': 'OpenWrt uspot captive portal',
   'coovachilli-uam': 'CoovaChilli gateway captive portal',
   'generic-radius-8021x': 'Any vendor: 802.1X / MAC auth (generic RADIUS)',
+  'meraki-splash': 'Cisco Meraki MR splash: sign-on with RADIUS (cloud RADIUS)',
 };
 
 export interface StatusPresentation {

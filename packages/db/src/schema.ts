@@ -371,7 +371,8 @@ export interface NasClientsTable {
   network_device_id: Uuid | null;
   name: string;
   nas_identifier: string | null;
-  nas_ip: Inet;
+  /** NULL only for `meraki-splash` (migration 032: cloud-sourced RADIUS, no site address). */
+  nas_ip: Inet | null;
   adapter_type_key: string;
   /** Migration 015 (D-035): @ecloud/adapters key; NULL only for legacy rows without a mapping. */
   adapter_key: string | null;
@@ -387,6 +388,14 @@ export interface NasClientsTable {
   created_at: GeneratedTimestamp;
   updated_at: GeneratedTimestamp;
   deleted_at: NullableTimestamp;
+  /**
+   * Migration 032 (Cycle E, Meraki): per-NAS FreeRADIUS listener pair for cloud-sourced RADIUS
+   * (auth even, acct = auth + 1); NULL for every other adapter.
+   */
+  cloud_radius_auth_port: number | null;
+  cloud_radius_acct_port: number | null;
+  /** Migration 032: Meraki dashboard host (`n<digits>.meraki.com`) receiving Disconnect on 3799. */
+  das_host: string | null;
 }
 
 /**
@@ -976,6 +985,11 @@ export interface RadacctRawTable {
   received_at: GeneratedTimestamp;
   /** UDP source FreeRADIUS authenticated (migration 014); the only trusted NAS identity. */
   packet_src_ip: Inet | null;
+  /**
+   * Migration 032: FreeRADIUS client shortname that matched the packet. Trusted NAS identity for
+   * Meraki cloud listeners only (shared source addresses, per-NAS secret = per-NAS client).
+   */
+  packet_client_shortname: string | null;
 }
 
 export interface RadpostauthRawTable {

@@ -121,6 +121,43 @@ elif eap_linked; then
 	exit 1
 fi
 
+#  Schema check (Cycle E review F4): queries.conf writes
+#  radius.radacct_raw.packet_client_shortname (migration 032). Started against an older schema,
+#  every accounting INSERT would fail. Refuse to start until the column exists. Waits up to
+#  RADIUS_SCHEMA_WAIT_S (default 60) for the database / the migrate job; RADIUS_SCHEMA_CHECK=0
+#  skips the check (only for a throw-away configuration test without a database).
+if [ "${RADIUS_SCHEMA_CHECK:-1}" != "0" ]; then
+	wait_s="${RADIUS_SCHEMA_WAIT_S:-60}"
+	case "$wait_s" in ''|*[!0-9]*) echo "freeradius: RADIUS_SCHEMA_WAIT_S must be a number of seconds" >&2; exit 1 ;; esac
+	schema_query="SELECT count(*) FROM information_schema.columns WHERE table_schema = 'radius' AND table_name = 'radacct_raw' AND column_name = 'packet_client_shortname'"
+	found=""
+	reachable=""
+	waited=0
+	#  libpq reads the password from the environment (never on argv).
+	PGPASSWORD="$RADIUS_SQL_PASSWORD" # check-no-secrets: allow (environment reference, not a value)
+	export PGPASSWORD
+	while :; do
+		if out=$(PGCONNECT_TIMEOUT=5 psql -X -A -t -q \
+			-h "$RADIUS_SQL_HOST" -p "$RADIUS_SQL_PORT" -U "$RADIUS_SQL_USER" -d "$RADIUS_SQL_DB" \
+			-c "$schema_query" 2>/dev/null); then
+			reachable=1
+			if [ "$(echo "$out" | tr -d '[:space:]')" = "1" ]; then found=1; break; fi
+		fi
+		[ "$waited" -ge "$wait_s" ] && break
+		sleep 2
+		waited=$((waited + 2))
+	done
+	unset PGPASSWORD
+	if [ -z "$found" ]; then
+		if [ -n "$reachable" ]; then
+			echo "freeradius: database schema is too old: radius.radacct_raw.packet_client_shortname is missing. Apply migration 032 (npm run db:migrate / the migrate job) BEFORE starting this FreeRADIUS image." >&2
+		else
+			echo "freeradius: cannot verify the database schema (no connection to $RADIUS_SQL_HOST:$RADIUS_SQL_PORT/$RADIUS_SQL_DB within ${wait_s}s)" >&2
+		fi
+		exit 1
+	fi
+fi
+
 case "$INTERNAL_API_TOKEN" in
 	*[%\"\\]*)
 		echo "freeradius: INTERNAL_API_TOKEN must not contain %, \" or \\ (it is embedded in an xlat string)" >&2

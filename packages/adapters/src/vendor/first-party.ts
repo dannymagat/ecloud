@@ -14,6 +14,7 @@ import { DT_RESULTS } from '../registry/dt-results.js';
 import type { CompatibilityRow, DeploymentMode } from '../registry/types.js';
 import type { NasAdapter, SessionRef, Unsupported } from '../types.js';
 import { counterWrap32Quirks, normalizeAccounting, normalizeMacAddress } from './accounting.js';
+import { MERAKI_VENDOR_KEY, withMerakiSplash } from './meraki.js';
 import type {
   AuthorizationHandoff,
   AuthorizationPlan,
@@ -314,6 +315,16 @@ const SPECS: readonly FirstPartySpec[] = [
     defaultDeployment: 'native',
     radius: true,
     setup: () => genericRadiusSetup(),
+  },
+  {
+    // Cycle E (D-044): Meraki MR splash sign-on with cloud-sourced RADIUS. The UAM pieces of the
+    // wrapper are replaced by `withMerakiSplash` (vendor/meraki.ts).
+    key: 'meraki-splash',
+    vendorKey: MERAKI_VENDOR_KEY,
+    uam: null,
+    defaultDeployment: 'native',
+    radius: true,
+    setup: () => [],
   },
 ];
 
@@ -629,10 +640,12 @@ function createFirstPartyVendorAdapter(spec: FirstPartySpec): VendorAdapter {
 }
 
 const VENDOR_ADAPTERS: Readonly<Record<AdapterKey, VendorAdapter>> = Object.freeze(
-  Object.fromEntries(SPECS.map((s) => [s.key, createFirstPartyVendorAdapter(s)])) as Record<
-    AdapterKey,
-    VendorAdapter
-  >,
+  Object.fromEntries(
+    SPECS.map((s) => {
+      const base = createFirstPartyVendorAdapter(s);
+      return [s.key, s.key === 'meraki-splash' ? withMerakiSplash(base) : base];
+    }),
+  ) as Record<AdapterKey, VendorAdapter>,
 );
 
 /** First-party vendor adapter by engine key; throws on an unknown key. */

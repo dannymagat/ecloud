@@ -172,12 +172,31 @@ export const VENDORS: readonly VendorEntry[] = Object.freeze([
     notes:
       'Researched only (plan §7.3). ECLOUD must not depend on cnMaestro Cloud (C4); AP-side External Hotspot + RADIUS is the primary candidate; no adapter.',
   },
-  ...ROADMAP_VENDORS.map((v): VendorEntry => ({
-    key: v.key,
-    name: v.name,
-    lifecycle: 'planned',
-    roadmapPhase: v.phase,
-    docLinks: [],
-    notes: roadmapNotes(v),
-  })),
+  ...ROADMAP_VENDORS.map((v): VendorEntry =>
+    v.key === 'cisco-meraki'
+      ? {
+          // Cycle E (D-044): the MR splash sign-on row is implemented (build/test only:
+          // MERAKI_CLOUD_RADIUS_ENABLED default OFF); the roadmap row stays planned.
+          key: v.key,
+          name: v.name,
+          lifecycle: 'implemented',
+          roadmapPhase: v.phase,
+          docLinks: [
+            {
+              kind: 'doc-section',
+              ref: 'docs/VENDOR_INTEGRATION_RESEARCH.md §2 F4, §3.5 (meraki-splash)',
+            },
+            { kind: 'doc-section', ref: 'DECISIONS.md D-044 (Cycle E)' },
+          ],
+          notes: `${roadmapNotes(v)} Cycle E: meraki-splash implemented; nothing lab-validated (D-028).`,
+        }
+      : {
+          key: v.key,
+          name: v.name,
+          lifecycle: 'planned',
+          roadmapPhase: v.phase,
+          docLinks: [],
+          notes: roadmapNotes(v),
+        },
+  ),
 ]);

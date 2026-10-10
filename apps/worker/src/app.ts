@@ -199,6 +199,7 @@ export async function startWorker(options: StartOptions): Promise<RunningWorker>
           timeoutS: config.coa.timeoutS,
           retries: config.coa.retries,
           defaultCoaPort: config.app.radius.coaPort,
+          merakiCloudRadiusEnabled: config.merakiCloudRadius.enabled,
           resolveSecret,
           ...(options.radclientRunner ? { runner: options.radclientRunner } : {}),
         },

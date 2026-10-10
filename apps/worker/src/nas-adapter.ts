@@ -13,6 +13,8 @@ export const NAS_ADAPTER_KEYS: readonly string[] = Object.freeze([
   'coovachilli-uam',
   // Cycle A (D-044, migration 028): vendor-neutral 802.1X / MAC-auth NAS.
   'generic-radius-8021x',
+  // Cycle E (D-044, migration 032): Meraki MR splash sign-on, cloud-sourced RADIUS.
+  'meraki-splash',
 ]);
 
 export function resolveAdapter(adapterKey: string | null): NasAdapter | null {

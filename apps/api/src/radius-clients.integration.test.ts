@@ -67,6 +67,8 @@ const CONTAINER_ENV = [
   'RADIUS_SQL_PASSWORD=ecloud_test_placeholder',
   'ECLOUD_INTERNAL_URL=http://127.0.0.1:1',
   'INTERNAL_API_TOKEN=ecloud_test_internal_placeholder',
+  // Cycle E review F4: these containers have no database; skip the migration-032 schema check.
+  'RADIUS_SCHEMA_CHECK=0',
 ];
 
 interface RunOptions {

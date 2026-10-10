@@ -4,7 +4,15 @@
  * listener knobs). They are validated here with the same rules: dev-only defaults that are
  * rejected when NODE_ENV=production, and error messages that name variables, never values.
  */
-import { ConfigError, loadConfig, resolveSecretFiles, type AppConfig } from '@ecloud/shared';
+import {
+  ConfigError,
+  MerakiSettingsError,
+  loadConfig,
+  parseMerakiCloudRadiusSettings,
+  resolveSecretFiles,
+  type AppConfig,
+  type MerakiCloudRadiusSettings,
+} from '@ecloud/shared';
 import { z } from 'zod';
 
 /** Dev-only key material (obviously fake, rejected in production — D-033). */
@@ -100,6 +108,11 @@ export interface ApiConfig {
   coaEnabled: boolean;
   shutdownGraceMs: number;
   rateLimitDisabled: boolean;
+  /**
+   * Cycle E (D-044): MERAKI_CLOUD_RADIUS_ENABLED (default false), MERAKI_RADIUS_SOURCE_CIDRS,
+   * MERAKI_RADIUS_PORT_RANGE (`@ecloud/shared` meraki-cloud-radius.ts).
+   */
+  merakiCloudRadius: MerakiCloudRadiusSettings;
 }
 
 export function loadApiConfig(
@@ -147,7 +160,14 @@ export function loadApiConfig(
       problems.push('SESSION_COOKIE_NAME: must start with __Host- when NODE_ENV=production');
     }
   }
-  if (problems.length > 0) throw new ConfigError(problems);
+  let merakiCloudRadius: MerakiCloudRadiusSettings | null = null;
+  try {
+    merakiCloudRadius = parseMerakiCloudRadiusSettings(env);
+  } catch (error) {
+    if (!(error instanceof MerakiSettingsError)) throw error;
+    problems.push(...error.problems);
+  }
+  if (problems.length > 0 || merakiCloudRadius === null) throw new ConfigError(problems);
 
   const secureCookie =
     raw.SESSION_COOKIE_SECURE === undefined
@@ -177,5 +197,6 @@ export function loadApiConfig(
     coaEnabled: raw.ECLOUD_COA_ENABLED,
     shutdownGraceMs: raw.SHUTDOWN_GRACE_MS,
     rateLimitDisabled: raw.RATE_LIMIT_DISABLED,
+    merakiCloudRadius,
   };
 }
