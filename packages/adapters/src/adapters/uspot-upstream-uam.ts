@@ -13,7 +13,7 @@ const RATE_VERIFIED =
 const QUOTA_VERIFIED =
   "CAPTIVE_PORTAL_ARCHITECTURE.md §3.4 reply table rows ChilliSpot-Max-Total-Octets (U: yes + Gigawords) and ChilliSpot-Max-Input/Output-Octets(+Gigawords) (U: yes); NETWORK_INTEGRATION.md §2 row 'Per-session total quota (captive)': upstream README lists ChilliSpot-Max-{Input,Output,Total}-{Octets,Gigawords}";
 const QUOTA_NOTE =
-  'period counter is ECLOUD-side (usage_counters); remaining emitted as Octets + Gigawords (64-bit). FreeRADIUS dictionary.chillispot lacks Gigawords 21-23 → EZECLOUD ships dictionary additions (AAA_ARCHITECTURE.md §4.3, PROPOSED)';
+  'period counter is EZECLOUD-side (usage_counters); remaining emitted as Octets + Gigawords (64-bit). FreeRADIUS dictionary.chillispot lacks Gigawords 21-23 → EZECLOUD ships dictionary additions (AAA_ARCHITECTURE.md §4.3, PROPOSED)';
 const TIMEOUT_VERIFIED =
   'CAPTIVE_PORTAL_ARCHITECTURE.md §3.4 reply table row Session-Timeout (U: yes); POLICY_ENGINE.md §3.1 row session_timeout (uspot-upstream-uam): VERIFIED DOCS';
 const IDLE_VERIFIED =

@@ -378,7 +378,7 @@ export function createServer(options: ServerOptions = {}): Express {
   const ENTRY_PATHS = [
     ['uspot', ['/uam/uspot', '/uam/uspot/']],
     ['chilli', ['/uam/chilli', '/uam/chilli/']],
-    // Cycle B: the ECLOUD-generated RouterOS login.html sends the browser here.
+    // Cycle B: the EZECLOUD-generated RouterOS login.html sends the browser here.
     ['mikrotik', ['/hotspot/mikrotik', '/hotspot/mikrotik/']],
   ] as const;
   for (const [flavour, paths] of ENTRY_PATHS) {

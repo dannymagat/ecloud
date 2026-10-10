@@ -556,7 +556,7 @@ Compliance notes (PROPOSED; jurisdiction REQUIRES CLARIFICATION): subscriber PII
 | ST2 | CoovaChilli 1.2.9 on EZE gateway: Message-Authenticator in Access-Request (source says yes for master; 1.2.9 UNKNOWN) | same for gateway NAS |
 | ST3 | Disconnect-Request with `Event-Timestamp` and `Message-Authenticator` to hostapd DAS (TIP build) and to CoovaChilli `coaport` — ACK or NAK? | replay protection on CoA path |
 | ST4 | NAS `secondary` RADIUS server used for the dual-secret rotation window (switch primary off, observe failover and return) | rotation procedure §4.1 |
-| ST5 | RadSec via `service.radius-proxy` (`protocol: radsec`, 2083) from an EZEAP to FreeRADIUS `tls` listener with ECLOUD-issued client cert | topology C security fallback |
+| ST5 | RadSec via `service.radius-proxy` (`protocol: radsec`, 2083) from an EZEAP to FreeRADIUS `tls` listener with EZECLOUD-issued client cert | topology C security fallback |
 | ST6 | Portal under CSP `default-src 'self'` inside iOS CNA / Android captive sign-in, with 302 hand-off to `http://uamip:3990/logon` | CSP/HSTS compatibility with mini-browsers |
 | ST7 | `uam-secret` set: verify `md` validation and PAP XOR with ≤ 16-byte credential on T and U uspot; CHAP path where available | §5.2 |
 | ST8 | MAC-auth username/password format from hostapd and uspot | §4.8 policy restrictions |

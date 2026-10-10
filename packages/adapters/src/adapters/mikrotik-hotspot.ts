@@ -1,6 +1,6 @@
 /**
  * `mikrotik-hotspot` (Cycle B, D-044; docs/VENDOR_INTEGRATION_RESEARCH.md §2 F2, §3.3): MikroTik
- * RouterOS HotSpot with an ECLOUD-generated `login.html` that sends the client to the EZECLOUD
+ * RouterOS HotSpot with an EZECLOUD-generated `login.html` that sends the client to the EZECLOUD
  * portal, which completes the login by POSTing back to the router's `$(link-login-only)`
  * (HTTP-CHAP when the router issued a `chap-id`, else PAP). The router is the RADIUS client
  * (`/radius` service=hotspot) and enforces the reply attributes itself, in front of any AP brand
@@ -81,7 +81,7 @@ const CLASS_RDT = sourced(
   RAD,
 );
 const QUOTA_RDT = sourced(
-  'Mikrotik-Total-Limit (14988/17) + Mikrotik-Total-Limit-Gigawords (14988/18) are listed in the vendor numeric attribute table; the page describes only Recv/Xmit-Limit semantics, so a session-scoped total byte cap is REQUIRES_DEVICE_TEST; daily/monthly accounting stays ECLOUD-side (watcher + drain time; docs/VENDOR_INTEGRATION_RESEARCH.md §3.3)',
+  'Mikrotik-Total-Limit (14988/17) + Mikrotik-Total-Limit-Gigawords (14988/18) are listed in the vendor numeric attribute table; the page describes only Recv/Xmit-Limit semantics, so a session-scoped total byte cap is REQUIRES_DEVICE_TEST; daily/monthly accounting stays EZECLOUD-side (watcher + drain time; docs/VENDOR_INTEGRATION_RESEARCH.md §3.3)',
   RAD,
 );
 const VLAN_UNSUPPORTED = sourced(

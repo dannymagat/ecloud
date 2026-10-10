@@ -908,7 +908,7 @@ const mikrotikRow: CompatibilityRow = {
   profile: {
     ...allUnknownProfile(),
     redirectProtocol: fact(
-      'ECLOUD-generated login.html: GET to the EZECLOUD portal with the RouterOS variables mac, ip, identity, link-login-only, link-orig, chap-id, chap-challenge, error ($(name-esc)); unsigned',
+      'EZECLOUD-generated login.html: GET to the EZECLOUD portal with the RouterOS variables mac, ip, identity, link-login-only, link-orig, chap-id, chap-challenge, error ($(name-esc)); unsigned',
       'DOCUMENTED',
       [MT_CUSTOM, F2_DOC],
     ),

@@ -217,7 +217,7 @@ Two facts in that schema drive the design: `radacct` is a **mutable** table (sto
 
 ### 4.2 Options — **PROPOSED**, final choice belongs to A3 (AAA); A6 owns the data side
 
-| | (a) `rlm_sql` only — FreeRADIUS reads/writes ECLOUD-owned tables shaped like the official schema | (b) `rlm_rest` only — FreeRADIUS calls the EZECLOUD API for authorize/accounting | (c) Hybrid — `rlm_rest` for authorize/post-auth, `rlm_sql` for accounting |
+| | (a) `rlm_sql` only — FreeRADIUS reads/writes EZECLOUD-owned tables shaped like the official schema | (b) `rlm_rest` only — FreeRADIUS calls the EZECLOUD API for authorize/accounting | (c) Hybrid — `rlm_rest` for authorize/post-auth, `rlm_sql` for accounting |
 |---|---|---|---|
 | Policy resolution (priority, quotas, schedule, concurrency) | Must be pre-materialised into `radcheck/radreply`-shaped rows per user; every intent change re-renders rows; schedule/quota checks need SQL hacks or `rlm_sqlcounter` | Done in TypeScript against the intent model at request time; full `policy_translations` logging | As (b) |
 | Tenant resolution | FreeRADIUS queries are templated with request attributes; which attributes are available for the query is an A3 fact | EZECLOUD receives NAS-IP / NAS-Identifier / Called-Station-Id and resolves tenant itself | As (b) |

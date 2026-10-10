@@ -7,7 +7,7 @@
  *
  * Honesty: NAS status is EZECLOUD's observation of RADIUS traffic, never device up/down state
  * (spec §8); registered network devices are shown with no observed state; usage figures carry
- * freshness and the period label basis (spec §6, Q65); enforcement counts are ECLOUD-side
+ * freshness and the period label basis (spec §6, Q65); enforcement counts are EZECLOUD-side
  * pending records, not device confirmations (D-028 / V12).
  *
  * Without `report:read`, or against an API without the dashboard endpoint, the organization page
@@ -410,7 +410,7 @@ function Callouts({ d, orgId }: { d: OrgDashboard; orgId: string }) {
               ? `Oldest recorded ${formatDateTime(d.enforcement.oldest_pending_at)}. `
               : ''}
             EZECLOUD records these changes and they take effect when the session re-authorizes; this
-            is an ECLOUD-side record, not a confirmation from the device.{' '}
+            is an EZECLOUD-side record, not a confirmation from the device.{' '}
             <Link className="text-primary hover:underline" to={`/orgs/${orgId}/sessions`}>
               Sessions
             </Link>

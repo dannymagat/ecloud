@@ -384,7 +384,7 @@ describe('translate — unit conversions and rounding (§4.1)', () => {
   });
 });
 
-describe('translate — VLAN, burst, ECLOUD-side fields', () => {
+describe('translate — VLAN, burst, EZECLOUD-side fields', () => {
   it('VLAN triplet is RFC 3580 (Tunnel-Type 13, Medium 6, Group-Id string), lab mode only, one flag', () => {
     const eff = effectiveOf({ vlan_id: 42 });
     const plan = translate(eff, captive32, { clip: emptyClip, now: NOW });

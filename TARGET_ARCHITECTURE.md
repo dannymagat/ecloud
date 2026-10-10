@@ -24,7 +24,7 @@ Evidence labels used across all Phase 2 artifacts: **VERIFIED FROM EXISTING CODE
 
 ## 1. Cloud control plane
 
-EZECLOUD is a multi-tenant control plane. It owns **policy intent**, identities, sessions and accounting; it never carries subscriber traffic. Enforcement happens on the site device (EZEAP or gateway) through mechanisms that have been verified, with ECLOUD-side controls covering what devices cannot do.
+EZECLOUD is a multi-tenant control plane. It owns **policy intent**, identities, sessions and accounting; it never carries subscriber traffic. Enforcement happens on the site device (EZEAP or gateway) through mechanisms that have been verified, with EZECLOUD-side controls covering what devices cannot do.
 
 ```mermaid
 flowchart LR
@@ -114,11 +114,11 @@ flowchart LR
   T --> P2["coovachilli-uam\nChilliSpot-Bandwidth-Max-* (kbit/s)\nMax-Input/Output/Total-Octets + Gigawords\nCoA re-apply"]
   T --> P3["openwifi-hostapd-radius\nSession-Timeout? VLAN (Tunnel-*)?\nbandwidth attrs UNKNOWN"]
   T --> P4["openwifi-config\nssids[].rate-limit (Mbit/s, per-station ceiling)\nvia EZE controller"]
-  T --> E["ECLOUD-side controls\ndaily/monthly quota · concurrency · schedules\nDisconnect or Session-Timeout drain"]
+  T --> E["EZECLOUD-side controls\ndaily/monthly quota · concurrency · schedules\nDisconnect or Session-Timeout drain"]
   T --> U["unenforceable[] → UI amber flag"]
 ```
 
-Each adapter declares `AdapterCapabilities` with a verification status per field; the UI renders an enforceability preview from the same declaration. Only attributes verified by A2/A4 appear in a plan; VLAN and hostapd bandwidth are REQUIRES DEVICE TEST, burst is UNSUPPORTED. Default degradation is fallback to ECLOUD-side enforcement with an operator flag. Details: POLICY_ENGINE.md §3–§4, NETWORK_INTEGRATION.md §2.
+Each adapter declares `AdapterCapabilities` with a verification status per field; the UI renders an enforceability preview from the same declaration. Only attributes verified by A2/A4 appear in a plan; VLAN and hostapd bandwidth are REQUIRES DEVICE TEST, burst is UNSUPPORTED. Default degradation is fallback to EZECLOUD-side enforcement with an operator flag. Details: POLICY_ENGINE.md §3–§4, NETWORK_INTEGRATION.md §2.
 
 ## 8. Session management
 

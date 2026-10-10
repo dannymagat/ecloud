@@ -220,7 +220,7 @@ export const GALLERY_ENTRIES: readonly GalleryEntry[] = Object.freeze([
     longTail: false,
     preflight: [
       'RouterOS with a HotSpot server on the guest interface.',
-      'You upload the ECLOUD-generated login.html to the router (no secret inside).',
+      'You upload the EZECLOUD-generated login.html to the router (no secret inside).',
       pf.nas,
       pf.radiusReach,
     ],

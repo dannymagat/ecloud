@@ -57,7 +57,7 @@ const RATE_UNSUPPORTED = sourced(
   [F3],
 );
 const QUOTA_UNSUPPORTED = sourced(
-  `no vendor-documented octet-limit attribute (${R34} "quotas UNKNOWN"); bounded ECLOUD-side by the accounting watcher (POLICY_ENGINE.md D3)`,
+  `no vendor-documented octet-limit attribute (${R34} "quotas UNKNOWN"); bounded EZECLOUD-side by the accounting watcher (POLICY_ENGINE.md D3)`,
   [F3],
 );
 const VLAN_UNSUPPORTED = sourced(

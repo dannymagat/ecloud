@@ -376,7 +376,7 @@ export function merakiSetupGuide(): readonly SetupStep[] {
  * Returns `base` (the first-party wrapper of the `meraki-splash` engine) with the Meraki redirect
  * parsing, context validation and sign-on hand-off. `validateContext` resolves the NAS by the
  * `nasid` path segment EZECLOUD put in the custom splash URL (the caller passes it as the
- * ECLOUD-internal `ecloud_nasid` param; the query parser never reads undocumented names, so a
+ * EZECLOUD-internal `ecloud_nasid` param; the query parser never reads undocumented names, so a
  * query cannot set it) and uses `login_url` as the vendor nonce (`nonceKind: 'vendor-nonce'`).
  * The redirect is unsigned: the EZECLOUD login token (vendor/login-token.ts) guards the identify
  * step, and a forged redirect only yields a credential usable through the registered NAS's own

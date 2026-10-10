@@ -12,7 +12,7 @@
  *    being up or down (`FORBIDDEN_DEVICE_WORDS`, asserted by tests).
  *  - Registered network devices are counted, with "state observed: 0" (EZECLOUD observes none).
  *  - Usage lags accounting by up to the interim interval: freshness and label basis are shown.
- *  - Enforcement counts are ECLOUD-side pending records, never "applied on the device".
+ *  - Enforcement counts are EZECLOUD-side pending records, never "applied on the device".
  *  - Q73: polling (30 s) that stops while the query is in error. Q75 / D-027: CSV export needs
  *    `report:export` and is hidden while impersonating.
  */

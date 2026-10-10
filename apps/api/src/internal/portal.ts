@@ -108,7 +108,7 @@ export const UAM_FLAVOURS = Object.freeze({
     path: '/uam/uspot/',
   },
   chilli: { adapterKeys: ['coovachilli-uam'], portalType: 'coovachilli', path: '/uam/chilli/' },
-  // Cycle B (D-044): RouterOS Hotspot, ECLOUD-generated login.html (vendor/mikrotik.ts).
+  // Cycle B (D-044): RouterOS Hotspot, EZECLOUD-generated login.html (vendor/mikrotik.ts).
   mikrotik: {
     adapterKeys: ['mikrotik-hotspot'],
     portalType: 'mikrotik',
@@ -212,7 +212,7 @@ function openUamSecret(deps: AppDeps, ref: string | null): string | null {
 }
 
 /**
- * NAS by `nasid` (= the ECLOUD-assigned NAS identifier, CP §7.3) and/or the AP MAC from `called`
+ * NAS by `nasid` (= the EZECLOUD-assigned NAS identifier, CP §7.3) and/or the AP MAC from `called`
  * (Cycle A, migration 028 `nas_access_points`), via `findNasByIdentity` (nas-lookup.ts): anything
  * but exactly one active NAS fails closed, and `nasid` + a registered AP MAC of another NAS is a
  * conflict. The UAM `md` signature is still verified against the resolved NAS's secret.
@@ -558,7 +558,7 @@ export function portalInternalRouter(deps: AppDeps): Router {
       isReplay: (k) => isReplayed(deps.kv, k),
       now: () => at,
     };
-    // `ecloud_nasid` is ECLOUD-internal (from the path); the Meraki query parser ignores
+    // `ecloud_nasid` is EZECLOUD-internal (from the path); the Meraki query parser ignores
     // undocumented names, so the query itself can never supply it.
     const validation = await adapter.validateContext(
       { ...parsed, params: { ...parsed.params, ecloud_nasid: nasid } },

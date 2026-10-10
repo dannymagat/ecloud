@@ -19,7 +19,7 @@ export const ADAPTER_KEYS = [
   'openwifi-config',
   /** Cycle A (D-044): vendor-neutral 802.1X / MAC-auth NAS (no portal). */
   'generic-radius-8021x',
-  /** Cycle B (D-044): MikroTik RouterOS Hotspot with an ECLOUD-generated external login page. */
+  /** Cycle B (D-044): MikroTik RouterOS Hotspot with an EZECLOUD-generated external login page. */
   'mikrotik-hotspot',
   /** Cycle C (D-044): F3 external captive portal post-back engine (vendor profiles). */
   'external-portal-postback',

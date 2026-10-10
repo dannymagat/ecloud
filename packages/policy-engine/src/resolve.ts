@@ -708,7 +708,7 @@ function finish(
 
 /**
  * `resolve(ctx)` of POLICY_ENGINE.md §2.7. Rejections carry a `reasonCode`; an accept carries the
- * effective intent, clip bounds for `Session-Timeout`, ECLOUD-side controls to arm and a
+ * effective intent, clip bounds for `Session-Timeout`, EZECLOUD-side controls to arm and a
  * per-field trace for the simulate endpoint.
  */
 export function resolveEffectivePolicy(input: ResolutionInput): ResolutionResult {

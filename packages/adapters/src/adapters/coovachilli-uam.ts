@@ -14,7 +14,7 @@ const RATE_VERIFIED =
 const QUOTA_VERIFIED =
   "CAPTIVE_PORTAL_ARCHITECTURE.md §4 RADIUS bullet: CoovaChilli-Max-Input/Output/Total-Octets + -Gigawords (VERIFIED FROM OFFICIAL DOCUMENTATION); §6 row 'Quota attrs'; POLICY_ENGINE.md §3.1 row quota (coovachilli-uam)";
 const QUOTA_NOTE =
-  'period counter is ECLOUD-side (usage_counters); remaining emitted as Octets + Gigawords; CoovaChilli-* share vendor id 14559 with ChilliSpot (AAA_ARCHITECTURE.md §4.3 alias dictionary, PROPOSED)';
+  'period counter is EZECLOUD-side (usage_counters); remaining emitted as Octets + Gigawords; CoovaChilli-* share vendor id 14559 with ChilliSpot (AAA_ARCHITECTURE.md §4.3 alias dictionary, PROPOSED)';
 const TIMEOUT_VERIFIED =
   "CAPTIVE_PORTAL_ARCHITECTURE.md §4 RADIUS bullet: Session-Timeout (also WISPr-Session-Terminate-Time); §6 row 'Timeouts'; POLICY_ENGINE.md §3.1 row session_timeout (coovachilli-uam)";
 const IDLE_VERIFIED =

@@ -1,5 +1,5 @@
 /**
- * ECLOUD-issued post-back login token (Cycle A, D-044; docs/VENDOR_INTEGRATION_RESEARCH.md §3
+ * EZECLOUD-issued post-back login token (Cycle A, D-044; docs/VENDOR_INTEGRATION_RESEARCH.md §3
  * "contract gaps": `isReplay` key requires `challenge`).
  *
  * UAM redirects carry a NAS challenge that makes every hand-off single-use. Post-back vendors

@@ -470,7 +470,7 @@ describe('setup guide, health', () => {
     expect(steps.find((s) => s.id === 'nasid')?.value).toBe('nas-1');
   });
 
-  it('healthCheck reports ECLOUD-side signals only', () => {
+  it('healthCheck reports EZECLOUD-side signals only', () => {
     const h = uspot.healthCheck({
       now: NOW,
       lastAccessRequestAt: new Date(NOW.getTime() - 60_000),

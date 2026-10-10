@@ -1,6 +1,6 @@
 # EZECLOUD Policy Engine (Phase 2, A5b — design only, nothing deployed)
 
-> **Owner amendments 2026-10-07 (D-022, D-028).** (1) Canonical specificity order is `temporary > client_device > user > voucher_batch > user_group > site > organization default`; field-level fall-through semantics in this document are retained. (2) All policy types in §1 are modelled from the start; enforcement is staged in this order: up/down rate, session timeout, idle timeout, validity/expiry, vouchers; then quotas, concurrency, schedules, VLAN, burst/advanced. (3) Every adapter reports each policy field with exactly one of `VERIFIED_SUPPORTED`, `REQUIRES_DEVICE_TEST`, `UNSUPPORTED`, `ECLOUD_SIDE_ONLY` (this supersedes the label vocabulary used in the capability table below; mapping: VERIFIED → VERIFIED_SUPPORTED, REQUIRES DEVICE TEST / UNKNOWN → REQUIRES_DEVICE_TEST, UNSUPPORTED → UNSUPPORTED, ECLOUD-side → ECLOUD_SIDE_ONLY). A field is never shown as device-enforced unless its status is VERIFIED_SUPPORTED. (4) Permission keys use `resource:action` (D-021).
+> **Owner amendments 2026-10-07 (D-022, D-028).** (1) Canonical specificity order is `temporary > client_device > user > voucher_batch > user_group > site > organization default`; field-level fall-through semantics in this document are retained. (2) All policy types in §1 are modelled from the start; enforcement is staged in this order: up/down rate, session timeout, idle timeout, validity/expiry, vouchers; then quotas, concurrency, schedules, VLAN, burst/advanced. (3) Every adapter reports each policy field with exactly one of `VERIFIED_SUPPORTED`, `REQUIRES_DEVICE_TEST`, `UNSUPPORTED`, `ECLOUD_SIDE_ONLY` (this supersedes the label vocabulary used in the capability table below; mapping: VERIFIED → VERIFIED_SUPPORTED, REQUIRES DEVICE TEST / UNKNOWN → REQUIRES_DEVICE_TEST, UNSUPPORTED → UNSUPPORTED, EZECLOUD-side → ECLOUD_SIDE_ONLY). A field is never shown as device-enforced unless its status is VERIFIED_SUPPORTED. (4) Permission keys use `resource:action` (D-021).
 
 
 Status: PROPOSED unless a row carries another label. Evidence labels follow BRIEF.md rule 3:
@@ -19,7 +19,7 @@ Design principle (BRIEF rule 4, A2 §7.1): **the core stores policy intent; adap
 | D2 | Specificity order | `temporary > client_device > user > voucher_batch > user_group > site > org default` | Matches A6 §3.4 (`client_device > user > voucher_batch > group > site`). The brief suggested `user > client-device`; see Open Question Q1. |
 | D3 | Quota on NAS without octet attributes | Session-Timeout sized to **worst-case drain time**, floor 300 s, plus EZECLOUD accounting watcher | Bounds overshoot without claiming any unverified device feature. |
 | D4 | Concurrency breach | Default **reject new** (`max_concurrent_*`); `disconnect_oldest` selectable per policy only once Disconnect is VERIFIED on that adapter | Disconnect end-to-end is REQUIRES DEVICE TEST on every adapter (A2 §5, A4 §3.5). |
-| D5 | Unenforceable field | Default **fallback-to-ECLOUD-side if a watcher exists, else allow-and-flag**; tenant may set `strict` → reject | Keeps Wi-Fi working on day one while the enforceability preview (A7) shows the gaps. |
+| D5 | Unenforceable field | Default **fallback-to-EZECLOUD-side if a watcher exists, else allow-and-flag**; tenant may set `strict` → reject | Keeps Wi-Fi working on day one while the enforceability preview (A7) shows the gaps. |
 | D6 | Quota reset clock | Daily at 00:00 **site timezone** (A6 §5), monthly on calendar day 1 site TZ; per-tenant `billing_anchor_day` later | Site TZ is already the schedule TZ; one clock per site. |
 | D7 | DB unavailable on authorize | **Fail-closed** for unknown subjects; **cached-allow** (Redis snapshot ≤15 min old) for subjects authorized recently | A NAS retransmits anyway; a stale-but-known answer beats a timeout. |
 
@@ -37,22 +37,22 @@ All sizes are **bytes (decimal, SI)**: `1 GB = 1 000 000 000 bytes`. All rates a
 | `upload_rate_kbps` | int ≥ 1, NULL = inherit | Per-client ceiling, client→AP | same |
 | `burst_download_kbps`, `burst_upload_kbps` | int, NULL | **Burst rate**: peak rate allowed while a burst allowance lasts | **UNSUPPORTED on all current adapters.** A2 §2: no schema key; `ratelimit` uses fixed `burst 2k` (VERIFIED DOCS, absence). A4 §7.5: not expressible via RADIUS for uspot/CoovaChilli. Stored for future adapters; translation always lists it under `unenforceable[]`. |
 | `burst_duration_s` | int, NULL | How long the burst rate may be sustained (the engine derives burst *size* = `burst_rate × duration / 8` bytes when a future adapter wants a bucket size) | UNSUPPORTED (same) |
-| `quota_daily_bytes` | bigint, NULL | Max bytes (in+out) per site-local day | ECLOUD-side counter (A6 `usage_counters`) + per-session octet attribute sized to remaining, where the adapter supports it (A4 §7.5) |
+| `quota_daily_bytes` | bigint, NULL | Max bytes (in+out) per site-local day | EZECLOUD-side counter (A6 `usage_counters`) + per-session octet attribute sized to remaining, where the adapter supports it (A4 §7.5) |
 | `quota_monthly_bytes` | bigint, NULL | Max bytes per site-local calendar month | same |
 | `quota_total_bytes` | bigint, NULL | Lifetime / voucher total | same |
 | `session_timeout_s` | int ≥ 60, NULL | Max duration of one session | Captive adapters VERIFIED (`Session-Timeout`, A4 §3.4); hostapd REQUIRES DEVICE TEST (A2 §2) |
 | `idle_timeout_s` | int ≥ 60, NULL | Disconnect after inactivity | Captive adapters VERIFIED (`Idle-Timeout`); hostapd: per-SSID `max-inactivity` only (A2 §2) |
-| `max_concurrent_sessions` | int ≥ 1, NULL | Active sessions per subject (user or voucher) | ECLOUD-side only (A2 §2 "not a device feature") |
-| `max_devices` (brief: `max_concurrent_devices`) | int ≥ 1, NULL | Distinct MACs with an active session per subject | ECLOUD-side only |
-| `valid_from`, `valid_until` | timestamptz, NULL | Absolute validity window of the *policy* | ECLOUD-side (reject outside; `Session-Timeout` clipped to `valid_until`) |
-| voucher validity | `voucher_batches.valid_from/valid_until` (absolute) **and/or** `duration_s` (counted from first use → `vouchers.expires_at`) | A6 §3.4; both may be set, the earlier end wins | ECLOUD-side (clip `Session-Timeout`) |
-| `schedule_id` | FK `schedules` | Weekly windows `{days:[1..7], start:"HH:MM", end:"HH:MM"}` in `schedules.timezone`; `end < start` = crosses midnight | ECLOUD-side (deny out-of-window; `Session-Timeout` clipped to window end) |
+| `max_concurrent_sessions` | int ≥ 1, NULL | Active sessions per subject (user or voucher) | EZECLOUD-side only (A2 §2 "not a device feature") |
+| `max_devices` (brief: `max_concurrent_devices`) | int ≥ 1, NULL | Distinct MACs with an active session per subject | EZECLOUD-side only |
+| `valid_from`, `valid_until` | timestamptz, NULL | Absolute validity window of the *policy* | EZECLOUD-side (reject outside; `Session-Timeout` clipped to `valid_until`) |
+| voucher validity | `voucher_batches.valid_from/valid_until` (absolute) **and/or** `duration_s` (counted from first use → `vouchers.expires_at`) | A6 §3.4; both may be set, the earlier end wins | EZECLOUD-side (clip `Session-Timeout`) |
+| `schedule_id` | FK `schedules` | Weekly windows `{days:[1..7], start:"HH:MM", end:"HH:MM"}` in `schedules.timezone`; `end < start` = crosses midnight | EZECLOUD-side (deny out-of-window; `Session-Timeout` clipped to window end) |
 | `vlan_id` | int 1–4094, NULL | Dynamic VLAN for the client | hostapd: renderer VERIFIED, attribute honouring REQUIRES DEVICE TEST (A2 §2, §7.2). uspot: UNSUPPORTED (A4 §3.4 "VLAN attrs: no"). CoovaChilli `CoovaChilli-VLAN-Id`: REQUIRES DEVICE TEST (A4 §7.5). |
 | `scope_type` | `user` / `group` / `site` / `temporary` | Where the policy is intended to be attached (A6 CHECK). The *actual* attachment is `policy_assignments.target_type` (`user`, `user_group`, `site`, `client_device`, `voucher_batch`). | — |
 | `priority` | int, default 100, **lower wins** | Explicit tie-breaker across assignments (A6: `policy_assignments.priority ASC, policies.priority ASC`) | — |
 | `status` | `draft` / `active` / `retired` | Only `active` participates in resolution | — |
 | `is_default` | bool, one per org | Org default (lowest layer) | — |
-| temporary policy / expiry | `policy_assignments.effective_from/effective_until` | "Temporary" = an assignment with `effective_until` set (A6 §3.4); engine treats `scope_type='temporary'` **or** a bounded assignment on a user/device as the top layer | ECLOUD-side |
+| temporary policy / expiry | `policy_assignments.effective_from/effective_until` | "Temporary" = an assignment with `effective_until` set (A6 §3.4); engine treats `scope_type='temporary'` **or** a bounded assignment on a user/device as the top layer | EZECLOUD-side |
 | `version` | int | Bumped on every edit of an `active` policy (see §6) | — |
 
 `enabled` in the brief = `status = 'active'` AND assignment window contains `now()`.
@@ -268,7 +268,7 @@ flowchart TD
   M --> N{unenforceable[] and tenant strict?}
   N -- yes --> R4[REJECT unenforceable]
   N -- no --> O[Store snapshot in policy_translations + sessions.policy_version]
-  O --> P[Arm ECLOUD-side controls: timers, quota watcher]
+  O --> P[Arm EZECLOUD-side controls: timers, quota watcher]
   P --> Q[Access-Accept with radiusReplyAttributes]
 ```
 
@@ -365,7 +365,7 @@ Per-tenant setting `policy_degradation`:
 |---|---|---|
 | `reject` | Access-Reject with reason `unenforceable:<fields>`; `auth_events.reason` set | Regulated sites where e.g. VLAN isolation is a security control |
 | `allow_and_flag` | Accept with whatever the adapter can do; `policy_translations.unsupported` lists the rest; `policy.unenforceable` event; A7 shows amber | Default for `burst`, `vlan` on captive adapters |
-| `fallback_ecloud_side` | Same as above **plus** arm an ECLOUD-side control: quota → accounting watcher (+ Session-Timeout drain bound); schedule/validity → timers; rate → SSID `rate-limit` push **only** when the winning policy is site-scoped (granularity match) | **Recommended default** |
+| `fallback_ecloud_side` | Same as above **plus** arm an EZECLOUD-side control: quota → accounting watcher (+ Session-Timeout drain bound); schedule/validity → timers; rate → SSID `rate-limit` push **only** when the winning policy is site-scoped (granularity match) | **Recommended default** |
 
 Field-level override: a policy may mark fields `critical: ["vlan_id"]`, which forces `reject` for those fields regardless of tenant mode.
 
@@ -373,7 +373,7 @@ Field-level override: a policy may mark fields `critical: ["vlan_id"]`, which fo
 
 Effective policy (from §1.2): 20 000 / 5 000 kbit/s, `quota_daily_bytes = 1 000 000 000`, `max_devices = 2`, `idle_timeout_s = 600`, schedule Mon–Fri 09:00–18:00 site TZ. Context: Tuesday 10:00:00 site time; `usage_counters(daily)` = 300 000 000 bytes used → remaining 700 000 000; user has 1 active session on another MAC (so this second device is allowed); `tenant.interim_interval_s = 300`; `tenant.min_session_s = 300`.
 
-Common ECLOUD-side controls (every adapter): `concurrency` (checked pre-accept; count 1 → 2 ≤ max_devices), `schedule_end at 18:00:00 site TZ`, `quota_watcher {limit: 700000000, period: daily}`, `session_timer` mirror of the emitted `Session-Timeout`.
+Common EZECLOUD-side controls (every adapter): `concurrency` (checked pre-accept; count 1 → 2 ≤ max_devices), `schedule_end at 18:00:00 site TZ`, `quota_watcher {limit: 700000000, period: daily}`, `session_timer` mirror of the emitted `Session-Timeout`.
 
 **(a) `openwifi-uspot-uam` (TIP fork)**
 
@@ -432,7 +432,7 @@ For the group-scoped policy of this example the adapter returns everything as `g
 
 ---
 
-## 5. Runtime enforcement loop (ECLOUD-side controls)
+## 5. Runtime enforcement loop (EZECLOUD-side controls)
 
 ### 5.1 Accounting-driven counters
 

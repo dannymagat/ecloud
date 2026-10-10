@@ -66,7 +66,7 @@ const RATE_UNSUPPORTED = sourced(
   [F4, MERAKI_DOCS.groupPolicy],
 );
 const QUOTA_UNSUPPORTED = sourced(
-  `no octet-limit reply attribute is documented for Meraki splash sign-on (${R35}: quotas UNKNOWN on the device); bounded ECLOUD-side by the accounting watcher + Session-Timeout (POLICY_ENGINE.md D3)`,
+  `no octet-limit reply attribute is documented for Meraki splash sign-on (${R35}: quotas UNKNOWN on the device); bounded EZECLOUD-side by the accounting watcher + Session-Timeout (POLICY_ENGINE.md D3)`,
   [F4],
 );
 const TIMEOUT_RDT = sourced(

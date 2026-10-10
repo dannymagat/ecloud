@@ -26,7 +26,7 @@
 rest {
 	tls {
 		#  Used only when ECLOUD_INTERNAL_URL is https://.
-		#  Production: pin the ECLOUD-issued CA and verify the hostname.
+		#  Production: pin the EZECLOUD-issued CA and verify the hostname.
 		#  ca_file = /run/secrets/ecloud_internal_ca.pem
 		check_cert = yes
 		check_cert_cn = yes

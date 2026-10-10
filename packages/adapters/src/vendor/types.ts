@@ -182,7 +182,7 @@ export interface NasLookup {
    *
    * `challenge` is the freshness value of the redirect: the UAM challenge, a vendor nonce
    * (`magic`, `ga_Qv`, `login_url`, `t`) or, for post-back vendors that send none, the id of an
-   * ECLOUD-issued login token (`vendor/login-token.ts`). `nonceKind` says which (default
+   * EZECLOUD-issued login token (`vendor/login-token.ts`). `nonceKind` says which (default
    * `uam-challenge`) so the replay namespaces never collide.
    */
   isReplay(key: {
@@ -195,7 +195,7 @@ export interface NasLookup {
   now?(): Date;
 }
 
-/** ECLOUD-side observations only; devices are never probed (plan §6.1). */
+/** EZECLOUD-side observations only; devices are never probed (plan §6.1). */
 export interface SiteSignals {
   readonly now: Date;
   readonly lastAccessRequestAt: Date | null;

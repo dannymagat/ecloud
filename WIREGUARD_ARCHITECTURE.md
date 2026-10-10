@@ -390,7 +390,7 @@ flowchart TB
 2. **Q3/Q4:** does every site have a Linux/OpenWrt-capable gateway (EZEGATE/EZEOS?) that can run WireGuard, or are some sites AP-only (forcing option B or C)?
 3. **Q8:** approval of the tunnel approach versus public RadSec; and the hub UDP port (51820 proposed).
 4. Is CoA/Disconnect a must-have for the pilot (D-006)? If yes and NAS are behind NAT, a tunnel is mandatory.
-5. Who owns site gateway configuration (ECLOUD-generated bundle applied by site staff vs ECLOUD-managed)?
+5. Who owns site gateway configuration (EZECLOUD-generated bundle applied by site staff vs EZECLOUD-managed)?
 6. May the EZE controller (future) emit `service.wireguard-overlay` for APs, i.e. is topology B desired, given it requires the controller to hold AP private keys?
 7. Monitoring over tunnel: is SNMP on EZEAP acceptable, or telemetry-only?
 8. Q17: OVH edge firewall/anti-DDoS behaviour for UDP 51820/1812/1813/3799.

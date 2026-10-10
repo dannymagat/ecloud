@@ -122,7 +122,7 @@ describe('parseMerakiRedirect', () => {
     expect(r.ok && r.redirect.apMac).toBe('00:18:0a:13:dd:b0');
   });
 
-  it('ignores undocumented parameters (an ECLOUD-internal name cannot be injected)', () => {
+  it('ignores undocumented parameters (an EZECLOUD-internal name cannot be injected)', () => {
     const r = parseMerakiRedirect(`${signOnQuery()}&ecloud_nasid=other&ecloud_success_url=x`);
     expect(r.ok).toBe(true);
     if (r.ok) {

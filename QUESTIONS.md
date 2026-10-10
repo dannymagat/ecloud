@@ -101,7 +101,7 @@ Legend: **ANSWERED** · **PARTIAL** (owner gave the principle; details still ope
 | Q51 | RADIUS exposure: tunnel-only in pilot (recommended) or public UDP with allowlist? If any site cannot run WireGuard, approve RadSec with per-NAS client certificates — who issues device certs (EZECLOUD PKI vs OpenWiFi certs)? | tunnel-only; RadSec work in Phase 5 if needed | AAA Q3, SEC Q3, DEP Q10 |
 | Q52 | Should CoA/Disconnect originate only from the WireGuard hub IP (fixed `uc-ip` requirement of `dynamic-authorization.host`)? | yes (`100.100.0.1`) | NI Q6 |
 | Q53 | Hub UDP port (51820 proposed) and OVH edge behaviour for UDP 51820/1812/1813/3799 (ties Q17). | 51820 | WG Q3, Q8 |
-| Q54 | Who owns site gateway configuration — ECLOUD-generated bundle applied by site staff, or ECLOUD-managed? | bundle applied by site staff | WG Q5 |
+| Q54 | Who owns site gateway configuration — EZECLOUD-generated bundle applied by site staff, or EZECLOUD-managed? | bundle applied by site staff | WG Q5 |
 | Q55 | May the EZE controller later emit `service.wireguard-overlay` for APs (topology B), given it would hold AP private keys? | no until DT-18 | WG Q6 |
 | Q56 | Monitoring over tunnel: enable SNMP on EZEAP or telemetry-only? | telemetry-only | WG Q7 |
 | Q57 | Retention: raw `radius.radacct_raw` after draining (7 days proposed); `accounting_records` 13 months; audit logs 24 months — any regulatory requirement in the operating country; who is data controller per tenant? | as proposed | AAA Q6, DB Q5, SEC Q5 |
@@ -119,7 +119,7 @@ Legend: **ANSWERED** · **PARTIAL** (owner gave the principle; details still ope
 | Q64 | Which social IdPs are required for release 1 (each adds hosts to the walled garden; wildcard FQDNs are not rendered by the TIP renderer)? | none in pilot; Google first when needed | CP Q4 |
 | Q65 | Quota reset clock: site-TZ midnight / calendar month, or tenant billing anchor day? | site TZ (PE D6) | PE Q3 |
 | Q66 | Concurrency breach default `reject` vs `disconnect_oldest` (once Disconnect is verified); count 802.1X and captive devices together? | `reject`; counted together | PE Q4 |
-| Q67 | Degradation default when a field is unenforceable on an adapter: fallback-to-ECLOUD-side/allow-and-flag vs strict reject (e.g. a 20 Mbit/s plan on an 802.1X SSID initially not rate-limited)? | fallback + amber warning (PE D5) | PE Q5 |
+| Q67 | Degradation default when a field is unenforceable on an adapter: fallback-to-EZECLOUD-side/allow-and-flag vs strict reject (e.g. a 20 Mbit/s plan on an 802.1X SSID initially not rate-limited)? | fallback + amber warning (PE D5) | PE Q5 |
 | Q68 | Preferred rate attribute family per tenant: WISPr bit/s (default) vs ChilliSpot kbit/s? | WISPr | PE Q8 |
 | Q69 | Show `burst_*` in the UI as "stored, not enforced" or hide until an adapter supports it? | shown with warning | PE Q9, A7 |
 | Q70 | Platform Support impersonation: allowed without tenant consent (always audited, visible to tenant) or tenant-enabled flag with expiry? Guardrails (no key creation / secret rotation / binding changes) acceptable? Must the tenant be notified? | allowed + audited + visible; guardrails on; production → tenant flag | MT M3, API Q3, A7 Q5, SEC Q7 |

@@ -5,7 +5,7 @@
  * Flow (vendor doc "Hotspot customisation", External authentication, read 2026-10-10,
  * https://help.mikrotik.com/docs/spaces/ROS/pages/87162881/Hotspot+customisation):
  *
- *  1. The router serves the ECLOUD-generated `login.html` ({@link renderMikrotikLoginHtml}). It
+ *  1. The router serves the EZECLOUD-generated `login.html` ({@link renderMikrotikLoginHtml}). It
  *     sends the browser to the EZECLOUD portal with the documented servlet variables as query
  *     parameters. The parameter NAMES are exactly the RouterOS variable names (`mac`, `ip`,
  *     `identity`, `link-login-only`, `link-orig`, `chap-id`, `chap-challenge`, `error`); each value
@@ -459,7 +459,7 @@ export function mikrotikSetupGuide(portalOrigin: string): readonly SetupStep[] {
     ),
     step(
       'login-html',
-      'Replace login.html in the profile html-directory with the ECLOUD-generated file (redirects to the EZECLOUD portal with the RouterOS variables; no secret inside)',
+      'Replace login.html in the profile html-directory with the EZECLOUD-generated file (redirects to the EZECLOUD portal with the RouterOS variables; no secret inside)',
       '/ip hotspot profile html-directory → login.html',
       `<ECLOUD_GENERATED_LOGIN_HTML> (redirect target ${portalOrigin}${MIKROTIK_PORTAL_PATH})`,
       HC,

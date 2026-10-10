@@ -57,7 +57,7 @@ const RATE_RDT = sourced(
   [F9],
 );
 const QUOTA_UNSUPPORTED = sourced(
-  'no vendor-neutral octet-limit reply attribute (docs/VENDOR_INTEGRATION_RESEARCH.md §3.1 "quotas UNKNOWN" per vendor); bounded ECLOUD-side by the accounting watcher + Session-Timeout drain time (POLICY_ENGINE.md D3)',
+  'no vendor-neutral octet-limit reply attribute (docs/VENDOR_INTEGRATION_RESEARCH.md §3.1 "quotas UNKNOWN" per vendor); bounded EZECLOUD-side by the accounting watcher + Session-Timeout drain time (POLICY_ENGINE.md D3)',
   [F9],
 );
 const DISCONNECT_RDT = sourced(

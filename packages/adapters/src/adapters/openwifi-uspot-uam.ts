@@ -15,7 +15,7 @@ const RATE_NOTE =
 const QUOTA_VERIFIED =
   "NETWORK_INTEGRATION.md §2 row 'Per-session total quota (captive)': uspot ChilliSpot-Max-Total-Octets terminates when bytes_ul+bytes_dl ≥ max, VERIFIED DOCS (uspot.uc l.225, l.349-353); CAPTIVE_PORTAL_ARCHITECTURE.md §3.4 row ChilliSpot-Max-Total-Octets (T: yes, 32-bit)";
 const QUOTA_NOTE =
-  'period counter is ECLOUD-side (usage_counters); remaining bytes emitted per session as a 32-bit octet limit (< 4 GiB, clamp → overflow_clamped)';
+  'period counter is EZECLOUD-side (usage_counters); remaining bytes emitted per session as a 32-bit octet limit (< 4 GiB, clamp → overflow_clamped)';
 const TIMEOUT_VERIFIED =
   "CAPTIVE_PORTAL_ARCHITECTURE.md §3.4 reply table row Session-Timeout (T: yes, Stop cause 5); NETWORK_INTEGRATION.md §2 row 'Session timeout / idle timeout (captive)' VERIFIED CODE + DOCS (uspot.uc l.215-227)";
 const IDLE_VERIFIED =
