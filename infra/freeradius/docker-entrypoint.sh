@@ -13,9 +13,21 @@
 set -eu
 
 #  Runs a check as the service user (the container may start as root, see below).
+#  Supplementary groups for freerad: its own group plus any groups granted to the container
+#  (compose `group_add`, e.g. 10001 = ecloud-secrets for the 0440 secret files), never gid 0.
+#  `--init-groups` would reset them to /etc/group and lose the compose grant.
+freerad_groups() {
+	gids="$(id -g freerad)"
+	for g in $(id -G); do
+		[ "$g" = "0" ] && continue
+		case ",$gids," in *",$g,"*) ;; *) gids="$gids,$g" ;; esac
+	done
+	printf '%s' "$gids"
+}
+
 as_freerad() {
 	if [ "$(id -u)" = "0" ]; then
-		setpriv --reuid=freerad --regid=freerad --init-groups "$@"
+		setpriv --reuid=freerad --regid=freerad --groups="$(freerad_groups)" "$@"
 	else
 		"$@"
 	fi
@@ -166,7 +178,9 @@ esac
 
 #  Drop root before anything parses configuration or opens a socket.
 if [ "$(id -u)" = "0" ]; then
-	exec setpriv --reuid=freerad --regid=freerad --init-groups --no-new-privs \
+	#  Needs CAP_SETUID, CAP_SETGID and CAP_SETPCAP (bounding-set clear); the hardened compose
+	#  services drop ALL capabilities, so the freeradius service adds exactly these three.
+	exec setpriv --reuid=freerad --regid=freerad --groups="$(freerad_groups)" --no-new-privs \
 		--bounding-set=-all /docker-entrypoint.sh "$@"
 fi
 exec /docker-entrypoint.sh "$@"

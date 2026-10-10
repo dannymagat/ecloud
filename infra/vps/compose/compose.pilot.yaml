@@ -292,6 +292,10 @@ services:
     image: ${ECLOUD_REGISTRY:-ghcr.io/OWNER}/ecloud-freeradius:${IMAGE_TAG:?IMAGE_TAG is required}
     container_name: ecloud-freeradius
     profiles: ['radius']
+    # The entrypoint starts as root only to (un)link the EAP configuration, then drops to freerad
+    # with setpriv: that needs exactly these three capabilities (everything else stays dropped,
+    # no-new-privileges stays on, and the bounding set is cleared before radiusd starts).
+    cap_add: ['SETUID', 'SETGID', 'SETPCAP']
     depends_on:
       postgres: { condition: service_healthy }
       radius-clients: { condition: service_completed_successfully }
