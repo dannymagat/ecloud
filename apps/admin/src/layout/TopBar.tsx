@@ -16,6 +16,16 @@ import {
 } from '../lib/sites';
 import { Popover, popoverItemClass } from './Popover';
 
+/** The two-tone EZECLOUD letters, without a link (sign-in screens have nowhere to go "home"). */
+export function WordmarkText() {
+  return (
+    <>
+      <span className="text-brand-ink">EZE</span>
+      <span className="text-primary">CLOUD</span>
+    </>
+  );
+}
+
 export function Wordmark({ className }: { className?: string }) {
   return (
     <Link
@@ -27,8 +37,7 @@ export function Wordmark({ className }: { className?: string }) {
         className,
       )}
     >
-      <span className="text-brand-ink">EZE</span>
-      <span className="text-primary">CLOUD</span>
+      <WordmarkText />
     </Link>
   );
 }
