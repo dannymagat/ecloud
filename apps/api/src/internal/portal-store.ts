@@ -69,6 +69,22 @@ export interface PortalFlow {
    * before a broker credential is handed to a post-back vendor. Server-side only.
    */
   readonly loginToken?: string;
+  /** Cycle C: post-back flows (external-portal-postback); absent for UAM flows. */
+  readonly postback?: PostbackFlowData;
+}
+
+/** What a post-back flow needs to rebuild its hand-off (no secrets). */
+export interface PostbackFlowData {
+  readonly profile: string;
+  /** Redirect query exactly as received (Cambium appends it to the login URL). */
+  readonly rawQuery: string;
+  /** Validated `nas_clients.adapter_config` at redirect time. */
+  readonly adapterConfig: Readonly<Record<string, unknown>>;
+  readonly nasIp: string | null;
+  /** Registered `nas_clients.hotspot_address` (known login host); absent on older flows. */
+  readonly hotspotAddress?: string | null;
+  /** Raw vendor nonce (`magic`, `ga_Qv`), the replay identity; null = ECLOUD login token. */
+  readonly vendorNonce: string | null;
 }
 
 /** Identity proven at the portal; re-checked by AAA when the credential is presented. */

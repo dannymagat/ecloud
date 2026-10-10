@@ -43,8 +43,10 @@ describe('registry', () => {
       'openwifi-config',
       'generic-radius-8021x',
       'mikrotik-hotspot',
+      'external-portal-postback',
     ]);
     expect(listCapabilities().map((c) => c.version)).toEqual([
+      '0.1.0',
       '0.1.0',
       '0.1.0',
       '0.1.0',

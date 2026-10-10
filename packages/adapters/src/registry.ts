@@ -1,5 +1,6 @@
 import { ADAPTER_KEYS, type AdapterCapabilities, type AdapterKey } from '@ecloud/policy-engine';
 import { adapter as coovachilliUam } from './adapters/coovachilli-uam.js';
+import { adapter as externalPortalPostback } from './adapters/external-portal-postback.js';
 import { adapter as genericRadius8021x } from './adapters/generic-radius-8021x.js';
 import { adapter as mikrotikHotspot } from './adapters/mikrotik-hotspot.js';
 import { adapter as openwifiConfig } from './adapters/openwifi-config.js';
@@ -16,6 +17,7 @@ const REGISTRY: Readonly<Record<AdapterKey, NasAdapter>> = Object.freeze({
   'openwifi-config': openwifiConfig,
   'generic-radius-8021x': genericRadius8021x,
   'mikrotik-hotspot': mikrotikHotspot,
+  'external-portal-postback': externalPortalPostback,
 });
 
 export function isAdapterKey(value: unknown): value is AdapterKey {

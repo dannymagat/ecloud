@@ -15,6 +15,8 @@ export const NAS_ADAPTER_KEYS: readonly string[] = Object.freeze([
   'generic-radius-8021x',
   // Cycle B (D-044, migration 029): MikroTik RouterOS Hotspot.
   'mikrotik-hotspot',
+  // Cycle C (D-044, migration 030): external captive portal post-back (vendor profiles).
+  'external-portal-postback',
 ]);
 
 export function resolveAdapter(adapterKey: string | null): NasAdapter | null {

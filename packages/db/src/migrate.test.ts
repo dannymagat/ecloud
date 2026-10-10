@@ -287,7 +287,13 @@ describe('repository migrations', () => {
     expect(files.length).toBeGreaterThanOrEqual(11);
     expect(files[0]?.file).toBe('001_functions.sql');
     expect(files.every((f) => !f.noTransaction)).toBe(true);
-    expect(files.map((f) => Number(f.version))).toEqual(files.map((_, i) => i + 1));
+    // Strictly increasing, unique and (since the Cycle B + Cycle C merge) contiguous 001…N:
+    // a parallel cycle branch that reserves a later number must close the gap before merging.
+    const versions = files.map((f) => Number(f.version));
+    expect(new Set(versions).size).toBe(versions.length);
+    expect(versions.every((v, i) => i === 0 || v > (versions[i - 1] ?? 0))).toBe(true);
+    expect(versions).toEqual(files.map((_, i) => i + 1));
+    expect(versions).toEqual(expect.arrayContaining([29, 30]));
     expect(files.every((f) => /SET LOCAL lock_timeout/.test(f.sql))).toBe(true);
   });
 });

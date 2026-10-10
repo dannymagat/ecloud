@@ -45,6 +45,7 @@ describe('compatibility registry data', () => {
       ['generic-radius-8021x', 'generic-radius-8021x', 'implemented'],
       ['mikrotik-routeros-hotspot', 'mikrotik-hotspot', 'implemented'],
       ['teltonika-rutos-hotspot', 'coovachilli-uam', 'implemented'],
+      ['external-portal-postback', 'external-portal-postback', 'implemented'],
     ]);
     const tip = row('ezelink-eze-ap1832-r32912-tip-uspot');
     expect([tip.deploymentModes, tip.enforcementPoint, tip.sourceVersionMatchesDevice]).toEqual([
@@ -186,7 +187,7 @@ describe('compatibility registry data', () => {
     ]);
   });
 
-  it('23 roadmap vendors; the 21 not promoted (Cycle B: mikrotik, teltonika) are planned with every capability UNKNOWN and no adapter', () => {
+  it('23 roadmap vendors; the 21 not promoted (Cycle B: mikrotik, teltonika; Cycle C: generic-postback) are planned with every capability UNKNOWN and no adapter', () => {
     expect(ROADMAP_VENDORS).toHaveLength(23);
     const planned = COMPATIBILITY_ROWS.filter((r) => r.lifecycle === 'planned');
     expect(planned).toHaveLength(21);
@@ -205,14 +206,20 @@ describe('compatibility registry data', () => {
       expect(v.docLinks).toEqual([]);
   });
 
-  it('third-party rows use engine adapters only where a cycle implemented them (Cycle B: mikrotik, teltonika)', () => {
+  it('third-party rows use engine adapters only where a cycle implemented them (Cycle B: mikrotik, teltonika; Cycle C: generic-postback)', () => {
     const keys = new Set(COMPATIBILITY_ROWS.map((r) => r.adapterKey).filter((k) => k !== null));
     expect([...keys].sort()).toEqual([...ADAPTER_KEYS].sort());
     for (const r of COMPATIBILITY_ROWS)
       if (
-        !['ezelink', 'coova', 'openwrt', 'generic-radius', 'mikrotik', 'teltonika'].includes(
-          r.vendorKey,
-        )
+        ![
+          'ezelink',
+          'coova',
+          'openwrt',
+          'generic-radius',
+          'mikrotik',
+          'teltonika',
+          'generic-postback',
+        ].includes(r.vendorKey)
       )
         expect(r.adapterKey).toBeNull();
   });

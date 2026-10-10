@@ -6,6 +6,9 @@
  * Public routes (API_ARCHITECTURE.md "Portal public"):
  *   GET  /uam/uspot/ | /uam/chilli/   UAM entry + `res=` callbacks → 303 /f/{token} or a page
  *   GET  /hotspot/mikrotik/            MikroTik RouterOS login.html entry (Cycle B) → 303 /f/{token}
+ *   GET  /pb/{profile}[/{nasid}]/      Cycle C post-back entry (Cambium, Aruba, Cisco, …) → 303
+ *                                      /f/{token}; the hand-off is an auto-submitted form to the
+ *                                      validated AP / controller login URL
  *   GET  /f/{token}                    landing (enabled methods)
  *   GET  /f/{token}/login|voucher|terms
  *   POST /f/{token}/login|voucher|click → 302 to http://uamip:uamport/logon (adapter hand-off), or
@@ -71,6 +74,31 @@ const ASSET_TYPES = new Set(['image/png', 'image/jpeg', 'image/webp']);
 /** NAS origin from the API: `http(s)://<IPv4>:<port>` (https only for MikroTik login-by=https). */
 const NAS_ORIGIN_RE = /^https?:\/\/(\d{1,3}\.){3}\d{1,3}:\d{1,5}$/;
 const MIKROTIK_LOGIN_PATH_RE = /^(?:\/[A-Za-z0-9_-]{1,32})?\/login$/;
+/** Cycle C: validated post-back login origin (`scheme://host[:port]`, host lower-case). */
+const LOGIN_ORIGIN_RE = /^https?:\/\/[a-z0-9](?:[a-z0-9.-]{0,251}[a-z0-9])?(?::\d{1,5})?$/;
+const PROFILE_SEGMENT_RE = /^[a-z][a-z0-9-]{1,39}$/;
+const NASID_SEGMENT_RE = /^[A-Za-z0-9._:-]{1,64}$/;
+
+/**
+ * Open-redirect guard for post-back hand-offs: the URL must be http(s), carry no credentials and
+ * have exactly the login origin the API validated for this flow (the AP / controller).
+ */
+export function isPostbackHandoff(url: string, loginOrigin: string | null): boolean {
+  if (loginOrigin === null || !LOGIN_ORIGIN_RE.test(loginOrigin)) return false;
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    return false;
+  }
+  return (
+    (parsed.protocol === 'http:' || parsed.protocol === 'https:') &&
+    parsed.username === '' &&
+    parsed.password === '' &&
+    parsed.hash === '' &&
+    parsed.origin === loginOrigin
+  );
+}
 
 /**
  * Open-redirect guard: a NAS hand-off is followed only when it targets this flow's own
@@ -115,6 +143,8 @@ interface Rendered {
   body: PageBody;
   /** `http://uamip:uamport` allowed as form-action (SECURITY_ARCHITECTURE.md §5.8). */
   nasOrigin?: string | null;
+  /** Cycle C: validated post-back login origin, allowed as form-action. */
+  loginOrigin?: string | null;
 }
 
 function themeOf(view: FlowView | null): PageTheme {
@@ -169,15 +199,29 @@ export function createServer(options: ServerOptions = {}): Express {
       page.nasOrigin !== undefined && page.nasOrigin !== null && NAS_ORIGIN_RE.test(page.nasOrigin)
         ? ` ${page.nasOrigin}`
         : '';
+    const login =
+      page.loginOrigin !== undefined &&
+      page.loginOrigin !== null &&
+      LOGIN_ORIGIN_RE.test(page.loginOrigin)
+        ? ` ${page.loginOrigin}`
+        : '';
+    // Cycle C: only the post-back hand-off page runs a script (nonce'd auto-submit); the
+    // Cycle B MikroTik hand-off is a plain form the user submits (no script).
+    const handoff = page.body.page === 'handoff' && page.body.autoSubmit;
+    const script = handoff ? ` script-src 'nonce-${nonce}';` : '';
+    const body: PageBody =
+      page.body.page === 'handoff' && page.body.autoSubmit
+        ? { ...page.body, scriptNonce: nonce }
+        : page.body;
     res.setHeader(
       'Content-Security-Policy',
-      `default-src 'none'; style-src 'self' 'nonce-${nonce}'; img-src 'self' data:; form-action 'self'${nas}; frame-ancestors 'none'; base-uri 'none'`,
+      `default-src 'none';${script} style-src 'self' 'nonce-${nonce}'; img-src 'self' data:; form-action 'self'${nas}${login}; frame-ancestors 'none'; base-uri 'none'`,
     );
     res.setHeader('Cache-Control', 'no-store');
     res
       .status(page.status)
       .type('html')
-      .send(renderPage(page.theme, page.branding, page.body, { mode: 'link', nonce }));
+      .send(renderPage(page.theme, page.branding, body, { mode: 'link', nonce }));
   }
 
   function errorPage(res: Response, status: number, message: string, view: FlowView | null = null) {
@@ -320,6 +364,55 @@ export function createServer(options: ServerOptions = {}): Express {
     });
   }
 
+  // ---------------------------------------------------------------- post-back entry (Cycle C)
+  app.get(
+    ['/pb/:profile', '/pb/:profile/', '/pb/:profile/:nasid', '/pb/:profile/:nasid/'],
+    async (req, res) => {
+      const profile = String(req.params.profile);
+      const nasid = req.params.nasid === undefined ? null : String(req.params.nasid);
+      if (
+        !PROFILE_SEGMENT_RE.test(profile) ||
+        (nasid !== null && !NASID_SEGMENT_RE.test(nasid)) ||
+        api.postbackRedirect === undefined
+      ) {
+        errorPage(res, 400, t('error.generic'));
+        return;
+      }
+      // Raw query exactly as the device built it (opaque vendor tokens, Cambium query append).
+      const q = req.originalUrl.indexOf('?');
+      const rawQuery = q < 0 ? '' : req.originalUrl.slice(q + 1);
+      const outcome = await api.postbackRedirect({
+        profile,
+        nasid,
+        rawQuery,
+        clientIp: req.ip ?? null,
+      });
+      switch (outcome.kind) {
+        case 'flow': {
+          nonceFor(req, res);
+          const token = signFlowToken(secret, outcome.flowId, outcome.expiresAt);
+          res.setHeader('Cache-Control', 'no-store');
+          res.redirect(303, flowHref(token));
+          return;
+        }
+        case 'rate_limited':
+          errorPage(
+            res,
+            429,
+            t('form.rate_limited', { minutes: Math.max(1, Math.ceil(outcome.retryAfter / 60)) }),
+          );
+          return;
+        case 'unavailable':
+          errorPage(res, 503, t('error.unavailable'));
+          return;
+        default:
+          // One page for unknown NAS, unverified AP, foreign login host, replay, malformed.
+          errorPage(res, 400, t('error.generic'));
+          return;
+      }
+    },
+  );
+
   // ------------------------------------------------------------------------- flow pages
   type Loaded = { token: string; view: FlowView };
 
@@ -354,7 +447,11 @@ export function createServer(options: ServerOptions = {}): Express {
   ): void {
     const nonce = nonceFor(req, res);
     const action = flowHref(l.token, page === 'terms' ? '/click' : `/${page}`);
-    const form = { action, csrf: csrfToken(secret, l.view.id, nonce) };
+    const form = {
+      action,
+      csrf: csrfToken(secret, l.view.id, nonce),
+      ...(l.view.postback ? { loginToken: l.view.postback.loginToken } : {}),
+    };
     const backHref = flowHref(l.token);
     const body: PageBody =
       page === 'login'
@@ -375,6 +472,7 @@ export function createServer(options: ServerOptions = {}): Express {
       branding: brandingOf(l.view),
       body,
       nasOrigin: l.view.nasOrigin,
+      loginOrigin: l.view.postback?.loginOrigin ?? null,
     });
   }
 
@@ -443,6 +541,8 @@ export function createServer(options: ServerOptions = {}): Express {
         return;
       }
       const clientIp = req.ip;
+      // Cycle C: the single-use login token travels back with the form (post-back flows only).
+      const lt = l.view.postback ? { login_token: field('lt').slice(0, 1024) } : {};
       let input: IdentifyInput;
       if (route.method === 'password') {
         if (field('username') === '' || field('password') === '') {
@@ -454,6 +554,7 @@ export function createServer(options: ServerOptions = {}): Express {
           username: field('username').slice(0, 253),
           password: field('password').slice(0, 256),
           ...(clientIp === undefined ? {} : { client_ip: clientIp }),
+          ...lt,
         };
       } else if (route.method === 'voucher') {
         if (field('code') === '') {
@@ -464,6 +565,7 @@ export function createServer(options: ServerOptions = {}): Express {
           method: 'voucher',
           code: field('code').slice(0, 64),
           ...(clientIp === undefined ? {} : { client_ip: clientIp }),
+          ...lt,
         };
       } else {
         if (field('accept_terms') !== 'yes') {
@@ -474,6 +576,7 @@ export function createServer(options: ServerOptions = {}): Express {
           method: 'click_through',
           accept_terms: true,
           ...(clientIp === undefined ? {} : { client_ip: clientIp }),
+          ...lt,
         };
       }
       const outcome = await api.identify(l.view.id, input);
@@ -481,6 +584,34 @@ export function createServer(options: ServerOptions = {}): Express {
       const username = route.method === 'password' ? field('username').slice(0, 253) : '';
       switch (outcome.result) {
         case 'ok':
+          if (l.view.postback) {
+            // Cycle C: post-back hand-off to the AP / controller login URL the API validated.
+            const origin = l.view.postback.loginOrigin;
+            if (!isPostbackHandoff(outcome.handoffUrl, origin)) {
+              logger.error({ flowId: l.view.id }, 'portal post-back hand-off URL rejected');
+              errorPage(res, 502, t('error.unavailable'), l.view);
+              return;
+            }
+            if (outcome.handoffMethod === 'POST-form' && outcome.fields !== undefined) {
+              send(res, {
+                status: 200,
+                theme: themeOf(l.view),
+                branding: brandingOf(l.view),
+                body: {
+                  page: 'handoff',
+                  action: outcome.handoffUrl,
+                  fields: Object.entries(outcome.fields),
+                  autoSubmit: true,
+                  scriptNonce: null,
+                },
+                loginOrigin: origin,
+              });
+              return;
+            }
+            res.setHeader('Cache-Control', 'no-store');
+            res.redirect(302, outcome.handoffUrl);
+            return;
+          }
           if (outcome.handoffForm !== undefined) {
             // MikroTik: the browser POSTs username / password (CHAP hash) / dst / popup to the
             // router itself; the router origin is allowed as form-action for this page only.
@@ -493,7 +624,13 @@ export function createServer(options: ServerOptions = {}): Express {
               status: 200,
               theme: themeOf(l.view),
               branding: brandingOf(l.view),
-              body: { page: 'handoff', action: outcome.handoffUrl, fields: outcome.handoffForm },
+              body: {
+                page: 'handoff',
+                action: outcome.handoffUrl,
+                fields: Object.entries(outcome.handoffForm),
+                autoSubmit: false,
+                scriptNonce: null,
+              },
               nasOrigin: l.view.nasOrigin,
             });
             return;
@@ -541,6 +678,9 @@ export function createServer(options: ServerOptions = {}): Express {
           return;
         case 'handoff_unavailable':
           errorPage(res, 400, t('error.generic'), l.view);
+          return;
+        case 'login_token_invalid':
+          formPage(req, res, l, page, 403, t('form.token'), username);
           return;
         case 'unavailable':
           errorPage(res, 503, t('error.unavailable'), l.view);

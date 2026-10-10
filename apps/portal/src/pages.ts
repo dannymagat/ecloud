@@ -57,6 +57,8 @@ export type PortalMethod = 'password' | 'voucher' | 'click_through';
 export interface FormTarget {
   readonly action: string;
   readonly csrf: string;
+  /** Cycle C: single-use ECLOUD login token of a post-back flow (hidden field `lt`). */
+  readonly loginToken?: string;
 }
 
 export interface SessionStatus {
@@ -107,12 +109,17 @@ export type PageBody =
   | { readonly page: 'logout' }
   | {
       /**
-       * Cycle B (MikroTik): POST hand-off to the router's `$(link-login-only)`. A plain form the
-       * user submits (no script, ADMIN_UI §4); the router origin is in the CSP form-action.
+       * Hand-off to the NAS login URL as a form post. Cycle C post-back: posted to the validated
+       * AP / controller login URL, auto-submitted by a nonce'd script (`autoSubmit`); the visible
+       * button is the no-JS fallback. Cycle B (MikroTik): POST to the router's
+       * `$(link-login-only)`, a plain form the user submits (no script, ADMIN_UI §4); the router
+       * origin is in the CSP form-action.
        */
       readonly page: 'handoff';
       readonly action: string;
-      readonly fields: Readonly<Record<string, string>>;
+      readonly fields: readonly (readonly [string, string])[];
+      readonly autoSubmit: boolean;
+      readonly scriptNonce: string | null;
     };
 
 export type PageName = PageBody['page'];
@@ -148,7 +155,11 @@ function errorLine(message: string | null): string {
 
 function formOpen(form: FormTarget | null): string {
   if (form === null) return '<form>';
-  return `<form method="post" action="${escapeHtml(form.action)}"><input type="hidden" name="csrf" value="${escapeHtml(form.csrf)}">`;
+  const lt =
+    form.loginToken === undefined
+      ? ''
+      : `<input type="hidden" name="lt" value="${escapeHtml(form.loginToken)}">`;
+  return `<form method="post" action="${escapeHtml(form.action)}"><input type="hidden" name="csrf" value="${escapeHtml(form.csrf)}">${lt}`;
 }
 
 function back(href: string | null, locale: string): string {
@@ -243,13 +254,17 @@ function body(theme: PageTheme, b: PageBody): string {
     case 'logout':
       return `<p role="status">${escapeHtml(t('logout.text', {}, l))}</p>`;
     case 'handoff': {
-      const hidden = Object.entries(b.fields)
-        .map(
-          ([name, value]) =>
-            `<input type="hidden" name="${escapeHtml(name)}" value="${escapeHtml(value)}">`,
-        )
+      const hidden = b.fields
+        .map(([k, v]) => `<input type="hidden" name="${escapeHtml(k)}" value="${escapeHtml(v)}">`)
         .join('');
-      return `<p role="status">${escapeHtml(t('handoff.text', {}, l))}</p><form method="post" action="${escapeHtml(b.action)}">${hidden}<button type="submit">${escapeHtml(t('handoff.submit', {}, l))}</button></form>`;
+      if (!b.autoSubmit) {
+        return `<p role="status">${escapeHtml(t('handoff.manual_text', {}, l))}</p><form method="post" action="${escapeHtml(b.action)}">${hidden}<button type="submit">${escapeHtml(t('handoff.submit', {}, l))}</button></form>`;
+      }
+      const script =
+        b.scriptNonce === null
+          ? ''
+          : `<script nonce="${escapeHtml(b.scriptNonce)}">document.getElementById('pb').submit();</script>`;
+      return `<p role="status">${escapeHtml(t('handoff.text', {}, l))}</p><form id="pb" method="post" action="${escapeHtml(b.action)}">${hidden}<button type="submit">${escapeHtml(t('handoff.button', {}, l))}</button></form>${script}`;
     }
   }
 }

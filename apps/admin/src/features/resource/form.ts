@@ -1,4 +1,5 @@
 /** Declarative form fields for the generic resource screens and their body conversion. */
+import type { ReactNode } from 'react';
 import { isoToLocalInput, localInputToIso, str } from '../../lib/format';
 import type { OrgCollectionPath } from './paths';
 
@@ -11,7 +12,9 @@ export type FieldType =
   | 'checkbox'
   | 'datetime'
   | 'textarea'
-  | 'list';
+  | 'list'
+  /** Rendered by `render`; the value is a JSON string, sent as parsed JSON (Cycle C). */
+  | 'custom';
 
 export interface OptionSource {
   path: OrgCollectionPath;
@@ -35,6 +38,15 @@ export interface FieldDef {
   defaultValue?: string | boolean;
   min?: number;
   max?: number;
+  /** Only shown (and only sent) while this returns true for the current values. */
+  visibleWhen?: (values: FormValues) => boolean;
+  /** `custom` fields: the editor; `value` is a JSON string ('' = unset). */
+  render?: (props: {
+    value: string;
+    values: FormValues;
+    error?: string;
+    onChange: (value: string) => void;
+  }) => ReactNode;
 }
 
 export type FormValues = Record<string, string | boolean>;
@@ -50,6 +62,11 @@ export function initialValues(
       values[f.name] = typeof v === 'boolean' ? v : f.defaultValue === true;
     else if (f.type === 'datetime') values[f.name] = isoToLocalInput(v);
     else if (f.type === 'list') values[f.name] = Array.isArray(v) ? v.join(', ') : '';
+    else if (f.type === 'custom')
+      values[f.name] =
+        v === null || v === undefined || (typeof v === 'object' && Object.keys(v).length === 0)
+          ? ''
+          : JSON.stringify(v);
     else if (v === null || v === undefined)
       values[f.name] = typeof f.defaultValue === 'string' ? f.defaultValue : '';
     else values[f.name] = str(v);
@@ -70,6 +87,7 @@ export function toBody(
   const body: Record<string, unknown> = {};
   for (const f of fields) {
     if (mode === 'edit' && f.createOnly) continue;
+    if (f.visibleWhen !== undefined && !f.visibleWhen(values)) continue;
     const raw = values[f.name];
     if (mode === 'edit' && original && raw === original[f.name]) continue;
     if (f.type === 'checkbox') {
@@ -87,6 +105,13 @@ export function toBody(
         break;
       case 'datetime':
         body[f.name] = localInputToIso(text);
+        break;
+      case 'custom':
+        try {
+          body[f.name] = JSON.parse(text) as unknown;
+        } catch {
+          body[f.name] = text; // the API answers a field error
+        }
         break;
       case 'list':
         body[f.name] = text

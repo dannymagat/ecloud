@@ -37,7 +37,7 @@ const EN = {
   'terms.none': 'By continuing you agree to use this network responsibly.',
   'terms.version': 'Version {version}',
   'success.continue': 'Continue to your page',
-  'handoff.text':
+  'handoff.manual_text':
     'Your sign-in was accepted. Press Connect to finish connecting to the Wi-Fi network.',
   'handoff.submit': 'Connect',
   'success.status': 'View connection status',
@@ -56,6 +56,9 @@ const EN = {
   'status.logout': 'Sign out',
   'logout.text': 'You have been signed out of the Wi-Fi network.',
   'skip.main': 'Skip to content',
+  'handoff.text': 'Connecting you to the Wi-Fi network. If nothing happens, select Continue.',
+  'handoff.button': 'Continue',
+  'form.token': 'This sign-in page needs to be refreshed. Please try again.',
 } as const;
 
 export type MessageKey = keyof typeof EN;

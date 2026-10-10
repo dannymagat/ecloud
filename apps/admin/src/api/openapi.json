@@ -4915,7 +4915,8 @@
                 "coovachilli-uam",
                 "openwifi-config",
                 "generic-radius-8021x",
-                "mikrotik-hotspot"
+                "mikrotik-hotspot",
+                "external-portal-postback"
               ],
               "type": "string"
             }
@@ -7107,6 +7108,11 @@
               "schema": {
                 "additionalProperties": false,
                 "properties": {
+                  "adapter_config": {
+                    "additionalProperties": {},
+                    "propertyNames": { "type": "string" },
+                    "type": "object"
+                  },
                   "adapter_key": {
                     "enum": [
                       "openwifi-hostapd-radius",
@@ -7114,7 +7120,8 @@
                       "uspot-upstream-uam",
                       "coovachilli-uam",
                       "generic-radius-8021x",
-                      "mikrotik-hotspot"
+                      "mikrotik-hotspot",
+                      "external-portal-postback"
                     ],
                     "type": "string"
                   },
@@ -7394,6 +7401,11 @@
               "schema": {
                 "additionalProperties": false,
                 "properties": {
+                  "adapter_config": {
+                    "additionalProperties": {},
+                    "propertyNames": { "type": "string" },
+                    "type": "object"
+                  },
                   "adapter_key": {
                     "enum": [
                       "openwifi-hostapd-radius",
@@ -7401,7 +7413,8 @@
                       "uspot-upstream-uam",
                       "coovachilli-uam",
                       "generic-radius-8021x",
-                      "mikrotik-hotspot"
+                      "mikrotik-hotspot",
+                      "external-portal-postback"
                     ],
                     "type": "string"
                   },
@@ -7609,6 +7622,75 @@
           }
         },
         "summary": "Rotate the RADIUS shared secret of a NAS (returned once)",
+        "tags": ["nas"]
+      }
+    },
+    "/api/v1/orgs/{orgId}/nas/{id}/setup-guide": {
+      "get": {
+        "description": "Permission: `nas:read`",
+        "operationId": "get_api_v1_orgs_orgId_nas_id_setup_guide",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "orgId",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {},
+                  "properties": { "id": { "type": "string" } },
+                  "required": ["id"],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Setup guide"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Validation failed (application/problem+json)"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Authentication required"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Permission denied"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Not found (also returned for objects of other tenants)"
+          }
+        },
+        "summary": "Setup guide steps for a NAS (filled values; secrets as placeholders)",
         "tags": ["nas"]
       }
     },

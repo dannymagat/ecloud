@@ -14,6 +14,7 @@ import { DT_RESULTS } from '../registry/dt-results.js';
 import type { CompatibilityRow, DeploymentMode } from '../registry/types.js';
 import type { NasAdapter, SessionRef, Unsupported } from '../types.js';
 import { counterWrap32Quirks, normalizeAccounting, normalizeMacAddress } from './accounting.js';
+import { createPostbackVendorAdapter } from './postback/engine.js';
 import type {
   AuthorizationHandoff,
   AuthorizationPlan,
@@ -646,12 +647,15 @@ function composeVendor(spec: FirstPartySpec): VendorAdapter {
   return spec.key === 'mikrotik-hotspot' ? withMikrotikHotspot(base, PORTAL_ORIGIN) : base;
 }
 
-const VENDOR_ADAPTERS: Readonly<Record<AdapterKey, VendorAdapter>> = Object.freeze(
-  Object.fromEntries(SPECS.map((s) => [s.key, composeVendor(s)])) as Record<
-    AdapterKey,
+const VENDOR_ADAPTERS: Readonly<Record<AdapterKey, VendorAdapter>> = Object.freeze({
+  ...(Object.fromEntries(SPECS.map((s) => [s.key, composeVendor(s)])) as Record<
+    Exclude<AdapterKey, 'external-portal-postback'>,
     VendorAdapter
-  >,
-);
+  >),
+  // Cycle C (D-044): the F3 post-back engine without a profile. Redirect handling needs the
+  // NAS's profile (`postbackAdapterForNas`); this entry exposes capabilities / RADIUS only.
+  'external-portal-postback': createPostbackVendorAdapter(null),
+});
 
 /** First-party vendor adapter by engine key; throws on an unknown key. */
 export function getVendorAdapter(key: string): VendorAdapter {
@@ -661,7 +665,7 @@ export function getVendorAdapter(key: string): VendorAdapter {
 }
 
 export function listVendorAdapters(): VendorAdapter[] {
-  return SPECS.map((s) => VENDOR_ADAPTERS[s.key]);
+  return [...SPECS.map((s) => VENDOR_ADAPTERS[s.key]), VENDOR_ADAPTERS['external-portal-postback']];
 }
 
 // ------------------------------------------------------------------------------------------

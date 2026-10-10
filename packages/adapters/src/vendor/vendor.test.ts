@@ -97,6 +97,7 @@ describe('first-party VendorAdapter wrappers (AC1, AC2)', () => {
       'openwifi-config',
       'generic-radius-8021x',
       'mikrotik-hotspot',
+      'external-portal-postback',
     ]);
     for (const v of all) {
       expect(v.engine).toBe(getAdapter(v.key));

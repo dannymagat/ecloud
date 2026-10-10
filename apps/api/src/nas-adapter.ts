@@ -17,6 +17,8 @@ export const NAS_ADAPTER_KEYS = [
   'generic-radius-8021x',
   // Cycle B (D-044, migration 029): MikroTik RouterOS Hotspot.
   'mikrotik-hotspot',
+  // Cycle C (D-044, migration 030): external captive portal post-back (vendor profiles).
+  'external-portal-postback',
 ] as const;
 
 export type NasAdapterKey = (typeof NAS_ADAPTER_KEYS)[number];

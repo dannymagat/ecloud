@@ -21,6 +21,8 @@ export const ADAPTER_KEYS = [
   'generic-radius-8021x',
   /** Cycle B (D-044): MikroTik RouterOS Hotspot with an ECLOUD-generated external login page. */
   'mikrotik-hotspot',
+  /** Cycle C (D-044): F3 external captive portal post-back engine (vendor profiles). */
+  'external-portal-postback',
 ] as const;
 
 export type AdapterKey = (typeof ADAPTER_KEYS)[number];
@@ -32,7 +34,9 @@ export type PortalType =
   | 'uam-chillispot+wispr+json'
   | 'config-only'
   /** Cycle B: RouterOS Hotspot `login.html` → ECLOUD portal → POST to `$(link-login-only)`. */
-  | 'mikrotik-hotspot';
+  | 'mikrotik-hotspot'
+  /** Cycle C: AP/controller redirects to ECLOUD, the browser posts credentials back to the AP. */
+  | 'external-postback';
 
 /**
  * `mikrotik-rate-string`: one combined `rx/tx` string attribute (Mikrotik-Rate-Limit, rendered by
