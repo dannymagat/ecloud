@@ -86,8 +86,10 @@ services:
       - edge_tls_key
     ports:
       # Container ports equal host ports so redirects and Host headers carry the real port.
-      - '${ECLOUD_LAN_IP:?ECLOUD_LAN_IP is required}:8443:8443'
-      - '${ECLOUD_LAN_IP:?ECLOUD_LAN_IP is required}:8444:8444'
+      # Owner 2026-10-11: listen on all host addresses (ECLOUD_WEB_BIND, default 0.0.0.0).
+      # Exposure stays LAN-only: DOCKER-USER admits NEW 8443/8444 only from ECLOUD_WEB_CIDRS.
+      - '${ECLOUD_WEB_BIND:-0.0.0.0}:8443:8443'
+      - '${ECLOUD_WEB_BIND:-0.0.0.0}:8444:8444'
     healthcheck:
       test: ['CMD', 'wget', '-q', '-O', '/dev/null', 'http://127.0.0.1:8081/healthz']
       interval: 30s

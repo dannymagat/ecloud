@@ -14,7 +14,7 @@
 #
 #  Policy (LAN-only pilot, D-042):
 #    - replies (ESTABLISHED,RELATED) pass;
-#    - NEW tcp 8443/8444 (edge) whose ORIGINAL destination is ECLOUD_LAN_IP pass only from
+#    - NEW tcp 8443/8444 (edge), to any host address (published on 0.0.0.0), pass only from
 #      ECLOUD_WEB_CIDRS;
 #    - NEW udp 1812/1813 (freeradius) whose original destination is ECLOUD_LAN_IP pass only
 #      from ECLOUD_RADIUS_CIDRS;
@@ -88,8 +88,10 @@ apply_v4() {
   "$IPTABLES" -w -A DOCKER-USER -m conntrack --ctstate ESTABLISHED,RELATED -j RETURN
   local c
   for c in $ECLOUD_WEB_CIDRS; do
+    # Web ports are published on all host addresses (ECLOUD_WEB_BIND=0.0.0.0, owner 2026-10-11):
+    # admitted by SOURCE (the LAN CIDRs) for any host destination address.
     "$IPTABLES" -w -A DOCKER-USER -s "$c" -o "$BRIDGE" -p tcp -m multiport --dports "$WEB_PORTS" \
-      -m conntrack --ctstate NEW --ctorigdst "$ECLOUD_LAN_IP" -j RETURN
+      -m conntrack --ctstate NEW -j RETURN
   done
   for c in $ECLOUD_RADIUS_CIDRS; do
     "$IPTABLES" -w -A DOCKER-USER -s "$c" -o "$BRIDGE" -p udp -m multiport --dports "$RADIUS_PORTS" \

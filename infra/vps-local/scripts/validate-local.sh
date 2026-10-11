@@ -117,8 +117,11 @@ want = {("edge", 8443, "tcp"), ("edge", 8444, "tcp"), ("freeradius", 1812, "udp"
 got = set()
 for name, svc in s.items():
     for p in svc.get("ports", []):
-        if p.get("host_ip") != ip:
-            errs.append(f"{name} publishes on {p.get('host_ip')!r}, not the LAN IP")
+        # web ports: all host addresses (ECLOUD_WEB_BIND default 0.0.0.0; firewall admits LAN
+        # sources only); RADIUS: the LAN IP only.
+        want_ip = "0.0.0.0" if name == "edge" else ip
+        if p.get("host_ip") != want_ip:
+            errs.append(f"{name} publishes on {p.get('host_ip')!r}, not {want_ip}")
         got.add((name, int(p["published"]), p.get("protocol", "tcp")))
 if got != want:
     errs.append(f"published set {sorted(got)} != {sorted(want)}")
@@ -145,7 +148,7 @@ if not edge.get("read_only") or edge.get("cap_drop") != ["ALL"]:
     errs.append("edge must be read_only with cap_drop ALL")
 if not any(v.get("target") == "/etc/nginx/conf.d" and v.get("source") == f"{repo}/infra/vps-local/edge" for v in edge["volumes"]):
     errs.append(f"edge conf.d mount wrong: {edge['volumes']}")
-print("\n".join(errs) if errs else "      compose: only edge 8443/8444 + RADIUS 1812/1813 on the LAN IP; origins + radius-clients OK")
+print("\n".join(errs) if errs else "      compose: only edge 8443/8444 (0.0.0.0) + RADIUS 1812/1813 on the LAN IP; origins + radius-clients OK")
 sys.exit(1 if errs else 0)
 EOF
 }
@@ -213,7 +216,7 @@ dockeruser_check() {
       S=/l/firewall/docker-user.sh
       bash $S apply; a="$(iptables -w -S DOCKER-USER)"; bash $S apply; b="$(iptables -w -S DOCKER-USER)"
       [ "$a" = "$b" ] || { echo "apply not idempotent"; exit 1; }
-      echo "$a" | grep -q -- "-s 192.168.203.0/24 -o br-ecloud -p tcp -m multiport --dports 8443,8444 -m conntrack --ctstate NEW --ctorigdst 192.168.203.196 -j RETURN"
+      echo "$a" | grep -q -- "-s 192.168.203.0/24 -o br-ecloud -p tcp -m multiport --dports 8443,8444 -m conntrack --ctstate NEW -j RETURN"
       echo "$a" | grep -q -- "-s 192.168.204.10/32 -o br-ecloud -p udp -m multiport --dports 1812,1813"
       echo "$a" | grep -q -- "! -i br-ecloud -o br-ecloud -m conntrack --ctstate NEW -j DROP"
       [ "$(echo "$a" | tail -1)" = "-A DOCKER-USER -j RETURN" ]
