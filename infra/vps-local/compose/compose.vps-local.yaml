@@ -13,7 +13,7 @@
 #  tunnel is not used. Differences from the base file:
 #    - api / portal are NOT published on the host at all (the base publishes 127.0.0.1:3000 /
 #      127.0.0.1:3002); the only web entry is the `edge` container (nginx, TLS) on the LAN
-#      address: 8443 = admin SPA + same-origin /api, 8444 = captive portal.
+#      address: host 443 (container 8443) = admin SPA + same-origin /api, host 444 (container 8444) = captive portal.
 #    - freeradius (profile `radius`) publishes 1812/1813 udp on the LAN address instead of the
 #      WireGuard hub address (amends D-032 for the LAN pilot, D-042). The F-P10-07 fix is
 #      inherited unchanged from the base file: the `radius-clients` one-shot (api image, renders
@@ -30,10 +30,10 @@
 # =============================================================================================
 
 x-lan-origins: &lan-origins
-  PUBLIC_ADMIN_ORIGIN: https://${ECLOUD_LAN_IP:?ECLOUD_LAN_IP is required}:8443
-  # No separate integration-API origin on the LAN pilot: /api/v1 is served same-origin on 8443.
-  PUBLIC_API_ORIGIN: https://${ECLOUD_LAN_IP:?ECLOUD_LAN_IP is required}:8443
-  PUBLIC_PORTAL_ORIGIN: https://${ECLOUD_LAN_IP:?ECLOUD_LAN_IP is required}:8444
+  PUBLIC_ADMIN_ORIGIN: https://${ECLOUD_LAN_IP:?ECLOUD_LAN_IP is required}
+  # No separate integration-API origin on the LAN pilot: /api/v1 is served same-origin on 443.
+  PUBLIC_API_ORIGIN: https://${ECLOUD_LAN_IP:?ECLOUD_LAN_IP is required}
+  PUBLIC_PORTAL_ORIGIN: https://${ECLOUD_LAN_IP:?ECLOUD_LAN_IP is required}:444
 
 services:
   migrate:
@@ -85,11 +85,15 @@ services:
       - edge_tls_crt
       - edge_tls_key
     ports:
-      # Container ports equal host ports so redirects and Host headers carry the real port.
+      # Host and container ports differ (443->8443, 444->8444): the edge forwards the browser's
+      # Host header ($http_host) and its 497 redirects use fixed targets, so apps see real ports.
       # Owner 2026-10-11: listen on all host addresses (ECLOUD_WEB_BIND, default 0.0.0.0).
-      # Exposure stays LAN-only: DOCKER-USER admits NEW 8443/8444 only from ECLOUD_WEB_CIDRS.
-      - '${ECLOUD_WEB_BIND:-0.0.0.0}:8443:8443'
-      - '${ECLOUD_WEB_BIND:-0.0.0.0}:8444:8444'
+      # Owner 2026-10-11: host 443 -> admin/API (container 8443), host 444 -> portal (8444);
+      # the appliance nginx that held 80/443 is stopped and disabled (not removed).
+      # Exposure stays LAN-only: DOCKER-USER admits NEW connections to container ports
+      # 8443/8444 (post-DNAT) only from ECLOUD_WEB_CIDRS.
+      - '${ECLOUD_WEB_BIND:-0.0.0.0}:443:8443'
+      - '${ECLOUD_WEB_BIND:-0.0.0.0}:444:8444'
     healthcheck:
       test: ['CMD', 'wget', '-q', '-O', '/dev/null', 'http://127.0.0.1:8081/healthz']
       interval: 30s

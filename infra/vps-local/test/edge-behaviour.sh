@@ -64,8 +64,8 @@ t "portal header x-content-type-options" "$(echo "$HP" | grep -qi '^x-content-ty
 
 # Plain HTTP on the TLS ports -> redirect to https
 R2="$(curl -s -o /dev/null -w '%{redirect_url}' -H 'Host: evil.example' --connect-to "$IP:8444:edge:8444" "http://$IP:8444/p")"
-t "http on 8444 -> fixed https target, client Host ignored ($R2)" "$([ "$R2" = "https://$IP:8444/p" ]; echo $?)"
+t "http on 8444 -> fixed https target, client Host ignored ($R2)" "$([ "$R2" = "https://$IP:444/p" ]; echo $?)"
 R="$(curl -s -o /dev/null -w '%{http_code} %{redirect_url}' --connect-to "$IP:8443:edge:8443" "http://$IP:8443/x?y=1")"
-t "http on 8443 -> 301 https ($R)" "$(echo "$R" | grep -q "^301 https://$IP:8443/x?y=1"; echo $?)"
+t "http on 8443 -> 301 https ($R)" "$(echo "$R" | grep -q "^301 https://$IP/x?y=1"; echo $?)"
 
 [ "$fails" -eq 0 ]

@@ -31,10 +31,11 @@ active() {
 }
 
 baseline() {
-  # EZEOS UI (nginx on 80/443) and the :9090 UI: any HTTP answer except 000/5xx counts as up.
-  expect 'EZEOS UI https://127.0.0.1/' '[1-4][0-9][0-9]' https://127.0.0.1/
+  # The appliance nginx (EZEOS UI on 80/443) is stopped and disabled by owner decision
+  # (2026-10-11): 443/444 belong to EZECLOUD. The :9090 UI stays: any HTTP answer except
+  # 000/5xx counts as up.
   expect 'EZEOS :9090 https://127.0.0.1:9090/' '[1-4][0-9][0-9]' https://127.0.0.1:9090/
-  for s in nginx php-fpm sshd firewalld cloudflared chronyd; do active "$s"; done
+  for s in sshd firewalld cloudflared chronyd; do active "$s"; done
   echo "--- listeners (tcp/udp, LISTEN/UNCONN)"
   ss -lntu 2>/dev/null | awk 'NR>1 {print $1, $5}' | sort -u
   if [ "$(id -u)" -eq 0 ]; then
@@ -53,10 +54,10 @@ ecloud() {
   else
     echo "SKIP  containers (docker not reachable for this user; run with sudo)"
   fi
-  expect 'edge admin SPA  https://LAN:8443/' '200' "https://$LAN_IP:8443/"
-  expect 'edge api health https://LAN:8443/healthz' '200' "https://$LAN_IP:8443/healthz"
-  expect 'edge portal     https://LAN:8444/healthz' '200' "https://$LAN_IP:8444/healthz"
-  expect 'edge private    https://LAN:8443/readyz' '404' "https://$LAN_IP:8443/readyz"
+  expect 'edge admin SPA  https://LAN/' '200' "https://$LAN_IP/"
+  expect 'edge api health https://LAN/healthz' '200' "https://$LAN_IP/healthz"
+  expect 'edge portal     https://LAN:444/healthz' '200' "https://$LAN_IP:444/healthz"
+  expect 'edge private    https://LAN/readyz' '404' "https://$LAN_IP/readyz"
   if [ -r "$TLS_DIR/edge.crt" ]; then
     if openssl x509 -checkend $((30 * 86400)) -noout -in "$TLS_DIR/edge.crt" >/dev/null; then
       ok "edge certificate valid > 30 days"

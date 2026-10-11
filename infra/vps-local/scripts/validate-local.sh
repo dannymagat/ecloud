@@ -113,7 +113,7 @@ errs = []
 for name in ("api", "portal", "worker", "postgres", "redis"):
     if s[name].get("ports"):
         errs.append(f"{name} must not publish ports: {s[name]['ports']}")
-want = {("edge", 8443, "tcp"), ("edge", 8444, "tcp"), ("freeradius", 1812, "udp"), ("freeradius", 1813, "udp")}
+want = {("edge", 443, "tcp"), ("edge", 444, "tcp"), ("freeradius", 1812, "udp"), ("freeradius", 1813, "udp")}
 got = set()
 for name, svc in s.items():
     for p in svc.get("ports", []):
@@ -127,8 +127,8 @@ if got != want:
     errs.append(f"published set {sorted(got)} != {sorted(want)}")
 for name in ("api", "portal", "worker", "migrate"):
     e = s[name]["environment"]
-    for k, v in (("PUBLIC_ADMIN_ORIGIN", f"https://{ip}:8443"), ("PUBLIC_API_ORIGIN", f"https://{ip}:8443"),
-                 ("PUBLIC_PORTAL_ORIGIN", f"https://{ip}:8444")):
+    for k, v in (("PUBLIC_ADMIN_ORIGIN", f"https://{ip}"), ("PUBLIC_API_ORIGIN", f"https://{ip}"),
+                 ("PUBLIC_PORTAL_ORIGIN", f"https://{ip}:444")):
         if e.get(k) != v:
             errs.append(f"{name} {k}={e.get(k)!r}")
 if s["api"]["environment"].get("TRUST_PROXY_HOPS") != "1" or s["portal"]["environment"].get("PORTAL_TRUST_PROXY_HOPS") != "1":
@@ -148,7 +148,7 @@ if not edge.get("read_only") or edge.get("cap_drop") != ["ALL"]:
     errs.append("edge must be read_only with cap_drop ALL")
 if not any(v.get("target") == "/etc/nginx/conf.d" and v.get("source") == f"{repo}/infra/vps-local/edge" for v in edge["volumes"]):
     errs.append(f"edge conf.d mount wrong: {edge['volumes']}")
-print("\n".join(errs) if errs else "      compose: only edge 8443/8444 (0.0.0.0) + RADIUS 1812/1813 on the LAN IP; origins + radius-clients OK")
+print("\n".join(errs) if errs else "      compose: only edge 443/444 (0.0.0.0) + RADIUS 1812/1813 on the LAN IP; origins + radius-clients OK")
 sys.exit(1 if errs else 0)
 EOF
 }
