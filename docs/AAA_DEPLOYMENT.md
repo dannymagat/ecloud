@@ -32,14 +32,27 @@ Version 1.0  |  2026-10-12
 
   Verify:
     ecloud-compose ps
-    Expected: 7 containers UP/Healthy (redis, postgres, edge, api, worker, portal, freeradius)
+    Expected: 6 containers UP/Healthy (redis, postgres, edge, api, worker, portal).
+
+  NOTE — `up -d` does NOT start FreeRADIUS.  `freeradius` and `radius-clients` sit behind
+  `profiles: ['radius']` (infra/vps/compose/compose.pilot.yaml:266 and :297) and the
+  ecloud-compose wrapper sets no COMPOSE_PROFILES
+  (infra/vps-local/scripts/ecloud-compose:9-11).  To include them:
+
+    ecloud-compose --profile radius up -d
+    Expected: 7 containers, the six above plus freeradius.
+
+  `migrate` is likewise behind `profiles: ['migrate']` (compose.pilot.yaml:157), which is why
+  it is run explicitly below.
 
   Run migrations:
-    ecloud-compose run --rm migrate
+    ecloud-compose --profile migrate run --rm migrate
 
-  Verify FreeRADIUS is ready:
-    ssh vps-local 'docker exec ecloud-freeradius radtest test test 127.0.0.1 0 testing123'
-    Expected: Access-Reject (no such NAS registered) — confirms FR is running.
+  Verify FreeRADIUS is ready (Status-Server probe on loopback — the same check the container
+  healthcheck uses, infra/freeradius/healthcheck.sh:14):
+    ssh vps-local 'docker exec ecloud-freeradius /healthcheck.sh'
+    Expected: exit 0.  The probe reads the Status-Server secret from
+    RADIUS_STATUS_SECRET_FILE inside the container; no secret is typed on the command line.
 
 ---
 
@@ -227,7 +240,8 @@ Version 1.0  |  2026-10-12
 
   Health checks:
     API:           GET /health -> 200
-    FreeRADIUS:    docker exec ecloud-freeradius radtest ping ping 127.0.0.1 0 testing123
+    FreeRADIUS:    docker exec ecloud-freeradius /healthcheck.sh   (Status-Server on
+                   127.0.0.1:18121, secret from RADIUS_STATUS_SECRET_FILE)
     PostgreSQL:    pg_isready -h localhost -p 5432
     Redis:         redis-cli ping
 
@@ -248,17 +262,33 @@ Version 1.0  |  2026-10-12
 
 ## 11. Backup and restore
 
-  Database backup:
-    pg_dump -h localhost -U ecloud ecloud > ecloud_backup_$(date +%Y%m%d).sql
-    Recommended: daily automated pg_dump via cron, retained 30 days.
+  Do NOT use a bare `pg_dump -U ecloud`.  Two reasons: the application role cannot read the
+  FORCE RLS tables (pg_dump refuses them without BYPASSRLS, so the dump fails or omits
+  tenant data — docs/RESTORE_DRILL.md:109), and a plaintext .sql dump of this database
+  contains NAS shared secrets and subscriber material.
+
+  Database backup — use the approved path, scripts/backup/backup.sh:
+    pg_dump -Fc runs inside the Postgres container and is piped straight into
+    `age -R <recipients>`, so no plaintext dump ever touches disk.  It writes SHA256SUMS and
+    manifest.json, 0700 directory / 0600 files, atomic .partial-* rename, keep-N retention
+    (BACKUP_RETENTION_COUNT), and an optional off-site upload hook.  Credentials come from
+    the container secret files, never from the command line.
+    Host install and the nightly timer: infra/vps-local/scripts/setup-backup.sh install
+    (approval gate LCL-BK-2 / LCL-BK-3).
+    Full description, including the dedicated backup role and its BYPASSRLS requirement:
+    docs/RESTORE_DRILL.md.
 
   FreeRADIUS config backup:
     infra/freeradius/raddb/ is tracked in git.  No external backup needed for config.
-    NAS secrets are in the database; covered by DB backup.
+    NAS secrets are in the database; covered by the database backup above.
 
   Restore:
-    psql -h localhost -U ecloud ecloud < ecloud_backup_YYYYMMDD.sql
-    ecloud-compose restart
+    scripts/backup/restore.sh  (and scripts/backup/restore-drill.sh for a rehearsal into a
+    throwaway database).  Follow docs/RESTORE_DRILL.md — restoring by hand with psql skips
+    the decrypt, checksum and role steps it documents.
+
+  The age PRIVATE key is never created, read or stored by any script here; it is held by the
+  owner offline.  Without it no backup can be restored.
 
 ---
 
@@ -315,14 +345,26 @@ Version 1.0  |  2026-10-12
 ## 14. NAS Hot-Reload Automation
 
 When a NAS is provisioned, updated, deleted, or has its RADIUS secret rotated via the API,
-the API writes a Redis key `radius:clients:reload_pending`.  A host-side cron job polls this
-key and runs `reload-radius.sh` automatically.
+the API writes a Redis key `radius:clients:reload_pending` with a 300 s TTL
+(apps/api/src/radius-clients/reload-signal.ts).  A host-side cron job polls that key every
+60 s and runs `reload-radius.sh`.
 
-Install (run once as root on the VPS):
+STATUS — the API side exists and the watcher script exists and is tested
+(tests/scripts/radius-reload-watch.test.ts, 6 cases, no Redis or Docker required).  Whether
+the host-side install below has actually been performed on vps-local is NOT verified from
+this repository: REQUIRES_CLARIFICATION.  Until it is confirmed, treat NAS changes as
+requiring the manual `reload-radius.sh` step in §3.  This supersedes the earlier claim that
+the automation is installed and working, and matches AAA_AUDIT.md G4 and AAA_SECURITY.md R2.
 
-  cp infra/vps-local/scripts/radius-reload-watch.sh /opt/ecloud/bin/
-  chmod +x /opt/ecloud/bin/radius-reload-watch.sh
-  apt-get install -y redis-tools          # for redis-cli
+Install (run once as root on the VPS).  BOTH scripts are required: the watcher resolves
+reload-radius.sh from its own directory and exits 1 without it, so a copy of the watcher
+alone cannot work.
+
+  install -m 0755 infra/vps-local/scripts/reload-radius.sh       /opt/ecloud/bin/
+  install -m 0755 infra/vps-local/scripts/radius-reload-watch.sh /opt/ecloud/bin/
+  install -d -m 0755 /var/log/ecloud
+
+  dnf install -y redis                    # provides redis-cli on Oracle Linux 8 (D-041)
 
   cat > /etc/cron.d/ecloud-radius-reload << 'EOF'
   SHELL=/bin/bash
@@ -330,10 +372,23 @@ Install (run once as root on the VPS):
   * * * * * root /opt/ecloud/bin/radius-reload-watch.sh >> /var/log/ecloud/radius-reload.log 2>&1
   EOF
 
-  mkdir -p /var/log/ecloud
+`redis-tools` is a Debian/Ubuntu package name and does not exist on this host.  The watcher
+reads REDIS_URL from /opt/ecloud/ecloud.env and passes any password to redis-cli through
+REDISCLI_AUTH, never as an `-a` argument, so it does not appear in `ps`.
 
-Verify: create a NAS in the dashboard, wait up to 90 s, then confirm
-`/var/log/ecloud/radius-reload.log` shows "Reload succeeded".
+Exit-code contract (do not change one side without the other): reload-radius.sh exits 0 when
+it re-rendered and restarted FreeRADIUS, 3 when it did so with some invalid NAS rows skipped
+— the reload still happened — 4 when it refuses to run as non-root, and 1 when nothing was
+written and FreeRADIUS was NOT restarted.  The watcher consumes the Redis key on both 0 and
+3.  Treating 3 as a failure keeps the key and makes cron restart FreeRADIUS every 60 s for as
+long as one malformed NAS row exists, each restart a brief authentication outage; that was
+the behaviour before commit 2eb9be9.  Repeated genuine failures are capped at
+ECLOUD_RELOAD_MAX_ATTEMPTS (default 5) via `radius:clients:reload_attempts`, after which the
+watcher stops acting and logs what the operator must do.
+
+Verify: create a NAS in the dashboard, wait up to ~2 min (60 s poll plus the reload), then
+confirm `/var/log/ecloud/radius-reload.log` shows "Reload succeeded" and that
+`redis-cli GET radius:clients:reload_pending` is empty.
 
 ---
 

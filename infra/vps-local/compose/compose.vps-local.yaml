@@ -1,6 +1,7 @@
 # =============================================================================================
 #  EZECLOUD on vps-local (EZEOS v2.1 / Oracle Linux 8 appliance) — Compose OVERRIDE
-#  DRAFT, NOT APPLIED (docs/VPS_LOCAL_CHANGE_LIST.md, per-id owner approval).
+#  APPLIED on vps-local: this override is in use by the running stack.
+#  Changes to it still need per-id owner approval (docs/VPS_LOCAL_CHANGE_LIST.md).
 #
 #  Used ON TOP OF infra/vps/compose/compose.pilot.yaml (unchanged, reused):
 #    docker compose --env-file /opt/ecloud/ecloud.env \
