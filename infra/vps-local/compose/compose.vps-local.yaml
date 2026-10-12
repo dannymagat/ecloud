@@ -30,10 +30,15 @@
 # =============================================================================================
 
 x-lan-origins: &lan-origins
-  PUBLIC_ADMIN_ORIGIN: https://${ECLOUD_LAN_IP:?ECLOUD_LAN_IP is required}
+  # Explicit overrides (PUBLIC_ADMIN_ORIGIN / PUBLIC_API_ORIGIN / PUBLIC_PORTAL_ORIGIN in
+  # ecloud.env) are required when the stack is reached via a public hostname (e.g. a Cloudflare
+  # tunnel). Set all three to the public URL; omitting any is an error so the API never starts
+  # with a mismatched CSRF origin. For LAN-only access set them to https://${ECLOUD_LAN_IP}
+  # (and https://${ECLOUD_LAN_IP}:444 for the portal).
+  PUBLIC_ADMIN_ORIGIN: ${PUBLIC_ADMIN_ORIGIN:?PUBLIC_ADMIN_ORIGIN is required (set to public URL or https://ECLOUD_LAN_IP)}
   # No separate integration-API origin on the LAN pilot: /api/v1 is served same-origin on 443.
-  PUBLIC_API_ORIGIN: https://${ECLOUD_LAN_IP:?ECLOUD_LAN_IP is required}
-  PUBLIC_PORTAL_ORIGIN: https://${ECLOUD_LAN_IP:?ECLOUD_LAN_IP is required}:444
+  PUBLIC_API_ORIGIN: ${PUBLIC_API_ORIGIN:?PUBLIC_API_ORIGIN is required (set to public URL or https://ECLOUD_LAN_IP)}
+  PUBLIC_PORTAL_ORIGIN: ${PUBLIC_PORTAL_ORIGIN:?PUBLIC_PORTAL_ORIGIN is required (set to public portal URL or https://ECLOUD_LAN_IP:444)}
 
 services:
   migrate:

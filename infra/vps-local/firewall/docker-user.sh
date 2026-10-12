@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # =============================================================================================
-#  DOCKER-USER policy for vps-local (DRAFT, NOT APPLIED; docs/VPS_LOCAL_CHANGE_LIST.md LCL-FW-2)
+#  DOCKER-USER policy for vps-local (docs/VPS_LOCAL_CHANGE_LIST.md LCL-FW-2)
 #
 #    docker-user.sh apply      (re)build the DOCKER-USER chain, idempotent
 #    docker-user.sh show       print the chain
