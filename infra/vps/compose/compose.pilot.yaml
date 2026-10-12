@@ -185,6 +185,10 @@ services:
       TRUST_PROXY_HOPS: '1'
       # internal listener on the private network only (FreeRADIUS, portal); never published
       INTERNAL_BIND_HOST: 0.0.0.0
+      # Set both to serve that listener over TLS (HERMES_AAA_AUDIT.md F-002). Empty = plaintext;
+      # one without the other refuses to boot rather than falling back silently.
+      INTERNAL_TLS_CERT_FILE: ${INTERNAL_TLS_CERT_FILE:-}
+      INTERNAL_TLS_KEY_FILE: ${INTERNAL_TLS_KEY_FILE:-}
       NODE_OPTIONS: --max-old-space-size=256
     secrets:
       - database_url
@@ -310,7 +314,16 @@ services:
       RADIUS_SQL_PASSWORD_FILE: /run/secrets/radius_sql_password
       RADIUS_STATUS_SECRET_FILE: /run/secrets/radius_status_secret
       INTERNAL_API_TOKEN_FILE: /run/secrets/internal_api_token
-      ECLOUD_INTERNAL_URL: http://api:3001
+      # HERMES_AAA_AUDIT.md F-002: rlm_rest POSTs the RADIUS request, User-Password included.
+      # api and freeradius share this host's private compose network, which is not published,
+      # so the pilot default is cleartext over that network -- acknowledged explicitly below,
+      # never defaulted silently. To switch the leg to TLS: issue an internal certificate
+      # (infra/vps-local/scripts/make-lan-tls.sh), set INTERNAL_TLS_CERT_FILE and
+      # INTERNAL_TLS_KEY_FILE on api, then set ECLOUD_INTERNAL_URL=https://api:3001 and
+      # RADIUS_INTERNAL_CA_FILE here and drop the acknowledgement.
+      ECLOUD_INTERNAL_URL: ${ECLOUD_INTERNAL_URL:-http://api:3001}
+      RADIUS_INTERNAL_CA_FILE: ${RADIUS_INTERNAL_CA_FILE:-}
+      ECLOUD_INTERNAL_CLEARTEXT_ACK: ${ECLOUD_INTERNAL_CLEARTEXT_ACK:-1}
       RADIUS_CLIENTS_RENDERED: '1'
     secrets:
       - radius_sql_password

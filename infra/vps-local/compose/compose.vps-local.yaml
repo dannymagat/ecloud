@@ -53,6 +53,10 @@ services:
       RADIUS_ADVERTISED_ADDRESS: ${ECLOUD_LAN_IP:?ECLOUD_LAN_IP is required}
     # Only reachable through `edge` on the Compose network.
     ports: !reset []
+    volumes:
+      # The internal CA and leaf issued by make-lan-tls.sh, for the FreeRADIUS -> api leg
+      # (F-002). Read-only; unused while INTERNAL_TLS_CERT_FILE is empty.
+      - ${ECLOUD_TLS_DIR:-/opt/ecloud/tls}:/etc/ecloud/tls:ro
 
   portal:
     environment:
@@ -69,6 +73,9 @@ services:
     ports: !override
       - '${ECLOUD_LAN_IP:?ECLOUD_LAN_IP is required}:1812:1812/udp'
       - '${ECLOUD_LAN_IP:?ECLOUD_LAN_IP is required}:1813:1813/udp'
+    volumes:
+      # Same directory, for RADIUS_INTERNAL_CA_FILE when the leg is switched to TLS (F-002).
+      - ${ECLOUD_TLS_DIR:-/opt/ecloud/tls}:/etc/ecloud/tls:ro
 
   # TLS edge: the admin image (static SPA in /usr/share/ecloud-admin, nginx-unprivileged, uid 101)
   # with its local-testing nginx config replaced by infra/vps-local/edge/*.

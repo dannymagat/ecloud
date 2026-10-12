@@ -29,6 +29,13 @@ const boolEnv = (fallback: boolean) =>
     .optional()
     .transform((v) => (v === undefined ? fallback : v === 'true' || v === '1'));
 
+const emptyAsUnset = () =>
+  z
+    .string()
+    .trim()
+    .optional()
+    .transform((v) => (v === undefined || v === '' ? undefined : v));
+
 export const apiEnvSchema = z.object({
   MFA_ENCRYPTION_KEY: z.string().min(16).default(API_DEV_DEFAULTS.MFA_ENCRYPTION_KEY),
   /**
@@ -103,6 +110,16 @@ export const apiEnvSchema = z.object({
   TRUST_PROXY_HOPS: z.coerce.number().int().min(0).max(10).default(0),
   /** Bind address of the internal listener (compose: 0.0.0.0 on the private network only). */
   INTERNAL_BIND_HOST: z.string().trim().min(1).default('127.0.0.1'),
+  /**
+   * TLS for the internal listener. FreeRADIUS `rlm_rest` POSTs the whole RADIUS request to
+   * `/internal/aaa/authorize`, including `User-Password`, so that leg must not be cleartext
+   * off-host. Both paths are set together or neither is (loadApiConfig refuses one alone).
+   * PEM files, readable by the api user; the CA that signed the cert is pinned by FreeRADIUS
+   * (`ca_file` in infra/freeradius/raddb/mods-available/rest).
+   */
+  //  An empty value counts as unset: compose passes `${INTERNAL_TLS_CERT_FILE:-}`.
+  INTERNAL_TLS_CERT_FILE: emptyAsUnset(),
+  INTERNAL_TLS_KEY_FILE: emptyAsUnset(),
   API_BIND_HOST: z.string().trim().min(1).default('0.0.0.0'),
   /** Use the in-process memory store instead of Redis (tests / single-process dev only). */
   KV_DRIVER: z.enum(['redis', 'memory']).default('redis'),
@@ -151,6 +168,8 @@ export interface ApiConfig {
   };
   trustProxyHops: number;
   internalBindHost: string;
+  /** PEM paths for the internal listener's TLS, or null for plaintext (dev / loopback only). */
+  internalTls: { certFile: string; keyFile: string } | null;
   apiBindHost: string;
   kvDriver: 'redis' | 'memory';
   impersonationRoleTemplate: string;
@@ -243,6 +262,17 @@ export function loadApiConfig(
       ? base.isProduction
       : raw.SESSION_COOKIE_SECURE === 'true' || raw.SESSION_COOKIE_SECURE === '1';
 
+  // Both or neither: a cert without its key (or the reverse) is a misconfiguration that would
+  // otherwise fall back to cleartext silently, which is the failure this option exists to stop.
+  const certFile = raw.INTERNAL_TLS_CERT_FILE;
+  const keyFile = raw.INTERNAL_TLS_KEY_FILE;
+  if ((certFile === undefined) !== (keyFile === undefined)) {
+    throw new Error(
+      'INTERNAL_TLS_CERT_FILE and INTERNAL_TLS_KEY_FILE must be set together (or both omitted)',
+    );
+  }
+  const internalTls = certFile !== undefined && keyFile !== undefined ? { certFile, keyFile } : null;
+
   return {
     base,
     mfaEncryptionKey: raw.MFA_ENCRYPTION_KEY,
@@ -258,6 +288,7 @@ export function loadApiConfig(
     },
     trustProxyHops: raw.TRUST_PROXY_HOPS,
     internalBindHost: raw.INTERNAL_BIND_HOST,
+    internalTls,
     apiBindHost: raw.API_BIND_HOST,
     kvDriver: raw.KV_DRIVER,
     impersonationRoleTemplate: raw.IMPERSONATION_ROLE_TEMPLATE,

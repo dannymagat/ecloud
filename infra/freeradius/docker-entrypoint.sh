@@ -77,6 +77,49 @@ if [ -n "$missing" ]; then
 	exit 1
 fi
 
+#  Credential transport (HERMES_AAA_AUDIT.md F-002). rlm_rest POSTs the whole RADIUS
+#  request to /internal/aaa/authorize, User-Password included. Cleartext HTTP is allowed
+#  only for the dev stack (loopback / host.docker.internal); a production deployment --
+#  identified by RADIUS_CLIENTS_RENDERED, the same indicator the rendered-clients check
+#  below uses -- must use https, and must pin the EZECLOUD-issued CA, because
+#  check_cert = yes against the system trust store would not trust that CA anyway.
+case "${ECLOUD_INTERNAL_URL:-}" in
+https://*)
+	if [ -z "${RADIUS_INTERNAL_CA_FILE:-}" ]; then
+		echo "freeradius: ECLOUD_INTERNAL_URL is https but RADIUS_INTERNAL_CA_FILE is not set; the internal CA must be pinned" >&2
+		exit 1
+	fi
+	if ! as_freerad test -r "$RADIUS_INTERNAL_CA_FILE"; then
+		echo "freeradius: RADIUS_INTERNAL_CA_FILE=$RADIUS_INTERNAL_CA_FILE is missing or unreadable by freerad" >&2
+		exit 1
+	fi
+	#  Activate the pin in the shipped module config, which ships it commented out so the
+	#  dev stack (plain http) starts without a CA file present.
+	rest_mod=/etc/freeradius/mods-available/rest
+	if ! grep -q '^[[:space:]]*ca_file[[:space:]]*=' "$rest_mod"; then
+		sed -i "s|^\([[:space:]]*\)#[[:space:]]*ca_file = .*|\1ca_file = ${RADIUS_INTERNAL_CA_FILE}|" "$rest_mod"
+	fi
+	if ! grep -q "^[[:space:]]*ca_file = ${RADIUS_INTERNAL_CA_FILE}\$" "$rest_mod"; then
+		echo "freeradius: failed to activate ca_file in $rest_mod" >&2
+		exit 1
+	fi
+	;;
+*)
+	if [ -n "${RADIUS_CLIENTS_RENDERED:-}" ]; then
+		#  The pilot stack runs api and freeradius on one host's private compose network and
+		#  predates this check, so refusing outright would stop an already-deployed stack from
+		#  restarting. The operator must therefore acknowledge the cleartext leg explicitly;
+		#  there is no silent default either way.
+		if [ "${ECLOUD_INTERNAL_CLEARTEXT_ACK:-}" != "1" ]; then
+			echo "freeradius: ECLOUD_INTERNAL_URL is not https:// in a production deployment (RADIUS_CLIENTS_RENDERED is set); rlm_rest would send User-Password in cleartext." >&2
+			echo "freeradius: issue an internal certificate and set ECLOUD_INTERNAL_URL=https://..., or set ECLOUD_INTERNAL_CLEARTEXT_ACK=1 to accept the risk on a private network." >&2
+			exit 1
+		fi
+		echo "freeradius: WARNING - rlm_rest is sending User-Password over cleartext $ECLOUD_INTERNAL_URL (ECLOUD_INTERNAL_CLEARTEXT_ACK=1). HERMES_AAA_AUDIT.md F-002." >&2
+	fi
+	;;
+esac
+
 #  Rendered clients (docs/SECURITY_REVIEW_P10.md F-P10-07): fail closed unless the
 #  rendered-clients volume is really mounted over clients.d/ (the image's dev client
 #  is then hidden) and holds a non-empty rendered file with at least one client.

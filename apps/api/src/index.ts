@@ -1,7 +1,9 @@
 import { createDb } from '@ecloud/db';
 import { createLogger, redactConfig, type Logger } from '@ecloud/shared';
 import { createStorage } from '@ecloud/storage';
+import { readFileSync } from 'node:fs';
 import type { Server } from 'node:http';
+import { createServer as createHttpsServer } from 'node:https';
 import { createApp } from './app.js';
 import { loadApiConfig, type ApiConfig } from './config.js';
 import type { AppDeps } from './context.js';
@@ -37,8 +39,24 @@ function listen(
   app: ReturnType<typeof createApp>['publicApp'],
   port: number,
   host: string,
+  /**
+   * When given, the listener speaks TLS. Used for the internal listener: FreeRADIUS
+   * `rlm_rest` POSTs `User-Password` to it, so that leg must not be cleartext off-host.
+   * The files are read once at start-up; a missing or unreadable file fails the boot rather
+   * than falling back to plaintext.
+   */
+  tls?: { certFile: string; keyFile: string },
 ): Promise<Server> {
   return new Promise((resolve, reject) => {
+    if (tls) {
+      const secure = createHttpsServer(
+        { cert: readFileSync(tls.certFile), key: readFileSync(tls.keyFile) },
+        app,
+      );
+      secure.on('error', reject);
+      secure.listen(port, host, () => resolve(secure));
+      return;
+    }
     const server = app.listen(port, host, (error?: Error) => {
       if (error) reject(error);
       else resolve(server);
@@ -88,12 +106,14 @@ export async function main(options: MainOptions = {}): Promise<RunningApi> {
     internalApp,
     config.base.ports.internal,
     config.internalBindHost,
+    ...(config.internalTls ? ([config.internalTls] as const) : []),
   );
   logger.info(
     {
       port: config.base.ports.api,
       internalPort: config.base.ports.internal,
       internalHost: config.internalBindHost,
+      internalTls: config.internalTls !== null,
       routes: routes.length,
       config: { ...redactConfig(config.base), kv: config.kvDriver },
     },

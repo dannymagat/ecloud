@@ -26,7 +26,12 @@
 rest {
 	tls {
 		#  Used only when ECLOUD_INTERNAL_URL is https://.
-		#  Production: pin the EZECLOUD-issued CA and verify the hostname.
+		#  Shipped commented out so the dev stack (plain http, no CA file present) starts.
+		#  docker-entrypoint.sh uncomments it and substitutes RADIUS_INTERNAL_CA_FILE when
+		#  ECLOUD_INTERNAL_URL is https://, and refuses to start if that CA is missing:
+		#  check_cert against the system trust store would not trust an EZECLOUD-issued CA.
+		#  Keep the line's shape (optional indent, '#', spaces, 'ca_file = <path>') -- the
+		#  entrypoint matches it.
 		#  ca_file = /run/secrets/ecloud_internal_ca.pem
 		check_cert = yes
 		check_cert_cn = yes
