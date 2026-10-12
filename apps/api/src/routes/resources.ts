@@ -28,6 +28,7 @@ import { OrgIdParams, ResourceSchema, problemResponses } from '../http/common.js
 import { ImpersonationForbiddenError } from '../http/errors.js';
 import { defineRoute, type AnyRouteSpec } from '../http/route.js';
 import { assertRef, inTenant, requireOnSite } from '../tenant.js';
+import { signalRadiusClientsReload } from '../radius-clients/reload-signal.js';
 import { NAS_ADAPTER_KEYS, nasAdapter } from '../nas-adapter.js';
 import { isPrivateIpv4 } from '@ecloud/adapters';
 import { ForbiddenError } from '@ecloud/shared';
@@ -541,7 +542,17 @@ export function resourceRoutes(deps: AppDeps): AnyRouteSpec[] {
       if (row.device_test_attributes === true) {
         await auditLabMode(hook, row.id as string, false, true);
       }
+      // Signal FreeRADIUS that clients.conf needs re-render (D-PRE-2: hot-reload).
+      await signalRadiusClientsReload(deps.kv, `nas:create id=${row.id as string}`);
       return { ...row, secret: hook.scratch.secret };
+    },
+    afterPatch: async (after) => {
+      // Any NAS update (IP, secret, status, adapter) requires a FreeRADIUS reload.
+      await signalRadiusClientsReload(deps.kv, `nas:update id=${after.id as string}`);
+    },
+    afterDelete: async (before) => {
+      // Soft-delete: removed NAS must no longer appear in clients.conf.
+      await signalRadiusClientsReload(deps.kv, `nas:delete id=${before.id as string}`);
     },
     // Cycle A (migration 028): a deleted NAS takes its access points along (frees their MACs).
     beforeDelete: (before, { trx }) => softDeleteAccessPointsOf(trx, before.id as string),
@@ -685,6 +696,8 @@ export function resourceRoutes(deps: AppDeps): AnyRouteSpec[] {
         });
         return before;
       });
+      // Secret rotation changes the shared secret in clients.conf — reload FreeRADIUS.
+      await signalRadiusClientsReload(deps.kv, `nas:secret:rotate id=${row.id as string}`);
       return { status: 200, body: { id: row.id, secret } };
     },
   });

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Re-render the FreeRADIUS NAS allow-list and restart freeradius (DRAFT). Operator step after ANY
+# Re-render the FreeRADIUS NAS allow-list and restart freeradius. Operator step after ANY
 # NAS change (create, IP change, rotate-secret, disable); docs/VPS_LOCAL_CHANGE_LIST.md
 # LCL-RADIUS-1. FreeRADIUS reads clients only at start-up (SIGHUP does not reload them).
 #

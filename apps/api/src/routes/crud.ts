@@ -84,6 +84,16 @@ export interface CrudConfig {
   secretFields?: readonly string[];
   /** Post-create hook to add once-only data to the response. */
   afterCreate?: (row: Row, hook: CrudHookContext) => Promise<Row>;
+  /**
+   * Post-patch hook called after the transaction commits with the updated row.
+   * Use for side-effects that must not run inside the DB transaction (e.g. Redis signals).
+   */
+  afterPatch?: (after: Row, before: Row) => Promise<void>;
+  /**
+   * Post-delete hook called after the transaction commits with the deleted row.
+   * Use for side-effects that must not run inside the DB transaction (e.g. Redis signals).
+   */
+  afterDelete?: (before: Row) => Promise<void>;
   idempotency?: 'required' | 'optional';
   /** Runs on the locked row before a delete; throw (e.g. 409) to refuse it. */
   beforeDelete?: (before: Row, hook: CrudHookContext) => Promise<void>;
@@ -264,6 +274,7 @@ export function crudRoutes(deps: AppDeps, config: CrudConfig): AnyRouteSpec[] {
           ...problemResponses,
         },
         handler: async ({ params, body, req, ctx }) => {
+          let patchBefore: Row | undefined;
           const row = await inTenant(deps, params.orgId, async (trx) => {
             let sel = loose(trx)
               .selectFrom(config.table)
@@ -272,6 +283,7 @@ export function crudRoutes(deps: AppDeps, config: CrudConfig): AnyRouteSpec[] {
               .forUpdate();
             if (config.softDelete) sel = sel.where('deleted_at', 'is', null);
             const before = await sel.executeTakeFirst();
+            patchBefore = before;
             if (before === undefined) throw new NotFoundError(config.resource, params.id);
             const site = siteOf(before, config.siteMode);
             const effective = config.patchPermission?.(body, before) ?? permission;
@@ -327,6 +339,7 @@ export function crudRoutes(deps: AppDeps, config: CrudConfig): AnyRouteSpec[] {
             });
             return after;
           });
+          if (config.afterPatch) await config.afterPatch(row, patchBefore!);
           return {
             status: 200,
             body: serialize(row),
@@ -352,6 +365,7 @@ export function crudRoutes(deps: AppDeps, config: CrudConfig): AnyRouteSpec[] {
         params: OrgIdParams,
         responses: { 204: { description: 'Deleted' }, ...problemResponses },
         handler: async ({ params, req, ctx }) => {
+          let deleteBefore: Row | undefined;
           await inTenant(deps, params.orgId, async (trx) => {
             let sel = loose(trx)
               .selectFrom(config.table)
@@ -360,6 +374,7 @@ export function crudRoutes(deps: AppDeps, config: CrudConfig): AnyRouteSpec[] {
               .forUpdate();
             if (config.softDelete) sel = sel.where('deleted_at', 'is', null);
             const before = await sel.executeTakeFirst();
+            deleteBefore = before;
             if (before === undefined) throw new NotFoundError(config.resource, params.id);
             requireOnSite(
               ctx,
@@ -395,6 +410,9 @@ export function crudRoutes(deps: AppDeps, config: CrudConfig): AnyRouteSpec[] {
               before,
             });
           });
+          if (config.afterDelete && deleteBefore !== undefined) {
+            await config.afterDelete(deleteBefore);
+          }
           return { status: 204 };
         },
       }),
