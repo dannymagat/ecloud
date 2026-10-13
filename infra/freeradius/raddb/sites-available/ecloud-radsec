@@ -1,0 +1,101 @@
+# -*- text -*-
+######################################################################
+#
+#  EZECLOUD RadSec listener (RFC 6614; AAA_IMPLEMENTATION_PLAN.md Phase 3A,
+#  migration 034): RADIUS over TLS on TCP 2083, for a NAS that reaches this
+#  server across the internet instead of a trusted network or a VPN.
+#
+#  OPT-IN: linked into sites-enabled/ by docker-entrypoint.sh only when
+#  RADIUS_RADSEC_ENABLED=1 and the certificate set below is mounted. Not
+#  linked by default, so the default image never opens port 2083.
+#
+#  Requests are handed to the SAME `ecloud` virtual server as UDP: one
+#  decision path, no duplicated policy. What differs is the NAS identity:
+#
+#  - Every RadSec NAS matches the ONE client below (`ecloud-radsec`). Its
+#    address says nothing (any address, usually NAT) and its secret is the
+#    literal "radsec" that RFC 6614 §2.3 and FreeRADIUS require; neither
+#    identifies a NAS.
+#  - The identity is the client certificate. FreeRADIUS refuses the TLS
+#    handshake unless the certificate chains to ca.pem (require_client_cert),
+#    then policy.d/ecloud `ecloud_tls_identity` copies its CN (= the NAS id)
+#    and serial into ECLOUD-TLS-Client-Cert-*, for this client ONLY. The API
+#    and the accounting drainer accept the request only when the CN names an
+#    active NAS enrolled for RadSec whose recorded serial equals the presented
+#    one (packages/shared/src/radsec.ts). The source address is never used.
+#
+#  ca.pem MUST be the dedicated EZECLOUD RadSec CA (scripts/radsec-ca.sh),
+#  never a public CA and never the EAP CA: every certificate that chains to it
+#  passes the handshake, and only the serial check stands between it and the
+#  NAS its CN names.
+#
+#  Certificates are NEVER part of the image or the repository. They are
+#  mounted read-only at $RADIUS_RADSEC_CERT_DIR (default
+#  /etc/freeradius/radsec-certs):
+#    server.pem  server certificate (+ chain) the NAS verifies
+#    server.key  its private key (readable by freerad only)
+#    ca.pem      the EZECLOUD RadSec CA that issues NAS client certificates
+#
+#  Publishing port 2083 is a deployment decision for the owner (the pilot is
+#  LAN-only, D-043): this file opens the listener inside the container only.
+#
+#  Not supported over RadSec: CoA / Disconnect. The worker sends them over UDP
+#  to the NAS address, which a NAS behind NAT cannot receive (REQUIRES_
+#  CLARIFICATION: per-vendor support for CoA over the RadSec connection).
+#
+######################################################################
+
+listen {
+	ipaddr = $ENV{RADIUS_LISTEN_IP}
+	port = 2083
+	type = auth+acct
+	proto = tcp
+	virtual_server = ecloud
+	clients = ecloud_radsec
+
+	#  Bound the connection table: each NAS holds one long-lived connection.
+	limit {
+		max_connections = $ENV{RADIUS_RADSEC_MAX_CONNECTIONS}
+		lifetime = 0
+		idle_timeout = 600
+	}
+
+	tls {
+		private_key_password = "$ENV{RADIUS_RADSEC_KEY_PASSWORD}"
+		private_key_file = "$ENV{RADIUS_RADSEC_CERT_DIR}/server.key"
+		certificate_file = "$ENV{RADIUS_RADSEC_CERT_DIR}/server.pem"
+		ca_file = "$ENV{RADIUS_RADSEC_CERT_DIR}/ca.pem"
+		#  Without a client certificate there is no NAS identity at all.
+		require_client_cert = yes
+		cipher_list = "DEFAULT"
+		cipher_server_preference = no
+		tls_min_version = "1.2"
+		tls_max_version = "1.2"
+		ecdh_curve = ""
+		fragment_size = 8192
+		cache {
+			enable = no
+		}
+		verify {
+		}
+		ocsp {
+			enable = no
+		}
+	}
+}
+
+clients ecloud_radsec {
+	client ecloud-radsec {
+		ipaddr = 0.0.0.0/0
+		proto = tls
+		secret = radsec  # check-no-secrets: allow (fixed RFC 6614 value, not a credential)
+		#  policy.d/ecloud, the API and the drainer key on this exact name
+		#  (RADSEC_CLIENT_SHORTNAME in packages/shared/src/radsec.ts).
+		shortname = ecloud-radsec
+		#  BlastRADIUS (CVE-2024-3596) forges UDP responses; TLS already
+		#  authenticates every packet, so Message-Authenticator adds nothing
+		#  here and NAS RadSec implementations commonly omit it.
+		require_message_authenticator = no
+		limit_proxy_state = no
+	}
+}

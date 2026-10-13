@@ -214,6 +214,25 @@ refused; no database → refused. Meraki NAS listeners always carry
 `require_message_authenticator = yes` unless `MERAKI_ALLOW_RELAXED_MSGAUTH=true`; the Meraki file is
 written even when the NAS clients render fails (flag off always clears the listeners).
 
+## 9. RadSec / RADIUS over TLS (Phase 3A, migration 034) -- opt-in
+
+| Item | Value |
+|---|---|
+| Enable | `RADIUS_RADSEC_ENABLED=1`; the entrypoint links `sites-available/ecloud-radsec` (TLS listener, TCP 2083, `type = auth+acct`, `virtual_server = ecloud`) as root, verifies the link after the privilege drop (F-008) and unlinks it otherwise. Publishing 2083 is an owner decision (pilot is LAN-only, D-043): no compose file publishes it |
+| Certificates | mounted read-only at `RADIUS_RADSEC_CERT_DIR` (default `/etc/freeradius/radsec-certs`): `server.pem`, `server.key`, `ca.pem` (the **dedicated** RadSec CA); optional `RADIUS_RADSEC_KEY_PASSWORD` / `_FILE`. `bash scripts/radsec-ca.sh init / server / issue` creates the CA, the server set and one client certificate per NAS (CN = `nas_clients.id`, random 128-bit serial). Where the CA key lives in production: **REQUIRES_CLARIFICATION** |
+| Identity | one catch-all client `ecloud-radsec` (secret `radsec`, any address). `require_client_cert = yes`; the CN and serial are read from the connection (`%{listen:TLS-Client-Cert-*}`) -- FreeRADIUS 3.2.10 does **not** copy them onto each packet's request. API and drainer accept only an active NAS with `radsec_enabled` and `radsec_cert_serial` = presented serial; enrolling a new serial retires the old certificate (no CRL) |
+| Accounting | `queries.conf` writes `packet_tls_client_cn` / `packet_tls_client_serial`; the drainer attributes `ecloud-radsec` packets by them only, never by `packet_src_ip`. The schema check now requires these columns too: **apply migration 034 before this image** |
+| Not supported | CoA / Disconnect to a NAS behind NAT (the worker sends UDP to `nas_ip`). A RadSec NAS row still needs a unique `nas_ip` (`ck_nas_clients_nas_ip_by_adapter`): **REQUIRES_CLARIFICATION** |
+| Build check | the Dockerfile runs `freeradius -C` a third time with the RadSec site linked and a throw-away CA + server cert |
+
+Verified locally 2026-10-13 (throw-away containers on the dev network, stub API, Python RFC 6614
+client): a NAS certificate from the RadSec CA -> `/authorize` and `/post-auth` received
+`ECLOUD-Client-Shortname = ecloud-radsec`, `ECLOUD-TLS-Client-Cert-CN` = the NAS id and the serial
+exactly as `openssl x509 -serial` prints it (lowercased); an Accounting-Request over the same
+connection was stored with both columns set. No client certificate, and a certificate from a
+foreign CA with the same CN: TLS handshake refused. A UDP request to the same container carried no
+`ECLOUD-TLS-*` attribute. No vendor NAS has been tested: REQUIRES_DEVICE_TEST.
+
 ---
 
 # Appendix: contract (identical copy of docs/contracts/aaa-authorize.md)
@@ -293,6 +312,7 @@ Encoding rules (VERIFIED on 3.2.10):
 | `Called-Station-Id`, `Called-Station-SSID`, `Called-Station-MAC` | `rewrite_called_station_id` | when the NAS sent `mac:ssid` (TIP uspot) the id is reduced to the MAC and the SSID is split out; CoovaChilli sends only the MAC (no `Called-Station-SSID`) |
 | `Service-Type` | NAS | `Call-Check` => MAC authentication (uspot `mac-auth`); `Login-User`/`Framed-User` otherwise. Cycle A: on a `generic-radius-8021x` NAS a `User-Name` that is exactly the `Calling-Station-Id` MAC (password absent or the same MAC) is MAC authentication without `Call-Check` |
 | `ECLOUD-EAP-Inner` (string, `ttls`), `ECLOUD-Outer-User-Name` (string) | server, `sites-available/ecloud-inner` only (Cycle A, opt-in 802.1X) | marks an EAP-TTLS **inner** request: `User-Name` / `User-Password` are the inner identity; NAS facts and `ECLOUD-Packet-*` are re-copied from the outer packet. Accepted only for 802.1X adapters (`generic-radius-8021x`, `openwifi-hostapd-radius`); never MAC auth, never a portal credential. The outer server deletes both attributes from every packet. |
+| `ECLOUD-TLS-Client-Cert-CN`, `ECLOUD-TLS-Client-Cert-Serial` (string) | server, `policy.d/ecloud` `ecloud_tls_identity`, from `%{listen:TLS-Client-Cert-*}` (migration 034, opt-in RadSec) | set **only** for the RadSec listener's client (`ECLOUD-Client-Shortname = ecloud-radsec`), deleted from every other request. Presence (even empty) is decisive: the NAS is the row whose id is the CN, which must be active, `radsec_enabled` and have `radsec_cert_serial` equal to the presented serial; otherwise the request is refused and the (NAT) source address is never consulted. Also part of the retransmit / decision cache key. |
 | `Acct-Session-Id`, `Framed-IP-Address` | NAS | correlation with the UAM `sessionid` and the portal binding (CAPTIVE_PORTAL §3.4) |
 | `Message-Authenticator` (presence) | NAS | per-NAS BlastRADIUS posture telemetry (`nas_clients.require_message_authenticator`) |
 | `WISPr-*`, `ChilliSpot-*` request VSAs | NAS | adapter fingerprinting (uspot vs CoovaChilli) |

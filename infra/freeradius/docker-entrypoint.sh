@@ -52,7 +52,7 @@ file_env() {
 	fi
 }
 
-for v in RADIUS_SQL_PASSWORD RADIUS_STATUS_SECRET RADIUS_DEV_CLIENT_SECRET INTERNAL_API_TOKEN RADIUS_EAP_KEY_PASSWORD; do
+for v in RADIUS_SQL_PASSWORD RADIUS_STATUS_SECRET RADIUS_DEV_CLIENT_SECRET INTERNAL_API_TOKEN RADIUS_EAP_KEY_PASSWORD RADIUS_RADSEC_KEY_PASSWORD; do
 	file_env "$v"
 done
 
@@ -208,15 +208,57 @@ elif eap_linked; then
 	exit 1
 fi
 
+#  RadSec (RFC 6614, Phase 3A, migration 034): opt-in, same pattern as EAP above. The
+#  ecloud-radsec site (TLS listener on TCP 2083) is linked only when RADIUS_RADSEC_ENABLED=1 AND
+#  its certificate set is readable BY freerad; otherwise it is unlinked and port 2083 is never
+#  opened. Certificates are never in the image (scripts/radsec-ca.sh issues them).
+export RADIUS_RADSEC_CERT_DIR="${RADIUS_RADSEC_CERT_DIR:-$raddb/radsec-certs}"
+export RADIUS_RADSEC_KEY_PASSWORD="${RADIUS_RADSEC_KEY_PASSWORD:-}"
+export RADIUS_RADSEC_MAX_CONNECTIONS="${RADIUS_RADSEC_MAX_CONNECTIONS:-64}"
+case "$RADIUS_RADSEC_MAX_CONNECTIONS" in
+	''|*[!0-9]*|0) echo "freeradius: RADIUS_RADSEC_MAX_CONNECTIONS must be a positive number" >&2; exit 1 ;;
+esac
+radsec_linked() {
+	[ -L "$raddb/sites-enabled/ecloud-radsec" ]
+}
+if [ "${RADIUS_RADSEC_ENABLED:-}" = "1" ]; then
+	for f in server.pem server.key ca.pem; do
+		if ! as_freerad test -r "$RADIUS_RADSEC_CERT_DIR/$f"; then
+			echo "freeradius: RADIUS_RADSEC_ENABLED=1 but $RADIUS_RADSEC_CERT_DIR/$f is missing or unreadable by freerad" >&2
+			exit 1
+		fi
+	done
+	if [ "$(id -u)" = "0" ]; then
+		ln -sfn ../sites-available/ecloud-radsec "$raddb/sites-enabled/ecloud-radsec"
+	elif ! radsec_linked; then
+		echo "freeradius: RADIUS_RADSEC_ENABLED=1 needs the container to start as root (it links the RadSec listener, then drops to freerad)" >&2
+		exit 1
+	else
+		#  F-008, as for EAP: confirm the link root created still points where root put it.
+		_got="$(readlink "$raddb/sites-enabled/ecloud-radsec" 2>/dev/null || true)"
+		if [ "$_got" != "../sites-available/ecloud-radsec" ]; then
+			echo "freeradius: sites-enabled/ecloud-radsec points at '$_got', expected '../sites-available/ecloud-radsec' (RadSec configuration tampered between privilege drop and parse)" >&2
+			exit 1
+		fi
+		unset _got
+	fi
+elif [ "$(id -u)" = "0" ]; then
+	rm -f "$raddb/sites-enabled/ecloud-radsec"
+elif radsec_linked; then
+	echo "freeradius: RadSec listener is linked but RADIUS_RADSEC_ENABLED is not 1; start the container as root to unlink it" >&2
+	exit 1
+fi
+
 #  Schema check (Cycle E review F4): queries.conf writes
-#  radius.radacct_raw.packet_client_shortname (migration 032). Started against an older schema,
-#  every accounting INSERT would fail. Refuse to start until the column exists. Waits up to
+#  radius.radacct_raw.packet_client_shortname (migration 032) and packet_tls_client_cn /
+#  packet_tls_client_serial (migration 034). Started against an older schema, every accounting
+#  INSERT would fail. Refuse to start until the column exists. Waits up to
 #  RADIUS_SCHEMA_WAIT_S (default 60) for the database / the migrate job; RADIUS_SCHEMA_CHECK=0
 #  skips the check (only for a throw-away configuration test without a database).
 if [ "${RADIUS_SCHEMA_CHECK:-1}" != "0" ]; then
 	wait_s="${RADIUS_SCHEMA_WAIT_S:-60}"
 	case "$wait_s" in ''|*[!0-9]*) echo "freeradius: RADIUS_SCHEMA_WAIT_S must be a number of seconds" >&2; exit 1 ;; esac
-	schema_query="SELECT count(*) FROM information_schema.columns WHERE table_schema = 'radius' AND table_name = 'radacct_raw' AND column_name = 'packet_client_shortname'"
+	schema_query="SELECT count(*) FROM information_schema.columns WHERE table_schema = 'radius' AND table_name = 'radacct_raw' AND column_name IN ('packet_client_shortname', 'packet_tls_client_cn', 'packet_tls_client_serial')"
 	found=""
 	reachable=""
 	waited=0
@@ -228,7 +270,7 @@ if [ "${RADIUS_SCHEMA_CHECK:-1}" != "0" ]; then
 			-h "$RADIUS_SQL_HOST" -p "$RADIUS_SQL_PORT" -U "$RADIUS_SQL_USER" -d "$RADIUS_SQL_DB" \
 			-c "$schema_query" 2>/dev/null); then
 			reachable=1
-			if [ "$(echo "$out" | tr -d '[:space:]')" = "1" ]; then found=1; break; fi
+			if [ "$(echo "$out" | tr -d '[:space:]')" = "3" ]; then found=1; break; fi
 		fi
 		[ "$waited" -ge "$wait_s" ] && break
 		sleep 2
@@ -237,7 +279,7 @@ if [ "${RADIUS_SCHEMA_CHECK:-1}" != "0" ]; then
 	unset PGPASSWORD
 	if [ -z "$found" ]; then
 		if [ -n "$reachable" ]; then
-			echo "freeradius: database schema is too old: radius.radacct_raw.packet_client_shortname is missing. Apply migration 032 (npm run db:migrate / the migrate job) BEFORE starting this FreeRADIUS image." >&2
+			echo "freeradius: database schema is too old: radius.radacct_raw is missing packet_client_shortname (migration 032) or packet_tls_client_cn / packet_tls_client_serial (migration 034). Apply the migrations (npm run db:migrate / the migrate job) BEFORE starting this FreeRADIUS image." >&2
 		else
 			echo "freeradius: cannot verify the database schema (no connection to $RADIUS_SQL_HOST:$RADIUS_SQL_PORT/$RADIUS_SQL_DB within ${wait_s}s)" >&2
 		fi

@@ -83,3 +83,9 @@ ATTRIBUTE	ECLOUD-Reply-Message		3007	string
 #  the outer server deletes them (policy.d/ecloud ecloud_request_context).
 ATTRIBUTE	ECLOUD-EAP-Inner		3008	string
 ATTRIBUTE	ECLOUD-Outer-User-Name		3009	string
+
+#  RadSec (RFC 6614, migration 034). Populated ONLY on a TLS socket, from the client
+#  certificate FreeRADIUS has already verified against the EZECLOUD RadSec CA. The CN is
+#  the NAS id; the serial is carried for rotation and revocation evidence only.
+ATTRIBUTE	ECLOUD-TLS-Client-Cert-CN	3010	string
+ATTRIBUTE	ECLOUD-TLS-Client-Cert-Serial	3011	string

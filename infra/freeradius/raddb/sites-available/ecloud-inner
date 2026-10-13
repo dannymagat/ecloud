@@ -93,6 +93,21 @@ server ecloud-inner {
 			&ECLOUD-Client-Shortname := "%{outer.request:ECLOUD-Client-Shortname}"
 			&ECLOUD-EAP-Inner := "ttls"
 			&ECLOUD-Outer-User-Name := "%{outer.request:User-Name}"
+			&ECLOUD-TLS-Client-Cert-CN !* ANY
+			&ECLOUD-TLS-Client-Cert-Serial !* ANY
+		}
+		#  RadSec (migration 034): the NAS certificate identity, copied only
+		#  when the OUTER request has it, because its mere presence (even
+		#  empty) selects the certificate path in the API.
+		if (&outer.request:ECLOUD-TLS-Client-Cert-CN) {
+			update request {
+				&ECLOUD-TLS-Client-Cert-CN := &outer.request:ECLOUD-TLS-Client-Cert-CN
+			}
+		}
+		if (&outer.request:ECLOUD-TLS-Client-Cert-Serial) {
+			update request {
+				&ECLOUD-TLS-Client-Cert-Serial := &outer.request:ECLOUD-TLS-Client-Cert-Serial
+			}
 		}
 
 		#

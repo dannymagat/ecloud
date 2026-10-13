@@ -77,6 +77,28 @@ RUN set -e; d="$(mktemp -d)"; \
     freeradius -C -d "${RADDB}" -l stdout; \
     rm -f "${RADDB}/mods-enabled/eap" "${RADDB}/sites-enabled/ecloud-inner"; rm -rf "$d"
 
+#  3c. Same check with the opt-in RadSec listener (Phase 3A, migration 034)
+#      linked in: a throw-away CA, server certificate and key created, used and
+#      deleted inside this single RUN (no key material in any layer).
+RUN set -e; d="$(mktemp -d)"; \
+    openssl req -x509 -newkey rsa:2048 -nodes -days 1 -subj "/CN=ecloud-build-check-ca" \
+      -keyout "$d/ca.key" -out "$d/ca.pem" 2>/dev/null; \
+    openssl req -newkey rsa:2048 -nodes -subj "/CN=ecloud-build-check" \
+      -keyout "$d/server.key" -out "$d/server.csr" 2>/dev/null; \
+    openssl x509 -req -in "$d/server.csr" -CA "$d/ca.pem" -CAkey "$d/ca.key" -CAcreateserial \
+      -days 1 -out "$d/server.pem" 2>/dev/null; \
+    rm -f "$d/ca.key" "$d/server.csr"; chown -R freerad:freerad "$d"; \
+    ln -s ../sites-available/ecloud-radsec "${RADDB}/sites-enabled/ecloud-radsec"; \
+    RADIUS_LISTEN_IP=127.0.0.1 RADIUS_DEV_CLIENT_CIDR=127.0.0.1 \
+    RADIUS_DEV_CLIENT_SECRET=build-check-placeholder RADIUS_STATUS_SECRET=build-check-placeholder \
+    RADIUS_SQL_HOST=localhost RADIUS_SQL_PORT=5432 RADIUS_SQL_DB=ecloud \
+    RADIUS_SQL_USER=build-check RADIUS_SQL_PASSWORD=build-check-placeholder \
+    ECLOUD_INTERNAL_URL=http://127.0.0.1:1 INTERNAL_API_TOKEN=build-check-placeholder \
+    RADIUS_RADSEC_MAX_CONNECTIONS=64 RADIUS_RADSEC_CERT_DIR="$d" RADIUS_RADSEC_KEY_PASSWORD= \
+    RADIUS_DYNAMIC_CLIENT_SUBNET=198.51.100.0/24 RADIUS_DYNAMIC_CLIENT_LIFETIME=300 \
+    freeradius -C -d "${RADDB}" -l stdout; \
+    rm -f "${RADDB}/sites-enabled/ecloud-radsec"; rm -rf "$d"
+
 #  4. Run unprivileged. The container STARTS as root only so the entrypoint
 #     can (un)link the opt-in EAP configuration in the root-owned
 #     mods-enabled/ and sites-enabled/ (they stay root-owned: the service user
@@ -88,7 +110,8 @@ RUN set -e; d="$(mktemp -d)"; \
 #     (Run with `--user freerad` the entrypoint skips the root step and refuses
 #     RADIUS_EAP_ENABLED=1 unless the links already match.)
 
-EXPOSE 1812/udp 1813/udp
+#  2083/tcp is RadSec, listening only with RADIUS_RADSEC_ENABLED=1 (never published by default).
+EXPOSE 1812/udp 1813/udp 2083/tcp
 
 HEALTHCHECK --interval=15s --timeout=5s --start-period=10s --retries=3 \
     CMD ["/usr/local/bin/ecloud-healthcheck.sh"]

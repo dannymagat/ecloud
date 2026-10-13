@@ -29,7 +29,7 @@ import {
   macFrom,
   sessionIdFromReplyClass,
 } from './internal/radius.js';
-import { retransmitKey } from './internal/aaa.js';
+import { decisionKey, retransmitKey } from './internal/aaa.js';
 import { MemoryKv } from './kv.js';
 import { unitDeps } from './test-support/deps.js';
 import { generate } from 'otplib';
@@ -130,6 +130,21 @@ describe('RADIUS encoding (docs/contracts/aaa-authorize.md)', () => {
     const b = retransmitKey({ ...base, 'User-Password': { value: ['pw-2'] } });
     expect(a).not.toBe(b);
     expect(a).not.toContain('pw-1');
+  });
+
+  it('keeps two RadSec NAS behind one NAT address apart (migration 034)', () => {
+    // Same shared client, same NAT address, same session and user: only the certificate differs.
+    const base = {
+      'User-Name': { value: ['u'] },
+      'User-Password': { value: ['pw'] },
+      'Acct-Session-Id': { value: ['s1'] },
+      'ECLOUD-Packet-Src-IP-Address': { value: ['192.0.2.1'] },
+      'ECLOUD-Client-Shortname': { value: ['ecloud-radsec'] },
+    };
+    const a = { ...base, 'ECLOUD-TLS-Client-Cert-CN': { value: ['0192aaaa-0000-7000-8000-000000000001'] } };
+    const b = { ...base, 'ECLOUD-TLS-Client-Cert-CN': { value: ['0192aaaa-0000-7000-8000-000000000002'] } };
+    expect(retransmitKey(a)).not.toBe(retransmitKey(b));
+    expect(decisionKey(a)).not.toBe(decisionKey(b));
   });
 });
 

@@ -156,6 +156,7 @@ server ecloud {
 		#  md5(User-Name, Acct-Session-Id, NAS-IP, NAS-Identifier, NAS-Port-Id, NAS-Port).
 		#
 		acct_unique
+		ecloud_tls_identity
 		rewrite_calling_station_id
 		rewrite_called_station_id
 	}

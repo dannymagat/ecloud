@@ -389,6 +389,14 @@ export interface NasClientsTable {
   require_message_authenticator: Generated<boolean>;
   /** Migration 029 (Cycle B): lab opt-in, also emit REQUIRES_DEVICE_TEST reply attributes. */
   device_test_attributes: Generated<boolean>;
+  /**
+   * Migration 034 (RFC 6614): this NAS may authenticate over RadSec, identified by a client
+   * certificate whose CN is this row's id and whose serial is `radsec_cert_serial` (any other
+   * serial is refused, so reissuing retires the previous certificate).
+   */
+  radsec_enabled: Generated<boolean>;
+  radsec_cert_serial: string | null;
+  radsec_enrolled_at: Timestamp | null;
   /** Migration 029 (review F1): browser login address of the NAS (private unicast IPv4). */
   hotspot_address: Inet | null;
   hotspot_port: number | null;
@@ -1054,6 +1062,10 @@ export interface RadacctRawTable {
    * Meraki cloud listeners only (shared source addresses, per-NAS secret = per-NAS client).
    */
   packet_client_shortname: string | null;
+  /** Migration 034: verified RadSec client certificate CN (= NAS id); NULL for UDP packets. */
+  packet_tls_client_cn: string | null;
+  /** Migration 034: serial of that certificate; NULL for UDP packets. */
+  packet_tls_client_serial: string | null;
 }
 
 export interface RadpostauthRawTable {

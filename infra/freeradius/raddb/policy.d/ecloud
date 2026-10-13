@@ -25,6 +25,42 @@ ecloud_request_context {
 		&ECLOUD-Packet-Dst-Port := "%{Packet-Dst-Port}"
 		&ECLOUD-Client-Shortname := "%{client:shortname}"
 	}
+
+	ecloud_tls_identity
+}
+
+#
+#  RadSec (RFC 6614, migration 034; sites-available/ecloud-radsec). On the TLS
+#  listener the client certificate has already been verified against the
+#  EZECLOUD RadSec CA, so its CN (= nas_clients.id) and serial are
+#  server-verified facts and are the NAS identity.
+#
+#  The certificate is read from the CONNECTION (%{listen:TLS-Client-Cert-*},
+#  the mechanism the image's stock sites-available/tls documents): FreeRADIUS
+#  3.2 does not copy it onto each packet's request, so a plain
+#  %{TLS-Client-Cert-Common-Name} expands to nothing here (verified on this
+#  image with a live RadSec connection). Reading the listener also keeps an
+#  EAP-TLS supplicant certificate, which is not the NAS, out of it.
+#
+#  Keyed on the matched client: only the `ecloud-radsec` client of the TLS
+#  listener's own client list sets the attributes; every other request has
+#  them deleted. The CN is set even when empty, which the API and the drainer
+#  treat as a refusal (a RadSec request never falls back to its NAT address).
+#
+#  Called from authorize (via ecloud_request_context) and preacct, because
+#  accounting goes to rlm_sql (queries.conf) without the authorize context.
+#
+ecloud_tls_identity {
+	update request {
+		&ECLOUD-TLS-Client-Cert-CN !* ANY
+		&ECLOUD-TLS-Client-Cert-Serial !* ANY
+	}
+	if ("%{client:shortname}" == "ecloud-radsec") {
+		update request {
+			&ECLOUD-TLS-Client-Cert-CN := "%{listen:TLS-Client-Cert-Common-Name}"
+			&ECLOUD-TLS-Client-Cert-Serial := "%{listen:TLS-Client-Cert-Serial}"
+		}
+	}
 }
 
 #

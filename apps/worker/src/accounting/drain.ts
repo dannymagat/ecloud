@@ -14,7 +14,12 @@ import {
   type AccountingQuirks,
 } from '@ecloud/adapters';
 import { withPlatform, type Db, type DbTransaction, type SessionStatus } from '@ecloud/db';
-import { newId, type Logger } from '@ecloud/shared';
+import {
+  RADSEC_CLIENT_SHORTNAME,
+  newId,
+  radsecCertificateAccepted,
+  type Logger,
+} from '@ecloud/shared';
 import { sql } from 'kysely';
 import { emitEvent } from '../events.js';
 import type { WorkerState } from '../infra/state.js';
@@ -133,6 +138,8 @@ export async function drainOnce(deps: DrainDeps): Promise<DrainResult> {
       'received_at',
       'packet_src_ip',
       'packet_client_shortname',
+      'packet_tls_client_cn',
+      'packet_tls_client_serial',
     ])
     .where('radacctid', '>', cursor)
     .orderBy('radacctid')
@@ -261,6 +268,65 @@ async function lookupMerakiNas(
   if (nas.adapter_key !== 'meraki-splash') return null;
   if (nasIdentifier === null || nasIdentifier !== nas.nas_identifier) return 'refused';
   const { status: _s, deleted_at: _d, ...info } = nas;
+  return info;
+}
+
+/**
+ * RadSec (RFC 6614, migration 034): a packet from the RadSec listener's `ecloud-radsec` client is
+ * attributed by the verified client certificate ONLY — CN = NAS id, serial = the one certificate
+ * enrolled for it (packages/shared/src/radsec.ts). Its source address is a NAT address that may
+ * equal another tenant's registered nas_ip, so it is never consulted. Returns null when the packet
+ * did not come from the RadSec client, `refused` when it did but the certificate does not identify
+ * an active, enrolled NAS.
+ */
+type RadsecNas = NasInfo & {
+  status: string;
+  deleted_at: Date | null;
+  radsec_enabled: boolean;
+  radsec_cert_serial: string | null;
+};
+
+async function lookupRadsecNas(
+  trx: DbTransaction,
+  rec: NormalizedAccounting,
+  cache: Map<string, NasInfo | null>,
+): Promise<NasInfo | 'refused' | null> {
+  if (rec.packetClientShortname !== RADSEC_CLIENT_SHORTNAME) return null;
+  const cn = rec.packetTlsClientCn;
+  if (cn === null || cn === undefined || !UUID_RE.test(cn)) return 'refused';
+  const key = `radsec:${cn}`;
+  let nas = cache.get(key) as RadsecNas | null | undefined;
+  if (!cache.has(key)) {
+    nas =
+      (await trx
+        .selectFrom('nas_clients as n')
+        .innerJoin('sites as s', 's.id', 'n.site_id')
+        .select([
+          'n.id',
+          'n.organization_id',
+          'n.site_id',
+          'n.network_device_id',
+          's.timezone',
+          'n.adapter_key',
+          'n.status',
+          'n.deleted_at',
+          'n.radsec_enabled',
+          'n.radsec_cert_serial',
+        ])
+        .where('n.id', '=', cn)
+        .executeTakeFirst()) ?? null;
+    cache.set(key, nas);
+  }
+  if (nas === null || nas === undefined) return 'refused';
+  if (nas.status !== 'active' || nas.deleted_at !== null) return 'refused';
+  if (!radsecCertificateAccepted(nas, rec.packetTlsClientSerial)) return 'refused';
+  const {
+    status: _s,
+    deleted_at: _d,
+    radsec_enabled: _r,
+    radsec_cert_serial: _c,
+    ...info
+  } = nas;
   return info;
 }
 
@@ -641,7 +707,12 @@ export async function processRecord(
   // Tenant attribution comes from the authenticated packet source only (migration 014):
   // NAS-IP-Address is NAS-supplied and could name another tenant's NAS.
   // Cycle E: a Meraki listener's shortname wins and never falls back to the shared source IP.
-  const meraki = await lookupMerakiNas(trx, rec.packetClientShortname, rec.nasIdentifier, nasCache);
+  // Migration 034: so does a RadSec certificate, whose packets arrive from a NAT address.
+  const radsec = await lookupRadsecNas(trx, rec, nasCache);
+  const meraki =
+    radsec === null
+      ? await lookupMerakiNas(trx, rec.packetClientShortname, rec.nasIdentifier, nasCache)
+      : radsec;
   const nas =
     meraki === 'refused'
       ? null

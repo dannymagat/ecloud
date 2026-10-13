@@ -104,24 +104,45 @@ protection and EAP stays disabled.
 Priority: HIGH — required before any remote NAS deployment.
 Addresses: G1 (RadSec), deployment modes B and C.
 
-### 3A. RadSec listener (TLS over TCP 2083)
-Affected files:
-  infra/freeradius/raddb/sites-available/radsec (new)
-  infra/freeradius/raddb/certs/ (TLS cert + CA)
-  infra/freeradius/raddb/mods-available/tls (new)
-  infra/vps-local/compose/compose.vps-local.yaml (port 2083)
-  packages/db/migrations/035_nas_radsec.sql (new: nas_clients.radsec_cert_sha256)
+### 3A. RadSec listener (TLS over TCP 2083) — IMPLEMENTED, feature off by default
 
-Implementation:
-  Create sites-available/radsec using the same inner authorize/post-auth/accounting
-  sections as the UDP site.  Reference mods-available/tls for cert paths.
-  Add EZECLOUD internal CA (self-signed, 10-year, 4096-bit).
-  Add nas_clients.radsec_cert_sha256 for per-NAS cert pinning (optional).
-  Document: never expose port 2083 without TLS client cert requirement.
+CORRECTIONS to the original plan: no `mods-available/tls` module exists or is needed (the TLS
+block lives in the listen section); the site reuses the `ecloud` virtual server through
+`virtual_server = ecloud` instead of copying its sections; no certificate is committed under
+raddb/certs (mounted at runtime, like EAP); the migration is 034, and pinning is by certificate
+SERIAL (required, not optional), not by a sha256 column.
 
-Tests:
-  - radsec-client --cert test-client.pem sends Access-Request; verify Accept.
-  - Invalid cert -> verify Reject/TLS handshake failure.
+Delivered:
+  infra/freeradius/raddb/sites-available/ecloud-radsec   listener + `ecloud-radsec` client list
+  infra/freeradius/raddb/policy.d/ecloud                  ecloud_tls_identity (authorize + preacct)
+  infra/freeradius/raddb/sites-available/ecloud-inner     copies the identity into the EAP tunnel
+  infra/freeradius/raddb/mods-config/sql/.../queries.conf packet_tls_client_cn / _serial
+  infra/freeradius/{Dockerfile,docker-entrypoint.sh}      opt-in link, F-008 check, schema check
+  packages/db/migrations/034_nas_radsec.sql               nas_clients.radsec_*, radacct_raw columns
+  packages/shared/src/radsec.ts                           one acceptance rule for API and worker
+  apps/api/src/internal/aaa.ts                            resolveNas cert path, cache key
+  apps/worker/src/accounting/drain.ts                     accounting attributed by certificate
+  scripts/radsec-ca.sh                                    CA, server set, per-NAS issuance
+
+Two isolation defects of the first draft were found and fixed before commit: the retransmit /
+decision cache key did not include the certificate (two NAS behind one NAT address shared a key),
+and RadSec accounting would have been attributed by the NAT source address.
+
+Tests: packages/shared/src/radsec.test.ts (4), apps/api/src/units.test.ts (cache key),
+apps/api/src/radsec.integration.test.ts (11), apps/worker/src/radsec-attribution.integration.test.ts
+(2; both fail with the drainer branch disabled).
+
+Status: VERIFIED_FROM_SOURCE plus a local live run (infra/freeradius/README.md §9): a real RadSec
+connection to the 3.2.10 image delivered the CN and serial to the API and to radacct_raw, and
+handshakes without a certificate or from a foreign CA were refused. NOT LAB_VALIDATED: no vendor
+NAS has connected. An Access-Accept through the real API over RadSec has not been run.
+
+Open (REQUIRES_CLARIFICATION):
+  - an admin path to enrol a NAS (radsec_enabled + serial); today it is a direct row update;
+  - a RadSec NAS still needs a unique nas_ip (ck_nas_clients_nas_ip_by_adapter);
+  - CoA / Disconnect cannot reach a NAS behind NAT;
+  - where the RadSec CA key lives and who may issue;
+  - publishing TCP 2083 (pilot is LAN-only, D-043).
 
 ### 3B. WireGuard configuration guide
 Affected files:

@@ -36,7 +36,13 @@ import {
   toJsonValue,
   type Subject,
 } from '@ecloud/policy-engine';
-import { canonicalMacStrict, isUuid, newId } from '@ecloud/shared';
+import {
+  RADSEC_CLIENT_SHORTNAME,
+  canonicalMacStrict,
+  isUuid,
+  newId,
+  radsecCertificateAccepted,
+} from '@ecloud/shared';
 import type { Request, RequestHandler, Response } from 'express';
 import type { AppDeps } from '../context.js';
 import {
@@ -193,6 +199,9 @@ function keyParts(body: RadiusRequestBody): string[] {
     // Cycle E: Meraki Cloud source addresses are shared by every tenant; the matched client
     // (one per Meraki NAS listener) keeps their retransmit / decision keys apart.
     attr(body, 'ECLOUD-Client-Shortname') ?? '',
+    // RadSec (migration 034): every remote NAS shares the one `ecloud-radsec` client and often a
+    // NAT address, so only the certificate keeps two tenants' retransmit / decision keys apart.
+    attr(body, 'ECLOUD-TLS-Client-Cert-CN') ?? '',
     attr(body, 'Acct-Session-Id') ?? '',
     macFrom(attr(body, 'Calling-Station-Id')) ?? attr(body, 'Calling-Station-Id') ?? '',
     attr(body, 'User-Name') ?? '',
@@ -228,6 +237,12 @@ export function decisionKey(body: RadiusRequestBody): string {
 export async function resolveNas(deps: AppDeps, body: RadiusRequestBody): Promise<NasRow | null> {
   const srcIp = attr(body, 'ECLOUD-Packet-Src-IP-Address');
   const shortname = attr(body, 'ECLOUD-Client-Shortname');
+  const certCn = attr(body, 'ECLOUD-TLS-Client-Cert-CN');
+  const certSerial = attr(body, 'ECLOUD-TLS-Client-Cert-Serial');
+  // A request from the RadSec listener's client always carries the CN (the policy sets it even
+  // when empty). Without it something between FreeRADIUS and here is wrong; never fall back to
+  // the NAT source address.
+  if (shortname === RADSEC_CLIENT_SHORTNAME && certCn === undefined) return null;
   return withPlatform(deps.dbPlatform, AUTHN_ACCESS, async (trx) => {
     const base = () =>
       trx
@@ -244,6 +259,27 @@ export async function resolveNas(deps: AppDeps, body: RadiusRequestBody): Promis
         ])
         .where('status', '=', 'active')
         .where('deleted_at', 'is', null);
+    // RadSec (RFC 6614, migration 034): the request arrived on the TLS listener and FreeRADIUS
+    // has already verified the client certificate against the EZECLOUD RadSec CA, so the CN is a
+    // server-verified fact and is the NAS id. This path is DECISIVE: once a certificate
+    // identified the NAS, the source address is never consulted, because a remote NAS is behind
+    // NAT and its address proves nothing. A CN naming an unknown, inactive, deleted or
+    // not-RadSec-enrolled NAS, or a certificate other than the one enrolled for it (rotated or
+    // reissued), refuses the request rather than falling through to the address.
+    if (certCn !== undefined) {
+      // Presence is decisive, even when empty: the policy sets the attribute only for the RadSec
+      // client, whose source address is a NAT address that identifies nothing. Falling through
+      // would be exactly the address fallback this path exists to prevent.
+      if (!isUuid(certCn)) return null;
+      const byCert = await base()
+        .select(['radsec_enabled', 'radsec_cert_serial'])
+        .where('id', '=', certCn)
+        .executeTakeFirst();
+      if (byCert === undefined || !radsecCertificateAccepted(byCert, certSerial)) return null;
+      const { radsec_enabled: _radsec, radsec_cert_serial: _serial, ...row } = byCert;
+      return row;
+    }
+
     // Cycle E (D-044, SECURITY §3.5; review F2): a rendered client's shortname is a NAS id. It is
     // looked up WITHOUT the active/deleted filters: a Meraki NAS is resolved by its shortname
     // ONLY (the source address is shared by every Meraki customer), and a shortname that names an

@@ -45,6 +45,9 @@ export interface RawAccountingRow {
    * cloud listeners only (one client list per Meraki NAS, shared source addresses).
    */
   packet_client_shortname?: string | null;
+  /** Migration 034: verified RadSec client certificate CN and serial; null for UDP packets. */
+  packet_tls_client_cn?: string | null;
+  packet_tls_client_serial?: string | null;
 }
 
 export interface NormalizedAccounting {
@@ -58,6 +61,12 @@ export interface NormalizedAccounting {
   packetSrcIp: string | null;
   /** Cycle E: matched client shortname; resolves a Meraki NAS (and only a Meraki NAS). */
   packetClientShortname?: string | null;
+  /**
+   * Migration 034: the RadSec certificate identity (CN = NAS id, serial). Decisive for packets
+   * from the RadSec client, whose source address is a NAT address.
+   */
+  packetTlsClientCn?: string | null;
+  packetTlsClientSerial?: string | null;
   nasIdentifier: string | null;
   nasPortId: string | null;
   username: string | null;
@@ -173,6 +182,8 @@ export function normalizeAccounting(row: RawAccountingRow): NormalizedAccounting
     nasIp: row.nasipaddress,
     packetSrcIp: row.packet_src_ip,
     packetClientShortname: row.packet_client_shortname ?? null,
+    packetTlsClientCn: row.packet_tls_client_cn ?? null,
+    packetTlsClientSerial: row.packet_tls_client_serial ?? null,
     nasIdentifier: row.nasidentifier,
     nasPortId: row.nasportid,
     username: row.username,
