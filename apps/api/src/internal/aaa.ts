@@ -77,7 +77,14 @@ import {
 export const RETRANSMIT_TTL_S = 10;
 /** Cycle E: Meraki MR splash sign-on NAS (cloud-sourced RADIUS, D-044). */
 export const MERAKI_ADAPTER = 'meraki-splash';
-/** Decision cache of single-use portal credentials: the NAS retransmit horizon. */
+/**
+ * Decision cache of single-use portal credentials: the NAS retransmit horizon.
+ *
+ * Do not shorten this (D-049, HERMES_AAA_AUDIT.md F-007). The credential is single-use, so a
+ * retransmit that arrives after the cache has expired re-runs decide(), finds the credential
+ * already consumed and rejects a legitimate retry. A shorter window trades a rare ghost session,
+ * which the reaper closes, for rejected retransmits on every slow NAS.
+ */
 export const PORTAL_RETRANSMIT_TTL_S = 30;
 const DECISION_TTL_S = 60;
 

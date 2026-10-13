@@ -56,6 +56,14 @@ for v in RADIUS_SQL_PASSWORD RADIUS_STATUS_SECRET RADIUS_DEV_CLIENT_SECRET INTER
 	file_env "$v"
 done
 
+#  HERMES_AAA_AUDIT.md F-009 (accepted, D-049): the secrets resolved above stay in this
+#  process environment for the lifetime of radiusd, because FreeRADIUS expands $ENV{} at
+#  config-parse time inside its own process -- nothing outside it can clear them afterwards.
+#  Exposure is limited to processes of the same UID in this container: the service runs
+#  read_only with ALL capabilities dropped, no-new-privileges, a single process, and no other
+#  container shares its PID namespace or /proc. PGPASSWORD is the exception and IS unset after
+#  the schema check below. Revisit if this container ever runs a second process or a shell.
+
 #  Non-secret defaults.
 export RADIUS_LISTEN_IP="${RADIUS_LISTEN_IP:-*}"
 export RADIUS_SQL_PORT="${RADIUS_SQL_PORT:-5432}"
@@ -170,6 +178,23 @@ if [ "${RADIUS_EAP_ENABLED:-}" = "1" ]; then
 	elif ! eap_linked; then
 		echo "freeradius: RADIUS_EAP_ENABLED=1 needs the container to start as root (it links the EAP configuration, then drops to freerad)" >&2
 		exit 1
+	else
+		#  HERMES_AAA_AUDIT.md F-008: this is the unprivileged second pass, after the privilege
+		#  drop. Root created these links; confirm they still point where it put them before
+		#  FreeRADIUS parses them, so a write between the two passes cannot swap in another
+		#  module or virtual server. Not reachable in the pilot (read_only root filesystem), but
+		#  the dev compose has a writable raddb.
+		for _pair in "mods-enabled/eap ../mods-available/eap" \
+			"sites-enabled/ecloud-inner ../sites-available/ecloud-inner"; do
+			_link="${_pair%% *}"
+			_want="${_pair#* }"
+			_got="$(readlink "$raddb/$_link" 2>/dev/null || true)"
+			if [ "$_got" != "$_want" ]; then
+				echo "freeradius: $_link points at '$_got', expected '$_want' (EAP configuration tampered between privilege drop and parse)" >&2
+				exit 1
+			fi
+		done
+		unset _pair _link _want _got
 	fi
 elif [ "$(id -u)" = "0" ]; then
 	rm -f "$raddb/mods-enabled/eap" "$raddb/sites-enabled/ecloud-inner"
