@@ -23,7 +23,7 @@ const NAS: NasSecretLookup = {
   id: '11111111-2222-4333-8444-555555555555',
   nasIp: '192.0.2.10',
   // Same alphabet the renderer enforces; not a real secret.
-  secret: 'Zm9vYmFyLXRlc3Qtc2VjcmV0LTAxMjM0NTY3ODk',
+  secret: 'Zm9vYmFyLXRlc3Qtc2VjcmV0LTAxMjM0NTY3ODk', // synthetic. check-no-secrets: allow
   requireMessageAuthenticator: true,
 };
 

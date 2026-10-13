@@ -17,7 +17,7 @@ describe('loadConfig', () => {
   });
 
   it('accepts the base64url alphabet scripts/secrets/lib.sh generates', () => {
-    const token = 'AbC-123_dEf456GhI789jKl-MnO_pQrStUvWxYz0';
+    const token = 'AbC-123_dEf456GhI789jKl-MnO_pQrStUvWxYz0'; // synthetic. check-no-secrets: allow
     expect(loadConfig({ INTERNAL_API_TOKEN: token }).internalApiToken).toBe(token);
   });
 
