@@ -15,6 +15,7 @@ import { mountRoute, type AnyRouteSpec } from './http/route.js';
 import { createApiMetrics, httpMetrics, metricsHandler } from './metrics.js';
 import { authorizeHandler, internalTokenGuard, postAuthHandler } from './internal/aaa.js';
 import { portalInternalRouter } from './internal/portal.js';
+import { dynamicClientHandler } from './internal/radius-client-lookup.js';
 import { vendorPortalInternalRouter } from './vendor-api/portal.js';
 import { OPENAPI_PATH, buildOpenApiDocument } from './openapi.js';
 import { internalAssetHandler, portalAdminRoutes } from './portal-admin/routes.js';
@@ -228,6 +229,8 @@ export function createApp(appDeps: AppDeps): Apps {
   internalApp.use(express.json({ limit: INTERNAL_BODY_LIMIT }));
   internalApp.post('/internal/aaa/authorize', authorizeHandler(deps));
   internalApp.post('/internal/aaa/post-auth', postAuthHandler(deps));
+  // Phase 2A: FreeRADIUS dynamic-clients lookup (admits a NAS without a restart).
+  internalApp.get('/internal/radius/client', dynamicClientHandler(deps));
   internalApp.use('/internal/portal', portalInternalRouter(deps));
   // Cycle D: UniFi / Omada (API mode) / Mist redirects (no UAM signature, verified AP MAC only).
   internalApp.use('/internal/vendor-portal', vendorPortalInternalRouter(deps));

@@ -39,6 +39,9 @@ RUN rm -f "${RADDB}/sites-enabled/default" \
 COPY --chown=freerad:freerad raddb/ ${RADDB}/
 RUN ln -s ../mods-available/rest "${RADDB}/mods-enabled/rest" \
  && ln -s ../mods-available/sql  "${RADDB}/mods-enabled/sql" \
+ && ln -s ../mods-available/rest_clients "${RADDB}/mods-enabled/rest_clients" \
+ && ln -s ../sites-available/ecloud-dynamic-clients "${RADDB}/sites-enabled/ecloud-dynamic-clients" \
+ && chown -h freerad:freerad "${RADDB}/mods-enabled/rest_clients" "${RADDB}/sites-enabled/ecloud-dynamic-clients" \
  && chown -h freerad:freerad "${RADDB}/mods-enabled/rest" "${RADDB}/mods-enabled/sql" \
  && chmod 0750 "${RADDB}/clients.d" "${RADDB}/meraki.d" \
  && chmod 0640 "${RADDB}/clients.conf" "${RADDB}/clients.d/dev.conf" "${RADDB}/sites-enabled/status"
@@ -52,6 +55,7 @@ RUN RADIUS_LISTEN_IP=127.0.0.1 RADIUS_DEV_CLIENT_CIDR=127.0.0.1 \
     RADIUS_SQL_HOST=localhost RADIUS_SQL_PORT=5432 RADIUS_SQL_DB=ecloud \
     RADIUS_SQL_USER=build-check RADIUS_SQL_PASSWORD=build-check-placeholder \
     ECLOUD_INTERNAL_URL=http://127.0.0.1:1 INTERNAL_API_TOKEN=build-check-placeholder \
+    RADIUS_DYNAMIC_CLIENT_SUBNET=198.51.100.0/24 RADIUS_DYNAMIC_CLIENT_LIFETIME=300 \
     freeradius -C -d "${RADDB}" -l stdout
 
 #  3b. Same check with the opt-in 802.1X/EAP-TTLS configuration linked in, using
@@ -69,6 +73,7 @@ RUN set -e; d="$(mktemp -d)"; \
     RADIUS_SQL_USER=build-check RADIUS_SQL_PASSWORD=build-check-placeholder \
     ECLOUD_INTERNAL_URL=http://127.0.0.1:1 INTERNAL_API_TOKEN=build-check-placeholder \
     RADIUS_EAP_CERT_DIR="$d" RADIUS_EAP_KEY_PASSWORD= \
+    RADIUS_DYNAMIC_CLIENT_SUBNET=198.51.100.0/24 RADIUS_DYNAMIC_CLIENT_LIFETIME=300 \
     freeradius -C -d "${RADDB}" -l stdout; \
     rm -f "${RADDB}/mods-enabled/eap" "${RADDB}/sites-enabled/ecloud-inner"; rm -rf "$d"
 

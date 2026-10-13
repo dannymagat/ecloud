@@ -1,0 +1,65 @@
+# -*- text -*-
+######################################################################
+#
+#  rest_clients — the rlm_rest instance used ONLY by the
+#  `ecloud_dynamic_clients` virtual server (sites-available/
+#  ecloud-dynamic-clients) to look a NAS up by source address.
+#
+#  A separate instance is required: a module's section is chosen by the
+#  name of the section it is called from, and the dynamic-clients server
+#  has only an `authorize` section. The main `rest` instance already uses
+#  `authorize` for POST /internal/aaa/authorize, so reusing it here would
+#  send the wrong request.
+#
+#  The reply carries a NAS shared secret, so the API refuses this endpoint
+#  unless the internal leg is TLS in production
+#  (apps/api/src/internal/radius-client-lookup.ts, HERMES_AAA_AUDIT.md
+#  F-002). A 404 answer means "no dynamic client": FreeRADIUS then discards
+#  the packet, exactly as it would for an unknown client.
+#
+######################################################################
+
+rest rest_clients {
+	tls {
+		#  Same contract as mods-available/rest: shipped commented out so the
+		#  dev stack (plain http) starts, and activated by
+		#  docker-entrypoint.sh when ECLOUD_INTERNAL_URL is https://.
+		#  ca_file = /run/secrets/ecloud_internal_ca.pem
+		check_cert = yes
+		check_cert_cn = yes
+	}
+
+	connect_uri = "$ENV{ECLOUD_INTERNAL_URL}"
+
+	connect_timeout = 1.0
+
+	#  Called from `server ecloud_dynamic_clients { authorize { ... } }`.
+	#
+	#  The request processed there is fake and EMPTY: the only useful value is
+	#  Packet-Src-IP-Address (or Packet-Src-IPv6-Address). The JSON reply sets
+	#  control:FreeRADIUS-Client-* attributes, which is how a dynamic client is
+	#  defined.
+	#
+	#  do_xlat = no: the reply contains a shared secret and a tenant-chosen
+	#  shortname, and must never be expanded as an xlat string.
+	authorize {
+		uri = "${..connect_uri}/internal/radius/client?ip=%{%{Packet-Src-IP-Address}:-%{Packet-Src-IPv6-Address}}"
+		method = 'get'
+		timeout = 1.5
+		do_xlat = no
+		tls = ${..tls}
+	}
+
+	#  Small pool: one lookup per newly seen NAS, then FreeRADIUS caches the
+	#  client for `lifetime` seconds (clients.conf), so this is cold-path.
+	pool {
+		start = 0
+		min = 0
+		max = 4
+		spare = 1
+		uses = 0
+		retry_delay = 5
+		lifetime = 0
+		idle_timeout = 60
+	}
+}

@@ -1,0 +1,55 @@
+# -*- text -*-
+######################################################################
+#
+#  ecloud_dynamic_clients — admit a NAS without restarting FreeRADIUS
+#  (AAA_IMPLEMENTATION_PLAN.md Phase 2A).
+#
+#  FreeRADIUS 3.2 reads clients.conf only at start-up: SIGHUP re-reads
+#  modules but NOT clients (verified on this image, clients.conf:20). The
+#  supported way to add a NAS at run time is this virtual server. When a
+#  packet arrives from an address inside the `client ecloud_dynamic`
+#  network (clients.conf) that is not already a known client, FreeRADIUS
+#  runs a fake, EMPTY request through the `authorize` section below. The
+#  only useful attribute is Packet-Src-IP-Address. Whatever the section
+#  puts in the control list becomes the client definition, which is then
+#  cached for `lifetime` seconds.
+#
+#  If the section does not define a client, the packet is treated as
+#  coming from an unknown client and silently discarded — which is the
+#  correct, fail-closed outcome for an address EZECLOUD does not know.
+#
+#  Two limits are imposed by the server and cannot be configured away:
+#    - the dynamic network MUST be a subnet; /32 and /128 are rejected;
+#    - at most ONE new client is added per second (DoS protection).
+#
+#  This server is always loaded; it does nothing unless
+#  RADIUS_DYNAMIC_CLIENT_SUBNET names a network that real NAS traffic
+#  comes from. The default is TEST-NET-2, i.e. effectively disabled.
+#
+######################################################################
+
+server ecloud_dynamic_clients {
+	authorize {
+		#  GET /internal/radius/client?ip=<source address>.
+		#  200 -> the JSON reply sets control:FreeRADIUS-Client-*.
+		#  404 -> no such NAS (or inactive, deleted, or an unusable secret);
+		#         the control list stays empty and the packet is discarded.
+		rest_clients
+
+		#  Only a reply that actually defined a secret can admit a client.
+		#  Without this, a 404 would fall through as "ok" and FreeRADIUS
+		#  would report a confusing "no secret" error instead of simply
+		#  treating the NAS as unknown.
+		if (!&control:FreeRADIUS-Client-Secret) {
+			reject
+		}
+
+		#  The address is authoritative server-side data, never taken from
+		#  the packet body: echo the source address FreeRADIUS saw.
+		update control {
+			&FreeRADIUS-Client-IP-Address := "%{Packet-Src-IP-Address}"
+		}
+
+		ok
+	}
+}

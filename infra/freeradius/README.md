@@ -66,6 +66,7 @@ also in `.env.example`):
 | `RADIUS_DEV_CLIENT_CIDR`, `RADIUS_DEV_CLIENT_SECRET` | the single dev client (not needed when `RADIUS_CLIENTS_RENDERED=1`) |
 | `RADIUS_STATUS_SECRET` / `_FILE` | Status-Server client on 127.0.0.1:18121 |
 | `RADIUS_SQL_HOST`, `RADIUS_SQL_PORT`, `RADIUS_SQL_DB`, `RADIUS_SQL_USER`, `RADIUS_SQL_PASSWORD` / `_FILE` | `rlm_sql`; `RADIUS_SQL_DB` may be a libpq conninfo string (`dbname=... sslmode=verify-full ...`) |
+| `RADIUS_DYNAMIC_CLIENT_SUBNET`, `RADIUS_DYNAMIC_CLIENT_LIFETIME` | Phase 2A dynamic clients: network whose unknown addresses are looked up through `GET /internal/radius/client` (`sites-available/ecloud-dynamic-clients`, `mods-available/rest_clients`), and how long a resolved client is cached. Defaults `198.51.100.0/24` (TEST-NET-2, i.e. off) and `300`. Must be a network -- the server rejects a `/32` -- and adds at most one new client per second. |
 | `ECLOUD_INTERNAL_URL`, `INTERNAL_API_TOKEN` / `_FILE` | `rlm_rest` base URL and `X-Internal-Token` (token must be `[A-Za-z0-9_-]+`: it is embedded in the configuration and expanded at parse time, so `%`, `"`, `\` and `$` are all unsafe -- F-003) |
 
 Undefined `$ENV{...}` expands to an empty string in FreeRADIUS, so the entrypoint fails fast and names

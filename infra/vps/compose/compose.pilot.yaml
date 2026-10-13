@@ -324,6 +324,12 @@ services:
       ECLOUD_INTERNAL_URL: ${ECLOUD_INTERNAL_URL:-http://api:3001}
       RADIUS_INTERNAL_CA_FILE: ${RADIUS_INTERNAL_CA_FILE:-}
       ECLOUD_INTERNAL_CLEARTEXT_ACK: ${ECLOUD_INTERNAL_CLEARTEXT_ACK:-1}
+      # Phase 2A dynamic clients: admit a NAS without restarting FreeRADIUS. Default is
+      # TEST-NET-2, i.e. off -- point it at the AP subnet to enable. Must be a network: the
+      # server rejects a /32. Requires the internal leg to be TLS in production, because the
+      # lookup returns NAS shared secrets (see INTERNAL_TLS_* on the api service).
+      RADIUS_DYNAMIC_CLIENT_SUBNET: ${RADIUS_DYNAMIC_CLIENT_SUBNET:-198.51.100.0/24}
+      RADIUS_DYNAMIC_CLIENT_LIFETIME: ${RADIUS_DYNAMIC_CLIENT_LIFETIME:-300}
       RADIUS_CLIENTS_RENDERED: '1'
     secrets:
       - radius_sql_password

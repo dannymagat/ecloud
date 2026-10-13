@@ -67,6 +67,11 @@ done
 #  Non-secret defaults.
 export RADIUS_LISTEN_IP="${RADIUS_LISTEN_IP:-*}"
 export RADIUS_SQL_PORT="${RADIUS_SQL_PORT:-5432}"
+#  Phase 2A dynamic clients (clients.conf, sites-available/ecloud-dynamic-clients).
+#  Default is TEST-NET-2: the network is declared but no real traffic comes from it, so the
+#  feature is off until an operator points it at the AP subnet. FreeRADIUS rejects a /32 here.
+export RADIUS_DYNAMIC_CLIENT_SUBNET="${RADIUS_DYNAMIC_CLIENT_SUBNET:-198.51.100.0/24}"
+export RADIUS_DYNAMIC_CLIENT_LIFETIME="${RADIUS_DYNAMIC_CLIENT_LIFETIME:-300}"
 
 #  Required. RADIUS_DEV_CLIENT_* are only read by the dev clients.conf; a
 #  production deployment mounts a rendered clients.conf over it and sets
