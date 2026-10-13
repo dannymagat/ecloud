@@ -14,56 +14,89 @@ Feature classifications: Implemented-tested / Implemented-untested / Partially /
 Priority: HIGHEST — blocks all other phases.
 Addresses: H4 (stale sessions), R2 (NAS hot-reload), R3 (single SPOF).
 
-### 2A. NAS client hot-reload without FR restart
-Affected files:
-  infra/freeradius/raddb/mods-available/rest
-  infra/freeradius/raddb/clients.conf
-  apps/api/src/routes/nas-clients.ts (new callback endpoint)
-  packages/db/migrations/034_nas_reload_events.sql
+### 2A. NAS client hot-reload without FR restart — DONE (commit ec93e7a), feature off by default
 
-Implementation:
-  FreeRADIUS 3.2 supports a virtual client lookup via rlm_rest.
-  Add a `client_map` subsection to mods-available/rest pointing to
-  GET /internal/radius/client?src_ip=<IP>&secret_length=<N>.
-  API returns { ipaddr, secret, require_message_authenticator: true }.
-  This eliminates the restart requirement for new NAS registrations.
-  Existing clients.d file kept as a startup cache for performance.
+CORRECTION to the original plan: there is no `client_map` subsection in rlm_rest, in 3.2 or
+any other release, and the claim contradicted this repo's own verified note at
+clients.conf:20 (SIGHUP re-reads modules but NOT clients, verified on this image). The
+supported mechanism is the `dynamic-clients` virtual server, which the pinned image ships as
+sites-available/dynamic-clients. A packet from an unknown address inside a declared network
+runs a fake, EMPTY request whose only useful attribute is Packet-Src-IP-Address; whatever
+that server puts in the control list becomes the client definition, cached for `lifetime`.
 
-Tests:
-  - Register new NAS via API; send test Access-Request; verify Accept without FR restart.
-  - Remove NAS secret; verify subsequent request is Rejected (not leaked Accept).
+Delivered:
+  apps/api/src/internal/radius-client-lookup.ts   GET /internal/radius/client?ip=<address>
+  apps/api/src/internal/radius-client-lookup.test.ts  (13 cases)
+  infra/freeradius/raddb/mods-available/rest_clients          (second rlm_rest instance)
+  infra/freeradius/raddb/sites-available/ecloud-dynamic-clients
+  infra/freeradius/raddb/clients.conf                        (client ecloud_dynamic block)
+  infra/freeradius/{Dockerfile,docker-entrypoint.sh,README.md}
+  infra/vps/compose/compose.pilot.yaml, infra/vps-local/compose/ecloud.env.example
 
-Rollback:
-  Revert mods-available/rest to previous version; FR continues using static clients.d.
+No migration was needed: nas_clients already holds the address, sealed secret, shortname and
+require_message_authenticator. The planned 034_nas_reload_events.sql was not written.
 
-### 2B. Stale session sweep automated test
-Affected files:
-  apps/worker/src/jobs/stale-sweep.ts
-  apps/worker/src/jobs/stale-sweep.test.ts (new)
+A second rlm_rest instance is required because a module's section is selected by the name of
+the calling section, and the dynamic-clients server has only `authorize`, which the main
+instance already uses for /internal/aaa/authorize.
 
-Implementation:
-  Write unit tests using a test DB:
-    1. Insert active session with last_interim_at = now() - stale_ttl - 1.
-    2. Run sweep().
-    3. Assert session.status = 'stale'.
-  Add integration test via testcontainers (PostgreSQL) for full pipeline.
+Security: this is the only endpoint that returns a NAS shared secret, so it refuses to serve
+when the FreeRADIUS -> api leg is cleartext in production (F-002 acknowledges cleartext for
+User-Password; every NAS secret is a different matter). Unknown / inactive / deleted /
+undecryptable / malformed all answer 404 with no body, so it cannot enumerate registered NAS.
 
-### 2C. Second FreeRADIUS replica
-Affected files:
-  infra/vps-local/compose/compose.vps-local.yaml
-  infra/freeradius/ (no code change needed; stateless container)
+Server limits that cannot be configured away, both documented for operators:
+  - the dynamic network MUST be a network; /32 and /128 are rejected;
+  - at most ONE new client is added per second;
+  - a rotated secret takes effect after `lifetime` seconds (default 300).
 
-Implementation:
-  Add freeradius-2 service with separate RADIUS_LISTEN_PORT=11812 (behind port alias).
-  nginx UDP stream block load-balances 1812 -> freeradius-1:1812 and freeradius-2:1812.
-  Both containers share the same rlm_sql DSN and rlm_rest endpoint.
-  NAS configured with primary auth-server = EZECLOUD:1812, secondary = EZECLOUD:1812.
-  Note: NAS must use the same shared secret for both servers (same NAS entry in DB).
+Status: VERIFIED_FROM_SOURCE. The image builds and both `freeradius -C` checks pass with the
+module and virtual server linked in ("Loaded virtual server ecloud_dynamic_clients"). NOT yet
+LAB_VALIDATED: no RADIUS packet has been admitted through this path, because that needs a
+source address inside the dynamic network — a contract-suite or lab test. RADIUS_DYNAMIC_
+CLIENT_SUBNET therefore defaults to TEST-NET-2 (198.51.100.0/24), i.e. off.
 
-Tests:
-  - Kill freeradius-1; verify freeradius-2 accepts requests.
-  - Restart freeradius-1; verify both replicas accept.
+Rollback: set RADIUS_DYNAMIC_CLIENT_SUBNET back to 198.51.100.0/24. The static rendered
+clients.d file is untouched and still wins for every NAS it contains (most specific network
+matches first).
 
+### 2B. Stale session sweep automated test — ALREADY COMPLETE, do not re-schedule
+
+The planned files do not exist and are not the right names: the sweep is
+apps/worker/src/jobs/reap.ts, and it is already tested.
+
+  apps/worker/src/jobs/reap.test.ts:6,9,15   the rule itself (cutoff = now − (2 × interval +
+                                              grace); last interim else start time; strictly
+                                              beyond the threshold), plus authorization
+                                              expiry (D-036) at :44-45
+  apps/worker/src/attribution.integration.test.ts:218,251  the pipeline: stale sessions closed
+                                              by the reaper after the grace period, and a
+                                              stale session revived by a Start is not reaped
+                                              on its old timestamp (F5)
+
+AAA_TEST_RESULTS.md previously marked this untested; corrected in commit a6c267d.
+
+### 2C. Second FreeRADIUS replica — DEFERRED, and the plan as written does not work
+
+Three problems, so this is not scheduled:
+
+1. It does not provide the HA it claims. Both replicas would run on vps-local, which is the
+   single point of failure. A second container survives a crash of radiusd and nothing else —
+   not a host reboot, a kernel panic, a power loss or a disk failure. Real redundancy needs a
+   second host, which the pilot does not have (D-041, D-043).
+2. The nginx it depends on is gone. The plan load-balances UDP 1812 through an nginx stream
+   block; the owner retired nginx on vps-local when EZECLOUD took ports 443/444.
+3. Round-robin across replicas breaks EAP. EAP is a multi-round-trip conversation with
+   per-session state held in the server; without affinity, the second packet of an exchange
+   can reach the replica that knows nothing about it. PAP/CHAP/MAB are unaffected, but 802.1X
+   and PEAP/TTLS (Phase 4) would be.
+
+The cheaper and more correct answer for NAS-level redundancy is the NAS's own secondary
+RADIUS server setting, pointed at a second HOST once one exists, with the same per-NAS secret.
+That is a deployment decision for the owner, not code.
+
+Revisit when: a second host exists, OR the owner accepts process-level-only restart
+protection and EAP stays disabled.
 ---
 
 ## Phase 3 — Local / public / hybrid deployment (RadSec + VPN)
