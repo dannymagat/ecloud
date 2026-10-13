@@ -215,9 +215,14 @@ if [ "${RADIUS_SCHEMA_CHECK:-1}" != "0" ]; then
 	fi
 fi
 
+#  The token is embedded in the configuration as $ENV{INTERNAL_API_TOKEN}, expanded at
+#  config-parse time, so `$` matters as much as the xlat characters: a token containing
+#  $ENV{OTHER_SECRET} would expand that secret into an outgoing HTTP header
+#  (HERMES_AAA_AUDIT.md F-003). loadConfig enforces the same alphabet for every caller; this
+#  check stays as defence in depth for a FreeRADIUS started without the API.
 case "$INTERNAL_API_TOKEN" in
-	*[%\"\\]*)
-		echo "freeradius: INTERNAL_API_TOKEN must not contain %, \" or \\ (it is embedded in an xlat string)" >&2
+	*[%\"\\$]*)
+		echo "freeradius: INTERNAL_API_TOKEN must not contain %, \", \\ or \$ (it is embedded in the configuration and expanded at parse time)" >&2
 		exit 1 ;;
 esac
 

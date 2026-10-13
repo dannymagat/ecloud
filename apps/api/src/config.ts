@@ -55,7 +55,13 @@ export const apiEnvSchema = z.object({
     .string()
     .trim()
     .transform((v) => (v === '' ? undefined : v))
-    .optional(),
+    .optional()
+    // Same alphabet as INTERNAL_API_TOKEN (F-003): during a rotation window this value is the
+    // one FreeRADIUS carries, so it reaches the same config-parse-time expansion.
+    .refine(
+      (v) => v === undefined || /^[A-Za-z0-9_-]+$/.test(v),
+      'INTERNAL_API_TOKEN_PREVIOUS may contain only letters, digits, _ and -',
+    ),
   /**
    * Cycle D review F2: extra networks outbound vendor-API calls may never reach (CIDRs, comma
    * separated). Unset = @ecloud/vendor-api DEFAULT_DENY_CIDRS (compose bridge 172.28.0.0/16,

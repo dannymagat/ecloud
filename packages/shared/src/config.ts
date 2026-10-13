@@ -59,7 +59,24 @@ export const envSchema = z.object({
     .default('ecloud_sid'),
   SESSION_TTL_SECONDS: z.coerce.number().int().min(60).max(2_592_000).default(43_200),
 
-  INTERNAL_API_TOKEN: z.string().min(1).default(DEV_DEFAULTS.INTERNAL_API_TOKEN),
+  /**
+   * HERMES_AAA_AUDIT.md F-003: this value is embedded in the FreeRADIUS configuration as
+   * `$ENV{INTERNAL_API_TOKEN}` (raddb/policy.d/ecloud), which FreeRADIUS expands at
+   * config-parse time. A token containing `%`, `"`, `\` or `$` could therefore alter the
+   * parsed configuration -- `$ENV{OTHER_SECRET}` would expand another secret into an HTTP
+   * header. docker-entrypoint.sh rejects those characters, but only when the entrypoint is
+   * in the execution path; this restricts the alphabet by construction instead, for every
+   * caller. scripts/secrets/lib.sh already generates base64url tokens, so no generated
+   * secret is affected.
+   */
+  INTERNAL_API_TOKEN: z
+    .string()
+    .min(1)
+    .regex(
+      /^[A-Za-z0-9_-]+$/,
+      'INTERNAL_API_TOKEN may contain only letters, digits, _ and - (it is embedded in the FreeRADIUS configuration)',
+    )
+    .default(DEV_DEFAULTS.INTERNAL_API_TOKEN),
 
   ARGON2_MEMORY_KIB: z.coerce.number().int().min(8_192).max(4_194_304).default(19_456),
 

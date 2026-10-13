@@ -2,6 +2,25 @@ import { describe, expect, it } from 'vitest';
 import { ConfigError, DEV_DEFAULTS, loadConfig, redactConfig, redactUrl } from './config.js';
 
 describe('loadConfig', () => {
+  // HERMES_AAA_AUDIT.md F-003: the token is embedded in the FreeRADIUS configuration as
+  // $ENV{INTERNAL_API_TOKEN} and expanded at config-parse time, so the alphabet is a
+  // security control, not cosmetics. docker-entrypoint.sh checks the same characters, but
+  // only when the entrypoint runs; this is the check every caller gets.
+  it.each([
+    ['percent', 'tok%{exec:id}aaaaaaaaaaaaaaaaaaaaaaa'],
+    ['dollar', 'tok$ENV{DATA_ENCRYPTION_KEY}aaaaaaaaaa'],
+    ['double quote', 'tok"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'],
+    ['backslash', 'tok\\aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'],
+    ['space', 'tok aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'],
+  ])('refuses an INTERNAL_API_TOKEN containing a %s', (_label, token) => {
+    expect(() => loadConfig({ INTERNAL_API_TOKEN: token })).toThrow(/INTERNAL_API_TOKEN/);
+  });
+
+  it('accepts the base64url alphabet scripts/secrets/lib.sh generates', () => {
+    const token = 'AbC-123_dEf456GhI789jKl-MnO_pQrStUvWxYz0';
+    expect(loadConfig({ INTERNAL_API_TOKEN: token }).internalApiToken).toBe(token);
+  });
+
   it('applies development defaults when env is empty', () => {
     const config = loadConfig({});
     expect(config.nodeEnv).toBe('development');

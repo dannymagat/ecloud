@@ -195,6 +195,12 @@ function keyParts(body: RadiusRequestBody): string[] {
 export function retransmitKey(body: RadiusRequestBody): string {
   const password = attr(body, 'User-Password') ?? '';
   // Review F2: a different CHAP response is a different packet (unchanged key without CHAP).
+  //
+  // Do not drop the credential hash to make retransmits idempotent across a changing
+  // CHAP-Challenge (D-048, HERMES_AAA_AUDIT.md F-005). A non-conforming NAS that re-challenges
+  // on timeout misses this cache and can leave one ghost session, which the reaper closes;
+  // keying without the hash would instead let two different CHAP responses share a cache slot,
+  // which is the collision Review F2 fixed.
   const chap = attr(body, 'CHAP-Password');
   const parts = [...keyParts(body), sha256Hex(password)];
   if (chap !== undefined) parts.push(`chap:${sha256Hex(chap)}`);
@@ -695,6 +701,14 @@ async function decide(deps: AppDeps, body: RadiusRequestBody, now: Date): Promis
 
   // Review M1b: an authenticated packet of this NAS naming an AP MAC proves that AP (best effort,
   // never part of the decision; only rows of THIS NAS that are not yet verified are touched).
+  //
+  // Deliberately BEFORE identify(), so a rejected authorization still marks the AP (D-048,
+  // HERMES_AAA_AUDIT.md F-006). What verified_at asserts is that the AP is online and pointed at
+  // this NAS, and a RADIUS request arriving at all proves that; whether the user's credentials
+  // were right says nothing about the AP. Moving this into the accept branch would leave an AP
+  // unverified whenever its first client mistypes a password. The packet is already authenticated
+  // by the NAS shared secret and Message-Authenticator in FreeRADIUS, and nas-lookup.ts scopes the
+  // update to not-yet-verified rows of this NAS, so no cross-NAS or cross-tenant row is reachable.
   await observeAccessPoint(
     deps,
     {
