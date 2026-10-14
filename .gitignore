@@ -18,3 +18,9 @@ var/
 # editor swap files
 *.swp
 *.swo
+
+# Cross-session coordination scratch and local worktrees: machine-local, never shared.
+.worktrees/
+.claude-to-hermes.md
+.hermes-coordination.md
+HERMES_AAA_AUDIT.md
