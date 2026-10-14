@@ -169,7 +169,7 @@ export function vendorPortalInternalRouter(deps: AppDeps): Router {
           .where('status', '=', 'active')
           .where('portal_type', '=', 'external')
           .execute();
-        const portalId = await resolveExternalPortalId(deps)(trx, nas, rows);
+        const portalId = await resolveExternalPortalId(deps)(trx, nas, rows, req.log);
         // A discriminated result, not a string channel shared with the refusal codes above.
         // The previous shape returned those codes as bare strings and the caller told success
         // from refusal by `typeof`, so any success value that was also a string - a portal id -

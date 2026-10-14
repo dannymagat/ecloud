@@ -316,7 +316,7 @@ await describeIntegration('@ecloud/api platform-default portal (migration 041)',
     rows: PortalRow[],
   ) =>
     withTenant(deps.db, orgId, (trx) =>
-      resolveExternalPortalId(deps)(trx, nasRow, rows),
+      resolveExternalPortalId(deps)(trx, nasRow, rows, logger),
     );
 
   async function externalRows(orgId: string, siteId: string) {

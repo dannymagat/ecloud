@@ -9,7 +9,7 @@
  * exists to keep those apart, so these tests assert the discriminator and not just non-null.
  */
 import { describe, expect, it } from 'vitest';
-import { pickPortal } from './portal.js';
+import { pickPortalForTests as pickPortal } from './portal.js';
 import type { PortalRow } from './portal-row.js';
 
 function row(over: Partial<PortalRow> & { id: string }): PortalRow {
@@ -84,12 +84,12 @@ describe('pickPortal', () => {
     const elsewhere = row({ id: 'elsewhere', adapter_config: { nas_client_id: 'nas-2' } });
     // The configured portal belongs to another NAS, so for this NAS nothing is configured and
     // the existing fallback serves it.
-    expect(pickPortal([elsewhere, fallback], NAS)).toEqual({ kind: 'fallback', row: fallback });
+    expect(pickPortal([elsewhere, fallback], NAS)).toEqual({ kind: 'fallback' });
   });
 
   it('reports an existing platform default as `fallback`, never as `configured`', () => {
     const fallback = row({ id: 'fallback', is_platform_default: true });
-    expect(pickPortal([fallback], NAS)).toEqual({ kind: 'fallback', row: fallback });
+    expect(pickPortal([fallback], NAS)).toEqual({ kind: 'fallback' });
   });
 
   it('still refuses when configured portals are ambiguous and a fallback exists', () => {
@@ -105,14 +105,14 @@ describe('pickPortal', () => {
   });
 });
 
-describe('the fallback outcome is not mistakable for a configured portal', () => {
-  it('uses a distinct kind, so a caller cannot use one where it meant the other', () => {
+describe('the fallback outcome hands back nothing servable', () => {
+  it('carries no row, so the gate cannot be skipped by reading one off it', () => {
     const fallback = row({ id: 'fallback', is_platform_default: true });
     const picked = pickPortal([fallback], NAS);
-    // The point of the separate kind: while a fallback came back as a bare `found`, every new
-    // caller inherited the "serve it without checking for a disabled configured portal" bug by
-    // default. Three call sites did exactly that.
-    expect(picked.kind).toBe('fallback');
-    expect(picked.kind).not.toBe('configured');
+    expect(picked).toEqual({ kind: 'fallback' });
+    // A distinct `kind` alone was not enough: a caller could still read `.row` off it, which is
+    // how three call sites acquired the missing-gate bug. With no row on the outcome, the only
+    // way to obtain a servable fallback is `resolvePortalRow`, which applies the gate.
+    expect(picked).not.toHaveProperty('row');
   });
 });

@@ -43,6 +43,11 @@ export interface ResourceConfig {
    */
   siteFilter?: boolean;
   rowActions?: (row: Row, ctx: { orgId: string; refresh: () => void }) => ReactNode;
+  /**
+   * Extra warning in the delete dialog, when deleting a row has a consequence the row itself does
+   * not show. Returning null means no warning for that row.
+   */
+  deleteWarning?: (row: Row) => ReactNode;
   headerActions?: (ctx: { orgId: string; refresh: () => void }) => ReactNode;
   emptyHint?: ReactNode;
   /** Open the create form on arrival (e.g. "Add this access point" from a setup guide). */
@@ -315,6 +320,9 @@ function ResourceScreen({ config, embedded }: { config: ResourceConfig; embedded
           <strong>{str(deleting?.name ?? deleting?.username ?? deleting?.id ?? '')}</strong>. This
           action is audited.
         </p>
+        {deleting !== null && config.deleteWarning ? (
+          <div className="mt-3">{config.deleteWarning(deleting)}</div>
+        ) : null}
         <div className="mt-3">
           <ProblemAlert error={remove.error} />
         </div>

@@ -149,6 +149,24 @@ export function PortalsPage() {
     ],
     fields,
     editFields,
+    // Migration 041: deleting a portal row leaves no trace — `captive_portals` has no
+    // `deleted_at` — so unlike DISABLING a portal it is not evidence of a decision, and the
+    // platform default is free to take the site over. The warning belongs where the decision is
+    // made rather than in a document nobody reads at this moment.
+    deleteWarning: (row) =>
+      row.is_platform_default === true ? (
+        <p className="text-sm text-warning">
+          This is the platform default for its site. Deleting it does not turn the fallback off —
+          a guest arriving on an unconfigured access point will cause it to be recreated. To stop
+          anonymous access at this site, set its status to Disabled instead.
+        </p>
+      ) : (
+        <p className="text-sm text-warning">
+          If this is the last portal for its site and gateway type, the platform default takes
+          over: guests will be offered an anonymous Connect button instead. Disable this portal
+          instead of deleting it to take guest access offline.
+        </p>
+      ),
     rowActions: (row) => (
       <Link
         to={row.id}

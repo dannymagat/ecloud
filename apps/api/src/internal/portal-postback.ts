@@ -64,6 +64,7 @@ export interface PostbackRouteHelpers {
     trx: DbTransaction,
     nas: { id: string; organization_id: string; site_id: string },
     rows: PortalRow[],
+    logger: Logger,
   ) => Promise<string | null>;
   readonly previousSessionExpired: (nas: RegisteredNas, mac: string, now: Date) => Promise<boolean>;
 }
@@ -179,7 +180,7 @@ export function registerPostbackRoutes(
           .where('status', '=', 'active')
           .where('portal_type', '=', 'external')
           .execute();
-        const portalId = await helpers.resolvePortalId(trx, n, portals);
+        const portalId = await helpers.resolvePortalId(trx, n, portals, log);
         return portalId === null ? null : { extra, portalId };
       });
       if (loaded === null) {

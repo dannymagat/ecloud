@@ -207,13 +207,16 @@ export type PortalPick =
   /** A portal an operator configured. Usable as-is; no fallback rules apply. */
   | { readonly kind: 'configured'; readonly row: PortalRow }
   /**
-   * An existing platform default. **Not usable on its own**: the caller must still establish that
-   * the operator has configured nothing for this (site, portal_type), because a fallback must
-   * never override a portal somebody disabled on purpose. This is a separate outcome from
-   * `configured` precisely so that check cannot be forgotten — while a fallback came back as a
-   * bare "found", every new caller inherited the bug by default.
+   * A platform default exists for this (site, portal_type), and **no row is handed back**.
+   *
+   * Carrying the row would make it servable, and a fallback is not servable until the caller has
+   * established that the operator configured nothing here — a fallback must never override a
+   * portal somebody disabled on purpose. Withholding the row makes that structural rather than
+   * conventional: the only way to obtain a usable portal from this outcome is
+   * `resolvePortalRow`, which applies the gate. A separate `kind` alone was not enough, because
+   * a caller could still read `.row` off it, which is how three callers acquired this bug.
    */
-  | { readonly kind: 'fallback'; readonly row: PortalRow }
+  | { readonly kind: 'fallback' }
   /** Nothing configured for this site and type: a fallback may be created. */
   | { readonly kind: 'none' }
   /** More than one configured candidate: refuse, never guess and never fall back. */
@@ -228,7 +231,7 @@ export type PortalPick =
  * site offline the moment a fallback existed. A deliberately configured portal always wins; the
  * fallback is only reached when there is nothing configured at all.
  */
-export function pickPortal(rows: PortalRow[], nasId: string): PortalPick {
+function pickPortal(rows: PortalRow[], nasId: string): PortalPick {
   const chosen = rows.filter((r) => !r.is_platform_default);
   const pinned = chosen.filter((r) => r.adapter_config.nas_client_id === nasId);
   const first = pinned[0];
@@ -242,7 +245,7 @@ export function pickPortal(rows: PortalRow[], nasId: string): PortalPick {
   if (unpinned.length === 1 && only !== undefined) return { kind: 'configured', row: only };
   if (unpinned.length > 1) return { kind: 'ambiguous', count: unpinned.length };
   const fallback = rows.find((r) => r.is_platform_default);
-  return fallback === undefined ? { kind: 'none' } : { kind: 'fallback', row: fallback };
+  return fallback === undefined ? { kind: 'none' } : { kind: 'fallback' };
 }
 
 function openUamSecret(deps: AppDeps, ref: string | null): string | null {
@@ -253,6 +256,18 @@ function openUamSecret(deps: AppDeps, ref: string | null): string | null {
     return null;
   }
 }
+
+/**
+ * The picker, exposed for its own unit tests only.
+ *
+ * `pickPortal` is deliberately NOT part of this module's public surface. It answers "which row",
+ * not "which row may be served", and composing it with {@link configuredPortalExists} correctly
+ * is the step that went wrong on three separate paths. Production callers use
+ * {@link resolvePortalRow} or {@link resolveExternalPortalId}, which cannot be composed wrongly.
+ * Exporting both the primitive and the safe composition with equal standing, ranked only by a
+ * docstring, is the protection that already failed.
+ */
+export const pickPortalForTests = pickPortal;
 
 /**
  * Whether an operator has configured a portal for this (site, portal_type) — **whatever its
@@ -435,16 +450,25 @@ export async function ensurePlatformDefaultPortal(
  * fallback competed as an ordinary candidate and could take a working post-back site offline by
  * making its real portal ambiguous.
  *
- * `allowFallback` is the one legitimate difference between the two callers. The UAM/splash paths
- * may create and serve a fallback for a site that has none, which is the owner's ruling. The
- * post-back path may do neither: a post-back hand-off needs a vendor profile and a validated
- * login URL in `adapter_config`, and a fallback has neither, so serving one would produce a page
- * that cannot complete its hand-off — the same "a button that always fails is worse than no
- * button" problem, one layer down. Absence therefore fails closed on that path by design.
+ * `allowFallback` is the one legitimate difference between the callers, and the asymmetry is
+ * sharper than it looks: **one portal type, two fallback policies, separated only by entry path.**
+ * The owner's ruling named the UAM and splash paths, so those pass `true`. The post-back and
+ * vendor-API paths pass `false`.
+ *
+ * The load-bearing reason is cross-vendor, not that a fallback would be useless there.
+ * `MERAKI_PORTAL_TYPE` is `'external'` (`portal-meraki.ts`) and the `meraki` flavour runs with
+ * `allowFallback: true`, so Meraki bring-up creates `external` fallback rows on sites that may
+ * also hold post-back and vendor-API NASes. Without `false` on those paths, one vendor's
+ * bring-up fallback gets served on another vendor's hand-off — which was the live defect, not a
+ * hypothesis. That a fallback also has no vendor profile or validated login URL in
+ * `adapter_config`, and so could only render a page that cannot complete its hand-off, is a
+ * second and weaker reason.
+ *
+ * **If you are adding another `external` entry path, you have to choose, and nothing else will
+ * tell you which way.** Pass `false` unless the owner's ruling has been extended to cover it.
  *
  * Note this is deliberately not a "do not create" flag. Not creating would still have served a
- * fallback that already existed, and one will exist at any site where a Meraki NAS has been seen:
- * `MERAKI_PORTAL_TYPE` is `'external'`, the same portal type post-back resolves.
+ * fallback that already existed, and one exists at any site where a Meraki NAS has been seen.
  */
 async function resolvePortalRow(opts: {
   readonly trx: DbTransaction;
@@ -491,10 +515,11 @@ async function resolvePortalRow(opts: {
     );
     return null;
   }
-  const portal =
-    picked.kind === 'fallback'
-      ? picked.row
-      : ((await ensurePlatformDefaultPortal(trx, nas, portalType)) ?? null);
+  // Both `fallback` and `none` go through here. `ensurePlatformDefaultPortal` returns the
+  // existing active row when there is one and creates it only when there is not, so this is a
+  // lookup in the `fallback` case rather than a second write — and it is the only code that can
+  // hand back a servable fallback row, which is the point.
+  const portal = (await ensurePlatformDefaultPortal(trx, nas, portalType)) ?? null;
   if (portal === null) return null;
   // Visible in the operator's logs, not only in the admin list: an access point running on the
   // fallback is giving anonymous access and somebody should finish configuring it.
@@ -527,20 +552,24 @@ async function resolvePortalRow(opts: {
  * it.
  */
 export function resolveExternalPortalId(
-  deps: AppDeps,
+  _deps: AppDeps,
 ): (
   trx: DbTransaction,
   nas: { id: string; organization_id: string; site_id: string },
   rows: PortalRow[],
+  // The PER-REQUEST logger, not `deps.logger`: a refusal logged off the process logger loses
+  // its request id, and these refusals are exactly the ones an operator has to correlate with
+  // the guest who complained.
+  logger: Logger,
 ) => Promise<string | null> {
-  return async (trx, nas, rows) => {
+  return async (trx, nas, rows, logger) => {
     const portal = await resolvePortalRow({
       trx,
       nas,
       portalType: 'external',
       // No cast. The caller's query must select `[...PORTAL_COLUMNS]`, and the compiler says so.
       rows,
-      logger: deps.logger,
+      logger,
       allowFallback: false,
     });
     return portal === null ? null : portal.id;
@@ -574,14 +603,14 @@ export async function resolvePortal(
     if (!spec.adapterKeys.includes(n.adapter_key ?? '')) {
       return null;
     }
-    const portals = (await trx
+    const portals = await trx
       .selectFrom('captive_portals')
       .select([...PORTAL_COLUMNS])
       .where('site_id', '=', n.site_id)
       .where('organization_id', '=', n.organization_id)
       .where('status', '=', 'active')
       .where('portal_type', '=', spec.portalType)
-      .execute()) as PortalRow[];
+      .execute();
     const portal = await resolvePortalRow({
       trx,
       nas: n,
