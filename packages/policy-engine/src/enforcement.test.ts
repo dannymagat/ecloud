@@ -124,6 +124,7 @@ describe('translate: Q44 Session-Timeout cap (policy_change_cap)', () => {
     winner: null,
     concurrency_mode: null,
     critical_fields: [],
+  unlimited: [],
   };
 
   it('caps a longer policy timeout and bounds an unbounded session', () => {

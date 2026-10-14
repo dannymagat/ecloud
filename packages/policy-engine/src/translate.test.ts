@@ -62,6 +62,7 @@ function effectiveOf(
     winner: null,
     concurrency_mode: null,
     critical_fields: [],
+  unlimited: [],
     ...extra,
   };
 }

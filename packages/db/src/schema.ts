@@ -654,6 +654,8 @@ export interface PoliciesTable {
   quota_exhaustion_action: QuotaExhaustionAction | null;
   reduced_download_rate_kbps: number | null;
   reduced_upload_rate_kbps: number | null;
+  /** Fields declared to have no cap (migration 039). */
+  unlimited_fields: Generated<string[]>;
   session_timeout_s: number | null;
   idle_timeout_s: number | null;
   max_concurrent_sessions: number | null;

@@ -70,6 +70,40 @@ export const QUOTA_EXHAUSTION_ACTIONS = ['deny', 'reduce_speed', 'require_renewa
 export type QuotaExhaustionAction = (typeof QUOTA_EXHAUSTION_ACTIONS)[number];
 
 /**
+ * Fields a policy may declare unlimited (migration 039), i.e. where "no cap" is a meaningful
+ * answer. `vlan_id` has no unlimited state, the quota modifiers are not limits, and `valid_from`
+ * is a start rather than a cap. `valid_until` and `schedule_id` are here because "never expires"
+ * and "no time restriction" are the things an operator needs to say about one account inside an
+ * otherwise restricted group.
+ */
+export const UNLIMITABLE_FIELDS = [
+  'download_rate_kbps',
+  'upload_rate_kbps',
+  'burst_download_kbps',
+  'burst_upload_kbps',
+  'burst_duration_s',
+  'quota_daily_bytes',
+  'quota_weekly_bytes',
+  'quota_monthly_bytes',
+  'quota_total_bytes',
+  'online_time_daily_s',
+  'online_time_weekly_s',
+  'online_time_monthly_s',
+  'online_time_total_s',
+  'session_timeout_s',
+  'idle_timeout_s',
+  'max_concurrent_sessions',
+  'max_devices',
+  'valid_until',
+  'schedule_id',
+] as const;
+export type UnlimitableField = (typeof UNLIMITABLE_FIELDS)[number];
+
+export function isUnlimitableField(value: unknown): value is UnlimitableField {
+  return typeof value === 'string' && (UNLIMITABLE_FIELDS as readonly string[]).includes(value);
+}
+
+/**
  * One `policies` row (plus its joined schedule). `null` = inherit from the next layer
  * (POLICY_ENGINE.md §2.3 field-level fall-through).
  */
@@ -122,6 +156,12 @@ export const PolicyIntentSchema = z.object({
 
   /** §2.6: per-policy override of the tenant default concurrency mode. */
   concurrency_mode: z.enum(CONCURRENCY_MODES).nullable().default(null),
+  /**
+   * Fields this policy declares to have no cap (migration 039). A declared field wins the merge
+   * exactly as a set value does: the third state beside "a value" and "inherit", so a more
+   * specific layer can lift a parent per-session cap instead of only raising it.
+   */
+  unlimited_fields: z.array(z.string()).default([]),
   /** §4.2 field-level override: these fields force `strict_reject` when unenforceable. */
   critical_fields: z.array(z.string()).default([]),
 });
@@ -423,6 +463,32 @@ export function validatePolicy(input: unknown, context: ValidationContext = {}):
       'action_without_allowance',
       'quota_exhaustion_action applies when a data or online-time allowance runs out; this policy sets none',
     );
+
+  // Rule 14: unlimited declarations (migration 039).
+  const seenUnlimited = new Set<string>();
+  for (const field of p.unlimited_fields) {
+    if (!isUnlimitableField(field)) {
+      err(
+        'unlimited_fields',
+        14,
+        'not_unlimitable',
+        `${field} has no unlimited state; allowed: ${UNLIMITABLE_FIELDS.join(', ')}`,
+      );
+      continue;
+    }
+    if (seenUnlimited.has(field))
+      err('unlimited_fields', 14, 'duplicate_unlimited', `${field} is listed twice`);
+    seenUnlimited.add(field);
+    // Declaring a field unlimited AND giving it a value is two answers to one question. The
+    // merge would have to pick one silently, so the policy is refused instead.
+    if ((p as Record<string, unknown>)[field] !== null)
+      err(
+        'unlimited_fields',
+        14,
+        'unlimited_and_set',
+        `${field} is declared unlimited and also set to a value; choose one`,
+      );
+  }
 
   // Rule 4: timers ≥ 60 s.
   for (const key of ['session_timeout_s', 'idle_timeout_s'] as const) {

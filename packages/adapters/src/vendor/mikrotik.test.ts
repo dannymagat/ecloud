@@ -403,6 +403,7 @@ describe('mikrotik-hotspot engine adapter (attribute rendering)', () => {
     winner: null,
     concurrency_mode: null,
     critical_fields: [],
+    unlimited: [],
   };
   const ctx = (lab: boolean): TranslationContext => ({
     now: new Date('2026-10-10T08:00:00Z'),

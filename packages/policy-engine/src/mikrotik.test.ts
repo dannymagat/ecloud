@@ -178,6 +178,7 @@ function effective(fields: Partial<EffectivePolicy['fields']>): EffectivePolicy 
     winner: null,
     concurrency_mode: null,
     critical_fields: [],
+  unlimited: [],
   };
 }
 

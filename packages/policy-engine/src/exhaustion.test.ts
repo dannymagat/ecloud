@@ -112,8 +112,8 @@ describe('reduce_speed', () => {
   it('reports the reduction as a control, so the operator can see why the rate differs', () => {
     const result = resolve(withPolicy(reducing, { usage: SPENT }));
     const control = result.controls.find((c) => c.kind === 'quota_reduced');
-    expect(control?.params.reason).toBe('quota_daily');
-    expect(control?.params.download_rate_kbps).toBe(1000);
+    expect(control?.params?.reason).toBe('quota_daily');
+    expect(control?.params?.download_rate_kbps).toBe(1000);
   });
 
   it('reduces only the direction that has a reduced rate', () => {

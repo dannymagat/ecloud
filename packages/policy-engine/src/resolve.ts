@@ -164,6 +164,13 @@ export interface EffectivePolicy {
   readonly winner: Provenance | null;
   readonly concurrency_mode: ConcurrencyMode | null;
   readonly critical_fields: readonly string[];
+  /**
+   * Fields resolved to "no cap" because a layer declared them unlimited (migration 039), sorted.
+   * They read as `null` in `fields` — the same absence of a limit — but the distinction matters
+   * to a reader: `null` not listed here means no layer had an opinion, while a field listed here
+   * means a layer decided. `provenance` says which one.
+   */
+  readonly unlimited: readonly string[];
 }
 
 export interface Clip {
@@ -390,11 +397,36 @@ export function merge(ordered: readonly RankedCandidate[], trace: TraceEntry[]):
   let schedule: Schedule | null = null;
   let concurrencyMode: ConcurrencyMode | null = null;
   const critical = new Set<string>();
+  // §2.3 with the third state (migration 039). Fall-through stops at the first layer that has an
+  // opinion, and declaring a field unlimited IS an opinion — otherwise a deliberate "no cap" on
+  // a user policy would be silently overwritten by the group cap one layer down, which is the
+  // bug this state exists to prevent.
+  const resolved = new Set<IntentColumn>();
+  const unlimited = new Set<string>();
   for (const c of ordered) {
     const prov = provenanceOf(c);
+    const declaredUnlimited = new Set<string>(c.policy.unlimited_fields);
     for (const field of INTENT_COLUMNS) {
+      if (resolved.has(field)) continue;
       const value = c.policy[field];
-      if (fields[field] === null && value !== null) {
+      if (declaredUnlimited.has(field)) {
+        resolved.add(field);
+        unlimited.add(field);
+        provenance[field] = prov;
+        trace.push({
+          step: 'field',
+          field,
+          value: 'unlimited',
+          policy_id: prov.policy_id,
+          policy_version: prov.policy_version,
+          assignment_id: prov.assignment_id,
+          layer: prov.layer,
+          layer_name: prov.layer_name,
+        });
+        continue;
+      }
+      if (value !== null) {
+        resolved.add(field);
         fields[field] = value;
         provenance[field] = prov;
         trace.push({
@@ -409,7 +441,9 @@ export function merge(ordered: readonly RankedCandidate[], trace: TraceEntry[]):
         });
       }
     }
-    if (schedule === null && c.policy.schedule !== null) {
+    // A layer that declares the schedule unlimited means "no time restriction here", so no
+    // lower layer's schedule applies either.
+    if (schedule === null && !unlimited.has('schedule_id') && c.policy.schedule !== null) {
       schedule = c.policy.schedule;
       provenance.schedule = prov;
       trace.push({
@@ -437,6 +471,7 @@ export function merge(ordered: readonly RankedCandidate[], trace: TraceEntry[]):
     winner: first ? provenanceOf(first) : null,
     concurrency_mode: concurrencyMode,
     critical_fields: [...critical].sort(),
+    unlimited: [...unlimited].sort(),
   };
 }
 

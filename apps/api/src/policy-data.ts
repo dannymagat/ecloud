@@ -51,6 +51,7 @@ export function policyRowToIntent(
     quota_exhaustion_action: row.quota_exhaustion_action ?? null,
     reduced_download_rate_kbps: row.reduced_download_rate_kbps ?? null,
     reduced_upload_rate_kbps: row.reduced_upload_rate_kbps ?? null,
+    unlimited_fields: row.unlimited_fields ?? [],
     session_timeout_s: row.session_timeout_s ?? null,
     idle_timeout_s: row.idle_timeout_s ?? null,
     max_concurrent_sessions: row.max_concurrent_sessions ?? null,
