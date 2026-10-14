@@ -14,6 +14,15 @@
  * Fix on the device (patch radcli to gate on PW_ACCESS_REQUEST); as a last resort clear
  * `nas_clients.require_message_authenticator` for that NAS and accept the exposure.
  * See infra/freeradius/README.md §5b.
+ *
+ * ACCT-INTERIM-INTERVAL IS NAS-AUTHORITATIVE (LAB, 2026-10-14, mechanism for the note on that
+ * attribute below). uspot.uc:215-222 reads `let interval = settings.acct_interval` and only
+ * falls back to the reply attribute with `||`, so a non-empty UCI `acct_interval` short-circuits
+ * before our value is consulted -- deliberate, per RFC 2869. Session-Timeout and Idle-Timeout are
+ * the opposite way round (reply first, UCI as fallback), which is why a clamped Session-Timeout
+ * does override the device. `acct_interval` is rendered from the controller's AP profile, so this
+ * is fleet-wide rather than per-device: to get a server-defined cadence, clear it in the profile
+ * first; setting AAA_INTERIM_INTERVAL_S alone has no effect while it is set.
  */
 import type { AdapterCapabilities } from '@ecloud/policy-engine';
 import { attr, attributeTable, createAdapter, decl, fieldTable, sourced } from '../base.js';
