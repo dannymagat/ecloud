@@ -59,7 +59,10 @@ export type AccountingStatusType =
 export type AuthResult = 'accept' | 'reject' | 'challenge' | 'error';
 export type SessionActionType = 'disconnect' | 'coa_update';
 export type SessionActionStatus = 'pending' | 'sent' | 'ack' | 'nak' | 'timeout' | 'unsupported';
-export type UsageSubjectType = 'user' | 'client_device' | 'voucher' | 'site';
+export type UsageSubjectType = 'user' | 'client_device' | 'voucher' | 'site' | 'user_group';
+
+/** Scope an aggregate limit applies over (migration 042). */
+export type AggregateScope = 'tenant' | 'site';
 export type UsagePeriodType = 'daily' | 'weekly' | 'monthly' | 'total';
 
 /** Which octets a policy's data quotas count (migration 036), from the client's perspective. */
@@ -107,6 +110,12 @@ export interface SitesTable {
   geo: Point;
   status: Generated<OrganizationStatus>;
   settings: GeneratedJsonb<Record<string, unknown>>;
+  /** Site-wide pool, kbit/s. NOT ENFORCED, same reason as the group pool (migration 042). */
+  aggregate_download_kbps: number | null;
+  aggregate_upload_kbps: number | null;
+  shared_quota_daily_bytes: BigintColumn | null;
+  shared_quota_monthly_bytes: BigintColumn | null;
+  max_active_sessions: number | null;
   created_at: GeneratedTimestamp;
   updated_at: GeneratedTimestamp;
   deleted_at: NullableTimestamp;
@@ -567,6 +576,17 @@ export interface UserGroupsTable {
   name: string;
   description: Generated<string>;
   is_default: Generated<boolean>;
+  /** Shared pool, kbit/s. NOT ENFORCED: no integrated gateway has a parent queue (migration 042). */
+  aggregate_download_kbps: number | null;
+  aggregate_upload_kbps: number | null;
+  /** Allowance shared by every member, distinct from each member's own quota (migration 042). */
+  shared_quota_daily_bytes: BigintColumn | null;
+  shared_quota_weekly_bytes: BigintColumn | null;
+  shared_quota_monthly_bytes: BigintColumn | null;
+  shared_quota_total_bytes: BigintColumn | null;
+  max_active_members: number | null;
+  max_active_sessions: number | null;
+  aggregate_scope: Generated<AggregateScope>;
   created_at: GeneratedTimestamp;
   updated_at: GeneratedTimestamp;
 }

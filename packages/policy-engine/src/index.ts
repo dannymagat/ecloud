@@ -10,3 +10,4 @@ export * from './translate.js';
 export * from './simulate.js';
 export * from './enforcement.js';
 export * from './api-limits.js';
+export * from './aggregate.js';
