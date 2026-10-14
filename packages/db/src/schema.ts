@@ -698,6 +698,28 @@ export interface AccessPlansTable {
   deleted_at: NullableTimestamp;
 }
 
+/**
+ * Singleton fallback for a NAS with no applicable policy (migration 043). Platform-scoped: no
+ * organization_id and no RLS, because it answers for organizations that have no default of
+ * their own — the same shape as `permissions` and `adapter_types`. Read-only to the app role.
+ */
+export interface PlatformDefaultPolicyTable {
+  id: Generated<boolean>;
+  enabled: Generated<boolean>;
+  description: Generated<string>;
+  download_rate_kbps: number | null;
+  upload_rate_kbps: number | null;
+  session_timeout_s: number | null;
+  idle_timeout_s: number | null;
+  quota_daily_bytes: BigintColumn | null;
+  quota_total_bytes: BigintColumn | null;
+  online_time_total_s: number | null;
+  max_concurrent_sessions: number | null;
+  max_devices: number | null;
+  updated_at: GeneratedTimestamp;
+  updated_by: Uuid | null;
+}
+
 export interface PoliciesTable {
   id: Generated<Uuid>;
   organization_id: Uuid;
@@ -1243,6 +1265,7 @@ export interface Database {
   otp_codes: OtpCodesTable;
   bandwidth_profiles: BandwidthProfilesTable;
   access_plans: AccessPlansTable;
+  platform_default_policy: PlatformDefaultPolicyTable;
   user_groups: UserGroupsTable;
   users: UsersTable;
   client_devices: ClientDevicesTable;

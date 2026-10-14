@@ -124,6 +124,12 @@ export interface ResolutionInput {
   readonly group_ids?: readonly string[];
   /** Assignments (with their policies) that may apply; the engine re-checks every filter. */
   readonly candidates: readonly Candidate[];
+  /**
+   * Migration 043: the platform fallback, loaded only when it is enabled. Used ONLY when no
+   * candidate and no organization default applied — anything an operator chose outranks it.
+   * Null when the feature is off, which restores the previous `no_policy` rejection exactly.
+   */
+  readonly platform_default?: PolicyIntent | null;
   /** `policies.is_default` row of the organization, synthetic lowest layer. */
   readonly default_policy?: PolicyIntent | null;
   readonly usage?: UsageCounters;
@@ -141,6 +147,11 @@ export const LAYERS = {
   user_group: 4,
   site: 5,
   organization_default: 6,
+  /**
+   * Migration 043: the singleton fallback for a NAS nobody has configured. Deliberately the
+   * last layer — anything an operator chose, at any level, outranks it.
+   */
+  platform_default: 7,
 } as const;
 
 export type LayerName = keyof typeof LAYERS;
@@ -151,7 +162,11 @@ export interface Provenance {
   readonly assignment_id: string | null;
   readonly layer: number;
   readonly layer_name: LayerName | 'out_of_window_override';
-  readonly target_type: AssignmentTargetType | 'organization_default' | 'out_of_window_override';
+  readonly target_type:
+    | AssignmentTargetType
+    | 'organization_default'
+    | 'out_of_window_override'
+    | 'platform_default';
 }
 
 export type ProvenanceField = IntentColumn | 'schedule';
@@ -264,6 +279,12 @@ export interface ResolutionResult {
   readonly decision: 'accept' | 'reject';
   readonly reasonCode: ReasonCode | null;
   readonly reasonDetail: string | null;
+  /**
+   * Migration 043: this session was answered by the platform fallback rather than by a policy
+   * anyone chose. The caller records it on the session so "which access points are serving the
+   * default right now" is one predicate instead of an audit.
+   */
+  readonly platform_default: boolean;
   readonly effective: EffectivePolicy;
   readonly clip: Clip;
   readonly controls: readonly EcloudSideControl[];
@@ -369,6 +390,25 @@ function syntheticDefault(policy: PolicyIntent, input: ResolutionInput): RankedC
   };
 }
 
+/** Migration 043: the platform fallback as a candidate, at the lowest layer there is. */
+function platformDefaultCandidate(policy: PolicyIntent): RankedCandidate {
+  return {
+    policy,
+    assignment: {
+      id: `platform-default:${policy.id}`,
+      policy_id: policy.id,
+      target_type: 'site',
+      effective_from: new Date(0),
+      effective_until: null,
+      priority: Number.MAX_SAFE_INTEGER,
+      site_id: null,
+    },
+    layer: LAYERS.platform_default,
+    layerName: 'platform_default',
+    synthetic: true,
+  };
+}
+
 function provenanceOf(c: RankedCandidate): Provenance {
   return {
     policy_id: c.policy.id,
@@ -379,7 +419,9 @@ function provenanceOf(c: RankedCandidate): Provenance {
     target_type: c.synthetic
       ? c.layerName === 'out_of_window_override'
         ? 'out_of_window_override'
-        : 'organization_default'
+        : c.layerName === 'platform_default'
+          ? 'platform_default'
+          : 'organization_default'
       : c.assignment.target_type,
   };
 }
@@ -814,6 +856,9 @@ function finish(
     decision,
     reasonCode,
     reasonDetail,
+    // Derived from the winning layer rather than threaded through as a flag: one source of
+    // truth, so the recorded value and the displayed provenance can never disagree.
+    platform_default: effective.winner?.layer_name === 'platform_default',
     effective,
     clip,
     controls,
@@ -880,7 +925,27 @@ export function resolveEffectivePolicy(input: ResolutionInput): ResolutionResult
     });
   }
 
-  const ordered = rankCandidates(input, trace);
+  let ordered = rankCandidates(input, trace);
+  let platformDefault = false;
+  if (ordered.length === 0 && input.platform_default) {
+    // Migration 043. Reached only when nothing an operator configured applied, so it cannot
+    // override a choice; it answers where there was no answer. Recorded as its own layer rather
+    // than dressed as an organization default, because a fallback that looks like a deliberate
+    // assignment is the failure this feature has to avoid: at generous limits nobody complains
+    // and a forgotten access point would serve real guests for months unnoticed.
+    ordered = [platformDefaultCandidate(input.platform_default)];
+    platformDefault = true;
+    trace.push({
+      step: 'candidate',
+      order: 0,
+      assignment_id: null,
+      policy_id: input.platform_default.id,
+      policy_version: input.platform_default.version,
+      layer: LAYERS.platform_default,
+      layer_name: 'platform_default',
+      included: true,
+    });
+  }
   let effective = merge(ordered, trace);
   if (ordered.length === 0) {
     const excluded = trace.filter((t) => t.step === 'candidate' && !t.included);

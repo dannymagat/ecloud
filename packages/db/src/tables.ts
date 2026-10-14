@@ -18,6 +18,7 @@ export const ALL_TABLES = Object.freeze([
   'api_keys',
   'invitations',
   'adapter_types',
+  'platform_default_policy',
   'network_devices',
   'wireguard_peers',
   'nas_clients',
