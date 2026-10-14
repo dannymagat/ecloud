@@ -1,14 +1,19 @@
 import { describe, expect, it } from 'vitest';
-import { decideEnforcement, describeAdapterDisconnect, evaluateQuota } from './quota.js';
+import {
+  decideEnforcement,
+  describeAdapterDisconnect,
+  evaluateOnlineTime,
+  evaluateQuota,
+} from './quota.js';
 
 describe('evaluateQuota', () => {
-  const limits = { daily: 1000, monthly: 10_000, total: null };
+  const limits = { daily: 1000, weekly: null, monthly: 10_000, total: null };
   it('returns no breach below every limit', () => {
     expect(evaluateQuota(limits, { daily: { bytesIn: 400, bytesOut: 599 } })).toEqual([]);
   });
   it('breaches when in + out reaches the limit (>=)', () => {
     expect(evaluateQuota(limits, { daily: { bytesIn: 400, bytesOut: 600 } })).toEqual([
-      { period: 'daily', limit: 1000, used: 1000 },
+      { kind: 'data', period: 'daily', limit: 1000, used: 1000 },
     ]);
   });
   it('reports every breached period and ignores unset / non-positive limits', () => {
@@ -18,10 +23,40 @@ describe('evaluateQuota', () => {
       total: { bytesIn: 1e12, bytesOut: 0 },
     };
     expect(evaluateQuota(limits, usage).map((b) => b.period)).toEqual(['daily', 'monthly']);
-    expect(evaluateQuota({ daily: 0, monthly: null, total: null }, usage)).toEqual([]);
+    expect(
+      evaluateQuota({ daily: 0, weekly: null, monthly: null, total: null }, usage),
+    ).toEqual([]);
   });
   it('treats a missing counter row as zero usage', () => {
-    expect(evaluateQuota({ daily: 1, monthly: null, total: null }, {})).toEqual([]);
+    expect(evaluateQuota({ daily: 1, weekly: null, monthly: null, total: null }, {})).toEqual([]);
+  });
+});
+
+describe('evaluateOnlineTime (migration 036)', () => {
+  const limits = { daily: 7200, weekly: null, monthly: 36_000, total: null };
+
+  it('counts connected seconds, not bytes: a quiet session still spends the allowance', () => {
+    const usage = { daily: { bytesIn: 0, bytesOut: 0, sessionTimeS: 7200 } };
+    expect(evaluateOnlineTime(limits, usage)).toEqual([
+      { kind: 'time', period: 'daily', limit: 7200, used: 7200 },
+    ]);
+  });
+
+  it('does not breach below the allowance', () => {
+    expect(evaluateOnlineTime(limits, { daily: { bytesIn: 0, bytesOut: 0, sessionTimeS: 7199 } }))
+      .toEqual([]);
+  });
+
+  it('treats a counter row without session time as zero, not as a breach', () => {
+    expect(evaluateOnlineTime(limits, { daily: { bytesIn: 9e9, bytesOut: 9e9 } })).toEqual([]);
+  });
+
+  it('reports every breached period', () => {
+    const usage = {
+      daily: { bytesIn: 0, bytesOut: 0, sessionTimeS: 7200 },
+      monthly: { bytesIn: 0, bytesOut: 0, sessionTimeS: 40_000 },
+    };
+    expect(evaluateOnlineTime(limits, usage).map((b) => b.period)).toEqual(['daily', 'monthly']);
   });
 });
 

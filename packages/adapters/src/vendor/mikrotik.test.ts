@@ -414,6 +414,8 @@ describe('mikrotik-hotspot engine adapter (attribute rendering)', () => {
       quota_reset_s: null,
       remaining_octets: 6_000_000_000n,
       remaining_period: 'total',
+    remaining_time_s: null,
+    remaining_time_period: null,
       drain_time_s: null,
       min_session_s: 300,
     },

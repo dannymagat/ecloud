@@ -109,6 +109,8 @@ describe('translate: Q44 Session-Timeout cap (policy_change_cap)', () => {
     quota_reset_s: null,
     remaining_octets: null,
     remaining_period: null,
+  remaining_time_s: null,
+  remaining_time_period: null,
     drain_time_s: null,
     min_session_s: 300,
   };

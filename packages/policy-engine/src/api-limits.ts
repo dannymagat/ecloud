@@ -138,7 +138,12 @@ export function translateApiLimits(target: ApiLimitTarget, input: ApiLimitInput)
   if (up !== null && up > MAX_RATE_KBPS) throw new RangeError('upload rate out of range');
 
   // --- data -----------------------------------------------------------------------------
-  const configured = minBig([f.quota_total_bytes, f.quota_daily_bytes, f.quota_monthly_bytes]);
+  const configured = minBig([
+    f.quota_total_bytes,
+    f.quota_daily_bytes,
+    f.quota_weekly_bytes,
+    f.quota_monthly_bytes,
+  ]);
   const dataBytes = target === 'mist' ? null : minBig([configured, input.remainingQuotaBytes]);
 
   let unifi: UnifiLimitBody | null = null;
@@ -223,6 +228,7 @@ export function translateApiLimits(target: ApiLimitTarget, input: ApiLimitInput)
     for (const field of [
       'quota_total_bytes',
       'quota_daily_bytes',
+      'quota_weekly_bytes',
       'quota_monthly_bytes',
     ] as const) {
       add(
@@ -243,7 +249,11 @@ export function translateApiLimits(target: ApiLimitTarget, input: ApiLimitInput)
       dataField,
       `${doc}; sent as a per-authorisation cap (smallest configured quota)${target === 'unifi-network' ? '; MB rounded down, MB vs MiB REQUIRES_DEVICE_TEST' : ''}`,
     );
-    for (const field of ['quota_daily_bytes', 'quota_monthly_bytes'] as const) {
+    for (const field of [
+      'quota_daily_bytes',
+      'quota_weekly_bytes',
+      'quota_monthly_bytes',
+    ] as const) {
       add(
         field,
         'UNSUPPORTED',

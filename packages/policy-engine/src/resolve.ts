@@ -12,6 +12,7 @@ import {
   type EnforcementFields,
   type IntentColumn,
   type PolicyIntent,
+  type QuotaDirection,
   type Schedule,
 } from './intent.js';
 import {
@@ -19,6 +20,7 @@ import {
   nextBoundary,
   nextLocalMidnight,
   nextLocalMonthStart,
+  nextLocalWeekStart,
   secondsUntil,
   type ScheduleWindow,
 } from './schedule.js';
@@ -69,11 +71,15 @@ export type Subject =
   | { readonly kind: 'client_device'; readonly client_device_id: string };
 
 export interface UsageBytes {
+  /** Acct-Input-Octets: traffic the client uploaded. */
   readonly bytes_in: bigint;
+  /** Acct-Output-Octets: traffic the client downloaded. */
   readonly bytes_out: bigint;
+  /** Acct-Session-Time accumulated in this period; 0 when the caller does not track it. */
+  readonly session_time_s?: bigint;
 }
 
-export type QuotaPeriod = 'daily' | 'monthly' | 'total';
+export type QuotaPeriod = 'daily' | 'weekly' | 'monthly' | 'total';
 
 export type UsageCounters = Partial<Record<QuotaPeriod, UsageBytes>>;
 
@@ -170,6 +176,9 @@ export interface Clip {
   /** Remaining quota bytes after subtracting active sessions' estimated unreported usage. */
   readonly remaining_octets: bigint | null;
   readonly remaining_period: QuotaPeriod | null;
+  /** Seconds left on the tightest online-time allowance; null when none is set. */
+  readonly remaining_time_s: number | null;
+  readonly remaining_time_period: QuotaPeriod | null;
   /** §2.5 worst-case drain time, floored at `min_session_s`; null when no rate is set. */
   readonly drain_time_s: number | null;
   readonly min_session_s: number;
@@ -179,6 +188,7 @@ export type ControlKind =
   | 'session_timer'
   | 'schedule_end'
   | 'quota_watcher'
+  | 'online_time_watcher'
   | 'concurrency'
   | 'validity_end'
   | 'voucher_expiry'
@@ -203,8 +213,13 @@ export type ReasonCode =
   | 'voucher_not_yet_valid'
   | 'schedule'
   | 'quota_daily'
+  | 'quota_weekly'
   | 'quota_monthly'
   | 'quota_total'
+  | 'online_time_daily'
+  | 'online_time_weekly'
+  | 'online_time_monthly'
+  | 'online_time_total'
   | 'concurrency_sessions'
   | 'concurrency_devices';
 
@@ -527,6 +542,69 @@ interface QuotaEvaluation {
   readonly limits: Partial<Record<QuotaPeriod, { limit: bigint; used: bigint; remaining: bigint }>>;
 }
 
+/** Octets an allowance has consumed, per its direction (migration 036). */
+function usedOctets(usage: UsageBytes, direction: QuotaDirection): bigint {
+  return direction === 'upload'
+    ? usage.bytes_in
+    : direction === 'download'
+      ? usage.bytes_out
+      : usage.bytes_in + usage.bytes_out;
+}
+
+interface TimeQuotaEvaluation {
+  readonly reject: ReasonCode | null;
+  readonly detail: string | null;
+  /** Seconds left on the tightest allowance, or null when none is set. */
+  readonly remaining: number | null;
+  readonly period: QuotaPeriod | null;
+  readonly limits: Partial<Record<QuotaPeriod, { limit: number; used: number; remaining: number }>>;
+}
+
+/**
+ * Cumulative online time (migration 036), the allowance the data quota cannot express: a guest
+ * on a 2 h/day plan who downloads nothing has still used their plan.
+ *
+ * The counter is `usage_counters.session_time_s`, which the drain has been advancing since
+ * migration 007 — summed across the subject's devices, so two phones connected at once consume
+ * the allowance twice as fast. That is the behaviour an operator selling "2 hours" expects, and
+ * it is the one displayed.
+ *
+ * Unlike the data quota there is no estimate of unreported time: the remaining allowance clips
+ * Session-Timeout, so the NAS closes the session at the boundary whether or not an interim
+ * update arrives first. Overshoot is therefore bounded by the NAS honouring Session-Timeout,
+ * not by the accounting interval.
+ */
+function evaluateTimeQuota(fields: EnforcementFields, input: ResolutionInput): TimeQuotaEvaluation {
+  const periods: [QuotaPeriod, number | null][] = [
+    ['daily', fields.online_time_daily_s],
+    ['weekly', fields.online_time_weekly_s],
+    ['monthly', fields.online_time_monthly_s],
+    ['total', fields.online_time_total_s],
+  ];
+  let remaining: number | null = null;
+  let period: QuotaPeriod | null = null;
+  const limits: TimeQuotaEvaluation['limits'] = {};
+  for (const [p, limit] of periods) {
+    if (limit === null) continue;
+    const used = Number(input.usage?.[p]?.session_time_s ?? 0n);
+    const left = limit - used;
+    limits[p] = { limit, used, remaining: left > 0 ? left : 0 };
+    if (used >= limit)
+      return {
+        reject: `online_time_${p}` as ReasonCode,
+        detail: `${String(used)} of ${String(limit)} seconds online`,
+        remaining: 0,
+        period: p,
+        limits,
+      };
+    if (remaining === null || left < remaining) {
+      remaining = left;
+      period = p;
+    }
+  }
+  return { reject: null, detail: null, remaining, period, limits };
+}
+
 function evaluateQuota(
   fields: EnforcementFields,
   input: ResolutionInput,
@@ -534,16 +612,20 @@ function evaluateQuota(
 ): QuotaEvaluation {
   const periods: [QuotaPeriod, bigint | null][] = [
     ['daily', fields.quota_daily_bytes],
+    ['weekly', fields.quota_weekly_bytes],
     ['monthly', fields.quota_monthly_bytes],
     ['total', fields.quota_total_bytes],
   ];
+  // Which octets the allowance counts (migration 036). `combined` when no layer set a direction,
+  // so every policy written before this field existed keeps its previous meaning exactly.
+  const direction = fields.quota_direction ?? 'combined';
   let remaining: bigint | null = null;
   let period: QuotaPeriod | null = null;
   const limits: QuotaEvaluation['limits'] = {};
   for (const [p, limit] of periods) {
     if (limit === null) continue;
     const usage = input.usage?.[p];
-    const used = usage ? usage.bytes_in + usage.bytes_out : 0n;
+    const used = usage ? usedOctets(usage, direction) : 0n;
     const left = limit - used;
     limits[p] = { limit, used, remaining: left > 0n ? left : 0n };
     if (used >= limit)
@@ -562,7 +644,14 @@ function evaluateQuota(
   if (remaining === null)
     return { reject: null, detail: null, remaining: null, period: null, limits };
   // §5.1: subtract what active sessions may have consumed since their last accounting record.
-  const rateBps = ((fields.download_rate_kbps ?? 0) + (fields.upload_rate_kbps ?? 0)) * 1000;
+  // Only the rate in the counted direction can consume a directional allowance.
+  const countedKbps =
+    direction === 'upload'
+      ? (fields.upload_rate_kbps ?? 0)
+      : direction === 'download'
+        ? (fields.download_rate_kbps ?? 0)
+        : (fields.download_rate_kbps ?? 0) + (fields.upload_rate_kbps ?? 0);
+  const rateBps = countedKbps * 1000;
   let estimated = 0n;
   if (rateBps > 0) {
     for (const s of subjectSessions) {
@@ -723,6 +812,8 @@ export function resolveEffectivePolicy(input: ResolutionInput): ResolutionResult
     voucher_end_s: null,
     quota_reset_s: null,
     remaining_octets: null,
+    remaining_time_s: null,
+    remaining_time_period: null,
     remaining_period: null,
     drain_time_s: null,
     min_session_s: minSessionS,
@@ -877,6 +968,16 @@ export function resolveEffectivePolicy(input: ResolutionInput): ResolutionResult
         : `remaining ${quota.remaining} bytes (${quota.period})`,
     data: toJsonValue(quota.limits) as Record<string, JsonValue>,
   });
+  const timeQuota = evaluateTimeQuota(effective.fields, input);
+  trace.push({
+    step: 'quota',
+    detail: timeQuota.reject
+      ? `online time exhausted (${timeQuota.detail ?? ''})`
+      : timeQuota.remaining === null
+        ? 'no online-time quota'
+        : `online time remaining ${String(timeQuota.remaining)} s (${timeQuota.period ?? ''})`,
+    data: toJsonValue(timeQuota.limits) as Record<string, JsonValue>,
+  });
   const clipBase: Clip = {
     policy_session_timeout_s: effective.fields.session_timeout_s,
     window_end_s: windowEndS,
@@ -885,9 +986,34 @@ export function resolveEffectivePolicy(input: ResolutionInput): ResolutionResult
     quota_reset_s: null,
     remaining_octets: quota.remaining,
     remaining_period: quota.period,
+    remaining_time_s: timeQuota.remaining,
+    remaining_time_period: timeQuota.period,
     drain_time_s: drainTime(quota.remaining, effective.fields, minSessionS),
     min_session_s: minSessionS,
   };
+  if (timeQuota.reject) {
+    return finish(
+      input,
+      effective,
+      clipBase,
+      controls,
+      [],
+      trace,
+      'reject',
+      timeQuota.reject,
+      timeQuota.detail,
+    );
+  }
+  if (timeQuota.remaining !== null) {
+    controls.push({
+      kind: 'online_time_watcher',
+      params: {
+        remaining_s: timeQuota.remaining,
+        period: timeQuota.period,
+        limits: toJsonValue(timeQuota.limits),
+      },
+    });
+  }
   if (quota.reject) {
     return finish(
       input,
@@ -915,9 +1041,11 @@ export function resolveEffectivePolicy(input: ResolutionInput): ResolutionResult
       const resetAt =
         effective.fields.quota_daily_bytes !== null
           ? nextLocalMidnight(input.now, input.timeZone)
-          : effective.fields.quota_monthly_bytes !== null
-            ? nextLocalMonthStart(input.now, input.timeZone)
-            : null;
+          : effective.fields.quota_weekly_bytes !== null
+            ? nextLocalWeekStart(input.now, input.timeZone)
+            : effective.fields.quota_monthly_bytes !== null
+              ? nextLocalMonthStart(input.now, input.timeZone)
+              : null;
       if (resetAt) quotaResetS = secondsUntil(resetAt, input.now);
     }
   }

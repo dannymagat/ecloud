@@ -8,6 +8,7 @@ import type { DbTransaction } from '@ecloud/db';
 import {
   PolicyIntentSchema,
   localDateKey,
+  localWeekStartKey,
   type ActiveSessionRef,
   type Candidate,
   type PolicyIntent,
@@ -39,8 +40,14 @@ export function policyRowToIntent(
     burst_upload_kbps: row.burst_upload_kbps ?? null,
     burst_duration_s: row.burst_duration_s ?? null,
     quota_daily_bytes: row.quota_daily_bytes ?? null,
+    quota_weekly_bytes: row.quota_weekly_bytes ?? null,
     quota_monthly_bytes: row.quota_monthly_bytes ?? null,
     quota_total_bytes: row.quota_total_bytes ?? null,
+    quota_direction: row.quota_direction ?? null,
+    online_time_daily_s: row.online_time_daily_s ?? null,
+    online_time_weekly_s: row.online_time_weekly_s ?? null,
+    online_time_monthly_s: row.online_time_monthly_s ?? null,
+    online_time_total_s: row.online_time_total_s ?? null,
     session_timeout_s: row.session_timeout_s ?? null,
     idle_timeout_s: row.idle_timeout_s ?? null,
     max_concurrent_sessions: row.max_concurrent_sessions ?? null,
@@ -197,22 +204,28 @@ export async function loadResolutionInput(
   const usage: UsageCounters = {};
   if (subjectRef !== null) {
     const day = localDateKey(facts.now, facts.timeZone);
+    const week = localWeekStartKey(facts.now, facts.timeZone);
     const month = `${day.slice(0, 8)}01`;
     const counters = await trx
       .selectFrom('usage_counters')
-      .select(['period_type', 'period_start', 'bytes_in', 'bytes_out'])
+      .select(['period_type', 'period_start', 'bytes_in', 'bytes_out', 'session_time_s'])
       .where('subject_type', '=', subjectRef.type)
       .where('subject_id', '=', subjectRef.id)
       .where((eb) =>
         eb.or([
           eb.and([eb('period_type', '=', 'daily'), eb('period_start', '=', day)]),
+          eb.and([eb('period_type', '=', 'weekly'), eb('period_start', '=', week)]),
           eb.and([eb('period_type', '=', 'monthly'), eb('period_start', '=', month)]),
           eb.and([eb('period_type', '=', 'total'), eb('period_start', '=', '1970-01-01')]),
         ]),
       )
       .execute();
     for (const c of counters) {
-      usage[c.period_type] = { bytes_in: BigInt(c.bytes_in), bytes_out: BigInt(c.bytes_out) };
+      usage[c.period_type] = {
+        bytes_in: BigInt(c.bytes_in),
+        bytes_out: BigInt(c.bytes_out),
+        session_time_s: BigInt(c.session_time_s),
+      };
     }
   }
 

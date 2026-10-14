@@ -8,7 +8,7 @@
  * unchanged and keeps only the period bucketing in the site timezone, which needs the policy
  * engine's calendar helpers.
  */
-import { localDateKey, offsetMs, toLocal } from '@ecloud/policy-engine';
+import { localDateKey, localWeekStartKey, offsetMs, toLocal } from '@ecloud/policy-engine';
 
 export {
   EVENT_TIME_TOLERANCE_MS,
@@ -29,6 +29,8 @@ export const TOTAL_PERIOD_START = '1970-01-01';
 
 export interface PeriodStarts {
   daily: string;
+  /** Monday of the local ISO week (migration 036). */
+  weekly: string;
   monthly: string;
   total: string;
 }
@@ -38,6 +40,7 @@ export function periodStarts(at: Date, timeZone: string): PeriodStarts {
   const local = toLocal(at, timeZone);
   return {
     daily: localDateKey(at, timeZone),
+    weekly: localWeekStartKey(at, timeZone),
     monthly: `${String(local.year)}-${String(local.month).padStart(2, '0')}-01`,
     total: TOTAL_PERIOD_START,
   };

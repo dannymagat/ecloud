@@ -28,6 +28,7 @@ export const FIELD_GROUP: Readonly<Record<PolicyField, CapabilityGroup>> = Objec
   burst_upload_kbps: 'bandwidth',
   burst_duration_s: 'bandwidth',
   quota_daily_bytes: 'accounting',
+  quota_weekly_bytes: 'accounting',
   quota_monthly_bytes: 'accounting',
   quota_total_bytes: 'accounting',
   session_timeout_s: 'captivePortal',

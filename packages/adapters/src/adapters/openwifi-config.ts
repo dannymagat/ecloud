@@ -84,6 +84,7 @@ export const capabilities: AdapterCapabilities = {
     decl('burst_upload_kbps', 'UNSUPPORTED', 'VERIFIED_FROM_SOURCE', EV_SOURCED.burstAbsent),
     decl('burst_duration_s', 'UNSUPPORTED', 'VERIFIED_FROM_SOURCE', EV_SOURCED.burstAbsent),
     decl('quota_daily_bytes', 'UNSUPPORTED', 'DOCUMENTED', QUOTA_UNSUPPORTED),
+    decl('quota_weekly_bytes', 'UNSUPPORTED', 'DOCUMENTED', QUOTA_UNSUPPORTED),
     decl('quota_monthly_bytes', 'UNSUPPORTED', 'DOCUMENTED', QUOTA_UNSUPPORTED),
     decl('quota_total_bytes', 'UNSUPPORTED', 'DOCUMENTED', QUOTA_UNSUPPORTED),
     decl(

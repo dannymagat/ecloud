@@ -14,7 +14,7 @@ import {
 } from './capabilities.js';
 import { MIN_TIMEOUT_S, RADIUS_UINT32_MAX } from './intent.js';
 import { renderMikrotikRateLimit } from './mikrotik.js';
-import type { IntentColumn } from './intent.js';
+import type { TranslatedColumn } from './intent.js';
 import type { Clip, EcloudSideControl, EffectivePolicy, Provenance } from './resolve.js';
 
 export const DEGRADATION_MODES = [
@@ -248,7 +248,7 @@ function rateValue(
 function translateRates(b: PlanBuilder, eff: EffectivePolicy, degradation: DegradationMode): void {
   const adapter = b.adapter;
   const ssid = b.ctx.ssidRef ?? '<ssid>';
-  const pairs: [IntentColumn, number | null, 'down' | 'up'][] = [
+  const pairs: [TranslatedColumn, number | null, 'down' | 'up'][] = [
     ['download_rate_kbps', eff.fields.download_rate_kbps, 'down'],
     ['upload_rate_kbps', eff.fields.upload_rate_kbps, 'up'],
   ];
@@ -340,7 +340,7 @@ function translateCombinedRate(
   const down = eff.fields.download_rate_kbps;
   const up = eff.fields.upload_rate_kbps;
   if (down === null && up === null) return;
-  const set: IntentColumn[] = [];
+  const set: TranslatedColumn[] = [];
   if (down !== null) set.push('download_rate_kbps');
   if (up !== null) set.push('upload_rate_kbps');
   const blocked = set.filter((f) => {
@@ -390,11 +390,33 @@ function translateBurst(b: PlanBuilder, eff: EffectivePolicy): void {
 /** Returns true when a verified octet limit was emitted (then the drain-time bound is not needed). */
 function translateQuota(b: PlanBuilder, eff: EffectivePolicy): boolean {
   const quotaFields = (
-    ['quota_daily_bytes', 'quota_monthly_bytes', 'quota_total_bytes'] as const
+    [
+      'quota_daily_bytes',
+      'quota_weekly_bytes',
+      'quota_monthly_bytes',
+      'quota_total_bytes',
+    ] as const
   ).filter((f) => eff.fields[f] !== null);
   if (quotaFields.length === 0) return false;
   const remaining = b.ctx.clip.remaining_octets;
   const adapter = b.adapter;
+  // A directional allowance needs a directional attribute. Emitting the TOTAL octet limit for a
+  // download-only quota would cut the session off once combined traffic reached the figure —
+  // stricter than the policy says, and wrong in a way the guest would notice and the operator
+  // would not. Where the adapter has no input/output attribute the quota stays EZECLOUD-side.
+  const direction = eff.fields.quota_direction ?? 'combined';
+  const quotaAttr =
+    direction === 'upload'
+      ? adapter.quotaAttributes.input
+      : direction === 'download'
+        ? adapter.quotaAttributes.output
+        : adapter.quotaAttributes.total;
+  const quotaGigawordsAttr =
+    direction === 'upload'
+      ? adapter.quotaAttributes.inputGigawords
+      : direction === 'download'
+        ? adapter.quotaAttributes.outputGigawords
+        : adapter.quotaAttributes.totalGigawords;
   const primary = quotaFields[0] as PolicyField;
   const decl = adapter.fields[primary];
   // Lab mode (Cycle B): a REQUIRES_DEVICE_TEST octet limit is emitted too, gated and marked
@@ -403,7 +425,7 @@ function translateQuota(b: PlanBuilder, eff: EffectivePolicy): boolean {
     decl.status === 'REQUIRES_DEVICE_TEST' && b.ctx.includeDeviceTestAttributes === true;
   if (
     (decl.status !== 'VERIFIED_SUPPORTED' && !labQuota) ||
-    !adapter.quotaAttributes.total ||
+    !quotaAttr ||
     adapter.octetWidth === null
   ) {
     for (const f of quotaFields) {
@@ -417,32 +439,34 @@ function translateQuota(b: PlanBuilder, eff: EffectivePolicy): boolean {
       b.flag(
         f,
         reason,
-        d.note ?? 'no octet attribute; bounded by Session-Timeout drain time + accounting watcher',
+        direction !== 'combined' && !quotaAttr && adapter.quotaAttributes.total
+          ? `${direction}-only quota: this NAS has a total octet limit but no ${direction} one, so the allowance is enforced EZECLOUD-side (deny at next Access-Request, Disconnect where supported)`
+          : (d.note ?? 'no octet attribute; bounded by Session-Timeout drain time + accounting watcher'),
       );
     }
     return false;
   }
   if (remaining === null) return false;
-  const vendor = adapter.attributes[adapter.quotaAttributes.total]?.vendor;
+  const vendor = adapter.attributes[quotaAttr]?.vendor;
   let emitted = false;
   if (adapter.octetWidth === 32) {
     const clamped = remaining > BigInt(RADIUS_UINT32_MAX);
     const value = clamped ? RADIUS_UINT32_MAX : Number(remaining);
-    emitted = b.emit(adapter.quotaAttributes.total, value, primary, vendor);
+    emitted = b.emit(quotaAttr, value, primary, vendor);
     if (emitted && clamped) {
       b.flag(
         primary,
         'overflow_clamped',
-        `${adapter.quotaAttributes.total} is 32-bit; ${remaining} clamped to ${RADIUS_UINT32_MAX}, watcher covers the remainder`,
+        `${quotaAttr} is 32-bit; ${remaining} clamped to ${RADIUS_UINT32_MAX}, watcher covers the remainder`,
         decl.status,
       );
     }
   } else {
     const octets = Number(remaining % TWO_POW_32);
     const giga = Number(remaining / TWO_POW_32);
-    emitted = b.emit(adapter.quotaAttributes.total, octets, primary, vendor);
-    if (adapter.quotaAttributes.totalGigawords) {
-      b.emit(adapter.quotaAttributes.totalGigawords, giga, primary, vendor);
+    emitted = b.emit(quotaAttr, octets, primary, vendor);
+    if (quotaGigawordsAttr) {
+      b.emit(quotaGigawordsAttr, giga, primary, vendor);
     }
   }
   for (const f of quotaFields.slice(1)) {
@@ -471,6 +495,9 @@ function deriveSessionTimeout(
     candidates.voucher_end = Math.max(MIN_TIMEOUT_S, clip.voucher_end_s);
   if (clip.quota_reset_s !== null)
     candidates.quota_reset = Math.max(MIN_TIMEOUT_S, clip.quota_reset_s);
+  // The online-time allowance has no attribute of its own; Session-Timeout is its enforcement.
+  if (clip.remaining_time_s !== null)
+    candidates.online_time = Math.max(MIN_TIMEOUT_S, clip.remaining_time_s);
   if (clip.drain_time_s !== null && !verifiedOctetLimit && degradation === 'fallback_ecloud_side') {
     candidates.quota_drain = Math.max(clip.min_session_s, clip.drain_time_s);
   }

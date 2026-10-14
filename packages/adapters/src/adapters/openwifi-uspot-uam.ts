@@ -125,6 +125,13 @@ export const capabilities: AdapterCapabilities = {
     decl('burst_duration_s', 'UNSUPPORTED', 'VERIFIED_FROM_SOURCE', EV_SOURCED.burstAbsent),
     decl('quota_daily_bytes', 'VERIFIED_SUPPORTED', 'VERIFIED_FROM_SOURCE', QUOTA_SRC, QUOTA_NOTE),
     decl(
+      'quota_weekly_bytes',
+      'VERIFIED_SUPPORTED',
+      'VERIFIED_FROM_SOURCE',
+      QUOTA_SRC,
+      QUOTA_NOTE,
+    ),
+    decl(
       'quota_monthly_bytes',
       'VERIFIED_SUPPORTED',
       'VERIFIED_FROM_SOURCE',

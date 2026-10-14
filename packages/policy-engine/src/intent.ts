@@ -48,9 +48,19 @@ export const POLICY_SCOPE_TYPES = ['user', 'group', 'site', 'temporary'] as cons
 export const POLICY_STATUSES = ['draft', 'active', 'retired'] as const;
 export const CONCURRENCY_MODES = ['reject', 'disconnect_oldest'] as const;
 
+/**
+ * Which octets the data quotas count (migration 036), named from the client's perspective like
+ * every other rate here: `upload` is Acct-Input-Octets, `download` is Acct-Output-Octets.
+ */
+export const QUOTA_DIRECTIONS = ['combined', 'upload', 'download'] as const;
+
 export type PolicyScopeType = (typeof POLICY_SCOPE_TYPES)[number];
 export type PolicyStatus = (typeof POLICY_STATUSES)[number];
 export type ConcurrencyMode = (typeof CONCURRENCY_MODES)[number];
+export type QuotaDirection = (typeof QUOTA_DIRECTIONS)[number];
+
+/** Accounting periods a quota can be expressed over (migration 036 added `weekly`). */
+export const QUOTA_PERIODS = ['daily', 'weekly', 'monthly', 'total'] as const;
 
 /**
  * One `policies` row (plus its joined schedule). `null` = inherit from the next layer
@@ -74,8 +84,20 @@ export const PolicyIntentSchema = z.object({
   burst_upload_kbps: z.number().int().nullable().default(null),
   burst_duration_s: z.number().int().nullable().default(null),
   quota_daily_bytes: positiveBigint.nullable().default(null),
+  quota_weekly_bytes: positiveBigint.nullable().default(null),
   quota_monthly_bytes: positiveBigint.nullable().default(null),
   quota_total_bytes: positiveBigint.nullable().default(null),
+  /** null = inherit; the engine falls back to `combined` when no layer sets one. */
+  quota_direction: z.enum(QUOTA_DIRECTIONS).nullable().default(null),
+  /**
+   * Cumulative connected seconds per period. Distinct from `valid_until` (eligibility window)
+   * and `session_timeout_s` (one connection): this is time actually spent online, summed across
+   * a subject's devices, and it is enforced EZECLOUD-side by clipping Session-Timeout.
+   */
+  online_time_daily_s: z.number().int().nullable().default(null),
+  online_time_weekly_s: z.number().int().nullable().default(null),
+  online_time_monthly_s: z.number().int().nullable().default(null),
+  online_time_total_s: z.number().int().nullable().default(null),
   session_timeout_s: z.number().int().nullable().default(null),
   idle_timeout_s: z.number().int().nullable().default(null),
   max_concurrent_sessions: z.number().int().nullable().default(null),
@@ -97,9 +119,25 @@ export type PolicyIntentInput = z.input<typeof PolicyIntentSchema>;
 export type PolicyIntent = z.output<typeof PolicyIntentSchema>;
 
 /** `policies` columns among POLICY_FIELDS (`voucher_validity` lives on the voucher batch). */
-export type IntentColumn = Exclude<PolicyField, 'voucher_validity'>;
+/**
+ * Columns the layer merge resolves. `PolicyField` is the set an adapter declares a capability
+ * for; `quota_direction` and the `online_time_*` allowances are deliberately not in it, because
+ * no NAS attribute carries them. Their enforcement is EZECLOUD-side — denial at the next
+ * Access-Request and a clipped Session-Timeout — so declaring a per-adapter status for them
+ * would invent a device capability rather than describe one.
+ */
+export type IntentColumn =
+  | Exclude<PolicyField, 'voucher_validity'>
+  | 'quota_direction'
+  | 'online_time_daily_s'
+  | 'online_time_weekly_s'
+  | 'online_time_monthly_s'
+  | 'online_time_total_s';
 
 /** Enforcement-relevant columns only (the ones that fall through layer by layer). */
+/** The merge columns an adapter declares a capability for; the ones `translate()` can act on. */
+export type TranslatedColumn = Exclude<PolicyField, 'voucher_validity'>;
+
 export type EnforcementFields = Pick<PolicyIntent, IntentColumn>;
 
 export interface IntentValidationIssue {
@@ -139,8 +177,14 @@ export const INTENT_COLUMNS: readonly IntentColumn[] = [
   'burst_upload_kbps',
   'burst_duration_s',
   'quota_daily_bytes',
+  'quota_weekly_bytes',
   'quota_monthly_bytes',
   'quota_total_bytes',
+  'quota_direction',
+  'online_time_daily_s',
+  'online_time_weekly_s',
+  'online_time_monthly_s',
+  'online_time_total_s',
   'session_timeout_s',
   'idle_timeout_s',
   'max_concurrent_sessions',
@@ -245,30 +289,64 @@ export function validatePolicy(input: unknown, context: ValidationContext = {}):
   if (burstSet || p.burst_duration_s !== null)
     warnings.push('burst is UNSUPPORTED on all current adapters');
 
-  // Rule 3: positive quotas (schema) and daily ≤ monthly ≤ total.
+  // Rule 3: positive quotas (schema) and a shorter period may never exceed a longer one.
+  // A "5 GB a day, 2 GB a month" plan is not a plan, it is a typo the guest would discover.
+  const QUOTA_ORDER = [
+    ['quota_daily_bytes', 'quota_weekly_bytes'],
+    ['quota_weekly_bytes', 'quota_monthly_bytes'],
+    ['quota_monthly_bytes', 'quota_total_bytes'],
+    ['quota_daily_bytes', 'quota_monthly_bytes'],
+    ['quota_daily_bytes', 'quota_total_bytes'],
+    ['quota_weekly_bytes', 'quota_total_bytes'],
+  ] as const;
+  for (const [shorter, longer] of QUOTA_ORDER) {
+    const a = p[shorter];
+    const b = p[longer];
+    if (a !== null && b !== null && a > b)
+      err(shorter, 3, 'quota_order', `${shorter} must be <= ${longer}`);
+  }
+  // A direction with nothing to apply it to is a setting that silently does nothing.
   if (
-    p.quota_daily_bytes !== null &&
-    p.quota_monthly_bytes !== null &&
-    p.quota_daily_bytes > p.quota_monthly_bytes
-  )
-    err('quota_daily_bytes', 3, 'quota_order', 'quota_daily_bytes must be <= quota_monthly_bytes');
-  if (
-    p.quota_monthly_bytes !== null &&
-    p.quota_total_bytes !== null &&
-    p.quota_monthly_bytes > p.quota_total_bytes
+    p.quota_direction !== null &&
+    p.quota_daily_bytes === null &&
+    p.quota_weekly_bytes === null &&
+    p.quota_monthly_bytes === null &&
+    p.quota_total_bytes === null
   )
     err(
-      'quota_monthly_bytes',
+      'quota_direction',
       3,
-      'quota_order',
-      'quota_monthly_bytes must be <= quota_total_bytes',
+      'direction_without_quota',
+      'quota_direction applies to the data quotas; set at least one, or leave the direction unset to inherit',
     );
-  if (
-    p.quota_daily_bytes !== null &&
-    p.quota_total_bytes !== null &&
-    p.quota_daily_bytes > p.quota_total_bytes
-  )
-    err('quota_daily_bytes', 3, 'quota_order', 'quota_daily_bytes must be <= quota_total_bytes');
+
+  // Rule 12: online-time allowances (migration 036). Same ordering discipline as the data
+  // quotas, and the same minimum as the timers: a cap below one minute cannot be enforced by a
+  // Session-Timeout the NAS only re-reads at the next Access-Request.
+  const TIME_ORDER = [
+    ['online_time_daily_s', 'online_time_weekly_s'],
+    ['online_time_weekly_s', 'online_time_monthly_s'],
+    ['online_time_monthly_s', 'online_time_total_s'],
+    ['online_time_daily_s', 'online_time_monthly_s'],
+    ['online_time_daily_s', 'online_time_total_s'],
+    ['online_time_weekly_s', 'online_time_total_s'],
+  ] as const;
+  for (const key of [
+    'online_time_daily_s',
+    'online_time_weekly_s',
+    'online_time_monthly_s',
+    'online_time_total_s',
+  ] as const) {
+    const v = p[key];
+    if (v !== null && v < MIN_TIMEOUT_S)
+      err(key, 12, 'online_time_too_short', `${key} must be >= ${MIN_TIMEOUT_S} s`);
+  }
+  for (const [shorter, longer] of TIME_ORDER) {
+    const a = p[shorter];
+    const b = p[longer];
+    if (a !== null && b !== null && a > b)
+      err(shorter, 12, 'online_time_order', `${shorter} must be <= ${longer}`);
+  }
 
   // Rule 4: timers ≥ 60 s.
   for (const key of ['session_timeout_s', 'idle_timeout_s'] as const) {
@@ -396,8 +474,14 @@ export function enforcementFields(p: PolicyIntent): EnforcementFields {
     burst_upload_kbps: p.burst_upload_kbps,
     burst_duration_s: p.burst_duration_s,
     quota_daily_bytes: p.quota_daily_bytes,
+    quota_weekly_bytes: p.quota_weekly_bytes,
     quota_monthly_bytes: p.quota_monthly_bytes,
     quota_total_bytes: p.quota_total_bytes,
+    quota_direction: p.quota_direction,
+    online_time_daily_s: p.online_time_daily_s,
+    online_time_weekly_s: p.online_time_weekly_s,
+    online_time_monthly_s: p.online_time_monthly_s,
+    online_time_total_s: p.online_time_total_s,
     session_timeout_s: p.session_timeout_s,
     idle_timeout_s: p.idle_timeout_s,
     max_concurrent_sessions: p.max_concurrent_sessions,

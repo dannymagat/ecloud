@@ -911,6 +911,7 @@ export async function processRecord(
       if (subjectId === null) continue;
       for (const [periodType, periodStart] of [
         ['daily', periods.daily],
+        ['weekly', periods.weekly],
         ['monthly', periods.monthly],
         ['total', periods.total],
       ] as const) {

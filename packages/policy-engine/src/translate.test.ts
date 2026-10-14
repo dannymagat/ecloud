@@ -74,6 +74,8 @@ const emptyClip: Clip = {
   quota_reset_s: null,
   remaining_octets: null,
   remaining_period: null,
+  remaining_time_s: null,
+  remaining_time_period: null,
   drain_time_s: null,
   min_session_s: 300,
 };
@@ -457,7 +459,7 @@ describe('translate — VLAN, burst, EZECLOUD-side fields', () => {
       deviceEnforced: true,
       attributes: ['WISPr-Bandwidth-Max-Down'],
     });
-    expect(plan.fieldTable).toHaveLength(17);
+    expect(plan.fieldTable).toHaveLength(18);
     expect(plan.sessionTimeout.boundBy).toBe('voucher_end');
   });
 });

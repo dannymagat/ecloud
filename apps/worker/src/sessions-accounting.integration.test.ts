@@ -9,7 +9,7 @@
 import { randomBytes, randomInt } from 'node:crypto';
 import { normalizeAccounting, type RawAccountingRow } from '@ecloud/adapters';
 import { createDb, createPool, withPlatform, type Db } from '@ecloud/db';
-import { localDateKey } from '@ecloud/policy-engine';
+import { localDateKey, localWeekStartKey } from '@ecloud/policy-engine';
 import { newId } from '@ecloud/shared';
 import {
   describeIntegration,
@@ -98,7 +98,7 @@ await describeIntegration('@ecloud/worker P8-A site counters and action sweep', 
     await db?.destroy();
   });
 
-  it('drain advances site counters (daily / monthly in the site TZ, total) with the user counters', async () => {
+  it('drain advances site counters (daily / weekly / monthly in the site TZ, total) with the user counters', async () => {
     const id = newId();
     const t0 = new Date(Date.now() - 600_000);
     const t1 = new Date(Date.now() - 60_000);
@@ -126,6 +126,7 @@ await describeIntegration('@ecloud/worker P8-A site counters and action sweep', 
       .orderBy('period_type')
       .execute();
     const today = localDateKey(t1, 'Asia/Dubai');
+    const weekStart = localWeekStartKey(t1, 'Asia/Dubai');
     expect(rows).toEqual([
       {
         subject_type: 'site',
@@ -147,6 +148,15 @@ await describeIntegration('@ecloud/worker P8-A site counters and action sweep', 
         subject_type: 'site',
         period_type: 'total',
         period_start: '1970-01-01',
+        bytes_in: 700,
+        bytes_out: 1300,
+        session_count: 1,
+      },
+      // Migration 036: the weekly bucket is advanced by the same delta, keyed on the local Monday.
+      {
+        subject_type: 'site',
+        period_type: 'weekly',
+        period_start: weekStart,
         bytes_in: 700,
         bytes_out: 1300,
         session_count: 1,

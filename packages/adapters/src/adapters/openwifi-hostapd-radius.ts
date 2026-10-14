@@ -87,6 +87,13 @@ export const capabilities: AdapterCapabilities = {
       'no octet attribute; bounded by Session-Timeout drain time + accounting watcher (POLICY_ENGINE.md D3)',
     ),
     decl(
+      'quota_weekly_bytes',
+      'UNSUPPORTED',
+      'DOCUMENTED',
+      QUOTA_UNSUPPORTED,
+      'no octet attribute; bounded by Session-Timeout drain time + accounting watcher (POLICY_ENGINE.md D3)',
+    ),
+    decl(
       'quota_monthly_bytes',
       'UNSUPPORTED',
       'DOCUMENTED',

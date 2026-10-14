@@ -89,6 +89,7 @@ describe('compatibility registry data', () => {
         'download_rate_kbps',
         'upload_rate_kbps',
         'quota_daily_bytes',
+        'quota_weekly_bytes',
         'quota_monthly_bytes',
         'quota_total_bytes',
         'session_timeout_s',
@@ -102,7 +103,7 @@ describe('compatibility registry data', () => {
       expect(c.evidenceRefs.some((r) => r.appliesTo === 'coova-chilli master')).toBe(true);
     }
     const master = presentCells(row('coova-chilli-master').capabilities);
-    expect(master.filter((c) => c.status === 'VERIFIED_SUPPORTED')).toHaveLength(8);
+    expect(master.filter((c) => c.status === 'VERIFIED_SUPPORTED')).toHaveLength(9);
     // Engine declaration untouched by the override.
     expect(getAdapter('coovachilli-uam').capabilities().fields.download_rate_kbps.status).toBe(
       'VERIFIED_SUPPORTED',

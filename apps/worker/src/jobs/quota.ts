@@ -22,6 +22,7 @@ export const BREACH_MARKER_TTL_S = 40 * 24 * 3600;
 
 export interface QuotaLimits {
   daily: number | null;
+  weekly: number | null;
   monthly: number | null;
   total: number | null;
 }
@@ -29,17 +30,29 @@ export interface QuotaLimits {
 export interface PeriodUsage {
   bytesIn: number;
   bytesOut: number;
+  /** Accumulated connected seconds in this period (migration 036); 0 when not yet recorded. */
+  sessionTimeS?: number;
+}
+
+/** Cumulative online-time allowances, seconds (migration 036). */
+export interface OnlineTimeLimits {
+  daily: number | null;
+  weekly: number | null;
+  monthly: number | null;
+  total: number | null;
 }
 
 export type UsageByPeriod = Partial<Record<UsagePeriodType, PeriodUsage>>;
 
 export interface QuotaBreach {
+  /** `data` is bytes, `time` is seconds of online time; the unit changes the message, not the path. */
+  kind: 'data' | 'time';
   period: UsagePeriodType;
   limit: number;
   used: number;
 }
 
-const PERIODS: readonly UsagePeriodType[] = ['daily', 'monthly', 'total'];
+const PERIODS: readonly UsagePeriodType[] = ['daily', 'weekly', 'monthly', 'total'];
 
 /** §2.5: a period is breached when bytes_in + bytes_out >= its limit. Limits <= 0 are ignored. */
 export function evaluateQuota(limits: QuotaLimits, usage: UsageByPeriod): QuotaBreach[] {
@@ -49,7 +62,31 @@ export function evaluateQuota(limits: QuotaLimits, usage: UsageByPeriod): QuotaB
     if (limit === null || limit <= 0) continue;
     const u = usage[period];
     const used = u === undefined ? 0 : u.bytesIn + u.bytesOut;
-    if (used >= limit) breaches.push({ period, limit, used });
+    if (used >= limit) breaches.push({ kind: 'data', period, limit, used });
+  }
+  return breaches;
+}
+
+/**
+ * §2.5 for online time (migration 036): a period is breached when the accumulated connected
+ * seconds reach its allowance.
+ *
+ * Session-Timeout already ends the session at the boundary the engine predicted at authorize
+ * time, so in the ordinary case this watcher finds nothing. It exists for the cases the
+ * prediction cannot cover: a second device joining after the timeout was issued and burning the
+ * shared allowance twice as fast, an allowance lowered mid-session, or a NAS that does not
+ * honour Session-Timeout. Without it those sessions would run to the timeout and overshoot.
+ */
+export function evaluateOnlineTime(
+  limits: OnlineTimeLimits,
+  usage: UsageByPeriod,
+): QuotaBreach[] {
+  const breaches: QuotaBreach[] = [];
+  for (const period of PERIODS) {
+    const limit = limits[period];
+    if (limit === null || limit <= 0) continue;
+    const used = usage[period]?.sessionTimeS ?? 0;
+    if (used >= limit) breaches.push({ kind: 'time', period, limit, used });
   }
   return breaches;
 }
@@ -111,11 +148,21 @@ interface CandidateRow {
   policy_id: string;
   started_at: Date;
   quota_daily_bytes: number | null;
+  quota_weekly_bytes: number | null;
   quota_monthly_bytes: number | null;
   quota_total_bytes: number | null;
+  online_time_daily_s: number | null;
+  online_time_weekly_s: number | null;
+  online_time_monthly_s: number | null;
+  online_time_total_s: number | null;
   timezone: string;
   adapter_key: string | null;
   coa_supported: boolean | null;
+}
+
+/** The reason code a breach is reported under, in the engine's own vocabulary. */
+function breachReason(b: QuotaBreach): string {
+  return b.kind === 'time' ? `online_time_${b.period}` : `quota_${b.period}`;
 }
 
 function subjectOf(
@@ -164,8 +211,13 @@ export async function enforceQuotas(
           'p.id as policy_id',
           'se.started_at',
           'p.quota_daily_bytes',
+          'p.quota_weekly_bytes',
           'p.quota_monthly_bytes',
           'p.quota_total_bytes',
+          'p.online_time_daily_s',
+          'p.online_time_weekly_s',
+          'p.online_time_monthly_s',
+          'p.online_time_total_s',
           'st.timezone',
           'n.adapter_key',
           'n.coa_supported',
@@ -174,8 +226,13 @@ export async function enforceQuotas(
         .where((eb) =>
           eb.or([
             eb('p.quota_daily_bytes', 'is not', null),
+            eb('p.quota_weekly_bytes', 'is not', null),
             eb('p.quota_monthly_bytes', 'is not', null),
             eb('p.quota_total_bytes', 'is not', null),
+            eb('p.online_time_daily_s', 'is not', null),
+            eb('p.online_time_weekly_s', 'is not', null),
+            eb('p.online_time_monthly_s', 'is not', null),
+            eb('p.online_time_total_s', 'is not', null),
           ]),
         );
       if (sessionIds !== undefined) q = q.where('se.id', 'in', [...sessionIds]);
@@ -190,30 +247,48 @@ export async function enforceQuotas(
     const periods = periodStarts(now, row.timezone);
     const counters = await deps.db
       .selectFrom('usage_counters')
-      .select(['period_type', 'period_start', 'bytes_in', 'bytes_out'])
+      .select(['period_type', 'period_start', 'bytes_in', 'bytes_out', 'session_time_s'])
       .where('subject_type', '=', subject.type)
       .where('subject_id', '=', subject.id)
       .where((eb) =>
         eb.or([
           eb.and([eb('period_type', '=', 'daily'), eb('period_start', '=', periods.daily)]),
+          eb.and([eb('period_type', '=', 'weekly'), eb('period_start', '=', periods.weekly)]),
           eb.and([eb('period_type', '=', 'monthly'), eb('period_start', '=', periods.monthly)]),
           eb.and([eb('period_type', '=', 'total'), eb('period_start', '=', periods.total)]),
         ]),
       )
       .execute();
     const usage: UsageByPeriod = {};
-    for (const c of counters) usage[c.period_type] = { bytesIn: c.bytes_in, bytesOut: c.bytes_out };
-    const breaches = evaluateQuota(
-      {
-        daily: row.quota_daily_bytes,
-        monthly: row.quota_monthly_bytes,
-        total: row.quota_total_bytes,
-      },
-      usage,
-    );
+    for (const c of counters)
+      usage[c.period_type] = {
+        bytesIn: c.bytes_in,
+        bytesOut: c.bytes_out,
+        sessionTimeS: Number(c.session_time_s),
+      };
+    const breaches = [
+      ...evaluateQuota(
+        {
+          daily: row.quota_daily_bytes,
+          weekly: row.quota_weekly_bytes,
+          monthly: row.quota_monthly_bytes,
+          total: row.quota_total_bytes,
+        },
+        usage,
+      ),
+      ...evaluateOnlineTime(
+        {
+          daily: row.online_time_daily_s,
+          weekly: row.online_time_weekly_s,
+          monthly: row.online_time_monthly_s,
+          total: row.online_time_total_s,
+        },
+        usage,
+      ),
+    ];
     const fresh: QuotaBreach[] = [];
     for (const b of breaches) {
-      const key = `quota:${row.session_id}:${b.period}:${periods[b.period]}`;
+      const key = `quota:${row.session_id}:${b.kind}:${b.period}:${periods[b.period]}`;
       if (await deps.state.markOnce(key, BREACH_MARKER_TTL_S)) fresh.push(b);
     }
     if (fresh.length === 0) continue;
@@ -225,7 +300,11 @@ export async function enforceQuotas(
       nasCoaSupported: row.coa_supported,
     });
     const breachText = fresh
-      .map((b) => `quota_${b.period}: ${String(b.used)} >= ${String(b.limit)} bytes`)
+      .map((b) =>
+        b.kind === 'time'
+          ? `online_time_${b.period}: ${String(b.used)} >= ${String(b.limit)} seconds`
+          : `quota_${b.period}: ${String(b.used)} >= ${String(b.limit)} bytes`,
+      )
       .join(', ');
     const runtime = {
       organizationId: row.organization_id,
@@ -245,10 +324,12 @@ export async function enforceQuotas(
       subject_id: subject.id,
       policy_id: row.policy_id,
       breaches: fresh.map((b) => ({
+        kind: b.kind,
         period: b.period,
         period_start: periods[b.period],
-        limit_bytes: b.limit,
-        used_bytes: b.used,
+        ...(b.kind === 'time'
+          ? { limit_seconds: b.limit, used_seconds: b.used }
+          : { limit_bytes: b.limit, used_bytes: b.used }),
       })),
     };
     if (decision.action === 'disconnect') {
@@ -263,7 +344,7 @@ export async function enforceQuotas(
               session_id: row.session_id,
               action: 'disconnect',
               status: 'pending',
-              payload: JSON.stringify({ reason: `quota_${first.period}`, trigger: 'quota' }),
+              payload: JSON.stringify({ reason: breachReason(first), trigger: 'quota' }),
             })
             .returning('id')
             .executeTakeFirstOrThrow();
@@ -275,7 +356,7 @@ export async function enforceQuotas(
           await emitEvent(trx, 'session.disconnect_requested', row.organization_id, row.site_id, {
             session_id: row.session_id,
             session_action_id: action.id,
-            reason: `quota_${first.period}`,
+            reason: breachReason(first),
           });
           // The strategy relied on stays evidence-based (next_reauth: Disconnect is not
           // lab-validated); the lab-mode Disconnect is an experiment recorded alongside (D-006).

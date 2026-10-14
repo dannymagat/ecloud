@@ -60,7 +60,10 @@ export type AuthResult = 'accept' | 'reject' | 'challenge' | 'error';
 export type SessionActionType = 'disconnect' | 'coa_update';
 export type SessionActionStatus = 'pending' | 'sent' | 'ack' | 'nak' | 'timeout' | 'unsupported';
 export type UsageSubjectType = 'user' | 'client_device' | 'voucher' | 'site';
-export type UsagePeriodType = 'daily' | 'monthly' | 'total';
+export type UsagePeriodType = 'daily' | 'weekly' | 'monthly' | 'total';
+
+/** Which octets a policy's data quotas count (migration 036), from the client's perspective. */
+export type QuotaDirection = 'combined' | 'upload' | 'download';
 export type AuditActorType = 'administrator' | 'api_key' | 'subscriber' | 'system';
 export type DeviceMode = 'bridge' | 'routed' | 'unknown';
 export type MgmtStatus = 'unknown' | 'online' | 'offline';
@@ -637,8 +640,14 @@ export interface PoliciesTable {
   burst_upload_kbps: number | null;
   burst_duration_s: number | null;
   quota_daily_bytes: BigintColumn | null;
+  quota_weekly_bytes: BigintColumn | null;
   quota_monthly_bytes: BigintColumn | null;
   quota_total_bytes: BigintColumn | null;
+  quota_direction: QuotaDirection | null;
+  online_time_daily_s: number | null;
+  online_time_weekly_s: number | null;
+  online_time_monthly_s: number | null;
+  online_time_total_s: number | null;
   session_timeout_s: number | null;
   idle_timeout_s: number | null;
   max_concurrent_sessions: number | null;

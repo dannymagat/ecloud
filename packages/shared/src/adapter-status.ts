@@ -33,6 +33,7 @@ export const POLICY_FIELDS = [
   'burst_upload_kbps',
   'burst_duration_s',
   'quota_daily_bytes',
+  'quota_weekly_bytes',
   'quota_monthly_bytes',
   'quota_total_bytes',
   'session_timeout_s',

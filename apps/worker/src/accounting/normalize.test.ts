@@ -180,15 +180,28 @@ describe('periodStarts (site timezone buckets)', () => {
     const at = new Date('2026-01-31T22:30:00Z');
     expect(periodStarts(at, 'Asia/Dubai')).toEqual({
       daily: '2026-02-01',
+      // Sunday 2026-02-01 belongs to the ISO week that started Monday 2026-01-26.
+      weekly: '2026-01-26',
       monthly: '2026-02-01',
       total: '1970-01-01',
     });
     expect(periodStarts(at, 'UTC')).toEqual({
       daily: '2026-01-31',
+      weekly: '2026-01-26',
       monthly: '2026-01-01',
       total: '1970-01-01',
     });
   });
+  it('rolls the weekly bucket on the local Monday, so Sunday still belongs to the week before', () => {
+    // 2026-02-01 is a Sunday, 2026-02-02 the Monday after it.
+    expect(periodStarts(new Date('2026-02-01T12:00:00Z'), 'UTC').weekly).toBe('2026-01-26');
+    expect(periodStarts(new Date('2026-02-02T00:00:00Z'), 'UTC').weekly).toBe('2026-02-02');
+    // Same instant, two zones, two weeks: 2026-02-01 20:00 UTC is already Monday in Asia/Dubai.
+    const sundayEvening = new Date('2026-02-01T20:00:00Z');
+    expect(periodStarts(sundayEvening, 'UTC').weekly).toBe('2026-01-26');
+    expect(periodStarts(sundayEvening, 'Asia/Dubai').weekly).toBe('2026-02-02');
+  });
+
   it('handles the DST spring-forward day in America/New_York', () => {
     // 2026-03-08: clocks jump 02:00 → 03:00 EST→EDT (UTC−5 → UTC−4)
     expect(periodStarts(new Date('2026-03-08T04:59:59Z'), 'America/New_York').daily).toBe(

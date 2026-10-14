@@ -24,12 +24,22 @@ const all = listCapabilities().flatMap((c) =>
   flags(c).map(([name, f]) => ({ key: c.key, name, f })),
 );
 
-/** Back-fill table: verified cell → V-row(s) of PHASE2_VALIDATION.md (plan §4.2, V10). */
+/**
+ * Back-fill table: verified cell → V-row(s) of PHASE2_VALIDATION.md (plan §4.2, V10).
+ *
+ * `quota_weekly_bytes` (migration 036) carries the V-row of the quota test that was actually
+ * executed, and no new V-row was created for it. That is deliberate and it is not a claim of an
+ * untested device: the period is an EZECLOUD-side bookkeeping concept. Whatever the period, the
+ * NAS receives the same octet attribute carrying the same remaining-bytes figure, so the device
+ * behaviour under test is identical to the one V-054 / V-073 already exercised. A separate V-row
+ * would test the device twice with the same packet.
+ */
 const BACKFILL: Readonly<Record<string, Readonly<Record<string, readonly string[]>>>> = {
   'openwifi-uspot-uam': {
     'fields.download_rate_kbps': ['V-052', 'V-053'],
     'fields.upload_rate_kbps': ['V-052', 'V-053'],
     'fields.quota_daily_bytes': ['V-054'],
+    'fields.quota_weekly_bytes': ['V-054'],
     'fields.quota_monthly_bytes': ['V-054'],
     'fields.quota_total_bytes': ['V-054'],
     'fields.session_timeout_s': ['V-050'],
@@ -49,6 +59,7 @@ const BACKFILL: Readonly<Record<string, Readonly<Record<string, readonly string[
     'fields.download_rate_kbps': ['V-053'],
     'fields.upload_rate_kbps': ['V-053'],
     'fields.quota_daily_bytes': ['V-054'],
+    'fields.quota_weekly_bytes': ['V-054'],
     'fields.quota_monthly_bytes': ['V-054'],
     'fields.quota_total_bytes': ['V-054'],
     'fields.session_timeout_s': ['V-050'],
@@ -73,6 +84,7 @@ const BACKFILL: Readonly<Record<string, Readonly<Record<string, readonly string[
     'fields.download_rate_kbps': ['V-073'],
     'fields.upload_rate_kbps': ['V-073'],
     'fields.quota_daily_bytes': ['V-073'],
+    'fields.quota_weekly_bytes': ['V-073'],
     'fields.quota_monthly_bytes': ['V-073'],
     'fields.quota_total_bytes': ['V-073'],
     'fields.session_timeout_s': ['V-073'],
@@ -119,11 +131,11 @@ describe('evidence levels (plan §4.2)', () => {
       expect(isEvidenceLevel(f.evidenceLevel), `${key}/${name}`).toBe(true);
   });
 
-  it('29 verified cells (25 fields + 4 macAuth) and 40 verified attributes, all VERIFIED_FROM_SOURCE', () => {
+  it('32 verified cells (28 fields + 4 macAuth) and 40 verified attributes, all VERIFIED_FROM_SOURCE', () => {
     const verified = all.filter((c) => c.f.status === 'VERIFIED_SUPPORTED');
     const cells = verified.filter((c) => !c.name.startsWith('attributes.'));
     const attrs = verified.filter((c) => c.name.startsWith('attributes.'));
-    expect(cells).toHaveLength(29);
+    expect(cells).toHaveLength(32);
     expect(cells.filter((c) => c.name === 'macAuth')).toHaveLength(4);
     expect(attrs).toHaveLength(40);
     for (const c of verified)

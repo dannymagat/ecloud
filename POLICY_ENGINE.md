@@ -37,9 +37,12 @@ All sizes are **bytes (decimal, SI)**: `1 GB = 1 000 000 000 bytes`. All rates a
 | `upload_rate_kbps` | int ≥ 1, NULL = inherit | Per-client ceiling, client→AP | same |
 | `burst_download_kbps`, `burst_upload_kbps` | int, NULL | **Burst rate**: peak rate allowed while a burst allowance lasts | **UNSUPPORTED on all current adapters.** A2 §2: no schema key; `ratelimit` uses fixed `burst 2k` (VERIFIED DOCS, absence). A4 §7.5: not expressible via RADIUS for uspot/CoovaChilli. Stored for future adapters; translation always lists it under `unenforceable[]`. |
 | `burst_duration_s` | int, NULL | How long the burst rate may be sustained (the engine derives burst *size* = `burst_rate × duration / 8` bytes when a future adapter wants a bucket size) | UNSUPPORTED (same) |
-| `quota_daily_bytes` | bigint, NULL | Max bytes (in+out) per site-local day | EZECLOUD-side counter (A6 `usage_counters`) + per-session octet attribute sized to remaining, where the adapter supports it (A4 §7.5) |
+| `quota_daily_bytes` | bigint, NULL | Max bytes per site-local day, counted per `quota_direction` | EZECLOUD-side counter (A6 `usage_counters`) + per-session octet attribute sized to remaining, where the adapter supports it (A4 §7.5) |
+| `quota_weekly_bytes` | bigint, NULL | Max bytes per site-local ISO week (Monday start); migration 036 | same |
 | `quota_monthly_bytes` | bigint, NULL | Max bytes per site-local calendar month | same |
 | `quota_total_bytes` | bigint, NULL | Lifetime / voucher total | same |
+| `quota_direction` | `combined` / `upload` / `download`, NULL = inherit (`combined` when no layer sets one); migration 036 | Which octets the data quotas count, named from the client's perspective: `upload` is Acct-Input-Octets, `download` is Acct-Output-Octets | A directional allowance needs a directional attribute (`*-Max-Input-Octets` / `*-Max-Output-Octets`). Where the adapter has only a total octet limit the quota is EZECLOUD-side, because emitting the total limit would cut the session off on traffic the allowance does not count |
+| `online_time_daily_s`, `online_time_weekly_s`, `online_time_monthly_s`, `online_time_total_s` | int ≥ 60, NULL; migration 036 | **Cumulative connected time** per period, summed across the subject's devices. Distinct from `valid_until` (eligibility window) and from `session_timeout_s` (one connection) | EZECLOUD-side: `usage_counters.session_time_s` + `Session-Timeout` clipped to the remainder. No RADIUS attribute carries a time allowance, so there is no per-adapter capability for it and none is declared |
 | `session_timeout_s` | int ≥ 60, NULL | Max duration of one session | Captive adapters VERIFIED (`Session-Timeout`, A4 §3.4); hostapd REQUIRES DEVICE TEST (A2 §2) |
 | `idle_timeout_s` | int ≥ 60, NULL | Disconnect after inactivity | Captive adapters VERIFIED (`Idle-Timeout`); hostapd: per-SSID `max-inactivity` only (A2 §2) |
 | `max_concurrent_sessions` | int ≥ 1, NULL | Active sessions per subject (user or voucher) | EZECLOUD-side only (A2 §2 "not a device feature") |
@@ -100,7 +103,7 @@ All sizes are **bytes (decimal, SI)**: `1 GB = 1 000 000 000 bytes`. All rates a
 
 1. Rates: `download_rate_kbps`, `upload_rate_kbps` ≥ 1 when set (A6 `ck_policies_rates_positive`); upper bound 4 294 967 kbit/s so `WISPr-Bandwidth-Max-*` (32-bit bit/s) cannot overflow.
 2. Burst: `burst_*_kbps` must be ≥ the corresponding base rate; `burst_duration_s` required when either burst rate is set. Saving a burst value is allowed but the API response carries `warnings: ["burst is UNSUPPORTED on all current adapters"]`.
-3. Quotas: positive bigint; `quota_daily_bytes ≤ quota_monthly_bytes ≤ quota_total_bytes` when more than one is set.
+3. Quotas: positive bigint; a shorter period never exceeds a longer one — `quota_daily_bytes ≤ quota_weekly_bytes ≤ quota_monthly_bytes ≤ quota_total_bytes` across every pair that is set. `quota_direction` requires at least one quota to apply to.
 4. Timeouts: `session_timeout_s ≥ 60`, `idle_timeout_s ≥ 60` (CoovaChilli ignores interim < 60 s per A4 §6; the same floor is applied to all timers for safety).
 5. `max_concurrent_sessions ≥ max_devices` when both set (a device holds at least one session).
 6. `valid_until > valid_from`; a policy with `valid_until < now()` cannot be set `active`.
@@ -109,6 +112,7 @@ All sizes are **bytes (decimal, SI)**: `1 GB = 1 000 000 000 bytes`. All rates a
 9. `is_default` → `scope_type` must be `site` or `group`-less org default; exactly one per org (A6 unique index).
 10. `scope_type = 'temporary'` requires every assignment to carry `effective_until`.
 11. Editing an `active` policy creates a new `version`; `retired` policies are immutable.
+12. Online time (migration 036): each `online_time_*_s` ≥ 60 s, and the same ordering discipline as the data quotas — a shorter period never exceeds a longer one. A cap below a minute cannot be enforced by a `Session-Timeout` the NAS only re-reads at the next Access-Request.
 
 ---
 
@@ -186,14 +190,30 @@ Grace (`schedule_grace_s`, default 0, max 900) exists because `Session-Timeout` 
 ### 2.5 Quota evaluation
 
 ```
+direction = quota_direction or 'combined'
 remaining = +inf
-for (period, limit) in [('daily', quota_daily_bytes), ('monthly', quota_monthly_bytes), ('total', quota_total_bytes)]:
-    if limit: used = usage[period].bytes_in + usage[period].bytes_out
+for (period, limit) in [('daily', quota_daily_bytes), ('weekly', quota_weekly_bytes),
+                        ('monthly', quota_monthly_bytes), ('total', quota_total_bytes)]:
+    if limit: used = counted_octets(usage[period], direction)   # in, out, or in+out
               if used >= limit: decision = REJECT(reason='quota_'+period)
               remaining = min(remaining, limit - used)
 remaining_minus_active = remaining - sum(estimated_unreported_bytes(s) for s in active_sessions)  # see §5.1
 clip.octets = remaining_minus_active if finite
+
+# Online time (migration 036). No unreported-usage estimate: the remainder clips Session-Timeout,
+# so the NAS ends the session at the boundary whether or not an interim update arrives first.
+remaining_time = +inf
+for (period, limit) in [('daily', online_time_daily_s), ('weekly', online_time_weekly_s),
+                        ('monthly', online_time_monthly_s), ('total', online_time_total_s)]:
+    if limit: used = usage[period].session_time_s
+              if used >= limit: decision = REJECT(reason='online_time_'+period)
+              remaining_time = min(remaining_time, limit - used)
+clip.remaining_time_s = remaining_time if finite
 ```
+
+Period boundaries are calendar-based in the site's IANA timezone: the local date (daily), the
+Monday of the local ISO week (weekly), the first of the local month (monthly). Rolling windows
+are not offered, and a configurable reset hour or week start does not exist.
 
 Translation (§4) turns `clip.octets` into `ChilliSpot-/CoovaChilli-Max-Total-Octets(+Gigawords)` where the adapter has `quota`, and/or into a `Session-Timeout` bound:
 

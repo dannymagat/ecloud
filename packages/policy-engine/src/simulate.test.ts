@@ -39,7 +39,7 @@ describe('simulate', () => {
       mechanism: 'none',
       detail: expect.stringContaining('per-SSID') as string,
     });
-    expect(s.perAdapter.every((a) => a.fieldTable.length === 17)).toBe(true);
+    expect(s.perAdapter.every((a) => a.fieldTable.length === 18)).toBe(true);
     expect(
       s.perAdapter[0]?.plan?.radiusReplyAttributes.some(
         (a) => a.name === 'Class' && a.value === 'ecloud:preview',

@@ -145,6 +145,7 @@ export const capabilities: AdapterCapabilities = {
   fields: fieldTable([
     ...MIKROTIK_RATE_FIELD_DECLARATIONS.map((d) => ({ ...d, evidence: `${d.evidence} (${R33})` })),
     decl('quota_daily_bytes', 'REQUIRES_DEVICE_TEST', 'DOCUMENTED', QUOTA_RDT),
+    decl('quota_weekly_bytes', 'REQUIRES_DEVICE_TEST', 'DOCUMENTED', QUOTA_RDT),
     decl('quota_monthly_bytes', 'REQUIRES_DEVICE_TEST', 'DOCUMENTED', QUOTA_RDT),
     decl('quota_total_bytes', 'REQUIRES_DEVICE_TEST', 'DOCUMENTED', QUOTA_RDT),
     decl('session_timeout_s', 'REQUIRES_DEVICE_TEST', 'DOCUMENTED', TIMEOUT_RDT),

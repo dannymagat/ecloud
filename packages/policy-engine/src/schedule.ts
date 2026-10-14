@@ -219,12 +219,30 @@ export function nextLocalMidnight(at: Date, timeZone: string): Date {
   return fromLocal(timeZone, next.year, next.month, next.day, 0, 0);
 }
 
+/**
+ * Monday 00:00 local of the ISO week after the one containing `at` (weekly quota reset,
+ * migration 036). ISO weeks start on Monday; `isoWeekday` is 1..7, so the current week's Monday
+ * is `isoWeekday - 1` days back and the next one is seven days on from there.
+ */
+export function nextLocalWeekStart(at: Date, timeZone: string): Date {
+  const l = toLocal(at, timeZone);
+  const next = addDays(l, 8 - l.isoWeekday);
+  return fromLocal(timeZone, next.year, next.month, next.day, 0, 0);
+}
+
 /** First local midnight of the next calendar month (monthly quota reset, D6). */
 export function nextLocalMonthStart(at: Date, timeZone: string): Date {
   const l = toLocal(at, timeZone);
   const year = l.month === 12 ? l.year + 1 : l.year;
   const month = l.month === 12 ? 1 : l.month + 1;
   return fromLocal(timeZone, year, month, 1, 0, 0);
+}
+
+/** Monday of `at`'s local ISO week as `YYYY-MM-DD` (weekly `usage_counters.period_start`). */
+export function localWeekStartKey(at: Date, timeZone: string): string {
+  const l = toLocal(at, timeZone);
+  const monday = addDays(l, 1 - l.isoWeekday);
+  return `${String(monday.year)}-${pad(monday.month)}-${pad(monday.day)}`;
 }
 
 /** Local calendar date `YYYY-MM-DD` of `at` (daily `usage_counters.period_start`). */
