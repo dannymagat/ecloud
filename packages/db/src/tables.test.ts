@@ -27,7 +27,7 @@ describe('table catalogue', () => {
     const created = [...sql.matchAll(/^CREATE TABLE (?!radius\.)([a-z_]+) \(/gm)].map((m) => m[1]);
     expect([...created].sort()).toEqual([...ALL_TABLES].sort());
     expect(new Set(ALL_TABLES).size).toBe(ALL_TABLES.length);
-    expect(ALL_TABLES).toHaveLength(53); // + 040: bandwidth_profiles, access_plans; + 035: otp_codes; + 031: vendor_api_sessions; + 019: 4 registry-mirror tables, controllers; + 021: portal_assets, portal_terms_versions; + 023: session_enforcement, accounting_anomalies; + 026: usage_hourly; + 028: nas_access_points, vendor_api_credentials
+    expect(ALL_TABLES).toHaveLength(54); // + 040: bandwidth_profiles, access_plans; + 038: portal_versions; + 035: otp_codes; + 031: vendor_api_sessions; + 019: 4 registry-mirror tables, controllers; + 021: portal_assets, portal_terms_versions; + 023: session_enforcement, accounting_anomalies; + 026: usage_hourly; + 028: nas_access_points, vendor_api_credentials
   });
 
   it('lists every radius table', () => {
