@@ -98,7 +98,7 @@ export function PortalsPage() {
     title: 'Captive portals',
     singular: 'captive portal',
     description:
-      'Guest login pages per site network. Open the designer to set the theme, logo, texts, login methods and terms.',
+      'Guest login pages per site network. Open the designer to set the theme, logo, texts, login methods and terms. A row badged "Platform default" is a fallback the platform created because the site had no portal: it admits guests with no identity, and it should be replaced by a configured portal or disabled.',
     path: '/api/v1/orgs/{orgId}/captive-portals',
     permissions: {
       read: 'captive_portal:read',
@@ -107,7 +107,23 @@ export function PortalsPage() {
       delete: 'captive_portal:delete',
     },
     columns: [
-      { key: 'name', header: 'Name' },
+      {
+        key: 'name',
+        header: 'Name',
+        // Migration 041: a platform-default portal gives network access with no identity. It is
+        // badged here because that state is otherwise indistinguishable from a configured open
+        // portal, and the owner chose fallback limits generous enough (10/10 Mbps for a day)
+        // that a forgotten site will never announce itself through a poor guest experience.
+        render: (r) =>
+          r.is_platform_default === true ? (
+            <span className="flex flex-wrap items-center gap-2">
+              {str(r.name)}
+              <Badge tone="warning">Platform default — not configured</Badge>
+            </span>
+          ) : (
+            str(r.name)
+          ),
+      },
       {
         key: 'public_slug',
         header: 'Slug',

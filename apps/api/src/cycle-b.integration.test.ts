@@ -13,7 +13,12 @@
  * behaviour (every MikroTik cell stays REQUIRES_DEVICE_TEST).
  */
 import { MIKROTIK_DEFAULT_COA_PORT, computeMikrotikChapPassword } from '@ecloud/adapters';
-import { describeIntegration, getTestRedisUrl, migrateTestDatabase } from '@ecloud/testing';
+import {
+  describeIntegration,
+  getTestRedisUrl,
+  migrateTestDatabase,
+  publishPortalFixtureKysely,
+} from '@ecloud/testing';
 import { generate } from 'otplib';
 import { createHash, randomBytes } from 'node:crypto';
 import request from 'supertest';
@@ -104,7 +109,7 @@ await describeIntegration('@ecloud/api multi-vendor Cycle B (MikroTik / Teltonik
       })
       .returning('id')
       .executeTakeFirstOrThrow();
-    await deps.dbPlatform
+    const mtPortal = await deps.dbPlatform
       .insertInto('captive_portals')
       .values({
         organization_id: orgId,
@@ -118,7 +123,14 @@ await describeIntegration('@ecloud/api multi-vendor Cycle B (MikroTik / Teltonik
         network_ref: 'hotspot1',
         auth_methods: ['click_through'],
       })
-      .execute();
+      .returning('id')
+      .executeTakeFirstOrThrow();
+    await publishPortalFixtureKysely(deps.dbPlatform, {
+      organizationId: orgId,
+      captivePortalId: mtPortal.id,
+      name: 'Lobby',
+      methods: ['click_through'],
+    });
     const policy = await deps.dbPlatform
       .insertInto('policies')
       .values({

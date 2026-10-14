@@ -14,6 +14,10 @@
     "./portal-theme": {
       "types": "./dist/portal-theme.d.ts",
       "import": "./dist/portal-theme.js"
+    },
+    "./portal-methods": {
+      "types": "./dist/portal-methods.d.ts",
+      "import": "./dist/portal-methods.js"
     }
   },
   "files": [

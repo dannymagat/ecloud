@@ -113,6 +113,15 @@ export interface StoredCredential {
    * (docs/contracts/aaa-authorize.md rule 2). Absent = PAP-only credential.
    */
   readonly chapPasswordRef?: string;
+  /**
+   * Migration 041: the credential came from a portal the platform created because the site had
+   * no configured portal, so the guest was given network access with no identity at all.
+   *
+   * Recorded here, at issue time, rather than derived by AAA from `captive_portals`: the row can
+   * be reconfigured or deleted while the session runs, and what matters for the session record
+   * is what was true when access was granted. Absent = an ordinary portal.
+   */
+  readonly platformDefaultPortal?: boolean;
 }
 
 /** HKDF purpose label of {@link StoredCredential.chapPasswordRef}, not a secret. */

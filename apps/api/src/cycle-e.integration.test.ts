@@ -12,7 +12,11 @@
  *  - flag OFF: portal entry refused, AAA refused, renderer emits no Meraki client.
  * Skipped without the dev stack (ECLOUD_TEST_DATABASE_URL).
  */
-import { describeIntegration, migrateTestDatabase } from '@ecloud/testing';
+import {
+  describeIntegration,
+  migrateTestDatabase,
+  publishPortalFixtureKysely,
+} from '@ecloud/testing';
 import { parseMerakiCloudRadiusSettings } from '@ecloud/shared';
 import { generate } from 'otplib';
 import request from 'supertest';
@@ -145,7 +149,7 @@ await describeIntegration('@ecloud/api multi-vendor Cycle E (Meraki)', () => {
   }
 
   async function externalPortal(orgId: string, siteId: string, nasId: string) {
-    await base.dbPlatform
+    const merakiPortal = await base.dbPlatform
       .insertInto('captive_portals')
       .values({
         organization_id: orgId,
@@ -160,7 +164,14 @@ await describeIntegration('@ecloud/api multi-vendor Cycle E (Meraki)', () => {
         auth_methods: ['click_through', 'password'],
         adapter_config: { nas_client_id: nasId },
       })
-      .execute();
+      .returning('id')
+      .executeTakeFirstOrThrow();
+    await publishPortalFixtureKysely(base.dbPlatform, {
+      organizationId: orgId,
+      captivePortalId: merakiPortal.id,
+      name: 'Meraki lobby',
+      methods: ['click_through', 'password'],
+    });
     // a site policy (AAA rejects `no_policy` otherwise); Session-Timeout is the only
     // Meraki-declared device field (REQUIRES_DEVICE_TEST), rates are not pushable.
     const policy = await base.dbPlatform
@@ -420,7 +431,9 @@ await describeIntegration('@ecloud/api multi-vendor Cycle E (Meraki)', () => {
       mode: 'sign-on',
       handoff_origin: 'https://n143.network-auth.com',
     });
-    expect(view.body.methods).toEqual(['password', 'click_through']);
+    // Migration 038: with no explicit method_order the registry order applies (click-through
+    // first: one tap before anything the guest has to know or receive).
+    expect(view.body.methods).toEqual(['click_through', 'password']);
 
     // no / forged token → refused before any identity check
     const noToken = await identify(apps, flowId, { method: 'click_through', accept_terms: true });

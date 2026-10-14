@@ -100,7 +100,12 @@ describe('portal administration routes (unit, no database)', () => {
       portal_type: 'uspot',
       network_ref: 'ssid',
     };
-    expect(PortalCreate.safeParse({ ...base, auth_methods: ['mac'] }).success).toBe(false);
+    // Migration 038 widened auth_methods to the whole registry, so 'mac' is now storable; an
+    // unregistered name still is not, and availability (not storability) decides what a guest sees.
+    expect(PortalCreate.safeParse({ ...base, auth_methods: ['mac'] }).success).toBe(true);
+    expect(PortalCreate.safeParse({ ...base, auth_methods: ['wishful'] }).success).toBe(false);
+    expect(PortalCreate.safeParse({ ...base, template_key: 'hotel_resident' }).success).toBe(true);
+    expect(PortalCreate.safeParse({ ...base, template_key: 'nope' }).success).toBe(false);
     expect(PortalCreate.safeParse({ ...base, redirect_url: 'javascript:alert(1)' }).success).toBe(
       false,
     );

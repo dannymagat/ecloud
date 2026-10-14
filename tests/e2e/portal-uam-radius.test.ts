@@ -35,6 +35,7 @@ import {
   migrateTestDatabase,
   parseDeviceLogon,
   probeIntegration,
+  publishPortalFixtureKysely,
 } from '@ecloud/testing';
 import { sql } from 'kysely';
 import { randomBytes } from 'node:crypto';
@@ -187,6 +188,12 @@ suite(title, () => {
       .returning('id')
       .executeTakeFirstOrThrow();
     f.portalId = portalRow.id;
+    await publishPortalFixtureKysely(p, {
+      organizationId: f.orgId,
+      captivePortalId: portalRow.id,
+      name: 'Lobby Wi-Fi',
+      methods: ['password', 'voucher', 'click_through'],
+    });
     await p
       .insertInto('users')
       .values({

@@ -592,7 +592,9 @@ export function createServer(options: ServerOptions = {}): Express {
             }
           : {}),
     };
-    const backHref = flowHref(l.token);
+    // Nothing to go back to when the portal offers a single method: the landing page would
+    // immediately send the guest here again.
+    const backHref = l.view.methods.length === 1 ? null : flowHref(l.token);
     const body: PageBody =
       page === 'login'
         ? { page, form, error, username, backHref }
@@ -673,6 +675,18 @@ export function createServer(options: ServerOptions = {}): Express {
     if (l === null) return;
     if (l.view.state === 'AUTHORIZED') {
       res.redirect(303, flowHref(l.token, '/status'));
+      return;
+    }
+    // §4.6 "one primary action": a portal offering only accept-and-connect has nothing to choose
+    // between, so a method list would be a tap that asks the guest a question with one answer.
+    // This is what the platform-default connect portal renders, and any click-through-only
+    // portal benefits the same way. A notice still needs the landing page to carry it.
+    if (
+      l.view.methods.length === 1 &&
+      l.view.methods[0] === 'click_through' &&
+      l.view.notice === null
+    ) {
+      formPage(req, res, l, 'terms');
       return;
     }
     nonceFor(req, res);

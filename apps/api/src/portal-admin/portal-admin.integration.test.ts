@@ -297,7 +297,9 @@ await describeIntegration('@ecloud/api portal administration (P6-B) against eclo
       .set(BROWSER)
       .send({ name: 'Url', colors: { brand: 'url(https://evil.test/x)' } });
     expect(notHex.status).toBe(400);
-    const idp = await agent
+    // Migration 038 widened auth_methods to the whole registry ('idp' included), so the
+    // rejected case is now a name that is in no registry entry at all.
+    const unknownMethod = await agent
       .post(`/api/v1/orgs/${orgId}/captive-portals`)
       .set(BROWSER)
       .send({
@@ -306,9 +308,21 @@ await describeIntegration('@ecloud/api portal administration (P6-B) against eclo
         public_slug: `x-${slug()}`,
         portal_type: 'uspot',
         network_ref: 'n',
-        auth_methods: ['idp'],
+        auth_methods: ['wishful'],
       });
-    expect(idp.status).toBe(400);
+    expect(unknownMethod.status).toBe(400);
+    const unknownTemplate = await agent
+      .post(`/api/v1/orgs/${orgId}/captive-portals`)
+      .set(BROWSER)
+      .send({
+        site_id: newId(),
+        name: 'x',
+        public_slug: `x-${slug()}`,
+        portal_type: 'uspot',
+        network_ref: 'n',
+        template_key: 'nope',
+      });
+    expect(unknownTemplate.status).toBe(400);
   });
 
   it('keeps portals, themes, assets, terms and previews tenant-isolated', async () => {
@@ -757,5 +771,180 @@ await describeIntegration('@ecloud/api portal administration (P6-B) against eclo
       const file = await stat(join(storageRoot, 'objects', 'org', orgId));
       expect(file.mode & 0o077).toBe(0);
     });
+  });
+
+  // -------------------------------------------------------------------------------------------
+  // Publishing (migration 038, requirement §8)
+  // -------------------------------------------------------------------------------------------
+
+  it('publishes an immutable snapshot, serves it to guests, and rolls back without losing drafts', async () => {
+    const apps = freshApps();
+    const { orgId, siteId, agent } = await tenantWithAdmin(apps);
+    const portal = await portalFixture(agent, orgId, siteId, slug());
+
+    // A portal is created unpublished: there is nothing validated to serve yet.
+    expect(portal).toMatchObject({ published: false, template_key: 'branded_multi_login' });
+    const before = await agent.get(`/api/v1/orgs/${orgId}/captive-portals/${portal.id}/versions`);
+    expect(before.status, JSON.stringify(before.body)).toBe(200);
+    expect(before.body.published_version_id).toBeNull();
+    expect(before.body.data).toEqual([]);
+
+    // Click-through with no terms DOCUMENT is publishable: §4.1 makes explicit acceptance a
+    // configurable extra, and the page carries a "use this network responsibly" line in its
+    // place. What is refused is a DANGLING reference, checked below.
+    expect(before.body.draft_publishable, JSON.stringify(before.body.draft_problems)).toBe(true);
+    expect(before.body.draft_problems).toEqual([]);
+
+    // Name a terms version that has no published text. The page would then promise a document it
+    // cannot show, so publishing is refused and says which version is missing.
+    await deps.dbPlatform
+      .updateTable('captive_portals')
+      .set({ terms_version: '99' })
+      .where('id', '=', portal.id)
+      .execute();
+    const dangling = await agent.get(
+      `/api/v1/orgs/${orgId}/captive-portals/${portal.id}/versions`,
+    );
+    expect(dangling.body.draft_publishable).toBe(false);
+    expect((dangling.body.draft_problems as { path: string }[]).map((p) => p.path)).toContain(
+      'terms_version',
+    );
+    const refused = await agent
+      .post(`/api/v1/orgs/${orgId}/captive-portals/${portal.id}/publish`)
+      .set(BROWSER)
+      .send({});
+    expect(refused.status, JSON.stringify(refused.body)).toBe(400);
+    expect(JSON.stringify(refused.body)).toContain('99');
+
+    const terms = await agent
+      .post(`/api/v1/orgs/${orgId}/captive-portals/${portal.id}/terms`)
+      .set(BROWSER)
+      .send({ texts: { en: 'Use responsibly.' } });
+    expect(terms.status, JSON.stringify(terms.body)).toBe(201);
+
+    const v1 = await agent
+      .post(`/api/v1/orgs/${orgId}/captive-portals/${portal.id}/publish`)
+      .set(BROWSER)
+      .send({});
+    expect(v1.status, JSON.stringify(v1.body)).toBe(201);
+    expect(v1.body).toMatchObject({ version: 1, current: true });
+    expect(await countAudit(deps.dbPlatform, 'captive_portal:update', portal.id)).toBeGreaterThan(0);
+
+    // The snapshot froze the methods that were enabled at publish time.
+    const stored = await deps.dbPlatform
+      .selectFrom('portal_versions')
+      .select(['snapshot'])
+      .where('id', '=', v1.body.id)
+      .executeTakeFirstOrThrow();
+    const snapshot = stored.snapshot;
+    expect(snapshot.methods).toEqual(['password', 'voucher', 'click_through']);
+    expect(snapshot.terms_version).toBe('1');
+    // A snapshot is public configuration: no secret may be in it.
+    expect(Object.keys(snapshot)).not.toContain('uam_secret_ref');
+
+    // Editing the draft does NOT change what guests are served until a second publish.
+    const narrowed = await agent
+      .patch(`/api/v1/orgs/${orgId}/captive-portals/${portal.id}`)
+      .set(BROWSER)
+      .send({ auth_methods: ['voucher'], method_order: ['voucher'] });
+    expect(narrowed.status, JSON.stringify(narrowed.body)).toBe(200);
+    const stillV1 = await deps.dbPlatform
+      .selectFrom('captive_portals')
+      .select(['published_version_id'])
+      .where('id', '=', portal.id)
+      .executeTakeFirstOrThrow();
+    expect(stillV1.published_version_id).toBe(v1.body.id);
+
+    const v2 = await agent
+      .post(`/api/v1/orgs/${orgId}/captive-portals/${portal.id}/publish`)
+      .set(BROWSER)
+      .send({});
+    expect(v2.status, JSON.stringify(v2.body)).toBe(201);
+    expect(v2.body.version).toBe(2);
+
+    // Rollback: the pointer moves back, both versions survive, and the draft is untouched.
+    const restored = await agent
+      .post(`/api/v1/orgs/${orgId}/captive-portals/${portal.id}/versions/${v1.body.id}/restore`)
+      .set(BROWSER)
+      .send({});
+    expect(restored.status, JSON.stringify(restored.body)).toBe(200);
+    expect(restored.body).toMatchObject({ id: v1.body.id, version: 1, current: true });
+
+    const after = await agent.get(`/api/v1/orgs/${orgId}/captive-portals/${portal.id}/versions`);
+    expect(after.body.published_version_id).toBe(v1.body.id);
+    const history = after.body.data as { version: number }[];
+    expect(history.map((v) => v.version)).toEqual([2, 1]);
+    const draft = await agent.get(`/api/v1/orgs/${orgId}/captive-portals/${portal.id}`);
+    expect(draft.body.auth_methods).toEqual(['voucher']);
+    expect(draft.body.published).toBe(true);
+  });
+
+  it('refuses to publish a portal whose only method has an unconfigured provider, and says which', async () => {
+    const apps = freshApps();
+    const { orgId, siteId, agent } = await tenantWithAdmin(apps);
+    const created = await agent
+      .post(`/api/v1/orgs/${orgId}/captive-portals`)
+      .set(BROWSER)
+      .send({
+        site_id: siteId,
+        name: 'Verified guests',
+        public_slug: `vg-${slug()}`,
+        portal_type: 'uspot',
+        network_ref: 'ssid-visitors',
+        template_key: 'verified_guest',
+        // No SMTP is configured in the test deps, so email OTP cannot be offered to a guest.
+        auth_methods: ['email_otp'],
+      });
+    expect(created.status, JSON.stringify(created.body)).toBe(201);
+
+    const check = await agent.get(
+      `/api/v1/orgs/${orgId}/captive-portals/${created.body.id}/versions`,
+    );
+    expect(check.body.draft_publishable).toBe(false);
+    expect(check.body.unavailable_methods).toEqual([
+      { method: 'email_otp', missing: ['mailer'], reasons: [expect.stringContaining('mail')] },
+    ]);
+    const refused = await agent
+      .post(`/api/v1/orgs/${orgId}/captive-portals/${created.body.id}/publish`)
+      .set(BROWSER)
+      .send({});
+    expect(refused.status, JSON.stringify(refused.body)).toBe(400);
+    expect(JSON.stringify(refused.body)).toContain('no way to connect');
+  });
+
+  it('refuses a restore of another portal\'s version', async () => {
+    const apps = freshApps();
+    const { orgId, siteId, agent } = await tenantWithAdmin(apps);
+    const one = await portalFixture(agent, orgId, siteId, slug());
+    // One portal per (site, network_ref), so the second needs its own network.
+    const second = await agent
+      .post(`/api/v1/orgs/${orgId}/captive-portals`)
+      .set(BROWSER)
+      .send({
+        site_id: siteId,
+        name: 'Staff Wi-Fi',
+        public_slug: `staff-${slug()}`,
+        portal_type: 'uspot',
+        network_ref: `ssid-staff-${slug()}`,
+        auth_methods: ['click_through'],
+      });
+    expect(second.status, JSON.stringify(second.body)).toBe(201);
+    const two = second.body as { id: string };
+    for (const id of [one.id, two.id]) {
+      await agent
+        .post(`/api/v1/orgs/${orgId}/captive-portals/${id}/terms`)
+        .set(BROWSER)
+        .send({ texts: { en: 'Terms.' } });
+    }
+    const published = await agent
+      .post(`/api/v1/orgs/${orgId}/captive-portals/${one.id}/publish`)
+      .set(BROWSER)
+      .send({});
+    expect(published.status, JSON.stringify(published.body)).toBe(201);
+    const crossed = await agent
+      .post(`/api/v1/orgs/${orgId}/captive-portals/${two.id}/versions/${published.body.id}/restore`)
+      .set(BROWSER)
+      .send({});
+    expect(crossed.status).toBe(404);
   });
 });

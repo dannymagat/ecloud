@@ -25,13 +25,14 @@ import {
   type NasLookup,
   type RegisteredNas,
 } from '@ecloud/adapters';
-import { withPlatform } from '@ecloud/db';
+import { withPlatform, type DbTransaction } from '@ecloud/db';
 import { canonicalUnicastMac, newId, type Logger } from '@ecloud/shared';
 import type { Request, Response, Router } from 'express';
 import { isIP } from 'node:net';
 import { z } from 'zod';
 import type { AppDeps } from '../context.js';
 import { logPortalSecurityEvent } from '../security-events.js';
+import { PORTAL_COLUMNS, type PortalRow } from './portal-row.js';
 import { findNasByIdentity } from './nas-lookup.js';
 import { indexFlow, isReplayed, saveFlow, FLOW_TTL_S, type PortalFlow } from './portal-store.js';
 
@@ -45,11 +46,25 @@ export interface PostbackRouteHelpers {
     readonly redirectsPerIp: { readonly max: number; readonly windowS: number };
     readonly flowsPerNas: { readonly max: number; readonly windowS: number };
   };
-  /** Captive portal of the NAS (pinned, else the only unpinned one) of the given type. */
-  readonly pickPortalId: (
-    rows: { id: string; adapter_config: Record<string, unknown> }[],
-    nasId: string,
-  ) => string | null;
+  /**
+   * The external captive portal serving this NAS, or null. Implemented by `portal.ts` so the
+   * migration-041 fallback rules have exactly one implementation: a platform default is never an
+   * ordinary candidate, and a site with a configured portal — even a disabled one — is never
+   * served a fallback. This path never serves OR creates one (`allowFallback: false`), because a
+   * post-back hand-off needs a vendor profile and a validated login URL that a fallback lacks, so
+   * a site with no configured external portal fails closed here.
+   *
+   * `rows` is a full `PortalRow[]` (`PORTAL_COLUMNS`) rather than the two columns this path used
+   * to select. That is deliberate and it is the root-cause fix: the picker reads
+   * `is_platform_default`, a narrower row type reached it through an `as unknown as` cast, and the
+   * erased mismatch made the fallback exclusion a silent no-op. With the real type here the
+   * compiler refuses any query that selects less.
+   */
+  readonly resolvePortalId: (
+    trx: DbTransaction,
+    nas: { id: string; organization_id: string; site_id: string },
+    rows: PortalRow[],
+  ) => Promise<string | null>;
   readonly previousSessionExpired: (nas: RegisteredNas, mac: string, now: Date) => Promise<boolean>;
 }
 
@@ -154,15 +169,17 @@ export function registerPostbackRoutes(
         ) {
           return null;
         }
-        const portals = (await trx
+        // `[...PORTAL_COLUMNS]`, not a narrower list: the resolver reads `is_platform_default`
+        // and a query that omits it makes the fallback exclusion a silent no-op.
+        const portals = await trx
           .selectFrom('captive_portals')
-          .select(['id', 'adapter_config'])
+          .select([...PORTAL_COLUMNS])
           .where('site_id', '=', n.site_id)
           .where('organization_id', '=', n.organization_id)
           .where('status', '=', 'active')
           .where('portal_type', '=', 'external')
-          .execute()) as { id: string; adapter_config: Record<string, unknown> }[];
-        const portalId = helpers.pickPortalId(portals, n.id);
+          .execute();
+        const portalId = await helpers.resolvePortalId(trx, n, portals);
         return portalId === null ? null : { extra, portalId };
       });
       if (loaded === null) {

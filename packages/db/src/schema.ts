@@ -918,8 +918,41 @@ export interface CaptivePortalsTable {
   walled_garden: Generated<string[]>;
   adapter_config: GeneratedJsonb<Record<string, unknown>>;
   status: Generated<EnabledStatus>;
+  /** Migration 038: @ecloud/shared PortalTemplateKey. Page composition, not an auth method. */
+  template_key: Generated<string>;
+  /** Migration 038: display order of the enabled methods; unlisted ones follow in registry order. */
+  method_order: Generated<string[]>;
+  /** Migration 038: SSIDs this portal serves; empty = every SSID at the site. */
+  ssids: Generated<string[]>;
+  /** Migration 038: draft registration form, an array of @ecloud/shared RegistrationField. */
+  registration_fields: GeneratedJsonb<Record<string, unknown>[]>;
+  /** Migration 038: selectable languages; first entry is the default. Empty = English only. */
+  locales: Generated<string[]>;
+  /** Migration 038: the immutable snapshot guests are served. NULL = draft only. */
+  published_version_id: Uuid | null;
+  /**
+   * Migration 041: a fallback portal the platform created because the site had none
+   * (click-through only, published at creation). Written only by the portal resolver, never
+   * through the admin API, and excluded from pickPortal candidate resolution.
+   */
+  is_platform_default: Generated<boolean>;
   created_at: GeneratedTimestamp;
   updated_at: GeneratedTimestamp;
+}
+
+/**
+ * Migration 038: immutable published portal configuration. INSERT + SELECT for the application
+ * role; publishing and rollback are an UPDATE of captive_portals.published_version_id, which is
+ * why both are atomic. `snapshot` is an @ecloud/shared PortalSnapshot and holds no secret.
+ */
+export interface PortalVersionsTable {
+  id: Generated<Uuid>;
+  organization_id: Uuid;
+  captive_portal_id: Uuid;
+  version: number;
+  snapshot: GeneratedJsonb<Record<string, unknown>>;
+  published_by: Uuid | null;
+  published_at: GeneratedTimestamp;
 }
 
 /** Migration 021: metadata of branding objects in @ecloud/storage (key = org/{org}/{purpose}/{id}). */
@@ -1327,6 +1360,7 @@ export interface Database {
   portal_login_attempts: PortalLoginAttemptsTable;
   portal_assets: PortalAssetsTable;
   portal_terms_versions: PortalTermsVersionsTable;
+  portal_versions: PortalVersionsTable;
   sessions: SessionsTable;
   accounting_records: AccountingRecordsTable;
   auth_events: AuthEventsTable;

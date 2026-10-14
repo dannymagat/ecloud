@@ -10,7 +10,12 @@
  * documented parameter names only; nothing here proves device behaviour (REQUIRES_DEVICE_TEST).
  */
 import { hashPassword } from '@ecloud/db';
-import { describeIntegration, getTestRedisUrl, migrateTestDatabase } from '@ecloud/testing';
+import {
+  describeIntegration,
+  getTestRedisUrl,
+  migrateTestDatabase,
+  publishPortalFixtureKysely,
+} from '@ecloud/testing';
 import { randomBytes } from 'node:crypto';
 import request from 'supertest';
 import { afterAll, beforeAll, expect, it } from 'vitest';
@@ -109,7 +114,7 @@ await describeIntegration('@ecloud/api multi-vendor Cycle C (post-back engine)',
       adapter_config: adapterConfig,
     });
     expect(created.status, JSON.stringify(created.body)).toBe(201);
-    await deps.dbPlatform
+    const pbPortal = await deps.dbPlatform
       .insertInto('captive_portals')
       .values({
         organization_id: t.orgId,
@@ -123,7 +128,14 @@ await describeIntegration('@ecloud/api multi-vendor Cycle C (post-back engine)',
         network_ref: 'guest',
         auth_methods: ['password', 'click_through'],
       })
-      .execute();
+      .returning('id')
+      .executeTakeFirstOrThrow();
+    await publishPortalFixtureKysely(deps.dbPlatform, {
+      organizationId: t.orgId,
+      captivePortalId: pbPortal.id,
+      name: 'Guest',
+      methods: ['password', 'click_through'],
+    });
     const username = unique('sub');
     await deps.dbPlatform
       .insertInto('users')

@@ -18,6 +18,7 @@ import {
   getTestRedisUrl,
   migrateTestDatabase,
   parseDeviceLogon,
+  publishPortalFixtureKysely,
   signUamQuery,
   type UamFlavour,
   type UamRedirectInput,
@@ -136,6 +137,13 @@ await describeIntegration('@ecloud/api captive portal broker (P6-A)', () => {
       })
       .returning('id')
       .executeTakeFirstOrThrow();
+    // Migration 038: the runtime serves the published snapshot, so a fixture portal must publish.
+    await publishPortalFixtureKysely(deps.dbPlatform, {
+      organizationId: orgId,
+      captivePortalId: portal.id,
+      name: 'Lobby',
+      methods,
+    });
     await deps.dbPlatform
       .insertInto('portal_terms_versions')
       .values({
@@ -352,7 +360,8 @@ await describeIntegration('@ecloud/api captive portal broker (P6-A)', () => {
       expect(view.status).toBe(200);
       expect(view.body).toMatchObject({
         state: 'ARRIVED',
-        methods: ['password', 'voucher', 'click_through'],
+        // Migration 038: registry order, since this portal publishes no explicit method_order.
+        methods: ['click_through', 'password', 'voucher'],
         portal: { id: f.portalId, name: 'Lobby', site_name: 'Site A' },
         terms: { version: '1', text: 'Use responsibly.' },
         nas: { origin: 'http://10.1.0.1:3990' },

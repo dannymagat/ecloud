@@ -17,14 +17,20 @@ import {
   ValidationError,
   HEX_COLOR_RE,
   NotFoundError,
+  DEFAULT_PORTAL_TEMPLATE,
   PORTAL_COLOR_TOKENS,
+  PORTAL_DEPENDENCY_REASON,
   PORTAL_LOGIN_METHODS,
+  PORTAL_METHOD_KEYS,
   PORTAL_PREVIEW_PAGES,
   PORTAL_STRING_KEYS,
   PORTAL_STRING_MAX_LENGTH,
+  PORTAL_TEMPLATE_KEYS,
   contrastIssues,
   localeDirection,
+  methodAvailability,
   newId,
+  portalTemplate,
   resolvePortalColors,
   resolvePortalStrings,
   type PortalLoginMethod,
@@ -60,6 +66,13 @@ import { defineRoute, type AnyRouteSpec } from '../http/route.js';
 import { crudRoutes, type Row } from '../routes/crud.js';
 import { assertRef, inTenant, requireOnSite } from '../tenant.js';
 import { PREVIEW_HEADERS, renderPortalPreview } from './preview.js';
+import {
+  RegistrationFieldsInput,
+  buildSnapshot,
+  portalCapabilities,
+  publishProblems,
+  type PortalDraft,
+} from '../internal/portal-snapshot.js';
 
 // ---------------------------------------------------------------------------------------------
 // Schemas
@@ -108,10 +121,20 @@ export const ThemeCreate = z.strictObject({
 });
 export const ThemeUpdate = ThemeCreate.partial();
 
+/**
+ * Migration 038: the full method registry, not the three pilot methods. A row may record a method
+ * whose adapter has not shipped; whether a GUEST is offered it is decided at publish and render
+ * time by `methodAvailability`, which refuses any method with an unconfigured dependency (§5).
+ */
 const loginMethods = z
-  .array(z.enum(PORTAL_LOGIN_METHODS))
-  .min(1)
-  .max(10)
+  .array(z.enum(PORTAL_METHOD_KEYS))
+  .max(PORTAL_METHOD_KEYS.length)
+  .transform((v) => [...new Set(v)]);
+
+/** Display order (§4.6); may name any registered method and need not be complete. */
+const methodOrder = z
+  .array(z.enum(PORTAL_METHOD_KEYS))
+  .max(PORTAL_METHOD_KEYS.length)
   .transform((v) => [...new Set(v)]);
 
 export const PortalCreate = z.strictObject({
@@ -144,6 +167,24 @@ export const PortalCreate = z.strictObject({
   uam_server_url: z.url().max(2048).nullable().optional(),
   /** `adapter_config.nas_client_id`: pins this portal to one NAS of the same site; null = unpinned. */
   nas_client_id: z.uuid().nullable().optional(),
+  /** Migration 038 (§4): page composition. Independent of `auth_methods`. */
+  template_key: z.enum(PORTAL_TEMPLATE_KEYS).optional(),
+  method_order: methodOrder.optional(),
+  /** SSIDs this portal serves; empty = every SSID at the site (§8 resolution chain). */
+  ssids: z
+    .array(
+      z
+        .string()
+        .trim()
+        .min(1)
+        .max(32),
+    )
+    .max(32)
+    .optional(),
+  /** Registration form definition (§7); the published copy lives in the snapshot. */
+  registration_fields: RegistrationFieldsInput.optional(),
+  /** Selectable languages; the first entry is the default. Empty = English only (§12). */
+  locales: z.array(localeKey).max(10).optional(),
 });
 export const PortalUpdate = PortalCreate.partial().omit({ site_id: true });
 
@@ -194,6 +235,15 @@ const TermsVersionSchema = z.object({
   locale: z.string(),
   body: z.string(),
   created_at: z.string(),
+});
+const PortalVersionSchema = z.object({
+  id: z.uuid(),
+  captive_portal_id: z.uuid(),
+  version: z.number().int(),
+  published_by: z.uuid().nullable(),
+  published_at: z.string(),
+  /** True for the version guests are currently served. */
+  current: z.boolean(),
 });
 const PreviewTicketSchema = z.object({ preview_url: z.string(), expires_in: z.number().int() });
 
@@ -258,6 +308,8 @@ function serializePortal(row: Row): Row {
   return {
     ...rest,
     uam_secret_configured: uam_secret_ref !== null && uam_secret_ref !== undefined,
+    // Migration 038: NULL means draft only, so guests are served nothing yet (§8).
+    published: rest.published_version_id !== null && rest.published_version_id !== undefined,
     // Q64: no identity providers in the pilot; the designer shows social login as such.
     social_login: 'not_configured',
   };
@@ -408,7 +460,19 @@ export function portalAdminRoutes(deps: AppDeps): AnyRouteSpec[] {
     softDelete: false,
     createSchema: PortalCreate,
     updateSchema: PortalUpdate,
-    filters: { status: z.enum(['active', 'disabled']).optional() },
+    filters: {
+      status: z.enum(['active', 'disabled']).optional(),
+      /**
+       * Migration 041: answers "which of my sites are serving the anonymous platform default"
+       * in one request. The owner chose generous fallback limits (10/10 Mbps for a day), so a
+       * forgotten site will not announce itself through a poor guest experience — this filter
+       * and the badge are the only things that surface it.
+       */
+      is_platform_default: z
+        .enum(['true', 'false'])
+        .optional()
+        .transform((v) => (v === undefined ? undefined : v === 'true')),
+    },
     prepareCreate: async (body, { trx }) => {
       await assertRef(trx, 'sites', body.site_id as string, 'site');
       if (typeof body.theme_id === 'string') {
@@ -423,9 +487,17 @@ export function portalAdminRoutes(deps: AppDeps): AnyRouteSpec[] {
         body.site_id as string,
         deps.config.base.origins.portal,
       );
+      const templateKey = (body.template_key as string | undefined) ?? DEFAULT_PORTAL_TEMPLATE;
+      const template = portalTemplate(templateKey);
+      const { registration_fields, ...withoutFields } = rest;
       return {
-        ...rest,
-        auth_methods: body.auth_methods ?? ['password'],
+        ...withoutFields,
+        template_key: templateKey,
+        // §3: a new portal starts with its template's dependency-free methods, not every method.
+        auth_methods: body.auth_methods ?? [...(template?.defaultMethods ?? ['click_through'])],
+        ...(registration_fields === undefined
+          ? {}
+          : { registration_fields: JSON.stringify(registration_fields) }),
         adapter_config: JSON.stringify(adapterConfig),
       };
     },
@@ -434,6 +506,9 @@ export function portalAdminRoutes(deps: AppDeps): AnyRouteSpec[] {
         await assertRef(trx, 'portal_themes', body.theme_id, 'portal_theme');
       }
       const { uam_server_url, nas_client_id, ...rest } = body;
+      if (rest.registration_fields !== undefined) {
+        rest.registration_fields = JSON.stringify(rest.registration_fields);
+      }
       const touchesConfig =
         uam_server_url !== undefined ||
         nas_client_id !== undefined ||
@@ -988,7 +1063,295 @@ export function portalAdminRoutes(deps: AppDeps): AnyRouteSpec[] {
     }),
   ];
 
-  return [...portals, ...secrets, ...terms, ...themes, ...assets, ...previews];
+
+  // -------------------------------------------------------------------------------------------
+  // Publishing (§8): an immutable validated snapshot, an atomic pointer move, and a rollback
+  // that leaves drafts alone. The runtime reads the snapshot, never the draft rows.
+  // -------------------------------------------------------------------------------------------
+
+  const VersionParams = z.object({ orgId: z.uuid(), id: z.uuid(), versionId: z.uuid() });
+
+  /** Loads the draft (portal + its theme) for a snapshot, with the portal row locked. */
+  async function loadDraft(
+    trx: Parameters<Parameters<typeof inTenant>[2]>[0],
+    portalId: string,
+  ): Promise<{ portal: Row; draft: PortalDraft; termsTextAvailable: boolean }> {
+    const portal = (await trx
+      .selectFrom('captive_portals')
+      .selectAll()
+      .where('id', '=', portalId)
+      .forUpdate()
+      .executeTakeFirst()) as Row | undefined;
+    if (portal === undefined) throw new NotFoundError('captive_portal', portalId);
+    const themeId = portal.theme_id as string | null;
+    const theme =
+      themeId === null
+        ? null
+        : ((await trx
+            .selectFrom('portal_themes')
+            .select(['colors', 'strings', 'logo_asset_ref', 'custom_css'])
+            .where('id', '=', themeId)
+            .executeTakeFirst()) ?? null);
+    // A named terms version must have text, or the page promises a document it cannot show.
+    const termsVersion = portal.terms_version as string | null;
+    const termsRow =
+      termsVersion === null || !/^\d{1,9}$/.test(termsVersion)
+        ? undefined
+        : await trx
+            .selectFrom('portal_terms_versions')
+            .select(['id'])
+            .where('captive_portal_id', '=', portalId)
+            .where('version', '=', Number(termsVersion))
+            .executeTakeFirst();
+    return {
+      portal,
+      termsTextAvailable: termsRow !== undefined,
+      draft: {
+        name: portal.name as string,
+        template_key: (portal.template_key as string | null) ?? DEFAULT_PORTAL_TEMPLATE,
+        auth_methods: (portal.auth_methods as string[] | null) ?? [],
+        method_order: (portal.method_order as string[] | null) ?? [],
+        identity_provider_ids: (portal.identity_provider_ids as string[] | null) ?? [],
+        redirect_url: (portal.redirect_url as string | null) ?? null,
+        terms_version: (portal.terms_version as string | null) ?? null,
+        registration_fields: portal.registration_fields,
+        locales: (portal.locales as string[] | null) ?? [],
+        theme:
+          theme === null
+            ? null
+            : {
+                colors: (theme.colors ?? {}),
+                strings: (theme.strings ?? {}),
+                logo_asset_ref: theme.logo_asset_ref,
+                custom_css: theme.custom_css,
+              },
+      },
+    };
+  }
+
+  const versions: AnyRouteSpec[] = [
+    defineRoute({
+      method: 'get',
+      path: `${base}/captive-portals/:id/versions`,
+      summary: 'List the published versions of a captive portal, and the draft publish check',
+      tags: [tag],
+      auth: 'principal',
+      permission: 'captive_portal:read',
+      scope: 'any-site',
+      params: PortalParams,
+      responses: {
+        200: {
+          description: 'Versions newest first, plus whether the current draft could be published',
+          schema: z.object({
+            published_version_id: z.uuid().nullable(),
+            draft_publishable: z.boolean(),
+            draft_problems: z.array(z.object({ path: z.string(), message: z.string() })),
+            unavailable_methods: z.array(
+              z.object({
+                method: z.string(),
+                missing: z.array(z.string()),
+                reasons: z.array(z.string()),
+              }),
+            ),
+            data: z.array(PortalVersionSchema),
+          }),
+        },
+        ...problemResponses,
+      },
+      handler: async ({ params, ctx }) => {
+        const result = await inTenant(deps, params.orgId, async (trx) => {
+          const portal = await trx
+            .selectFrom('captive_portals')
+            .select(['id', 'site_id', 'published_version_id'])
+            .where('id', '=', params.id)
+            .executeTakeFirst();
+          if (portal === undefined) throw new NotFoundError('captive_portal', params.id);
+          requireOnSite(ctx, 'captive_portal:read', params.orgId, portal.site_id, 'captive_portal');
+          const { draft, termsTextAvailable } = await loadDraft(trx, params.id);
+          const capabilities = await portalCapabilities(trx, {
+            mailerConfigured: deps.config.base.mail !== null,
+          });
+          const rows = await trx
+            .selectFrom('portal_versions')
+            .select(['id', 'captive_portal_id', 'version', 'published_by', 'published_at'])
+            .where('captive_portal_id', '=', params.id)
+            .orderBy('version', 'desc')
+            .limit(100)
+            .execute();
+          return {
+            portal,
+            rows,
+            problems: publishProblems(buildSnapshot(draft), capabilities, { termsTextAvailable }),
+            unavailable: draft.auth_methods
+              .map((method) => ({ method, availability: methodAvailability(method, capabilities) }))
+              .filter((m) => !m.availability.available)
+              .map((m) => ({
+                method: m.method,
+                missing: m.availability.available ? [] : [...m.availability.missing],
+                reasons: m.availability.available
+                  ? []
+                  : m.availability.missing.map((d) => PORTAL_DEPENDENCY_REASON[d]),
+              })),
+          };
+        });
+        return {
+          status: 200,
+          body: {
+            published_version_id: result.portal.published_version_id,
+            draft_publishable: result.problems.length === 0,
+            draft_problems: result.problems,
+            unavailable_methods: result.unavailable,
+            data: result.rows.map((r) => ({
+              ...r,
+              published_at: iso(r.published_at),
+              current: r.id === result.portal.published_version_id,
+            })),
+          },
+        };
+      },
+    }),
+    defineRoute({
+      method: 'post',
+      path: `${base}/captive-portals/:id/publish`,
+      summary: 'Publish the current draft as a new immutable version and serve it to guests',
+      tags: [tag],
+      auth: 'principal',
+      permission: 'captive_portal:update',
+      scope: 'any-site',
+      params: PortalParams,
+      idempotency: 'optional',
+      responses: {
+        201: { description: 'Published', schema: PortalVersionSchema },
+        ...problemResponses,
+      },
+      handler: async ({ params, ctx }) => {
+        const published = await inTenant(deps, params.orgId, async (trx) => {
+          const { portal, draft, termsTextAvailable } = await loadDraft(trx, params.id);
+          requireOnSite(
+            ctx,
+            'captive_portal:update',
+            params.orgId,
+            portal.site_id as string,
+            'captive_portal',
+            'captive_portal:read',
+          );
+          const capabilities = await portalCapabilities(trx, {
+            mailerConfigured: deps.config.base.mail !== null,
+          });
+          const snapshot = buildSnapshot(draft);
+          const problems = publishProblems(snapshot, capabilities, { termsTextAvailable });
+          // §16: an incomplete template is never silently published.
+          if (problems.length > 0) {
+            throw new ValidationError(
+              problems.map((p) => ({ path: `draft.${p.path}`, message: p.message })),
+            );
+          }
+          const max = await trx
+            .selectFrom('portal_versions')
+            .select(sql<number>`coalesce(max(version), 0)`.as('v'))
+            .where('captive_portal_id', '=', params.id)
+            .executeTakeFirstOrThrow();
+          const version = Number(max.v) + 1;
+          const publishedBy =
+            ctx.principal?.kind === 'admin' ? ctx.principal.administratorId : null;
+          const row = await trx
+            .insertInto('portal_versions')
+            .values({
+              id: newId(),
+              organization_id: params.orgId,
+              captive_portal_id: params.id,
+              version,
+              snapshot: JSON.stringify(snapshot),
+              published_by: publishedBy,
+            })
+            .returning(['id', 'captive_portal_id', 'version', 'published_by', 'published_at'])
+            .executeTakeFirstOrThrow();
+          // The atomic step: one column, so no guest can observe a half-published portal.
+          await trx
+            .updateTable('captive_portals')
+            .set({ published_version_id: row.id })
+            .where('id', '=', params.id)
+            .execute();
+          await writeAudit(trx, ctx, {
+            organizationId: params.orgId,
+            action: 'captive_portal:update',
+            targetType: 'captive_portal',
+            targetId: params.id,
+            before: { published_version_id: portal.published_version_id },
+            after: { published_version_id: row.id, version },
+          });
+          return row;
+        });
+        return {
+          status: 201,
+          body: { ...published, published_at: iso(published.published_at), current: true },
+        };
+      },
+    }),
+    defineRoute({
+      method: 'post',
+      path: `${base}/captive-portals/:id/versions/:versionId/restore`,
+      summary: 'Roll back to an earlier published version (drafts and history are kept)',
+      tags: [tag],
+      auth: 'principal',
+      permission: 'captive_portal:update',
+      scope: 'any-site',
+      params: VersionParams,
+      idempotency: 'optional',
+      responses: {
+        200: { description: 'Restored', schema: PortalVersionSchema },
+        ...problemResponses,
+      },
+      handler: async ({ params, ctx }) => {
+        const restored = await inTenant(deps, params.orgId, async (trx) => {
+          const portal = await trx
+            .selectFrom('captive_portals')
+            .select(['id', 'site_id', 'published_version_id'])
+            .where('id', '=', params.id)
+            .forUpdate()
+            .executeTakeFirst();
+          if (portal === undefined) throw new NotFoundError('captive_portal', params.id);
+          requireOnSite(
+            ctx,
+            'captive_portal:update',
+            params.orgId,
+            portal.site_id,
+            'captive_portal',
+            'captive_portal:read',
+          );
+          const row = await trx
+            .selectFrom('portal_versions')
+            .select(['id', 'captive_portal_id', 'version', 'published_by', 'published_at'])
+            .where('id', '=', params.versionId)
+            .where('captive_portal_id', '=', params.id)
+            .executeTakeFirst();
+          // Scoped to this portal as well as this tenant: a version id of another portal is a
+          // not-found, never a cross-portal restore.
+          if (row === undefined) throw new NotFoundError('portal_version', params.versionId);
+          await trx
+            .updateTable('captive_portals')
+            .set({ published_version_id: row.id })
+            .where('id', '=', params.id)
+            .execute();
+          await writeAudit(trx, ctx, {
+            organizationId: params.orgId,
+            action: 'captive_portal:update',
+            targetType: 'captive_portal',
+            targetId: params.id,
+            before: { published_version_id: portal.published_version_id },
+            after: { published_version_id: row.id, version: row.version, restored: true },
+          });
+          return row;
+        });
+        return {
+          status: 200,
+          body: { ...restored, published_at: iso(restored.published_at), current: true },
+        };
+      },
+    }),
+  ];
+
+  return [...portals, ...secrets, ...terms, ...versions, ...themes, ...assets, ...previews];
 }
 
 /**

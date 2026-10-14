@@ -88,6 +88,7 @@ export const TENANT_GRAPH_TABLES: readonly string[] = Object.freeze([
   'portal_login_attempts',
   'portal_assets',
   'portal_terms_versions',
+  'portal_versions',
   'sessions',
   'accounting_records',
   'auth_events',
@@ -473,6 +474,37 @@ export async function seedTenantGraph(
     [organizationId, captivePortalId],
   );
   ref('portal_terms_versions', termsId);
+
+  // 038: the published snapshot guests are served, and the portal pointing at it. Published here
+  // because an unpublished portal serves nothing, so a fixture portal without a version would be
+  // a portal no guest can use.
+  const portalVersionId = await insertReturning<string>(
+    db,
+    `INSERT INTO portal_versions (organization_id, captive_portal_id, version, snapshot)
+     VALUES ($1, $2, 1, $3::jsonb) RETURNING id`,
+    [
+      organizationId,
+      captivePortalId,
+      JSON.stringify({
+        template_key: 'branded_multi_login',
+        name: `portal ${slug}`,
+        methods: ['click_through'],
+        method_order: [],
+        identity_provider_ids: [],
+        redirect_url: null,
+        terms_version: '1',
+        theme: null,
+        locales: ['en'],
+        default_locale: 'en',
+        registration_fields: [],
+      }),
+    ],
+  );
+  ref('portal_versions', portalVersionId);
+  await db.query('UPDATE captive_portals SET published_version_id = $1 WHERE id = $2', [
+    portalVersionId,
+    captivePortalId,
+  ]);
 
   const acctUniqueId = `${slug}-${hex(8)}`;
   const sessionId = await insertReturning<string>(

@@ -39,7 +39,7 @@ import {
   type NasLookup,
   type RegisteredNas,
 } from '@ecloud/adapters';
-import { withPlatform, withTenant, type DbTransaction } from '@ecloud/db';
+import { withPlatform, withTenant, type DbTransaction, type PortalType } from '@ecloud/db';
 import { canonicalUnicastMac, isUuid, newId, type Logger } from '@ecloud/shared';
 import { isVendorApiAdapterKey } from '@ecloud/vendor-api';
 import express, { type Request, type Response, type Router } from 'express';
@@ -52,6 +52,14 @@ import { consumePortalLoginToken, issuePortalLoginToken } from './login-token-st
 import { completeVendorApiAuthorization } from '../vendor-api/portal.js';
 import { findNasByIdentity } from './nas-lookup.js';
 import { registerPostbackRoutes } from './portal-postback.js';
+import { PORTAL_COLUMNS, type PortalRow } from './portal-row.js';
+import {
+  buildSnapshot,
+  loadPublishedSnapshot,
+  offeredLegacyMethods,
+  portalCapabilities,
+  type PortalSnapshot,
+} from './portal-snapshot.js';
 import {
   MERAKI_ADAPTER_KEY,
   MERAKI_PORTAL_TYPE,
@@ -99,6 +107,13 @@ export function sealUamSecret(dataEncryptionKey: string, secret: string): string
 }
 
 const PORTAL_ACCESS = Object.freeze({ reason: 'portal', audit: false });
+
+/**
+ * Name of the portal created by {@link ensurePlatformDefaultPortal}. It says what it is in the
+ * admin list without anyone having to know what `is_platform_default` means, and it says it is
+ * temporary, because a fallback that looks like a choice outlives its purpose.
+ */
+export const PLATFORM_DEFAULT_PORTAL_NAME = 'Platform default (unconfigured site)';
 
 /** Path-based adapter selection (`/uam/uspot/`, `/uam/chilli/`; API_ARCHITECTURE portal table). */
 export const UAM_FLAVOURS = Object.freeze({
@@ -170,18 +185,6 @@ interface ResolvedPortal {
   readonly captivePortalId: string;
 }
 
-interface PortalRow {
-  id: string;
-  name: string;
-  site_id: string;
-  auth_methods: string[];
-  theme_id: string | null;
-  terms_version: string | null;
-  redirect_url: string | null;
-  uam_secret_ref: string | null;
-  adapter_config: Record<string, unknown>;
-  status: string;
-}
 
 function clientIpOf(value: unknown): string | null {
   return typeof value === 'string' && isIP(value) !== 0 ? value : null;
@@ -193,13 +196,53 @@ function uamServerUrl(deps: AppDeps, flavour: UamFlavour, config: Record<string,
   return `${deps.config.base.origins.portal.replace(/\/+$/, '')}${UAM_FLAVOURS[flavour].path}`;
 }
 
-/** The captive portal serving a NAS: pinned by `adapter_config.nas_client_id`, else the only one. */
-function pickPortal(rows: PortalRow[], nasId: string): PortalRow | null {
-  const pinned = rows.filter((r) => r.adapter_config.nas_client_id === nasId);
-  if (pinned.length === 1) return pinned[0] ?? null;
-  if (pinned.length > 1) return null;
-  const unpinned = rows.filter((r) => typeof r.adapter_config.nas_client_id !== 'string');
-  return unpinned.length === 1 ? (unpinned[0] ?? null) : null;
+/**
+ * Outcome of portal resolution for a NAS. The three cases are distinct because they must lead to
+ * different behaviour, and a bare `null` conflated two of them: `ambiguous` is an operator
+ * misconfiguration that must fail CLOSED, while `none` is the unconfigured site the platform
+ * default exists to serve. Returning one nullable row made a site with two pinned portals — the
+ * case the code deliberately refuses — fall through to creating an anonymous connect portal.
+ */
+export type PortalPick =
+  /** A portal an operator configured. Usable as-is; no fallback rules apply. */
+  | { readonly kind: 'configured'; readonly row: PortalRow }
+  /**
+   * An existing platform default. **Not usable on its own**: the caller must still establish that
+   * the operator has configured nothing for this (site, portal_type), because a fallback must
+   * never override a portal somebody disabled on purpose. This is a separate outcome from
+   * `configured` precisely so that check cannot be forgotten — while a fallback came back as a
+   * bare "found", every new caller inherited the bug by default.
+   */
+  | { readonly kind: 'fallback'; readonly row: PortalRow }
+  /** Nothing configured for this site and type: a fallback may be created. */
+  | { readonly kind: 'none' }
+  /** More than one configured candidate: refuse, never guess and never fall back. */
+  | { readonly kind: 'ambiguous'; readonly count: number };
+
+/**
+ * The captive portal serving a NAS: pinned by `adapter_config.nas_client_id`, else the only
+ * unpinned one, else — migration 041 — the site's active platform default if one exists.
+ *
+ * Platform defaults are excluded from the candidate sets on purpose. They are not portals anyone
+ * chose, so counting one as a candidate would make every real portal ambiguous and take a working
+ * site offline the moment a fallback existed. A deliberately configured portal always wins; the
+ * fallback is only reached when there is nothing configured at all.
+ */
+export function pickPortal(rows: PortalRow[], nasId: string): PortalPick {
+  const chosen = rows.filter((r) => !r.is_platform_default);
+  const pinned = chosen.filter((r) => r.adapter_config.nas_client_id === nasId);
+  const first = pinned[0];
+  if (pinned.length === 1 && first !== undefined) return { kind: 'configured', row: first };
+  // Ambiguity among portals an operator configured stays a refusal: guessing which of two pinned
+  // portals was meant is worse than the error page, and serving an anonymous fallback instead of
+  // one of them is worse than either.
+  if (pinned.length > 1) return { kind: 'ambiguous', count: pinned.length };
+  const unpinned = chosen.filter((r) => typeof r.adapter_config.nas_client_id !== 'string');
+  const only = unpinned[0];
+  if (unpinned.length === 1 && only !== undefined) return { kind: 'configured', row: only };
+  if (unpinned.length > 1) return { kind: 'ambiguous', count: unpinned.length };
+  const fallback = rows.find((r) => r.is_platform_default);
+  return fallback === undefined ? { kind: 'none' } : { kind: 'fallback', row: fallback };
 }
 
 function openUamSecret(deps: AppDeps, ref: string | null): string | null {
@@ -212,12 +255,305 @@ function openUamSecret(deps: AppDeps, ref: string | null): string | null {
 }
 
 /**
+ * Whether an operator has configured a portal for this (site, portal_type) — **whatever its
+ * status**. Migration 041: this is the one rule that decides whether a platform-default fallback
+ * may be used, and it lives in one function because applying it on the creation path but not the
+ * serving path is exactly the gap that let a disabled portal fall back to anonymous access.
+ *
+ * Status is deliberately not filtered. Disabling a portal is how an operator takes a site's guest
+ * access offline, so a disabled portal is evidence of a decision, and serving an anonymous
+ * fallback instead would be the worst available reading of it. The resolution query filters on
+ * active, so this is the only place that can see a disabled row.
+ *
+ * A DELETED portal leaves no row and therefore no evidence, so a site whose portal was deleted
+ * is indistinguishable from one that never had a portal and does fall back. Closing that would
+ * need a tombstone; it is recorded as a limitation rather than guessed at.
+ */
+export async function configuredPortalExists(
+  trx: DbTransaction,
+  nas: { readonly organization_id: string; readonly site_id: string },
+  portalType: PortalType,
+): Promise<boolean> {
+  const row = await trx
+    .selectFrom('captive_portals')
+    .select(['id'])
+    .where('site_id', '=', nas.site_id)
+    .where('organization_id', '=', nas.organization_id)
+    .where('portal_type', '=', portalType)
+    .where('is_platform_default', '=', false)
+    .executeTakeFirst();
+  return row !== undefined;
+}
+
+/**
+ * Migration 041: the site's platform-default portal for this portal type, created and published
+ * if it does not exist yet (owner request: a NAS nobody has configured still serves a working
+ * connect page).
+ *
+ * DELIBERATE OVERRIDE OF NAS_PENDING_ADOPTION_REQUIREMENTS.md — owner decision, 2026-10-14.
+ * That document (§5) puts a NAS with no applicable policy in Pending with new access Denied, and
+ * (§7, §8) forbids an unrestricted global fallback and warns specifically against applying the
+ * rule in the captive portal while other paths bypass it. This code is the fallback it rules out.
+ *
+ * The owner was shown both readings — a deny-by-default Pending state, and an honest
+ * "not yet configured" page that keeps the bring-up diagnostics without granting access — and
+ * chose the permissive fallback with a 10/10 Mbps, one-day default plan. §7's prohibition is
+ * against treating a global fallback as valid assignment *accidentally*; this one is a recorded
+ * decision, which is the difference. Do not revert it as a bug: it is working as the owner asked.
+ *
+ * What makes it survivable is that it is visible. See `is_platform_default`: the admin badge,
+ * the `?is_platform_default=true` filter, the `portal_platform_default_served` log line and the
+ * `platformDefaultPortal` flag on the credential all exist so a forgotten access point cannot
+ * serve anonymous access indefinitely without an operator being able to see it. Removing any of
+ * those is what would turn this decision into the problem the specification describes.
+ *
+ * Why the resolver writes it rather than NAS provisioning: the point of the feature is that a NAS
+ * nobody configured works, so there is no configuration step to hang the creation off. It is one
+ * insert per (site, portal_type) for the lifetime of the site — the second guest finds the row.
+ *
+ * Concurrency: two guests on two unconfigured access points of the same site race here. The
+ * partial unique index `uq_captive_portals_platform_default` is the arbiter; the loser's insert
+ * does nothing and it re-reads. Returning `undefined` is possible only if the row was created and
+ * then deleted inside this transaction's window, which the caller treats as unresolved.
+ *
+ * The snapshot is published in the same transaction as the insert, so the row can never exist in
+ * the draft-only state that would serve guests nothing. That is the structural part: there is no
+ * publish step for anyone to forget.
+ */
+export async function ensurePlatformDefaultPortal(
+  trx: DbTransaction,
+  nas: { readonly organization_id: string; readonly site_id: string },
+  portalType: PortalType,
+): Promise<PortalRow | undefined> {
+  // `status = 'active'`: disabling the fallback row is the operator's only way to switch this
+  // feature off for a site, so a disabled default must not be served. The partial unique index
+  // still counts the disabled row, so the insert below conflicts and nothing is recreated —
+  // which is what makes "off" stay off.
+  const existing = await trx
+    .selectFrom('captive_portals')
+    .select([...PORTAL_COLUMNS])
+    .where('site_id', '=', nas.site_id)
+    .where('organization_id', '=', nas.organization_id)
+    .where('portal_type', '=', portalType)
+    .where('is_platform_default', '=', true)
+    .where('status', '=', 'active')
+    .executeTakeFirst();
+  if (existing !== undefined) return existing;
+
+  // A configured portal — even a disabled one — means the operator made a decision about this
+  // site, and a fallback must not override it.
+  if (await configuredPortalExists(trx, nas, portalType)) return undefined;
+
+  const id = newId();
+  const snapshot = buildSnapshot({
+    name: PLATFORM_DEFAULT_PORTAL_NAME,
+    template_key: 'quick_connect',
+    auth_methods: ['click_through'],
+    // Explicit rather than inherited: the registry's fallback order happens to put click-through
+    // first today, and this portal must keep offering exactly one button whatever is added to the
+    // registry later.
+    method_order: ['click_through'],
+    identity_provider_ids: [],
+    redirect_url: null,
+    // No terms document: there is no operator to have written one. The page shows the
+    // "no terms provided" line rather than promising a document it cannot show.
+    terms_version: null,
+    registration_fields: [],
+    locales: [],
+    theme: null,
+  });
+  await trx
+    .insertInto('captive_portals')
+    .values({
+      id,
+      organization_id: nas.organization_id,
+      site_id: nas.site_id,
+      name: PLATFORM_DEFAULT_PORTAL_NAME,
+      // Globally unique, and recognisable in a URL as something the platform made.
+      public_slug: `default-${id.replace(/-/g, '').slice(0, 24)}`,
+      portal_type: portalType,
+      // Unique per (site, network_ref), so the portal type is part of it: a site may need a
+      // fallback for more than one gateway family.
+      network_ref: `_platform_default_${portalType}`,
+      auth_methods: ['click_through'],
+      method_order: ['click_through'],
+      template_key: 'quick_connect',
+      is_platform_default: true,
+      status: 'active',
+    })
+    .onConflict((oc) => oc.doNothing())
+    .execute();
+
+  // Same `status = 'active'` filter as the lookup above, and for the same reason: when the insert
+  // above conflicted with a row an operator had DISABLED, re-reading without the filter would
+  // hand back the disabled fallback and serve it — silently undoing the only off switch there is.
+  const created = await trx
+    .selectFrom('captive_portals')
+    .select([...PORTAL_COLUMNS])
+    .where('site_id', '=', nas.site_id)
+    .where('organization_id', '=', nas.organization_id)
+    .where('portal_type', '=', portalType)
+    .where('is_platform_default', '=', true)
+    .where('status', '=', 'active')
+    .executeTakeFirst();
+  if (created === undefined) return undefined;
+  if (created.published_version_id !== null) return created;
+
+  const versionId = newId();
+  await trx
+    .insertInto('portal_versions')
+    .values({
+      id: versionId,
+      organization_id: nas.organization_id,
+      captive_portal_id: created.id,
+      version: 1,
+      snapshot: JSON.stringify(snapshot),
+      published_by: null,
+    })
+    .onConflict((oc) => oc.doNothing())
+    .execute();
+  const published = await trx
+    .updateTable('captive_portals')
+    .set({ published_version_id: versionId })
+    .where('id', '=', created.id)
+    .where('published_version_id', 'is', null)
+    .returning([...PORTAL_COLUMNS])
+    .executeTakeFirst();
+  return (published ?? { ...created, published_version_id: versionId });
+}
+
+/**
+ * The whole portal-resolution decision for a NAS, including the migration-041 fallback rules.
+ *
+ * Both entry paths go through here — the UAM/splash resolver and the Cycle C post-back resolver —
+ * because the rules are security rules and a second implementation is a second place for them to
+ * drift. They did drift: the post-back path had its own one-line version that returned whatever
+ * `pickPortal` found, which (a) never applied {@link configuredPortalExists}, so a site whose
+ * operator had DISABLED its portal was served the anonymous fallback, and (b) ran against a query
+ * that did not select `is_platform_default`, so `!r.is_platform_default` was `!undefined` for
+ * every row and the exclusion inside `pickPortal` silently did nothing — which also meant a
+ * fallback competed as an ordinary candidate and could take a working post-back site offline by
+ * making its real portal ambiguous.
+ *
+ * `allowFallback` is the one legitimate difference between the two callers. The UAM/splash paths
+ * may create and serve a fallback for a site that has none, which is the owner's ruling. The
+ * post-back path may do neither: a post-back hand-off needs a vendor profile and a validated
+ * login URL in `adapter_config`, and a fallback has neither, so serving one would produce a page
+ * that cannot complete its hand-off — the same "a button that always fails is worse than no
+ * button" problem, one layer down. Absence therefore fails closed on that path by design.
+ *
+ * Note this is deliberately not a "do not create" flag. Not creating would still have served a
+ * fallback that already existed, and one will exist at any site where a Meraki NAS has been seen:
+ * `MERAKI_PORTAL_TYPE` is `'external'`, the same portal type post-back resolves.
+ */
+async function resolvePortalRow(opts: {
+  readonly trx: DbTransaction;
+  readonly nas: { readonly id: string; readonly organization_id: string; readonly site_id: string };
+  readonly portalType: PortalType;
+  readonly rows: PortalRow[];
+  readonly logger: Logger;
+  readonly allowFallback: boolean;
+}): Promise<PortalRow | null> {
+  const { trx, nas, portalType, rows, logger, allowFallback } = opts;
+  const picked = pickPortal(rows, nas.id);
+  if (picked.kind === 'ambiguous') {
+    // Fail closed. Two portals an operator configured is a misconfiguration to be fixed, not a
+    // reason to admit the guest anonymously.
+    logger.warn(
+      {
+        event: 'portal_resolution_ambiguous',
+        nasId: nas.id,
+        siteId: nas.site_id,
+        count: picked.count,
+      },
+      'portal resolution refused: more than one configured portal matches this NAS',
+    );
+    return null;
+  }
+  // A fallback may only be used when the operator has configured nothing for this
+  // (site, portal_type). The check cannot live only inside `ensurePlatformDefaultPortal`,
+  // because once a fallback row exists — and it will, for any site that was ever unconfigured —
+  // `pickPortal` returns it directly and the creation path never runs. Without this, disabling
+  // the real portal to take a site offline silently reopened it as an anonymous portal.
+  //
+  // This is also the line between the owner's ruling and something he did not rule on: he said a
+  // NAS with NOTHING ASSIGNED gets a default, not that a deliberate decision to disable a portal
+  // gets overridden.
+  if (picked.kind === 'configured') return picked.row;
+  // Everything below is the fallback path: `fallback` (one exists) or `none` (one may be made).
+  // Paths that cannot complete a hand-off with a fallback refuse one outright, before the
+  // configured-portal query: there is nothing a fallback could usefully do for them.
+  if (!allowFallback) return null;
+  if (await configuredPortalExists(trx, nas, portalType)) {
+    logger.warn(
+      { event: 'portal_fallback_refused_configured', nasId: nas.id, siteId: nas.site_id },
+      'portal fallback refused: this site has a configured portal, so guest access stays closed',
+    );
+    return null;
+  }
+  const portal =
+    picked.kind === 'fallback'
+      ? picked.row
+      : ((await ensurePlatformDefaultPortal(trx, nas, portalType)) ?? null);
+  if (portal === null) return null;
+  // Visible in the operator's logs, not only in the admin list: an access point running on the
+  // fallback is giving anonymous access and somebody should finish configuring it.
+  logger.warn(
+    { event: 'portal_platform_default_served', nasId: nas.id, siteId: nas.site_id },
+    'portal served from the platform default: this site has no configured portal',
+  );
+  return portal;
+}
+
+/**
+ * Portal resolution for the `external` portal type: the Cycle C post-back paths and the Cycle D
+ * vendor-API paths (`../vendor-api/portal.ts`).
+ *
+ * **Use this rather than calling `pickPortal` directly.** It is exported in preference to the
+ * picker because composing the picker with `configuredPortalExists` correctly is the step that
+ * went wrong three times: a caller that forgets the gate serves an anonymous fallback at a site
+ * whose operator deliberately disabled its portal, and a caller whose query omits
+ * `is_platform_default` also takes correctly configured sites offline by making their real portal
+ * look ambiguous. Both mistakes are impossible through this function — the gate is inside it, and
+ * the `PortalRow[]` parameter makes a narrower query a compile error.
+ *
+ * `allowFallback: false` for every caller here: an external hand-off needs a vendor profile and a
+ * validated login URL in `adapter_config`, and a platform-default row has neither, so a fallback
+ * could only ever produce a page that cannot complete its hand-off. Both absence of a portal and
+ * a leftover fallback therefore fail closed on these paths, by design rather than by omission.
+ *
+ * Also exported so tests drive the function the router wires in rather than a copy of it — the
+ * defect this replaces was in the wiring, and a test against a reimplementation would have missed
+ * it.
+ */
+export function resolveExternalPortalId(
+  deps: AppDeps,
+): (
+  trx: DbTransaction,
+  nas: { id: string; organization_id: string; site_id: string },
+  rows: PortalRow[],
+) => Promise<string | null> {
+  return async (trx, nas, rows) => {
+    const portal = await resolvePortalRow({
+      trx,
+      nas,
+      portalType: 'external',
+      // No cast. The caller's query must select `[...PORTAL_COLUMNS]`, and the compiler says so.
+      rows,
+      logger: deps.logger,
+      allowFallback: false,
+    });
+    return portal === null ? null : portal.id;
+  };
+}
+
+/**
  * NAS by `nasid` (= the EZECLOUD-assigned NAS identifier, CP §7.3) and/or the AP MAC from `called`
  * (Cycle A, migration 028 `nas_access_points`), via `findNasByIdentity` (nas-lookup.ts): anything
  * but exactly one active NAS fails closed, and `nasid` + a registered AP MAC of another NAS is a
  * conflict. The UAM `md` signature is still verified against the resolved NAS's secret.
  */
-async function resolvePortal(
+export async function resolvePortal(
   deps: AppDeps,
   flavour: PortalFlavour,
   identity: { nasid: string | undefined; apMac: string | null },
@@ -240,24 +576,21 @@ async function resolvePortal(
     }
     const portals = (await trx
       .selectFrom('captive_portals')
-      .select([
-        'id',
-        'name',
-        'site_id',
-        'auth_methods',
-        'theme_id',
-        'terms_version',
-        'redirect_url',
-        'uam_secret_ref',
-        'adapter_config',
-        'status',
-      ])
+      .select([...PORTAL_COLUMNS])
       .where('site_id', '=', n.site_id)
       .where('organization_id', '=', n.organization_id)
       .where('status', '=', 'active')
       .where('portal_type', '=', spec.portalType)
       .execute()) as PortalRow[];
-    const portal = pickPortal(portals, n.id);
+    const portal = await resolvePortalRow({
+      trx,
+      nas: n,
+      portalType: spec.portalType,
+      rows: portals,
+      logger,
+      // The owner's ruling: a NAS whose site has no portal still serves a connect page.
+      allowFallback: true,
+    });
     if (portal === null) return null;
     const deploymentMode = n.deployment_mode;
     return {
@@ -283,24 +616,32 @@ async function resolvePortal(
 async function loadPortalRow(trx: DbTransaction, id: string): Promise<PortalRow | undefined> {
   return await trx
     .selectFrom('captive_portals')
-    .select([
-      'id',
-      'name',
-      'site_id',
-      'auth_methods',
-      'theme_id',
-      'terms_version',
-      'redirect_url',
-      'uam_secret_ref',
-      'adapter_config',
-      'status',
-    ])
+    .select([...PORTAL_COLUMNS])
     .where('id', '=', id)
     .executeTakeFirst();
 }
 
-function enabledMethods(portal: PortalRow): PortalMethod[] {
-  return PORTAL_METHODS.filter((m) => portal.auth_methods.includes(m));
+/**
+ * Migration 038: what a guest is offered comes from the PUBLISHED snapshot, never from the draft
+ * row an administrator may be editing. A portal with no published version serves nothing.
+ *
+ * `loadPortalRow` still reads the draft row because the parts that are not public configuration
+ * live there: the UAM secret, the adapter config and the active/disabled status.
+ */
+async function publishedConfig(
+  deps: AppDeps,
+  trx: DbTransaction,
+  portal: PortalRow,
+): Promise<{ snapshot: PortalSnapshot; methods: PortalMethod[] } | null> {
+  const published = await loadPublishedSnapshot(trx, portal);
+  if (published === null) return null;
+  const capabilities = await portalCapabilities(trx, {
+    mailerConfigured: deps.config.base.mail !== null,
+  });
+  return {
+    snapshot: published.snapshot,
+    methods: offeredLegacyMethods(published.snapshot, capabilities),
+  };
 }
 
 async function counter(deps: AppDeps, key: string, max: number, windowS: number): Promise<void> {
@@ -797,7 +1138,7 @@ export function portalInternalRouter(deps: AppDeps): Router {
       counter: (key, max, windowS) => counter(deps, key, max, windowS),
       isRateLimited: (error): error is RateLimited => error instanceof RateLimited,
       limits: PORTAL_LIMITS,
-      pickPortalId: (rows, nasId) => pickPortal(rows as unknown as PortalRow[], nasId)?.id ?? null,
+      resolvePortalId: resolveExternalPortalId(deps),
       previousSessionExpired: (nas, mac, at) => previousSessionExpired(deps, nas, mac, at),
     },
     now,
@@ -815,33 +1156,30 @@ export function portalInternalRouter(deps: AppDeps): Router {
       const view = await withTenant(deps.db, flow.organizationId, async (trx) => {
         const portal = await loadPortalRow(trx, flow.captivePortalId);
         if (portal === undefined || portal.status !== 'active') return null;
+        // Migration 038: the published snapshot, not the draft row the designer may be editing.
+        const config = await publishedConfig(deps, trx, portal);
+        if (config === null) return null;
+        const { snapshot } = config;
         const site = await trx
           .selectFrom('sites')
           .select(['name'])
           .where('id', '=', flow.siteId)
           .executeTakeFirst();
-        const theme =
-          portal.theme_id === null
-            ? undefined
-            : await trx
-                .selectFrom('portal_themes')
-                .select(['colors', 'strings', 'logo_asset_ref'])
-                .where('id', '=', portal.theme_id)
-                .executeTakeFirst();
+        const theme = snapshot.theme ?? undefined;
         let terms: { version: string; text: string } | null = null;
-        if (portal.terms_version !== null && /^\d{1,9}$/.test(portal.terms_version)) {
+        if (snapshot.terms_version !== null && /^\d{1,9}$/.test(snapshot.terms_version)) {
           const row = await trx
             .selectFrom('portal_terms_versions')
             .select(['body'])
             .where('captive_portal_id', '=', portal.id)
-            .where('version', '=', Number(portal.terms_version))
+            .where('version', '=', Number(snapshot.terms_version))
             .where('locale', '=', 'en')
             .executeTakeFirst();
-          if (row !== undefined) terms = { version: portal.terms_version, text: row.body };
+          if (row !== undefined) terms = { version: snapshot.terms_version, text: row.body };
         }
         const base = nasBase(flow);
         const fallback =
-          portal.redirect_url !== null ? safeUserUrl(portal.redirect_url, null) : null;
+          snapshot.redirect_url !== null ? safeUserUrl(snapshot.redirect_url, null) : null;
         // Cycle C: post-back flows carry the validated login origin and a fresh single-use
         // login token (consumed by identify before a credential is handed out).
         const pb = flow.postback === undefined ? undefined : postbackView(flow);
@@ -868,8 +1206,8 @@ export function portalInternalRouter(deps: AppDeps): Router {
           id: flow.id,
           state: flow.state,
           expires_at: flow.expiresAt,
-          methods: enabledMethods(portal),
-          portal: { id: portal.id, name: portal.name, site_name: site?.name ?? '' },
+          methods: config.methods,
+          portal: { id: portal.id, name: snapshot.name, site_name: site?.name ?? '' },
           theme:
             theme === undefined
               ? null
@@ -877,8 +1215,8 @@ export function portalInternalRouter(deps: AppDeps): Router {
                   colors: theme.colors,
                   strings: theme.strings,
                   logo_asset_id:
-                    theme.logo_asset_ref !== null && isUuid(theme.logo_asset_ref)
-                      ? theme.logo_asset_ref
+                    theme.logo_asset_id !== null && isUuid(theme.logo_asset_id)
+                      ? theme.logo_asset_id
                       : null,
                 },
           terms,
@@ -896,7 +1234,7 @@ export function portalInternalRouter(deps: AppDeps): Router {
             ? (() => {
                 const m = merakiFlowView(deps, flow, now());
                 return {
-                  methods: merakiMethods(flow, enabledMethods(portal)),
+                  methods: merakiMethods(flow, config.methods),
                   meraki: {
                     mode: m.mode,
                     handoff_origin: m.handoff_origin,
@@ -999,36 +1337,57 @@ export function portalInternalRouter(deps: AppDeps): Router {
       // B-3: the Argon2id verify (~45 ms CPU) runs with no pg connection held. A short tenant
       // transaction reads the credential, the verify runs outside it, and the decision
       // transaction below re-reads the user and requires the credential unchanged.
+      //
+      // The published snapshot is resolved HERE, in the same pre-read, not inside the decision
+      // transaction. Two reasons. It is immutable once published, so reading it early cannot be
+      // stale in a way that matters — §8 wants an in-progress journey to keep the version it
+      // started on, which is exactly what this gives. And the decision transaction is a
+      // serialisation point for concurrent identifies on one flow: adding two queries to it
+      // widened the race window enough that a second concurrent submission stopped losing on the
+      // flow-state guard (409, "you are already connected") and started losing on the spent
+      // voucher instead (422, "sign-in failed"), which is the wrong thing to tell a guest whose
+      // other tab just succeeded.
       let passwordCheck: PasswordCheck | null = null;
-      if (input.method === 'password') {
-        const pre = await withTenant(deps.db, flow.organizationId, async (trx) => {
-          const portal = await loadPortalRow(trx, flow.captivePortalId);
-          if (
-            portal === undefined ||
-            portal.status !== 'active' ||
-            !enabledMethods(portal).includes('password')
-          ) {
-            return null; // refused by the decision transaction without any verify (as before)
-          }
-          return { user: await findSubscriberByUsername(trx, input.username) };
+      const resolved = await withTenant(deps.db, flow.organizationId, async (trx) => {
+        const portal = await loadPortalRow(trx, flow.captivePortalId);
+        if (portal === undefined || portal.status !== 'active') return null;
+        const config = await publishedConfig(deps, trx, portal);
+        if (config === null) return null;
+        // `looked` is separate from `user` on purpose: an UNKNOWN username must still cost one
+        // Argon2id verify against the dummy hash, or response time tells an attacker which
+        // usernames exist. `user: undefined` means "no such user", not "not looked up", and
+        // conflating the two removed that timing floor.
+        const looked = input.method === 'password' && config.methods.includes('password');
+        const user = looked ? await findSubscriberByUsername(trx, input.username) : undefined;
+        return { methods: config.methods, looked, user };
+      });
+      if (input.method === 'password' && resolved?.looked === true) {
+        passwordCheck = await checkSubscriberLoginPassword(resolved.user, input.password, {
+          argon2MemoryKib: deps.config.base.argon2.memoryKib,
+          verify: deps.verifyPassword,
         });
-        if (pre !== null) {
-          passwordCheck = await checkSubscriberLoginPassword(pre.user, input.password, {
-            argon2MemoryKib: deps.config.base.argon2.memoryKib,
-            verify: deps.verifyPassword,
-          });
-        }
       }
 
       type Outcome =
-        | { ok: true; identity: BrokerIdentity; uamSecret: string | null }
+        | {
+            ok: true;
+            identity: BrokerIdentity;
+            uamSecret: string | null;
+            platformDefaultPortal: boolean;
+          }
         | { ok: false; reason: string; status: 403 | 404 | 422 };
       const outcome: Outcome = await withTenant(deps.db, flow.organizationId, async (trx) => {
         const portal = await loadPortalRow(trx, flow.captivePortalId);
         if (portal === undefined || portal.status !== 'active') {
           return { ok: false, reason: 'portal_inactive', status: 404 } as const;
         }
-        if (!enabledMethods(portal).includes(method)) {
+        // Resolved in the pre-read above; an unpublished portal serves nothing at all.
+        if (resolved === null) {
+          return { ok: false, reason: 'portal_unpublished', status: 404 } as const;
+        }
+        // The published snapshot decides, so a method enabled only in the draft cannot be
+        // submitted directly even by a client that guesses the route.
+        if (!resolved.methods.includes(method)) {
           return { ok: false, reason: 'method_not_allowed', status: 403 } as const;
         }
         let identity: BrokerIdentity;
@@ -1078,7 +1437,14 @@ export function portalInternalRouter(deps: AppDeps): Router {
           })
           .execute();
         if (failure !== null) return { ok: false, reason: failure, status: 422 } as const;
-        return { ok: true, identity, uamSecret: openUamSecret(deps, portal.uam_secret_ref) };
+        return {
+          ok: true,
+          identity,
+          uamSecret: openUamSecret(deps, portal.uam_secret_ref),
+          // Migration 041: recorded on the credential so AAA and the session know the guest was
+          // admitted by a fallback portal rather than one somebody configured.
+          platformDefaultPortal: portal.is_platform_default,
+        };
       });
 
       if (!outcome.ok) {
@@ -1197,6 +1563,7 @@ export function portalInternalRouter(deps: AppDeps): Router {
       await storeCredential(deps.kv, {
         username: pair.username,
         passwordSha256: sha256Hex(pair.password),
+        ...(outcome.platformDefaultPortal ? { platformDefaultPortal: true } : {}),
         flowId: flow.id,
         organizationId: flow.organizationId,
         siteId: flow.siteId,

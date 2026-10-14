@@ -16,6 +16,7 @@ import {
   json,
   loopbackResolver,
   migrateTestDatabase,
+  publishPortalFixtureKysely,
   startMockController,
   testPki,
   type MockController,
@@ -178,7 +179,7 @@ await describeIntegration('@ecloud/api multi-vendor Cycle D (mock controller)', 
           : {}),
       })
       .execute();
-    await deps.dbPlatform
+    const vendorPortal = await deps.dbPlatform
       .insertInto('captive_portals')
       .values({
         organization_id: a.orgId,
@@ -190,7 +191,15 @@ await describeIntegration('@ecloud/api multi-vendor Cycle D (mock controller)', 
         auth_methods: portal.methods ?? ['click_through'],
         redirect_url: portal.redirectUrl ?? null,
       })
-      .execute();
+      .returning('id')
+      .executeTakeFirstOrThrow();
+    await publishPortalFixtureKysely(deps.dbPlatform, {
+      organizationId: a.orgId,
+      captivePortalId: vendorPortal.id,
+      name: 'Guest',
+      methods: portal.methods ?? ['click_through'],
+      redirectUrl: portal.redirectUrl ?? null,
+    });
     const policy = await deps.dbPlatform
       .insertInto('policies')
       .values({

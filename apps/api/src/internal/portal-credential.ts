@@ -51,6 +51,13 @@ export interface PortalIdentity {
   groupIds: string[];
   /** CHAP hand-off only: the cleartext FreeRADIUS `chap` verifies against (never logged). */
   chapPassword?: string;
+  /**
+   * Migration 041: true when the credential was issued by a platform-default portal — a fallback
+   * this service created because the site had no configured portal. The guest was admitted with
+   * no identity, so a session carrying this flag is anonymous by configuration gap rather than by
+   * an operator's choice, and the AAA side records it on the session and the auth event.
+   */
+  platformDefaultPortal?: boolean;
 }
 
 export interface PortalNas {

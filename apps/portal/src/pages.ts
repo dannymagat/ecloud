@@ -237,7 +237,17 @@ function body(theme: PageTheme, b: PageBody): string {
           ? ''
           : `<p class="muted">${escapeHtml(t('terms.version', { version: b.termsVersion }, l))}</p>`;
       const text = b.termsText ?? t('terms.none', {}, l);
-      return `${errorLine(b.error)}<div class="terms" tabindex="0">${escapeHtml(text)}</div>${version}${formOpen(b.form)}<label class="check" for="accept"><input type="checkbox" id="accept" name="accept_terms" value="yes" required> ${escapeHtml(t('form.accept_terms', {}, l))}</label><button type="submit">${escapeHtml(s.click_through_button)}</button></form>${back(b.backHref, l)}`;
+      // With a terms DOCUMENT the guest ticks a box: acceptance has to be a separate, deliberate
+      // act when there is something specific to accept. With no document configured (§4.1 makes
+      // acceptance explicit only "when configured", and the platform-default connect portal has
+      // no operator to have written one) the single sentence above the button IS the acceptance,
+      // so the box would be a second tap that adds no consent. `accept_terms` still travels, as
+      // a hidden field, because the POST contract and the recorded acceptance are unchanged.
+      const accept =
+        b.termsText === null
+          ? '<input type="hidden" name="accept_terms" value="yes">'
+          : `<label class="check" for="accept"><input type="checkbox" id="accept" name="accept_terms" value="yes" required> ${escapeHtml(t('form.accept_terms', {}, l))}</label>`;
+      return `${errorLine(b.error)}<div class="terms" tabindex="0">${escapeHtml(text)}</div>${version}${formOpen(b.form)}${accept}<button type="submit">${escapeHtml(s.click_through_button)}</button></form>${back(b.backHref, l)}`;
     }
     case 'success': {
       const hostLine =
