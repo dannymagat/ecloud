@@ -72,6 +72,8 @@ export const TENANT_GRAPH_TABLES: readonly string[] = Object.freeze([
   'otp_codes',
   'bandwidth_profiles',
   'access_plans',
+  'payment_events',
+  'orders',
   'user_groups',
   'users',
   'client_devices',
@@ -380,6 +382,25 @@ export async function seedTenantGraph(
     [organizationId, siteId, policyId, `plan ${slug}`, `PLAN${slug.replace(/[^A-Za-z0-9]/g, '').slice(0, 20)}`],
   );
   ref('access_plans', accessPlanId);
+
+  // 045: a verified provider event and a pending order. The order is deliberately left pending
+  // and without paid_event_id, because ck_orders_paid_needs_event makes "paid" meaningful only
+  // with a verified event and a fixture should not fake one.
+  const paymentEventId = await insertReturning<string>(
+    db,
+    `INSERT INTO payment_events (organization_id, provider, provider_event_id, event_type, amount_minor, currency)
+     VALUES ($1, 'none', $2, 'test.seeded', 2500, 'AED') RETURNING id`,
+    [organizationId, `evt-${slug}`],
+  );
+  ref('payment_events', paymentEventId);
+
+  const orderId = await insertReturning<string>(
+    db,
+    `INSERT INTO orders (organization_id, site_id, access_plan_id, amount_minor, currency)
+     VALUES ($1, $2, $3, 2500, 'AED') RETURNING id`,
+    [organizationId, siteId, accessPlanId],
+  );
+  ref('orders', orderId);
 
   const voucherBatchId = await insertReturning<string>(
     db,

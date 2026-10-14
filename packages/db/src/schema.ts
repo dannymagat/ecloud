@@ -720,6 +720,49 @@ export interface PlatformDefaultPolicyTable {
   updated_by: Uuid | null;
 }
 
+/** Lifecycle of a plan purchase (migration 045). */
+export type OrderStatus = 'pending' | 'paid' | 'fulfilled' | 'failed' | 'cancelled';
+
+/**
+ * A verified provider event (migration 045). Unverified callbacks are never stored. No provider
+ * is chosen; `provider` is free text until the owner picks one.
+ */
+export interface PaymentEventsTable {
+  id: Generated<Uuid>;
+  organization_id: Uuid;
+  provider: string;
+  provider_event_id: string;
+  event_type: string;
+  amount_minor: number | null;
+  currency: string | null;
+  payload: GeneratedJsonb<Record<string, unknown>>;
+  received_at: GeneratedTimestamp;
+}
+
+/**
+ * A purchase of an access plan (migration 045). `paid` requires `paid_event_id`, enforced by
+ * ck_orders_paid_needs_event: a redirect handler has no verified event to point at.
+ */
+export interface OrdersTable {
+  id: Generated<Uuid>;
+  organization_id: Uuid;
+  site_id: Uuid | null;
+  access_plan_id: Uuid;
+  user_id: Uuid | null;
+  status: Generated<OrderStatus>;
+  amount_minor: number;
+  currency: string;
+  provider: string | null;
+  provider_ref: string | null;
+  paid_event_id: Uuid | null;
+  paid_at: NullableTimestamp;
+  assignment_id: Uuid | null;
+  fulfilled_at: NullableTimestamp;
+  failure_reason: string | null;
+  created_at: GeneratedTimestamp;
+  updated_at: GeneratedTimestamp;
+}
+
 export interface PoliciesTable {
   id: Generated<Uuid>;
   organization_id: Uuid;
@@ -1267,6 +1310,8 @@ export interface Database {
   otp_codes: OtpCodesTable;
   bandwidth_profiles: BandwidthProfilesTable;
   access_plans: AccessPlansTable;
+  payment_events: PaymentEventsTable;
+  orders: OrdersTable;
   platform_default_policy: PlatformDefaultPolicyTable;
   user_groups: UserGroupsTable;
   users: UsersTable;
