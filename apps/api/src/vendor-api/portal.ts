@@ -50,6 +50,8 @@ import { z } from 'zod';
 import type { AppDeps } from '../context.js';
 import { consumeVoucher } from '../internal/aaa.js';
 import { findNasByIdentity } from '../internal/nas-lookup.js';
+import { resolveExternalPortalId } from '../internal/portal.js';
+import { PORTAL_COLUMNS } from '../internal/portal-row.js';
 import {
   IdentityRejected,
   clickThroughDevice,
@@ -100,20 +102,6 @@ async function bump(deps: AppDeps, key: string, max: number, windowS: number): P
   return (await deps.kv.incr(key, windowS)) <= max;
 }
 
-interface PortalPick {
-  id: string;
-  adapter_config: Record<string, unknown>;
-}
-
-/** Same rule as the UAM portal: pinned by `adapter_config.nas_client_id`, else the only one. */
-function pickPortal(rows: PortalPick[], nasId: string): PortalPick | null {
-  const pinned = rows.filter((r) => r.adapter_config.nas_client_id === nasId);
-  if (pinned.length === 1) return pinned[0] ?? null;
-  if (pinned.length > 1) return null;
-  const unpinned = rows.filter((r) => typeof r.adapter_config.nas_client_id !== 'string');
-  return unpinned.length === 1 ? (unpinned[0] ?? null) : null;
-}
-
 export function vendorPortalInternalRouter(deps: AppDeps): Router {
   const now = deps.now ?? (() => new Date());
   const router = express.Router();
@@ -155,29 +143,43 @@ export function vendorPortalInternalRouter(deps: AppDeps): Router {
       const picked = await withTenant(deps.db, nas.organization_id, async (trx) => {
         const cred = await loadStoredCredential(trx, controllerId);
         if (cred === null || cred.apiKind !== ADAPTER_API_KIND[parsed.adapterKey]) {
-          return 'no_credential' as const;
+          return { ok: false, reason: 'no_credential' } as const;
         }
         if (parsed.adapterKey === 'unifi-external-portal') {
           const expected = cred.settings.unifi_site_name;
           if (expected !== undefined && expected !== parsed.fields.unifi_site)
-            return 'site_mismatch' as const;
-          if (cred.externalSiteId === null) return 'no_site_id' as const;
+            return { ok: false, reason: 'site_mismatch' } as const;
+          if (cred.externalSiteId === null) return { ok: false, reason: 'no_site_id' } as const;
         }
         if (parsed.adapterKey === 'mist-guest-portal') {
           const wlans = cred.settings.mist_wlan_ids ?? [];
-          if (!wlans.includes(parsed.fields.wlan_id ?? '')) return 'wlan_not_registered' as const;
+          if (!wlans.includes(parsed.fields.wlan_id ?? '')) return { ok: false, reason: 'wlan_not_registered' } as const;
         }
-        const portals = (await trx
+        // One picker for every path (migration 041 fallout). This file used to carry its own
+        // copy of the rule with its own row type that had no notion of a platform-default
+        // portal, so a fallback row created on a Meraki splash path - MERAKI_PORTAL_TYPE is
+        // 'external' - became a candidate here. On a site with a real external portal that
+        // was two unpinned candidates and an outage; on a site whose real portal had been
+        // disabled it served the fallback. Neither was intended by either author.
+        const rows = await trx
           .selectFrom('captive_portals')
-          .select(['id', 'adapter_config'])
+          .select([...PORTAL_COLUMNS])
           .where('organization_id', '=', nas.organization_id)
           .where('site_id', '=', nas.site_id)
           .where('status', '=', 'active')
           .where('portal_type', '=', 'external')
-          .execute()) as PortalPick[];
-        return pickPortal(portals, nas.id) ?? ('no_portal' as const);
+          .execute();
+        const portalId = await resolveExternalPortalId(deps)(trx, nas, rows);
+        // A discriminated result, not a string channel shared with the refusal codes above.
+        // The previous shape returned those codes as bare strings and the caller told success
+        // from refusal by `typeof`, so any success value that was also a string - a portal id -
+        // made every unchecked code look like one. `!picked.ok` refuses every reason including
+        // ones added later, which enumerating sentinels does not.
+        return portalId === null
+          ? ({ ok: false, reason: 'no_portal' } as const)
+          : ({ ok: true, id: portalId } as const);
       });
-      if (typeof picked === 'string') return refuse(picked);
+      if (!picked.ok) return refuse(picked.reason);
       const lf = VENDOR_REDIRECT_LIMITS.flowsPerNas;
       if (!(await bump(deps, `pf:rl:flows:${nas.id}`, lf.max, lf.windowS))) {
         res.status(429).json({ kind: 'rate_limited', retry_after: 60 });
