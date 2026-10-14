@@ -143,6 +143,44 @@ the object form with `"do_xlat": false` for every attribute (contract §3 rule 1
 | Accounting with `radius.radacct_raw` created from migration 009 (temporary dev role) | Start, Interim, Interim retransmit, Stop, Accounting-On -> 4 rows (duplicate collapsed by `uq_radacct_raw_packet`), output octets folded `(1 << 32) + n`, `UPDATE` as `ecloud_radius` denied; schema and role dropped again afterwards |
 | M8 (2026-10-07, cloud dev container, distro FreeRADIUS 3.2.5 with this raddb, PostgreSQL 16 migrated to 014; the 3.2.10 image is exercised by the CI `radius-contract` job) | `freeradius -C` OK; Accounting Start -> `Accounting-Response`; identical retransmit -> `Accounting-Response` (was: none) and still one row; row has `nasipaddress = 192.0.2.10` (packet attribute) and `packet_src_ip = 127.0.0.1` (authenticated source) |
 
+## 5b. Silent discard: a NAS that omits Message-Authenticator (LAB, 2026-10-14)
+
+Symptom: the NAS reports "no reply from RADIUS auth server", `tcpdump` on the host shows the
+Access-Request arriving and being DNAT'd into the container, the DOCKER-USER counters increment,
+the listener sockets show no drops -- and FreeRADIUS logs NOTHING and never calls
+`/internal/aaa/authorize`. Accounting on 1813 works normally throughout.
+
+Cause: every rendered client carries `require_message_authenticator = yes` (BlastRADIUS,
+CVE-2024-3596). FreeRADIUS 3.2 discards an Access-Request from such a client that has no
+Message-Authenticator (attribute 80) **without a reply and without a log line**. Nothing in the
+server's output names the problem.
+
+Confirmed on the EZEAP lab device: radcli 1.3.0 (vendored in the firmware) adds the attribute
+ONLY when an EAP-Message attribute is present -- `lib/sendserver.c:676-677` calls
+`add_msg_auth_attr()` inside `if (rc_avpair_get(..., PW_EAP_MESSAGE, 0) != NULL)`. There is no
+configuration key for it; `/etc/radcli/radiusclient.conf` has no related option. A PAP
+Access-Request from uspot therefore never carries attribute 80. A wire capture on the AP showed
+ten attributes ending at NAS-Port, with no type 80.
+Accounting is unaffected because it takes the other branch and signs with `rc_md5_calc`, which
+is why 1813 produces log lines while 1812 is silent.
+
+Diagnosis shortcut, because the server gives no signal: a packet from an UNKNOWN client logs
+"Ignoring request ... from unknown client", since the client lookup runs BEFORE the
+Message-Authenticator check. So if a probe from an unregistered address logs and the registered
+NAS does not, suspect attribute 80 rather than the firewall or the secret.
+
+Fix, in order of preference:
+1. Make the NAS send Message-Authenticator. For radcli this is a source patch, not a setting:
+   gate `add_msg_auth_attr()` on `data->code == PW_ACCESS_REQUEST` as well as the EAP test.
+2. Only if the device cannot: set `nas_clients.require_message_authenticator = false` for that
+   NAS. This reopens CVE-2024-3596 for it; `limit_proxy_state` gives partial cover. Note the
+   re-render this forces also rewrites the client's secret from the database, so the NAS secret
+   must be updated in the same pass.
+
+Also note `radiusd.conf` has `auth = no`, so a request that IS processed logs nothing either.
+The reliable ground truth for "did FreeRADIUS process it" is a call to `/internal/aaa/authorize`
+in the api log plus a row in `auth_events`, not the RADIUS log.
+
 ## 6. Open items / dependencies
 
 1. **`ecloud_radius` role is not provisioned in the dev stack.** `packages/db/migrations/010` only grants

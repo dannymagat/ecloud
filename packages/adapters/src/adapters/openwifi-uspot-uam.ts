@@ -1,6 +1,18 @@
 /**
  * `openwifi-uspot-uam`: TIP-fork uspot on EZEAP (CAPTIVE_PORTAL_ARCHITECTURE.md §3 "(T)").
  * Assumed EZEAP adapter until the shipped uspot code base is confirmed (A4 §0 item 1).
+ *
+ * DEVICE LIMITATION (LAB, 2026-10-14): uspot's RADIUS client, radcli 1.3.0, adds
+ * Message-Authenticator (attribute 80) only when the request carries EAP-Message
+ * (lib/sendserver.c:676-677) -- so a PAP Access-Request never has it, and there is no
+ * configuration key to change that. Every client EZECLOUD renders sets
+ * `require_message_authenticator = yes` (CVE-2024-3596), and FreeRADIUS 3.2 discards such a
+ * request SILENTLY: no reply, no log line, no `/internal/aaa/authorize` call. Accounting is
+ * unaffected (different branch, `rc_md5_calc`), so 1813 works while 1812 is mute, which makes
+ * this look like a firewall or secret fault for as long as you let it.
+ * Fix on the device (patch radcli to gate on PW_ACCESS_REQUEST); as a last resort clear
+ * `nas_clients.require_message_authenticator` for that NAS and accept the exposure.
+ * See infra/freeradius/README.md §5b.
  */
 import type { AdapterCapabilities } from '@ecloud/policy-engine';
 import { attr, attributeTable, createAdapter, decl, fieldTable, sourced } from '../base.js';
