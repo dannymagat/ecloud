@@ -154,7 +154,7 @@ await describeIntegration('@ecloud/db schema', () => {
       .sort();
     expect(publicTables).toEqual([...ALL_TABLES].sort());
     expect(radiusTables).toEqual([...RADIUS_TABLES].sort());
-    expect(publicTables).toHaveLength(50); // + vendor_api_sessions (031); + portal_assets, portal_terms_versions (021); + session_enforcement, accounting_anomalies (023); + usage_hourly (026); + nas_access_points, vendor_api_credentials (028)
+    expect(publicTables).toHaveLength(51); // + vendor_api_sessions (031); + portal_assets, portal_terms_versions (021); + session_enforcement, accounting_anomalies (023); + usage_hourly (026); + nas_access_points, vendor_api_credentials (028); + otp_codes (035)
 
     const view = await sql<{ count: number }>`
       SELECT count(*)::int AS count FROM pg_views WHERE schemaname = 'radius' AND viewname = 'nas_v'

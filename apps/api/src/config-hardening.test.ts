@@ -13,6 +13,7 @@ const prod = {
   MFA_ENCRYPTION_KEY: 'm'.repeat(40),
   DATA_ENCRYPTION_KEY: 'd'.repeat(40),
   VOUCHER_PEPPER: 'v'.repeat(40),
+  OTP_PEPPER: 'o'.repeat(40),
   SESSION_COOKIE_NAME: '__Host-ecloud_sid',
 };
 

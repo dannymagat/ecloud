@@ -84,6 +84,19 @@ export const envSchema = z.object({
   PUBLIC_API_ORIGIN: z.url().default('http://localhost:3000'),
   PUBLIC_PORTAL_ORIGIN: z.url().default('http://localhost:3002'),
 
+  /**
+   * Outbound mail, used by captive-portal email OTP
+   * (docs/PORTAL_LOGIN_METHODS_DESIGN.md §4.1). Optional: with SMTP_HOST unset, nothing can send
+   * and the OTP method refuses rather than failing silently at the guest.
+   */
+  SMTP_HOST: optionalString(),
+  SMTP_PORT: port().default(587),
+  SMTP_USER: optionalString(),
+  SMTP_PASSWORD: optionalString(),
+  /** Envelope sender; must be an address the relay will accept. */
+  SMTP_FROM: optionalString(),
+  /** STARTTLS on 587 by default; `true` for implicit TLS on 465. */
+  SMTP_IMPLICIT_TLS: boolString(),
   STORAGE_DRIVER: z.enum(['local', 's3']).default('local'),
   STORAGE_LOCAL_PATH: z.string().trim().min(1).default('./var/storage'),
   /** Explicit opt-in for the local driver in production (D-026: non-critical assets only). */
@@ -133,6 +146,10 @@ export interface AppConfig {
   storage:
     | { driver: 'local'; localPath: string }
     | { driver: 's3'; localPath: string; s3: S3StorageConfig };
+  /** Outbound mail; null when SMTP_HOST is unset, which disables email OTP. */
+  mail:
+    | { host: string; port: number; user: string | undefined; password: string | undefined; from: string; implicitTls: boolean }
+    | null;
   radius: {
     bindIp: string | undefined;
     publicBindIp: string | undefined;
@@ -173,6 +190,9 @@ export const SECRET_FILE_VARIABLES = Object.freeze([
   'DATA_ENCRYPTION_KEY',
   'VOUCHER_PEPPER',
   'PORTAL_STATE_SECRET',
+  // Captive-portal email OTP (design §4.1): relay credential and the code pepper.
+  'SMTP_PASSWORD',
+  'OTP_PEPPER',
   // Cycle D review F4: the worker's derived vendor-API key (never the master data key)
   'VENDOR_API_SECRET_KEY',
 ] as const);
@@ -261,6 +281,12 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     }
   }
 
+  // Mail is optional, but a half-configured relay is not: without a sender the first OTP would
+  // fail at send time, i.e. in front of a guest, instead of at boot.
+  if (raw.SMTP_HOST !== undefined && raw.SMTP_FROM === undefined) {
+    problems.push('SMTP_FROM: required when SMTP_HOST is set');
+  }
+
   let storage: AppConfig['storage'];
   if (raw.STORAGE_DRIVER === 's3') {
     const missing = (['S3_BUCKET', 'S3_ACCESS_KEY_ID', 'S3_SECRET_ACCESS_KEY'] as const).filter(
@@ -304,6 +330,18 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
       portal: raw.PUBLIC_PORTAL_ORIGIN,
     },
     storage,
+    mail:
+      raw.SMTP_HOST === undefined
+        ? null
+        : {
+            host: raw.SMTP_HOST,
+            port: raw.SMTP_PORT,
+            user: raw.SMTP_USER,
+            password: raw.SMTP_PASSWORD,
+            // Checked below: a relay without a sender is refused rather than defaulted.
+            from: raw.SMTP_FROM ?? '',
+            implicitTls: raw.SMTP_IMPLICIT_TLS ?? false,
+          },
     radius: {
       bindIp: raw.RADIUS_BIND_IP,
       publicBindIp: raw.RADIUS_PUBLIC_BIND_IP,

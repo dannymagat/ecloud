@@ -42,6 +42,8 @@ export type ScopeType = 'platform' | 'organization' | 'site';
 export type UserStatus = 'active' | 'suspended' | 'expired' | 'disabled';
 export type UserOrigin = 'admin' | 'portal_signup' | 'voucher' | 'idp';
 export type AuthMethod = 'password' | 'mac' | 'voucher' | 'idp';
+/** Migration 035: delivery channel of a captive-portal one-time code. */
+export type OtpChannel = 'email' | 'sms';
 export type IdentityProviderType =
   'local' | 'oidc' | 'google' | 'facebook' | 'saml' | 'sms_otp' | 'radius_proxy';
 export type PolicyScopeType = 'user' | 'group' | 'site' | 'temporary';
@@ -519,6 +521,26 @@ export interface VendorApiSessionsTable {
 // ---------------------------------------------------------------------------------------------
 // 3.3 Subscribers, devices, identity
 // ---------------------------------------------------------------------------------------------
+
+export interface OtpCodesTable {
+  id: Generated<Uuid>;
+  organization_id: Uuid;
+  site_id: Uuid | null;
+  identity_provider_id: Uuid;
+  captive_portal_id: Uuid | null;
+  /** Migration 035: 'email' now, 'sms' when that provider lands. */
+  channel: OtpChannel;
+  /** Normalised: lower-cased address, or E.164 number. */
+  identifier: string;
+  /** HMAC-SHA-256(code, OTP_PEPPER), lowercase hex. Never the code. */
+  code_hash: string;
+  attempts: Generated<number>;
+  max_attempts: Generated<number>;
+  expires_at: Timestamp;
+  consumed_at: NullableTimestamp;
+  requested_ip: Inet | null;
+  created_at: GeneratedTimestamp;
+}
 
 export interface IdentityProvidersTable {
   id: Generated<Uuid>;
@@ -1131,6 +1153,7 @@ export interface Database {
   vendor_api_credentials: VendorApiCredentialsTable;
   vendor_api_sessions: VendorApiSessionsTable;
   identity_providers: IdentityProvidersTable;
+  otp_codes: OtpCodesTable;
   user_groups: UserGroupsTable;
   users: UsersTable;
   client_devices: ClientDevicesTable;

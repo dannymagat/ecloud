@@ -30,13 +30,14 @@
     "@ecloud/policy-engine": "*",
     "@ecloud/portal": "*",
     "@ecloud/shared": "*",
-    "@ecloud/vendor-api": "*",
     "@ecloud/storage": "*",
+    "@ecloud/vendor-api": "*",
     "argon2": "^0.45.1",
     "express": "^5.2.1",
     "helmet": "^8.3.0",
     "ioredis": "^5.11.1",
     "kysely": "^0.29.6",
+    "nodemailer": "^7.0.9",
     "otplib": "^13.5.0",
     "pino": "^10.4.0",
     "pino-http": "^11.0.0",
@@ -44,6 +45,7 @@
     "zod-openapi": "^6.0.2"
   },
   "devDependencies": {
-    "@ecloud/testing": "*"
+    "@ecloud/testing": "*",
+    "@types/nodemailer": "^7.0.4"
   }
 }

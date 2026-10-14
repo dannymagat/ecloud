@@ -17,22 +17,25 @@ Do not treat the MacBook as the production server.
 
 ## REMOTE ENVIRONMENT
 
-The production/deployment target is the remote Ubuntu server accessible
+The production/deployment target is the remote server accessible
 using:
 
-ssh vps
+ssh vps-local
 
-Confirmed remote OS:
+Do NOT use `ssh vps` for this project.
 
-Ubuntu 24.04.4 LTS (Noble Numbat)
+Confirmed remote OS (read from /etc/os-release, 2026-10-13):
+
+EZEOS Server release 8.10 (Oracle Linux 8.10 base: ID=ol,
+ID_LIKE=fedora). Package manager is dnf/yum, not apt.
 
 Confirmed hostname:
 
-vps-6391e47f
+localhost.localdomain
 
 Unless explicitly instructed otherwise, server-side components of the
 Cloud Bandwidth Management Platform must eventually be deployed to this
-remote Ubuntu server, NOT installed on the MacBook.
+remote server, NOT installed on the MacBook.
 
 Potential server-side components include:
 
@@ -62,7 +65,7 @@ LOCAL commands:
 - agent orchestration
 
 REMOTE commands:
-- Ubuntu package management
+- server package management (dnf)
 - server services
 - production database
 - RADIUS
@@ -73,7 +76,7 @@ REMOTE commands:
 
 Remote commands must be executed explicitly through:
 
-ssh vps "<command>"
+ssh vps-local "<command>"
 
 or through an approved remote deployment mechanism.
 

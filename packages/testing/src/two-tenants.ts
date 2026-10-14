@@ -69,6 +69,7 @@ export const TENANT_GRAPH_TABLES: readonly string[] = Object.freeze([
   'nas_access_points',
   'vendor_api_sessions',
   'identity_providers',
+  'otp_codes',
   'user_groups',
   'users',
   'client_devices',
@@ -315,6 +316,15 @@ export async function seedTenantGraph(
     [organizationId, `local ${slug}`],
   );
   ref('identity_providers', identityProviderId);
+
+  const otpCodeId = await insertReturning<string>(
+    db,
+    `INSERT INTO otp_codes (organization_id, site_id, identity_provider_id, channel, identifier,
+                            code_hash, expires_at)
+     VALUES ($1, $2, $3, 'email', $4, $5, now() + interval '10 minutes') RETURNING id`,
+    [organizationId, siteId, identityProviderId, `guest@${slug}.invalid`, `hash-${slug}`],
+  );
+  ref('otp_codes', otpCodeId);
 
   const userGroupId = await insertReturning<string>(
     db,

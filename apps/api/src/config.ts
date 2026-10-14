@@ -21,6 +21,7 @@ export const API_DEV_DEFAULTS = Object.freeze({
   MFA_ENCRYPTION_KEY: 'ecloud_dev_mfa_encryption_key_change_me',
   DATA_ENCRYPTION_KEY: 'ecloud_dev_data_encryption_key_change_me',
   VOUCHER_PEPPER: 'ecloud_dev_voucher_pepper_change_me',
+  OTP_PEPPER: 'ecloud_dev_otp_pepper_change_me',
 });
 
 const boolEnv = (fallback: boolean) =>
@@ -46,6 +47,12 @@ export const apiEnvSchema = z.object({
   ADMIN_MFA_MODE: z.enum(['off', 'required']).default('off'),
   DATA_ENCRYPTION_KEY: z.string().min(16).default(API_DEV_DEFAULTS.DATA_ENCRYPTION_KEY),
   VOUCHER_PEPPER: z.string().min(16).default(API_DEV_DEFAULTS.VOUCHER_PEPPER),
+  /**
+   * Captive-portal OTP codes are stored as HMAC-SHA-256(code, OTP_PEPPER) (migration 035). The
+   * pepper lives outside the database so a dump alone cannot complete a login; a six-digit code
+   * would otherwise be trivially reversible from its hash.
+   */
+  OTP_PEPPER: z.string().min(16).default(API_DEV_DEFAULTS.OTP_PEPPER),
   /**
    * P10-A rotation window (docs/SECRETS_MANAGEMENT.md R1): the internal listener also accepts
    * this previous token while FreeRADIUS / the portal are switched to the new INTERNAL_API_TOKEN.
@@ -164,6 +171,8 @@ export interface ApiConfig {
   adminMfaMode: 'off' | 'required';
   dataEncryptionKey: string;
   voucherPepper: string;
+  /** Pepper for captive-portal OTP code hashes (migration 035). */
+  otpPepper: string;
   /** Previous internal token accepted during a rotation window (null = none). */
   internalApiTokenPrevious: string | null;
   session: {
@@ -285,6 +294,7 @@ export function loadApiConfig(
     adminMfaMode: raw.ADMIN_MFA_MODE,
     dataEncryptionKey: raw.DATA_ENCRYPTION_KEY,
     voucherPepper: raw.VOUCHER_PEPPER,
+    otpPepper: raw.OTP_PEPPER,
     internalApiTokenPrevious: raw.INTERNAL_API_TOKEN_PREVIOUS ?? null,
     session: {
       cookieName: base.session.cookieName,
