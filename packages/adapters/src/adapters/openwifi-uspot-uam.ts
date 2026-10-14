@@ -4,8 +4,9 @@
  *
  * DEVICE LIMITATION (LAB, 2026-10-14): uspot's RADIUS client, radcli 1.3.0, adds
  * Message-Authenticator (attribute 80) only when the request carries EAP-Message
- * (lib/sendserver.c:676-677) -- so a PAP Access-Request never has it, and there is no
- * configuration key to change that. Every client EZECLOUD renders sets
+ * (lib/sendserver.c:676, the sole call site) -- so a PAP Access-Request never has it. The gate
+ * is unconditional in the shipped source rather than a build option, so EVERY radcli-based
+ * client is affected, not only this device. Every client EZECLOUD renders sets
  * `require_message_authenticator = yes` (CVE-2024-3596), and FreeRADIUS 3.2 discards such a
  * request SILENTLY: no reply, no log line, no `/internal/aaa/authorize` call. Accounting is
  * unaffected (different branch, `rc_md5_calc`), so 1813 works while 1812 is mute, which makes

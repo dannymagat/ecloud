@@ -155,12 +155,15 @@ CVE-2024-3596). FreeRADIUS 3.2 discards an Access-Request from such a client tha
 Message-Authenticator (attribute 80) **without a reply and without a log line**. Nothing in the
 server's output names the problem.
 
-Confirmed on the EZEAP lab device: radcli 1.3.0 (vendored in the firmware) adds the attribute
-ONLY when an EAP-Message attribute is present -- `lib/sendserver.c:676-677` calls
-`add_msg_auth_attr()` inside `if (rc_avpair_get(..., PW_EAP_MESSAGE, 0) != NULL)`. There is no
-configuration key for it; `/etc/radcli/radiusclient.conf` has no related option. A PAP
-Access-Request from uspot therefore never carries attribute 80. A wire capture on the AP showed
-ten attributes ending at NAS-Port, with no type 80.
+Confirmed on the EZEAP lab device, and NOT specific to that build: radcli 1.3.0 adds the
+attribute ONLY when an EAP-Message attribute is present. `lib/sendserver.c:676` reads
+`if (rc_avpair_get(data->send_pairs, PW_EAP_MESSAGE, 0) != NULL)` and that is the sole call
+site -- `PW_MESSAGE_AUTHENTICATOR` appears in exactly three places in the shipped source (the
+enum, the assignment inside `add_msg_auth_attr()`, and that call). The function is present and
+correct, simply unreachable for PAP and CHAP. The gate is unconditional in the source, not a
+build option, and `/etc/radcli/radiusclient.conf` has no related key, so EVERY radcli-based
+client is affected, not just uspot on this device. A wire capture on the AP showed ten
+attributes ending at NAS-Port, with no type 80.
 Accounting is unaffected because it takes the other branch and signs with `rc_md5_calc`, which
 is why 1813 produces log lines while 1812 is silent.
 
