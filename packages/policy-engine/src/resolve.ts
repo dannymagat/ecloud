@@ -189,6 +189,7 @@ export type ControlKind =
   | 'schedule_end'
   | 'quota_watcher'
   | 'online_time_watcher'
+  | 'quota_reduced'
   | 'concurrency'
   | 'validity_end'
   | 'voucher_expiry'
@@ -216,6 +217,7 @@ export type ReasonCode =
   | 'quota_weekly'
   | 'quota_monthly'
   | 'quota_total'
+  | 'renewal_required'
   | 'online_time_daily'
   | 'online_time_weekly'
   | 'online_time_monthly'
@@ -978,20 +980,60 @@ export function resolveEffectivePolicy(input: ResolutionInput): ResolutionResult
         : `online time remaining ${String(timeQuota.remaining)} s (${timeQuota.period ?? ''})`,
     data: toJsonValue(timeQuota.limits) as Record<string, JsonValue>,
   });
+  // §2.5 exhaustion action (migration 037). Data and online time are the same kind of promise
+  // to the guest, so one action governs both; whichever ran out first supplies the reason.
+  const exhaustion = timeQuota.reject
+    ? { reason: timeQuota.reject, detail: timeQuota.detail }
+    : quota.reject
+      ? { reason: quota.reject, detail: quota.detail }
+      : null;
+  const action = effective.fields.quota_exhaustion_action ?? 'deny';
+  // `reduce_speed` keeps the guest online at the reduced rate. The spent allowance must then
+  // stop clipping anything: a remainder of zero would otherwise drive Session-Timeout to its
+  // floor and the drain-time bound to nothing, cutting a session that policy says may continue.
+  const reduced = exhaustion !== null && action === 'reduce_speed';
+  if (reduced) {
+    effective = {
+      ...effective,
+      fields: {
+        ...effective.fields,
+        download_rate_kbps:
+          effective.fields.reduced_download_rate_kbps ?? effective.fields.download_rate_kbps,
+        upload_rate_kbps:
+          effective.fields.reduced_upload_rate_kbps ?? effective.fields.upload_rate_kbps,
+      },
+    };
+    trace.push({
+      step: 'quota',
+      detail: `exhausted (${exhaustion?.detail ?? ''}); reduce_speed: continuing at ${String(
+        effective.fields.download_rate_kbps,
+      )}/${String(effective.fields.upload_rate_kbps)} kbit/s down/up`,
+    });
+    controls.push({
+      kind: 'quota_reduced',
+      params: {
+        reason: exhaustion?.reason ?? null,
+        download_rate_kbps: effective.fields.download_rate_kbps,
+        upload_rate_kbps: effective.fields.upload_rate_kbps,
+      },
+    });
+  }
   const clipBase: Clip = {
     policy_session_timeout_s: effective.fields.session_timeout_s,
     window_end_s: windowEndS,
     validity_end_s: validityEndS,
     voucher_end_s: voucherEndS,
     quota_reset_s: null,
-    remaining_octets: quota.remaining,
-    remaining_period: quota.period,
-    remaining_time_s: timeQuota.remaining,
-    remaining_time_period: timeQuota.period,
-    drain_time_s: drainTime(quota.remaining, effective.fields, minSessionS),
+    remaining_octets: reduced ? null : quota.remaining,
+    remaining_period: reduced ? null : quota.period,
+    remaining_time_s: reduced ? null : timeQuota.remaining,
+    remaining_time_period: reduced ? null : timeQuota.period,
+    drain_time_s: reduced ? null : drainTime(quota.remaining, effective.fields, minSessionS),
     min_session_s: minSessionS,
   };
-  if (timeQuota.reject) {
+  if (exhaustion !== null && !reduced) {
+    // `require_renewal` is still a denial; it differs in the reason, so the portal can offer a
+    // renewal instead of a dead end. The original allowance is named in the detail either way.
     return finish(
       input,
       effective,
@@ -1000,11 +1042,13 @@ export function resolveEffectivePolicy(input: ResolutionInput): ResolutionResult
       [],
       trace,
       'reject',
-      timeQuota.reject,
-      timeQuota.detail,
+      action === 'require_renewal' ? 'renewal_required' : exhaustion.reason,
+      action === 'require_renewal'
+        ? `${exhaustion.reason}: ${exhaustion.detail ?? 'allowance exhausted'}`
+        : exhaustion.detail,
     );
   }
-  if (timeQuota.remaining !== null) {
+  if (!reduced && timeQuota.remaining !== null) {
     controls.push({
       kind: 'online_time_watcher',
       params: {
@@ -1014,21 +1058,8 @@ export function resolveEffectivePolicy(input: ResolutionInput): ResolutionResult
       },
     });
   }
-  if (quota.reject) {
-    return finish(
-      input,
-      effective,
-      clipBase,
-      controls,
-      [],
-      trace,
-      'reject',
-      quota.reject,
-      quota.detail,
-    );
-  }
   let quotaResetS: number | null = null;
-  if (quota.remaining !== null) {
+  if (!reduced && quota.remaining !== null) {
     controls.push({
       kind: 'quota_watcher',
       params: {

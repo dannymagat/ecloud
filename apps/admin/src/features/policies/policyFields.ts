@@ -126,6 +126,31 @@ export const POLICY_FORM_FIELDS: FieldDef[] = [
     nullable: true,
   },
   {
+    name: 'quota_exhaustion_action',
+    label: 'When an allowance runs out',
+    type: 'select',
+    nullable: true,
+    options: [
+      { value: 'deny', label: 'Deny access until it resets' },
+      { value: 'reduce_speed', label: 'Reduce speed and stay online' },
+      { value: 'require_renewal', label: 'Deny and offer a renewal' },
+    ],
+  },
+  {
+    name: 'reduced_download_rate_kbps',
+    label: 'Reduced download (kbps)',
+    type: 'number',
+    min: 0,
+    nullable: true,
+  },
+  {
+    name: 'reduced_upload_rate_kbps',
+    label: 'Reduced upload (kbps)',
+    type: 'number',
+    min: 0,
+    nullable: true,
+  },
+  {
     name: 'session_timeout_s',
     label: 'Session timeout (s)',
     type: 'number',

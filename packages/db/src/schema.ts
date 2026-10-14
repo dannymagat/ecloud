@@ -64,6 +64,9 @@ export type UsagePeriodType = 'daily' | 'weekly' | 'monthly' | 'total';
 
 /** Which octets a policy's data quotas count (migration 036), from the client's perspective. */
 export type QuotaDirection = 'combined' | 'upload' | 'download';
+
+/** What an exhausted allowance does (migration 037). */
+export type QuotaExhaustionAction = 'deny' | 'reduce_speed' | 'require_renewal';
 export type AuditActorType = 'administrator' | 'api_key' | 'subscriber' | 'system';
 export type DeviceMode = 'bridge' | 'routed' | 'unknown';
 export type MgmtStatus = 'unknown' | 'online' | 'offline';
@@ -648,6 +651,9 @@ export interface PoliciesTable {
   online_time_weekly_s: number | null;
   online_time_monthly_s: number | null;
   online_time_total_s: number | null;
+  quota_exhaustion_action: QuotaExhaustionAction | null;
+  reduced_download_rate_kbps: number | null;
+  reduced_upload_rate_kbps: number | null;
   session_timeout_s: number | null;
   idle_timeout_s: number | null;
   max_concurrent_sessions: number | null;

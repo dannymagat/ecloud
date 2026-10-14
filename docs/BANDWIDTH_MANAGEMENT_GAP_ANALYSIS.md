@@ -276,7 +276,7 @@ Each stage is a reviewable commit, keeps the suite green, and changes nothing on
 | --- | --- | --- |
 | **1** | This audit (no code). | none |
 | **2** | **Quota model completion.** Weekly period; quota direction (combined / upload / download); online-time quota per period; counters and evaluation; validation rules; display. **DONE** — migration 036, commit on `feature/universal-aaa`. | low — additive columns, same evaluation shape as existing quotas |
-| **3** | **Exhaustion actions.** `quota_exhaustion_action` (deny / reduce_speed / require_renewal) with a reduced-rate reference; worker and authorize honour it; enforcement strategy reused unchanged. | medium — touches the authorize decision |
+| **3** | **Exhaustion actions.** `quota_exhaustion_action` (deny / reduce_speed / require_renewal) with inline reduced rates; authorize honours it; enforcement strategy reused unchanged. **DONE** — migration 037. | medium — touches the authorize decision |
 | **4** | **Tri-state values.** Explicit `unlimited` distinct from `inherit` and from `disabled`, so a lower layer can deliberately lift a higher-layer cap; parent aggregate caps still bind. | medium — touches `merge()` |
 | **5** | **Bandwidth profiles + access plans.** Two additive tables, CRUD, admin pages, plan tabs per §16. Policies keep working unchanged; a plan references one policy and one profile. | low |
 | **6** | **Group and site aggregates.** Model the pool, count it from `usage_counters` (the `site` subject already exists), display observed vs configured, and mark enforcement UNSUPPORTED on the present fleet with the capability matrix saying so. | low (honesty-first) |

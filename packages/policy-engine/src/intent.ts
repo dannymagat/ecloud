@@ -63,6 +63,13 @@ export type QuotaDirection = (typeof QUOTA_DIRECTIONS)[number];
 export const QUOTA_PERIODS = ['daily', 'weekly', 'monthly', 'total'] as const;
 
 /**
+ * What an exhausted data or online-time allowance does (migration 037). `deny` when no layer
+ * sets one, which is the behaviour every policy had before the column existed.
+ */
+export const QUOTA_EXHAUSTION_ACTIONS = ['deny', 'reduce_speed', 'require_renewal'] as const;
+export type QuotaExhaustionAction = (typeof QUOTA_EXHAUSTION_ACTIONS)[number];
+
+/**
  * One `policies` row (plus its joined schedule). `null` = inherit from the next layer
  * (POLICY_ENGINE.md §2.3 field-level fall-through).
  */
@@ -98,6 +105,10 @@ export const PolicyIntentSchema = z.object({
   online_time_weekly_s: z.number().int().nullable().default(null),
   online_time_monthly_s: z.number().int().nullable().default(null),
   online_time_total_s: z.number().int().nullable().default(null),
+  quota_exhaustion_action: z.enum(QUOTA_EXHAUSTION_ACTIONS).nullable().default(null),
+  /** Rates used after exhaustion when the action is `reduce_speed`. */
+  reduced_download_rate_kbps: z.number().int().nullable().default(null),
+  reduced_upload_rate_kbps: z.number().int().nullable().default(null),
   session_timeout_s: z.number().int().nullable().default(null),
   idle_timeout_s: z.number().int().nullable().default(null),
   max_concurrent_sessions: z.number().int().nullable().default(null),
@@ -132,7 +143,10 @@ export type IntentColumn =
   | 'online_time_daily_s'
   | 'online_time_weekly_s'
   | 'online_time_monthly_s'
-  | 'online_time_total_s';
+  | 'online_time_total_s'
+  | 'quota_exhaustion_action'
+  | 'reduced_download_rate_kbps'
+  | 'reduced_upload_rate_kbps';
 
 /** Enforcement-relevant columns only (the ones that fall through layer by layer). */
 /** The merge columns an adapter declares a capability for; the ones `translate()` can act on. */
@@ -185,6 +199,9 @@ export const INTENT_COLUMNS: readonly IntentColumn[] = [
   'online_time_weekly_s',
   'online_time_monthly_s',
   'online_time_total_s',
+  'quota_exhaustion_action',
+  'reduced_download_rate_kbps',
+  'reduced_upload_rate_kbps',
   'session_timeout_s',
   'idle_timeout_s',
   'max_concurrent_sessions',
@@ -348,6 +365,65 @@ export function validatePolicy(input: unknown, context: ValidationContext = {}):
       err(shorter, 12, 'online_time_order', `${shorter} must be <= ${longer}`);
   }
 
+  // Rule 13: exhaustion action (migration 037).
+  for (const key of ['reduced_download_rate_kbps', 'reduced_upload_rate_kbps'] as const) {
+    const v = p[key];
+    if (v === null) continue;
+    if (v < 1) err(key, 13, 'rate_not_positive', `${key} must be >= 1 kbit/s when set`);
+    else if (v > MAX_RATE_KBPS)
+      err(key, 13, 'rate_overflow', `${key} must be <= ${MAX_RATE_KBPS} kbit/s (32-bit bit/s)`);
+  }
+  // A reduction that raises the rate is a typo, and one that silently does nothing is worse:
+  // the operator believes exhausted guests are throttled and they are not.
+  for (const [reduced, base] of [
+    ['reduced_download_rate_kbps', 'download_rate_kbps'],
+    ['reduced_upload_rate_kbps', 'upload_rate_kbps'],
+  ] as const) {
+    const r = p[reduced];
+    const b = p[base];
+    if (r !== null && b !== null && r > b)
+      err(reduced, 13, 'reduced_above_base', `${reduced} must be <= ${base}`);
+  }
+  if (
+    p.quota_exhaustion_action === 'reduce_speed' &&
+    p.reduced_download_rate_kbps === null &&
+    p.reduced_upload_rate_kbps === null
+  )
+    err(
+      'quota_exhaustion_action',
+      13,
+      'reduce_speed_without_rate',
+      'reduce_speed needs reduced_download_rate_kbps or reduced_upload_rate_kbps, otherwise an exhausted guest keeps the full rate',
+    );
+  if (
+    p.quota_exhaustion_action !== null &&
+    p.quota_exhaustion_action !== 'reduce_speed' &&
+    (p.reduced_download_rate_kbps !== null || p.reduced_upload_rate_kbps !== null)
+  )
+    err(
+      'quota_exhaustion_action',
+      13,
+      'reduced_rate_unused',
+      `reduced rates apply only to reduce_speed; this policy would ${p.quota_exhaustion_action} instead`,
+    );
+  // The action only has something to act on when an allowance exists.
+  const hasAllowance =
+    p.quota_daily_bytes !== null ||
+    p.quota_weekly_bytes !== null ||
+    p.quota_monthly_bytes !== null ||
+    p.quota_total_bytes !== null ||
+    p.online_time_daily_s !== null ||
+    p.online_time_weekly_s !== null ||
+    p.online_time_monthly_s !== null ||
+    p.online_time_total_s !== null;
+  if (p.quota_exhaustion_action !== null && !hasAllowance)
+    err(
+      'quota_exhaustion_action',
+      13,
+      'action_without_allowance',
+      'quota_exhaustion_action applies when a data or online-time allowance runs out; this policy sets none',
+    );
+
   // Rule 4: timers ≥ 60 s.
   for (const key of ['session_timeout_s', 'idle_timeout_s'] as const) {
     const v = p[key];
@@ -482,6 +558,9 @@ export function enforcementFields(p: PolicyIntent): EnforcementFields {
     online_time_weekly_s: p.online_time_weekly_s,
     online_time_monthly_s: p.online_time_monthly_s,
     online_time_total_s: p.online_time_total_s,
+    quota_exhaustion_action: p.quota_exhaustion_action,
+    reduced_download_rate_kbps: p.reduced_download_rate_kbps,
+    reduced_upload_rate_kbps: p.reduced_upload_rate_kbps,
     session_timeout_s: p.session_timeout_s,
     idle_timeout_s: p.idle_timeout_s,
     max_concurrent_sessions: p.max_concurrent_sessions,
