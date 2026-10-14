@@ -304,6 +304,111 @@ const ScheduleCreate = z.strictObject({
 });
 const ScheduleUpdate = ScheduleCreate.partial();
 
+
+// --- migration 040: reusable speed presets and the commercial plan wrapper -------------------
+
+const rateKbps = z.number().int().min(1).max(4_294_967);
+
+/**
+ * A preset with no speed is a name, not a preset: every field would resolve to "inherit" and the
+ * operator would believe a limit had been applied. The database CHECK says the same thing; this
+ * says it with a message a human can act on.
+ */
+const BandwidthProfileCreate = z
+  .strictObject({
+    name,
+    description: z.string().max(2000).optional(),
+    download_rate_kbps: rateKbps.nullable().optional(),
+    upload_rate_kbps: rateKbps.nullable().optional(),
+    burst_download_kbps: rateKbps.nullable().optional(),
+    burst_upload_kbps: rateKbps.nullable().optional(),
+    burst_duration_s: z.number().int().min(1).nullable().optional(),
+  })
+  .refine((v) => v.download_rate_kbps != null || v.upload_rate_kbps != null, {
+    path: ['download_rate_kbps'],
+    message: 'a profile must set at least one of download_rate_kbps or upload_rate_kbps',
+  });
+const BandwidthProfileUpdate = z.strictObject({
+  name: name.optional(),
+  description: z.string().max(2000).optional(),
+  download_rate_kbps: rateKbps.nullable().optional(),
+  upload_rate_kbps: rateKbps.nullable().optional(),
+  burst_download_kbps: rateKbps.nullable().optional(),
+  burst_upload_kbps: rateKbps.nullable().optional(),
+  burst_duration_s: z.number().int().min(1).nullable().optional(),
+});
+
+const PLAN_AUTH_METHODS = [
+  'password',
+  'voucher',
+  'click_through',
+  'email_otp',
+  'sms_otp',
+  'idp',
+  'mac',
+] as const;
+
+const planShape = {
+  name,
+  /** What an operator types and a receipt prints. Not a credential. */
+  code: z
+    .string()
+    .regex(/^[A-Za-z0-9_-]{1,32}$/)
+    .nullable()
+    .optional(),
+  description: z.string().max(2000).optional(),
+  site_id: z.uuid().nullable().optional(),
+  enabled: z.boolean().optional(),
+  is_default: z.boolean().optional(),
+  plan_type: z.enum(['free', 'paid']).optional(),
+  price_minor: z.number().int().min(1).nullable().optional(),
+  currency: z
+    .string()
+    .regex(/^[A-Z]{3}$/)
+    .nullable()
+    .optional(),
+  display_order: z.number().int().min(0).max(10_000).optional(),
+  eligible_auth_methods: z.array(z.enum(PLAN_AUTH_METHODS)).max(PLAN_AUTH_METHODS.length).optional(),
+  validity_duration_s: z.number().int().min(1).nullable().optional(),
+  activation_trigger: z.enum(['creation', 'purchase', 'first_login']).optional(),
+};
+
+/**
+ * A paid plan that cannot state its price is not sellable, and a free plan with a price is a
+ * contradiction — the requirement's §14 caution about never treating a redirect as payment
+ * starts by refusing a product that was never priced.
+ */
+function checkPlanPricing(v: Record<string, unknown>, ctx: z.RefinementCtx): void {
+  const type = v.plan_type ?? 'free';
+  const priced = v.price_minor != null && v.currency != null;
+  if (type === 'paid' && !priced)
+    ctx.addIssue({
+      code: 'custom',
+      path: ['price_minor'],
+      message: 'a paid plan needs price_minor and currency',
+    });
+  if (type === 'free' && (v.price_minor != null || v.currency != null))
+    ctx.addIssue({
+      code: 'custom',
+      path: ['price_minor'],
+      message: 'a free plan cannot carry a price; set plan_type to paid',
+    });
+  if (v.activation_trigger === 'purchase' && type !== 'paid')
+    ctx.addIssue({
+      code: 'custom',
+      path: ['activation_trigger'],
+      message: 'activation on purchase needs plan_type paid',
+    });
+}
+
+const AccessPlanCreate = z
+  .strictObject({ ...planShape, policy_id: z.uuid() })
+  .superRefine(checkPlanPricing);
+const AccessPlanUpdate = z
+  .strictObject({ ...planShape, policy_id: z.uuid().optional() })
+  .partial()
+  .superRefine(checkPlanPricing);
+
 // ---------------------------------------------------------------------------------------------
 
 /** Effective value of a PATCHed column: the body's when present (null clears), else the row's. */
@@ -831,6 +936,54 @@ export function resourceRoutes(deps: AppDeps): AnyRouteSpec[] {
       ),
   });
 
+  // Migration 040. Both ride `policy:*`: a speed preset is a policy input, and a plan is a
+  // presentation of one. A dedicated `access_plan:*` permission belongs with the billing module
+  // that will need it, not ahead of it.
+  const bandwidthProfiles = crudRoutes(deps, {
+    table: 'bandwidth_profiles',
+    path: '/bandwidth-profiles',
+    resource: 'bandwidth profile',
+    tag: 'policies',
+    permissions: {
+      read: 'policy:read',
+      create: 'policy:create',
+      update: 'policy:update',
+      delete: 'policy:delete',
+    },
+    siteMode: 'none',
+    softDelete: true,
+    createSchema: BandwidthProfileCreate as unknown as z.ZodType<Row>,
+    updateSchema: BandwidthProfileUpdate as unknown as z.ZodType<Row>,
+  });
+
+  const accessPlans = crudRoutes(deps, {
+    table: 'access_plans',
+    path: '/access-plans',
+    resource: 'access plan',
+    tag: 'policies',
+    permissions: {
+      read: 'policy:read',
+      create: 'policy:create',
+      update: 'policy:update',
+      delete: 'policy:delete',
+    },
+    siteMode: 'column',
+    softDelete: true,
+    createSchema: AccessPlanCreate as unknown as z.ZodType<Row>,
+    updateSchema: AccessPlanUpdate as unknown as z.ZodType<Row>,
+    prepareCreate: async (body, { trx }) => {
+      await assertRef(trx, 'policies', body.policy_id as string, 'policy');
+      if (typeof body.site_id === 'string') await assertRef(trx, 'sites', body.site_id, 'site');
+      return body;
+    },
+    preparePatch: async (body, _before, { trx }) => {
+      if (typeof body.policy_id === 'string')
+        await assertRef(trx, 'policies', body.policy_id, 'policy');
+      if (typeof body.site_id === 'string') await assertRef(trx, 'sites', body.site_id, 'site');
+      return body;
+    },
+  });
+
   return [
     ...sites,
     ...networkDevices,
@@ -840,5 +993,7 @@ export function resourceRoutes(deps: AppDeps): AnyRouteSpec[] {
     ...userGroups,
     ...clientDevices,
     ...schedules,
+    ...bandwidthProfiles,
+    ...accessPlans,
   ];
 }

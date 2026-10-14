@@ -630,6 +630,54 @@ export interface SchedulesTable {
   updated_at: GeneratedTimestamp;
 }
 
+/** Plan commercial type (migration 040). */
+export type AccessPlanType = 'free' | 'paid';
+/** When a plan's relative validity starts counting (migration 040). */
+export type ActivationTrigger = 'creation' | 'purchase' | 'first_login';
+
+/** Reusable speed preset (migration 040). Rates are kbit/s from the client perspective. */
+export interface BandwidthProfilesTable {
+  id: Generated<Uuid>;
+  organization_id: Uuid;
+  name: string;
+  description: Generated<string>;
+  download_rate_kbps: number | null;
+  upload_rate_kbps: number | null;
+  burst_download_kbps: number | null;
+  burst_upload_kbps: number | null;
+  burst_duration_s: number | null;
+  created_at: GeneratedTimestamp;
+  updated_at: GeneratedTimestamp;
+  deleted_at: NullableTimestamp;
+}
+
+/**
+ * Commercial wrapper over one policy (migration 040). Never read by the authorize path: a
+ * billing table must not be able to break authentication.
+ */
+export interface AccessPlansTable {
+  id: Generated<Uuid>;
+  organization_id: Uuid;
+  site_id: Uuid | null;
+  policy_id: Uuid;
+  name: string;
+  code: string | null;
+  description: Generated<string>;
+  enabled: Generated<boolean>;
+  is_default: Generated<boolean>;
+  plan_type: Generated<AccessPlanType>;
+  /** Minor units, so no plan is priced in floating point. */
+  price_minor: number | null;
+  currency: string | null;
+  display_order: Generated<number>;
+  eligible_auth_methods: Generated<string[]>;
+  validity_duration_s: number | null;
+  activation_trigger: Generated<ActivationTrigger>;
+  created_at: GeneratedTimestamp;
+  updated_at: GeneratedTimestamp;
+  deleted_at: NullableTimestamp;
+}
+
 export interface PoliciesTable {
   id: Generated<Uuid>;
   organization_id: Uuid;
@@ -656,6 +704,8 @@ export interface PoliciesTable {
   reduced_upload_rate_kbps: number | null;
   /** Fields declared to have no cap (migration 039). */
   unlimited_fields: Generated<string[]>;
+  /** When set, the profile supplies every rate field and the policy sets none (migration 040). */
+  bandwidth_profile_id: Uuid | null;
   session_timeout_s: number | null;
   idle_timeout_s: number | null;
   max_concurrent_sessions: number | null;
@@ -1171,6 +1221,8 @@ export interface Database {
   vendor_api_sessions: VendorApiSessionsTable;
   identity_providers: IdentityProvidersTable;
   otp_codes: OtpCodesTable;
+  bandwidth_profiles: BandwidthProfilesTable;
+  access_plans: AccessPlansTable;
   user_groups: UserGroupsTable;
   users: UsersTable;
   client_devices: ClientDevicesTable;

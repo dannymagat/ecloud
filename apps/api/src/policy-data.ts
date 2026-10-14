@@ -18,10 +18,32 @@ import {
 } from '@ecloud/policy-engine';
 import type { Row } from './routes/crud.js';
 
-/** DB `policies` row (+ optional joined schedule) → engine intent. */
+/** The rate fields a `bandwidth_profiles` row supplies (migration 040). */
+export interface BandwidthProfileRates {
+  readonly download_rate_kbps: number | null;
+  readonly upload_rate_kbps: number | null;
+  readonly burst_download_kbps: number | null;
+  readonly burst_upload_kbps: number | null;
+  readonly burst_duration_s: number | null;
+}
+
+/**
+ * DB `policies` row (+ optional joined schedule and bandwidth profile) → engine intent.
+ *
+ * A policy that references a profile may not set its own rates (migration 040 CHECK), so the
+ * profile's values are substituted here, before the engine sees the policy. Resolution,
+ * translation and every adapter therefore deal in plain numbers and know nothing about
+ * profiles — the indirection stops at this function, which is the point of putting it here
+ * rather than in the engine.
+ *
+ * A referenced profile that cannot be loaded leaves the rates null rather than guessing. Null
+ * means "inherit from the next layer", which for a rate is the safe direction: a lower layer's
+ * cap still applies, and nothing is granted that was not configured.
+ */
 export function policyRowToIntent(
   row: Row,
   schedule: { id: string; name: string; timezone: string; rules: unknown } | null,
+  profile: BandwidthProfileRates | null = null,
 ): PolicyIntent {
   return PolicyIntentSchema.parse({
     id: row.id,
@@ -34,11 +56,11 @@ export function policyRowToIntent(
     version: row.version,
     priority: row.priority,
     is_default: row.is_default,
-    download_rate_kbps: row.download_rate_kbps ?? null,
-    upload_rate_kbps: row.upload_rate_kbps ?? null,
-    burst_download_kbps: row.burst_download_kbps ?? null,
-    burst_upload_kbps: row.burst_upload_kbps ?? null,
-    burst_duration_s: row.burst_duration_s ?? null,
+    download_rate_kbps: profile?.download_rate_kbps ?? row.download_rate_kbps ?? null,
+    upload_rate_kbps: profile?.upload_rate_kbps ?? row.upload_rate_kbps ?? null,
+    burst_download_kbps: profile?.burst_download_kbps ?? row.burst_download_kbps ?? null,
+    burst_upload_kbps: profile?.burst_upload_kbps ?? row.burst_upload_kbps ?? null,
+    burst_duration_s: profile?.burst_duration_s ?? row.burst_duration_s ?? null,
     quota_daily_bytes: row.quota_daily_bytes ?? null,
     quota_weekly_bytes: row.quota_weekly_bytes ?? null,
     quota_monthly_bytes: row.quota_monthly_bytes ?? null,
@@ -77,6 +99,27 @@ async function loadSchedules(
   return new Map(rows.map((r) => [r.id, r]));
 }
 
+async function loadProfiles(
+  trx: DbTransaction,
+  ids: readonly string[],
+): Promise<Map<string, BandwidthProfileRates>> {
+  if (ids.length === 0) return new Map();
+  const rows = await trx
+    .selectFrom('bandwidth_profiles')
+    .select([
+      'id',
+      'download_rate_kbps',
+      'upload_rate_kbps',
+      'burst_download_kbps',
+      'burst_upload_kbps',
+      'burst_duration_s',
+    ])
+    .where('id', 'in', [...new Set(ids)])
+    .where('deleted_at', 'is', null)
+    .execute();
+  return new Map(rows.map((r) => [r.id, r]));
+}
+
 export async function intentsFor(
   trx: DbTransaction,
   rows: readonly Row[],
@@ -85,10 +128,17 @@ export async function intentsFor(
     trx,
     rows.map((r) => r.schedule_id).filter((v): v is string => typeof v === 'string'),
   );
+  const profiles = await loadProfiles(
+    trx,
+    rows.map((r) => r.bandwidth_profile_id).filter((v): v is string => typeof v === 'string'),
+  );
   return rows.map((row) =>
     policyRowToIntent(
       row,
       typeof row.schedule_id === 'string' ? (schedules.get(row.schedule_id) ?? null) : null,
+      typeof row.bandwidth_profile_id === 'string'
+        ? (profiles.get(row.bandwidth_profile_id) ?? null)
+        : null,
     ),
   );
 }

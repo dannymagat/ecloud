@@ -6,7 +6,7 @@
  * in this file exists to show that the third state did not disturb the other two.
  */
 import { describe, expect, it } from 'vitest';
-import { resolveEffectivePolicy as resolve, merge, type RankedCandidate } from './resolve.js';
+import { resolveEffectivePolicy as resolve, merge } from './resolve.js';
 import { validatePolicy } from './intent.js';
 import { OFFICE, assignment, policy, workedExampleInput } from './resolve.fixture.js';
 
@@ -163,7 +163,7 @@ describe('unlimited quotas and schedules', () => {
 
 describe('merge with no candidates', () => {
   it('reports nothing unlimited rather than undefined', () => {
-    expect(merge([] as RankedCandidate[], []).unlimited).toEqual([]);
+    expect(merge([], []).unlimited).toEqual([]);
   });
 });
 

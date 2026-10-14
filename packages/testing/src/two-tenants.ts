@@ -70,6 +70,8 @@ export const TENANT_GRAPH_TABLES: readonly string[] = Object.freeze([
   'vendor_api_sessions',
   'identity_providers',
   'otp_codes',
+  'bandwidth_profiles',
+  'access_plans',
   'user_groups',
   'users',
   'client_devices',
@@ -362,6 +364,22 @@ export async function seedTenantGraph(
     [organizationId, `policy ${slug}`, scheduleId],
   );
   ref('policies', policyId);
+
+  const bandwidthProfileId = await insertReturning<string>(
+    db,
+    `INSERT INTO bandwidth_profiles (organization_id, name, download_rate_kbps, upload_rate_kbps)
+     VALUES ($1, $2, 10000, 2000) RETURNING id`,
+    [organizationId, `profile ${slug}`],
+  );
+  ref('bandwidth_profiles', bandwidthProfileId);
+
+  const accessPlanId = await insertReturning<string>(
+    db,
+    `INSERT INTO access_plans (organization_id, site_id, policy_id, name, code)
+     VALUES ($1, $2, $3, $4, $5) RETURNING id`,
+    [organizationId, siteId, policyId, `plan ${slug}`, `PLAN${slug.replace(/[^A-Za-z0-9]/g, '').slice(0, 20)}`],
+  );
+  ref('access_plans', accessPlanId);
 
   const voucherBatchId = await insertReturning<string>(
     db,

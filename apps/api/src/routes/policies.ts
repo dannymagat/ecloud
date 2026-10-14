@@ -84,6 +84,8 @@ const intentFields = {
   valid_until: instant.nullable().optional(),
   vlan_id: z.number().int().min(1).max(4094).nullable().optional(),
   schedule_id: z.uuid().nullable().optional(),
+  /** Migration 040: when set, the profile supplies the rates and the policy may set none. */
+  bandwidth_profile_id: z.uuid().nullable().optional(),
 };
 
 const PolicyCreate = z.strictObject({
@@ -131,6 +133,7 @@ const COLUMNS = [
   'valid_until',
   'vlan_id',
   'schedule_id',
+  'bandwidth_profile_id',
 ] as const;
 
 const TARGET_COLUMN = {
