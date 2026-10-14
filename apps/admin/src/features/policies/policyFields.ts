@@ -159,6 +159,13 @@ export const POLICY_FORM_FIELDS: FieldDef[] = [
   },
   { name: 'idle_timeout_s', label: 'Idle timeout (s)', type: 'number', min: 0, nullable: true },
   {
+    name: 'reconnect_cooldown_s',
+    label: 'Reconnect cooldown (s)',
+    type: 'number',
+    min: 1,
+    nullable: true,
+  },
+  {
     name: 'max_concurrent_sessions',
     label: 'Max concurrent sessions',
     type: 'number',

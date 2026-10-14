@@ -48,6 +48,7 @@ All sizes are **bytes (decimal, SI)**: `1 GB = 1 000 000 000 bytes`. All rates a
 | `online_time_daily_s`, `online_time_weekly_s`, `online_time_monthly_s`, `online_time_total_s` | int ≥ 60, NULL; migration 036 | **Cumulative connected time** per period, summed across the subject's devices. Distinct from `valid_until` (eligibility window) and from `session_timeout_s` (one connection) | EZECLOUD-side: `usage_counters.session_time_s` + `Session-Timeout` clipped to the remainder. No RADIUS attribute carries a time allowance, so there is no per-adapter capability for it and none is declared |
 | `session_timeout_s` | int ≥ 60, NULL | Max duration of one session | Captive adapters VERIFIED (`Session-Timeout`, A4 §3.4); hostapd REQUIRES DEVICE TEST (A2 §2) |
 | `idle_timeout_s` | int ≥ 60, NULL | Disconnect after inactivity | Captive adapters VERIFIED (`Idle-Timeout`); hostapd: per-SSID `max-inactivity` only (A2 §2) |
+| `reconnect_cooldown_s` | int ≥ 1, NULL; migration 044 | Seconds a **subject** must wait after a session ends before a new one is authorized. Per subject, not per device: counting per device would let a guest with two phones alternate and never wait | EZECLOUD-side at authorize time. No NAS attribute carries "come back later", and none is invented |
 | `max_concurrent_sessions` | int ≥ 1, NULL | Active sessions per subject (user or voucher) | EZECLOUD-side only (A2 §2 "not a device feature") |
 | `max_devices` (brief: `max_concurrent_devices`) | int ≥ 1, NULL | Distinct MACs with an active session per subject | EZECLOUD-side only |
 | `valid_from`, `valid_until` | timestamptz, NULL | Absolute validity window of the *policy* | EZECLOUD-side (reject outside; `Session-Timeout` clipped to `valid_until`) |
@@ -115,6 +116,7 @@ All sizes are **bytes (decimal, SI)**: `1 GB = 1 000 000 000 bytes`. All rates a
 9. `is_default` → `scope_type` must be `site` or `group`-less org default; exactly one per org (A6 unique index).
 10. `scope_type = 'temporary'` requires every assignment to carry `effective_until`.
 11. Editing an `active` policy creates a new `version`; `retired` policies are immutable.
+15. Reconnect cooldown (migration 044): ≥ 1 s. Deliberately **not** subject to rule 4's 60 s floor — that floor exists because a NAS ignores shorter timers, and nothing is sent to a NAS here, so a ten-second anti-flap cooldown is valid.
 14. Unlimited (migration 039): every entry of `unlimited_fields` must be a field with an unlimited state, must not repeat, and must not also be given a value — two answers to one question.
 13. Exhaustion (migration 037): `reduce_speed` requires at least one reduced rate, a reduced rate must be at or below its base rate, reduced rates are refused on any other action, and the action itself is refused on a policy with no allowance to exhaust.
 12. Online time (migration 036): each `online_time_*_s` ≥ 60 s, and the same ordering discipline as the data quotas — a shorter period never exceeds a longer one. A cap below a minute cannot be enforced by a `Session-Timeout` the NAS only re-reads at the next Access-Request.

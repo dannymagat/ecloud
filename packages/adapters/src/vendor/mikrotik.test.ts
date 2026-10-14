@@ -399,6 +399,7 @@ describe('mikrotik-hotspot engine adapter (attribute rendering)', () => {
       quota_total_bytes: 6_000_000_000n,
     },
     schedule: null,
+    schedules: [],
     provenance: {},
     winner: null,
     concurrency_mode: null,

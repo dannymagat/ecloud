@@ -332,6 +332,7 @@ describe('validatePolicy — §1.3 rules', () => {
         'quota_exhaustion_action',
         'quota_total_bytes',
         'quota_weekly_bytes',
+        'reconnect_cooldown_s',
         'reduced_download_rate_kbps',
         'reduced_upload_rate_kbps',
         'schedule_id',

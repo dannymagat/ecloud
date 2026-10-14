@@ -174,6 +174,7 @@ function effective(fields: Partial<EffectivePolicy['fields']>): EffectivePolicy 
   return {
     fields: { ...blank, ...fields },
     schedule: null,
+    schedules: [],
     provenance: {},
     winner: null,
     concurrency_mode: null,

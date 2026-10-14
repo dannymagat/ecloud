@@ -120,6 +120,7 @@ describe('translate: Q44 Session-Timeout cap (policy_change_cap)', () => {
   const eff: EffectivePolicy = {
     fields: { ...blank, session_timeout_s: 7200 },
     schedule: null,
+    schedules: [],
     provenance: {},
     winner: null,
     concurrency_mode: null,

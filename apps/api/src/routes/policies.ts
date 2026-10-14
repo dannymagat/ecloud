@@ -78,6 +78,8 @@ const intentFields = {
   unlimited_fields: z.array(z.enum(UNLIMITABLE_FIELDS)).optional(),
   session_timeout_s: positiveInt.nullable().optional(),
   idle_timeout_s: positiveInt.nullable().optional(),
+  /** Migration 044: EZECLOUD-side wait before a subject may reconnect. */
+  reconnect_cooldown_s: positiveInt.nullable().optional(),
   max_concurrent_sessions: positiveInt.nullable().optional(),
   max_devices: positiveInt.nullable().optional(),
   valid_from: instant.nullable().optional(),
@@ -127,6 +129,7 @@ const COLUMNS = [
   'unlimited_fields',
   'session_timeout_s',
   'idle_timeout_s',
+  'reconnect_cooldown_s',
   'max_concurrent_sessions',
   'max_devices',
   'valid_from',

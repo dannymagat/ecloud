@@ -121,6 +121,11 @@ export interface ResolutionInput {
   readonly client_device_id?: string | null;
   /** `Calling-Station-Id`, any case/separator; normalised for device counting. */
   readonly mac?: string | null;
+  /**
+   * When this subject's most recent session ended (migration 044). Needed only when a policy
+   * sets `reconnect_cooldown_s`; absent means no previous session is known, which permits.
+   */
+  readonly last_session_end?: Date | null;
   readonly group_ids?: readonly string[];
   /** Assignments (with their policies) that may apply; the engine re-checks every filter. */
   readonly candidates: readonly Candidate[];
@@ -174,6 +179,13 @@ export type ProvenanceField = IntentColumn | 'schedule';
 export interface EffectivePolicy {
   readonly fields: EnforcementFields;
   readonly schedule: Schedule | null;
+  /**
+   * §10: "Restrictions from site, group and user schedules intersect by default." Every
+   * applicable schedule, innermost first, not only the winning layer's. Access is permitted
+   * when ALL of them allow it, and the window ends at the earliest of their ends. `schedule`
+   * remains the winning layer's, for display and for the snapshot.
+   */
+  readonly schedules: readonly Schedule[];
   readonly provenance: Partial<Record<ProvenanceField, Provenance>>;
   /** Top-ranked candidate (`sessions.policy_id/policy_version`). */
   readonly winner: Provenance | null;
@@ -212,6 +224,7 @@ export type ControlKind =
   | 'quota_watcher'
   | 'online_time_watcher'
   | 'quota_reduced'
+  | 'reconnect_cooldown'
   | 'concurrency'
   | 'validity_end'
   | 'voucher_expiry'
@@ -244,6 +257,7 @@ export type ReasonCode =
   | 'online_time_weekly'
   | 'online_time_monthly'
   | 'online_time_total'
+  | 'reconnect_cooldown'
   | 'concurrency_sessions'
   | 'concurrency_devices';
 
@@ -445,6 +459,7 @@ export function merge(ordered: readonly RankedCandidate[], trace: TraceEntry[]):
   // bug this state exists to prevent.
   const resolved = new Set<IntentColumn>();
   const unlimited = new Set<string>();
+  const schedules: Schedule[] = [];
   for (const c of ordered) {
     const prov = provenanceOf(c);
     const declaredUnlimited = new Set<string>(c.policy.unlimited_fields);
@@ -484,7 +499,16 @@ export function merge(ordered: readonly RankedCandidate[], trace: TraceEntry[]):
       }
     }
     // A layer that declares the schedule unlimited means "no time restriction here", so no
-    // lower layer's schedule applies either.
+    // lower layer's schedule applies either — which is why the collection stops, rather than
+    // the winner simply being skipped.
+    if (!unlimited.has('schedule_id') && c.policy.schedule !== null) {
+      // Intersection (§10): every applicable layer's schedule restricts, not just the winner's.
+      // Identity is enough to deduplicate; the same schedule row reached through two layers is
+      // one restriction, and two different rows with equal rules intersect to themselves.
+      if (!schedules.some((x) => x.id === c.policy.schedule?.id)) {
+        schedules.push(c.policy.schedule);
+      }
+    }
     if (schedule === null && !unlimited.has('schedule_id') && c.policy.schedule !== null) {
       schedule = c.policy.schedule;
       provenance.schedule = prov;
@@ -509,6 +533,7 @@ export function merge(ordered: readonly RankedCandidate[], trace: TraceEntry[]):
   return {
     fields: fields as unknown as EnforcementFields,
     schedule,
+    schedules,
     provenance,
     winner: first ? provenanceOf(first) : null,
     concurrency_mode: concurrencyMode,
@@ -983,17 +1008,41 @@ export function resolveEffectivePolicy(input: ResolutionInput): ResolutionResult
   // Schedule (§2.4).
   let windowEndS: number | null = null;
   if (effective.schedule) {
-    const tz = effective.schedule.timezone || input.timeZone;
-    let window: ScheduleWindow | null = isInWindow(effective.schedule, input.now, tz);
-    if (!window && grace > 0) {
-      const next = nextBoundary(effective.schedule, input.now, tz);
-      if (next && next.kind === 'start' && secondsUntil(next.at, input.now) <= grace) {
-        window = next.window;
-        trace.push({
-          step: 'schedule',
-          detail: `within ${grace}s grace before window start ${next.at.toISOString()}`,
-        });
+    // §10 intersection: every applicable schedule must allow the session, and the window ends
+    // at the earliest of their ends. A single schedule reduces to the previous behaviour, which
+    // is why this replaces the old single-schedule evaluation rather than sitting beside it.
+    // `blocking` is the first schedule that refuses; it supplies the trace, the next-boundary
+    // and the out-of-window override, so the message names a restriction an operator can find.
+    const applicable = effective.schedules.length > 0 ? effective.schedules : [effective.schedule];
+    let window: ScheduleWindow | null = null;
+    let blocking: Schedule | null = null;
+    for (const sch of applicable) {
+      const schTz = sch.timezone || input.timeZone;
+      let w: ScheduleWindow | null = isInWindow(sch, input.now, schTz);
+      if (!w && grace > 0) {
+        const next = nextBoundary(sch, input.now, schTz);
+        if (next && next.kind === 'start' && secondsUntil(next.at, input.now) <= grace) {
+          w = next.window;
+          trace.push({
+            step: 'schedule',
+            detail: `within ${grace}s grace before window start ${next.at.toISOString()}`,
+          });
+        }
       }
+      if (!w) {
+        blocking = sch;
+        window = null;
+        break;
+      }
+      // Intersection of windows: the tightest end wins.
+      if (window === null || w.endsAt.getTime() < window.endsAt.getTime()) window = w;
+    }
+    const tz = (blocking ?? effective.schedule).timezone || input.timeZone;
+    if (applicable.length > 1) {
+      trace.push({
+        step: 'schedule',
+        detail: `${applicable.length} schedules intersect${blocking ? `; blocked by ${blocking.id ?? blocking.name ?? 'one of them'}` : ''}`,
+      });
     }
     if (window) {
       const endWithGrace = new Date(window.endsAt.getTime() + grace * 1000);
@@ -1202,6 +1251,36 @@ export function resolveEffectivePolicy(input: ResolutionInput): ResolutionResult
         `ok (${concurrency.sessions} sessions, ${concurrency.devices} devices)`),
   });
   const clip: Clip = { ...clipBase, quota_reset_s: quotaResetS };
+  // Reconnect cooldown (§6, migration 044). After the allowances so an exhausted subject hears
+  // about the allowance, and before concurrency so a subject still cooling down is not told
+  // their device count is the problem.
+  const cooldownS = effective.fields.reconnect_cooldown_s;
+  if (cooldownS !== null && input.last_session_end) {
+    const elapsed = Math.floor((input.now.getTime() - input.last_session_end.getTime()) / 1000);
+    if (elapsed < cooldownS) {
+      const remaining = cooldownS - elapsed;
+      controls.push({
+        kind: 'reconnect_cooldown',
+        params: { cooldown_s: cooldownS, elapsed_s: elapsed, remaining_s: remaining },
+      });
+      trace.push({
+        step: 'decision',
+        detail: `reconnect cooldown: ${String(elapsed)}s of ${String(cooldownS)}s elapsed`,
+      });
+      return finish(
+        input,
+        effective,
+        clip,
+        controls,
+        [],
+        trace,
+        'reject',
+        'reconnect_cooldown',
+        `last session ended ${String(elapsed)}s ago; ${String(remaining)}s of the ${String(cooldownS)}s cooldown remain`,
+      );
+    }
+  }
+
   if (concurrency.reject) {
     return finish(
       input,

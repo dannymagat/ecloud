@@ -750,6 +750,8 @@ export interface PoliciesTable {
   bandwidth_profile_id: Uuid | null;
   session_timeout_s: number | null;
   idle_timeout_s: number | null;
+  /** Wait after a session ends before the subject may reconnect (migration 044). */
+  reconnect_cooldown_s: number | null;
   max_concurrent_sessions: number | null;
   max_devices: number | null;
   valid_from: NullableTimestamp;

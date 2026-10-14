@@ -100,7 +100,7 @@ mailer exist and are unit-tested; nothing calls them yet.
 | Cumulative online-time allowance | `usage_counters.session_time_s` is accumulated (`drain.ts:936`) but **never read as a limit** | Missing | time-quota fields + evaluation | accounting |
 | Max continuous session duration | `policies.session_timeout_s` → `Session-Timeout` | Working (LIVE: 1800 s observed, session closed on time) | — | gateway |
 | Idle timeout | `policies.idle_timeout_s` → `Idle-Timeout` | Working (LIVE) | — | gateway |
-| Reconnect cooldown | none | Missing | field + denial at authorize | — |
+| Reconnect cooldown | `policies.reconnect_cooldown_s`, evaluated in `resolve.ts` against the subject's last session end | Working (TESTED) | — | — |
 | Max registered devices | `policies.max_devices`, `users.max_devices` | Working (TESTED) | — | — |
 | Max simultaneous sessions | `policies.max_concurrent_sessions` + `concurrency_mode` reject/disconnect_oldest | Working (TESTED) | — | Disconnect for `disconnect_oldest` |
 | Allowed access hours and days | `schedules` (IANA tz, day+HH:MM rules), `schedule.ts` | Working (TESTED) | — | — |
@@ -176,7 +176,7 @@ a per-site *observed* total so an operator can at least see when a pool is excee
 | Several groups | a user has exactly one `user_group_id`; multi-group ambiguity cannot arise | Working (TESTED) | — | — |
 | Aggregate limits survive overrides | no aggregates exist yet | Missing | see §7 | — |
 | Disabled / blocked / expired remain denials | `users.status`, `client_devices.blocked`, validity windows, voucher state | Working (TESTED) | — | — |
-| Schedules intersect | `schedule.ts` evaluates the winning schedule; a *site* schedule does not additionally intersect a *user* schedule — the winner's schedule is used | **Partial** | Requirement says "intersect by default"; today it is single-winner | — |
+| Schedules intersect | `resolve.ts` collects every applicable layer's schedule and requires all to permit; the window ends at the earliest of their ends (migration 044 work) | **Working (TESTED)** | — | — |
 | Inherited vs unlimited vs disabled as distinct states | `null` means inherit; there is **no way to say "unlimited" at a lower layer**, so a child cannot escape a parent's cap even deliberately | Missing | tri-state | — |
 | Effective policy with source, constraints, status | `GET /policies/simulate` returns `effective` + per-field `provenance` + full `trace`; `POST /policies/:id/impact-preview`; `ImpactPreview.tsx`, `PreviewPanel.tsx`, `EnforceabilityMatrix.tsx` | **Working (TESTED)** — exceeds the requirement | — | — |
 | Unsupported combinations fail validation | 11 numbered rules in `intent.ts` with actionable messages | Working (TESTED) | — | — |
@@ -281,7 +281,7 @@ Each stage is a reviewable commit, keeps the suite green, and changes nothing on
 | **5** | **Bandwidth profiles + access plans.** Two additive tables, CRUD, policy→profile reference. **DONE (backend)** — migration 040. Admin pages and the §16 plan tabs are not built; the API is complete and the generic resource pages can drive it. | low |
 | **6** | **Group and site aggregates.** **DONE** — migration 042. Shared data allowance and member/session ceilings are enforced EZECLOUD-side; the rate pool is observed and carries `enforcement: 'unsupported'` as data, not as a comment. Admin pages not built. | low (honesty-first) |
 | **7** | **Access methods.** Finish email OTP (routes, portal pages, admin), then the `identity_providers` runtime and OIDC. | blocked on SMTP credentials for live delivery |
-| **8** | **Operations gaps.** Reconnect cooldown, MAC allowlist/blocklist precedence, schedule intersection, per-site default plan. | low |
+| **8** | **Operations gaps.** **PARTLY DONE** — migration 044. Reconnect cooldown and schedule intersection (§10) are built and tested. MAC precedence: `client_devices.blocked` is already enforced, but at **four separate call sites** (`internal/aaa.ts` ×2, `internal/portal-identity.ts`, `vendor-api/portal.ts`) with no shared predicate — the duplication is the risk, and three of those files are the portal session's lane. Per-site default: `access_plans` (040) already has per-site default indexes; `policies.is_default` remains org-wide. | low |
 | **9** | **Optional commercial modules.** Payments, subscriptions, PMS. | deferred; needs owner decision |
 
 Stages 2–4 are the ones that make the per-user half of the infographic complete. Stage 6 is where

@@ -76,6 +76,7 @@ export function policyRowToIntent(
     unlimited_fields: row.unlimited_fields ?? [],
     session_timeout_s: row.session_timeout_s ?? null,
     idle_timeout_s: row.idle_timeout_s ?? null,
+    reconnect_cooldown_s: row.reconnect_cooldown_s ?? null,
     max_concurrent_sessions: row.max_concurrent_sessions ?? null,
     max_devices: row.max_devices ?? null,
     valid_from: row.valid_from ?? null,

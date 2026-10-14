@@ -75,6 +75,11 @@ export type QuotaExhaustionAction = (typeof QUOTA_EXHAUSTION_ACTIONS)[number];
  * is a start rather than a cap. `valid_until` and `schedule_id` are here because "never expires"
  * and "no time restriction" are the things an operator needs to say about one account inside an
  * otherwise restricted group.
+ *
+ * `reconnect_cooldown_s` (migration 044) is deliberately absent: migration 039's SQL CHECK
+ * enumerates this list, so adding it here without extending that constraint would let the API
+ * accept a declaration the database then rejects. Extending it is a migration nobody has asked
+ * for yet, and a child that needs no cooldown can be given one of 1 second.
  */
 export const UNLIMITABLE_FIELDS = [
   'download_rate_kbps',
@@ -145,6 +150,12 @@ export const PolicyIntentSchema = z.object({
   reduced_upload_rate_kbps: z.number().int().nullable().default(null),
   session_timeout_s: z.number().int().nullable().default(null),
   idle_timeout_s: z.number().int().nullable().default(null),
+  /**
+   * Seconds a subject must wait after a session ends before a new one is authorized
+   * (migration 044). Per subject, not per device: counting per device would let a guest with
+   * two phones alternate and never wait.
+   */
+  reconnect_cooldown_s: z.number().int().nullable().default(null),
   max_concurrent_sessions: z.number().int().nullable().default(null),
   max_devices: z.number().int().nullable().default(null),
   valid_from: instant.nullable().default(null),
@@ -186,7 +197,8 @@ export type IntentColumn =
   | 'online_time_total_s'
   | 'quota_exhaustion_action'
   | 'reduced_download_rate_kbps'
-  | 'reduced_upload_rate_kbps';
+  | 'reduced_upload_rate_kbps'
+  | 'reconnect_cooldown_s';
 
 /** Enforcement-relevant columns only (the ones that fall through layer by layer). */
 /** The merge columns an adapter declares a capability for; the ones `translate()` can act on. */
@@ -244,6 +256,7 @@ export const INTENT_COLUMNS: readonly IntentColumn[] = [
   'reduced_upload_rate_kbps',
   'session_timeout_s',
   'idle_timeout_s',
+  'reconnect_cooldown_s',
   'max_concurrent_sessions',
   'max_devices',
   'valid_from',
@@ -497,6 +510,12 @@ export function validatePolicy(input: unknown, context: ValidationContext = {}):
       err(key, 4, 'timeout_too_short', `${key} must be >= ${MIN_TIMEOUT_S} s`);
   }
 
+  // Rule 15: reconnect cooldown (migration 044). Deliberately NOT subject to rule 4's 60 s
+  // floor: that floor exists because a NAS ignores shorter timers, and nothing is sent to a NAS
+  // here. A ten-second anti-flap cooldown is legitimate.
+  if (p.reconnect_cooldown_s !== null && p.reconnect_cooldown_s < 1)
+    err('reconnect_cooldown_s', 15, 'not_positive', 'reconnect_cooldown_s must be >= 1 s');
+
   // Rule 5: concurrency.
   for (const key of ['max_concurrent_sessions', 'max_devices'] as const) {
     const v = p[key];
@@ -629,6 +648,7 @@ export function enforcementFields(p: PolicyIntent): EnforcementFields {
     reduced_upload_rate_kbps: p.reduced_upload_rate_kbps,
     session_timeout_s: p.session_timeout_s,
     idle_timeout_s: p.idle_timeout_s,
+    reconnect_cooldown_s: p.reconnect_cooldown_s,
     max_concurrent_sessions: p.max_concurrent_sessions,
     max_devices: p.max_devices,
     valid_from: p.valid_from,
