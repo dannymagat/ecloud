@@ -112,6 +112,29 @@ function siteOf(row: Row, mode: SiteMode): string | null {
 export function crudRoutes(deps: AppDeps, config: CrudConfig): AnyRouteSpec[] {
   const base = `/api/v1/orgs/:orgId${config.path}`;
   const serialize = config.serialize ?? ((row: Row) => row);
+
+  /**
+   * Serialize, then put the declared `secretFields` back.
+   *
+   * `serialize` exists to decide which STORED columns are public, and for `nas_clients` it is an
+   * allowlist over column names (private by default). `secretFields` declares the opposite kind of
+   * field: a one-time plaintext that is shown once and never stored — `secret` is attached by
+   * `afterCreate`, so it is not a column and no columns list can name it. Running one over the
+   * other silently dropped it: `POST /orgs/:orgId/nas` answered 201 with no secret, so an operator
+   * without `nas:secret:reveal` could create a NAS and never learn how to configure it.
+   *
+   * Re-merging here makes the two declarations agree by construction instead of each config having
+   * to remember the interaction. `nas_clients` is the only config that declares both today, which
+   * is exactly why this was easy to miss and worth fixing in the shared path rather than once.
+   * Found by EZECLOUD1 reading the create path, 2026-10-15.
+   */
+  function serializeWithSecrets(row: Row): Row {
+    const body = serialize(row);
+    for (const field of config.secretFields ?? []) {
+      if (field in row) body[field] = row[field];
+    }
+    return body;
+  }
   const tags = [config.tag];
   const routes: AnyRouteSpec[] = [];
 
@@ -264,7 +287,7 @@ export function crudRoutes(deps: AppDeps, config: CrudConfig): AnyRouteSpec[] {
           });
           return {
             status: 201,
-            body: serialize(row),
+            body: serializeWithSecrets(row),
             headers: etagHeader(row),
           };
         },

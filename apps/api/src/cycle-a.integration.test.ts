@@ -1004,6 +1004,32 @@ await describeIntegration('@ecloud/api multi-vendor Cycle A', () => {
   });
   // ------------------------------------------------------------------------- block / unblock
 
+  it('create still returns the one-time secret alongside the allowlisted columns', async () => {
+    // REGRESSION. `serializeNasRow` is an allowlist over COLUMNS, and the one-time `secret` is
+    // not a column — `afterCreate` attaches it. Running the allowlist over the response dropped
+    // it, so POST answered 201 with no secret and an operator without `nas:secret:reveal` could
+    // create a NAS they could never configure. `crud.ts` now re-merges the declared
+    // `secretFields` after `serialize`, so the two declarations agree by construction.
+    const apps = freshApps();
+    const a = await orgAdmin(apps);
+    const ip = randomIp();
+    const res = await a.agent
+      .post(`/api/v1/orgs/${a.orgId}/nas`)
+      .set(BROWSER)
+      .send({ site_id: a.siteId, name: `nas ${ip}`, nas_ip: ip, adapter_key: 'generic-radius-8021x' });
+    expect(res.status, JSON.stringify(res.body)).toBe(201);
+    expect(typeof res.body.secret).toBe('string');
+    expect((res.body.secret as string).length).toBeGreaterThan(20);
+    // …and the allowlist still holds for the stored columns.
+    expect(res.body).not.toHaveProperty('secret_ref');
+    expect(res.body).not.toHaveProperty('secret_version');
+    // A later read never replays it: shown once is shown once.
+    const read = await a.agent.get(`/api/v1/orgs/${a.orgId}/nas/${res.body.id as string}`);
+    expect(read.status).toBe(200);
+    expect(read.body).not.toHaveProperty('secret');
+    expect(read.body).not.toHaveProperty('secret_ref');
+  });
+
   it('block: prohibits a NAS with a recorded reason, and the renderer stops serving it', async () => {
     const apps = freshApps();
     const a = await orgAdmin(apps);
