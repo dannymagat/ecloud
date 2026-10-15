@@ -1,5 +1,5 @@
 import { createDb } from '@ecloud/db';
-import { createLogger, redactConfig, type Logger } from '@ecloud/shared';
+import { PERMISSION_CATALOGUE, createLogger, redactConfig, type Logger } from '@ecloud/shared';
 import { createStorage } from '@ecloud/storage';
 import { readFileSync } from 'node:fs';
 import type { Server } from 'node:http';
@@ -80,6 +80,52 @@ function closeServer(server: Server, graceMs: number): Promise<void> {
 }
 
 /** Starts the public and internal listeners. */
+/**
+ * Warn when the seeded `permissions` rows do not match `PERMISSION_CATALOGUE`.
+ *
+ * WHY THIS EXISTS. The catalogue is a code constant; the rows are a MANUAL seed step
+ * (`npm run seed --workspace @ecloud/db`). Nothing connected the two, so a deploy that shipped a
+ * new permission without re-seeding left the route holding it 403ing for everyone — and it
+ * presented as a permissions bug rather than a missing step. `nas:adopt` did exactly that on
+ * 2026-10-15: deployed, tested green, and unusable in production until the next seed.
+ *
+ * It never fails startup. A missing seed is an operational gap, not a reason to take the api
+ * down, and an api that refuses to boot over it would turn a degraded deploy into an outage.
+ * Loud log, keep serving.
+ */
+async function checkPermissionCatalogue(deps: AppDeps): Promise<void> {
+  try {
+    const row = await deps.dbPlatform
+      .selectFrom('permissions')
+      .select(({ fn }) => fn.countAll<number>().as('n'))
+      .executeTakeFirst();
+    const seeded = Number(row?.n ?? 0);
+    const expected = PERMISSION_CATALOGUE.length;
+    if (seeded === expected) {
+      deps.logger.info({ permissions: seeded }, 'permission catalogue matches the seeded rows');
+      return;
+    }
+    deps.logger.error(
+      {
+        event: 'permission_catalogue_mismatch',
+        seeded,
+        expected,
+        missing: expected - seeded,
+        remedy: 'npm run seed --workspace @ecloud/db (platform URL)',
+      },
+      seeded < expected
+        ? 'SEED MISSING: routes using the unseeded permissions will refuse every caller with 403'
+        : 'the database holds permission keys the catalogue no longer defines (stale rows)',
+    );
+  } catch (error) {
+    // A database that is not reachable yet is the pool's problem to report, not this check's.
+    deps.logger.warn(
+      { err: (error as Error).message },
+      'could not verify the permission catalogue',
+    );
+  }
+}
+
 export async function main(options: MainOptions = {}): Promise<RunningApi> {
   const config = options.config ?? loadApiConfig();
   const logger = options.logger ?? createLogger({ name: 'api', level: config.base.logLevel });
@@ -119,6 +165,9 @@ export async function main(options: MainOptions = {}): Promise<RunningApi> {
     },
     'api listening',
   );
+  // After `listening`, and deliberately not awaited before it: this is a diagnostic, so it must
+  // not delay the port opening or fail the boot.
+  void checkPermissionCatalogue(deps);
   if (config.internalApiTokenPrevious !== null) {
     // The rotation window has no built-in expiry: it lasts until the variable is removed.
     logger.warn(
