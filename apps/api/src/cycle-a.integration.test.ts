@@ -23,10 +23,12 @@ import { consumePortalLoginToken, issuePortalLoginToken } from './internal/login
 import { findNasByIdentity } from './internal/nas-lookup.js';
 import { MemoryKv, RedisKv } from './kv.js';
 import { VENDOR_API_SECRET_PURPOSE } from './routes/controllers.js';
+import { loadNasClientRows } from './radius-clients/load.js';
 import {
   TEST_INTERNAL_TOKEN,
   TEST_ORIGIN,
   closeDeps,
+  countAudit,
   createAdmin,
   createTenant,
   integrationDeps,
@@ -999,5 +1001,109 @@ await describeIntegration('@ecloud/api multi-vendor Cycle A', () => {
       }),
     );
     expect(pap.status).toBe(200);
+  });
+  // ------------------------------------------------------------------------- block / unblock
+
+  it('block: prohibits a NAS with a recorded reason, and the renderer stops serving it', async () => {
+    const apps = freshApps();
+    const a = await orgAdmin(apps);
+    const nas = await createNas(a.agent, a.orgId, a.siteId);
+
+    const blocked = await a.agent
+      .post(`/api/v1/orgs/${a.orgId}/nas/${nas.id}/block`)
+      .set(BROWSER)
+      .send({ reason: 'moved to a decommissioned cabinet' });
+    expect(blocked.status, JSON.stringify(blocked.body)).toBe(200);
+    expect(blocked.body).toMatchObject({
+      status: 'blocked',
+      block_reason: 'moved to a decommissioned cabinet',
+    });
+    // The allowlist serializer must not publish the sealed secret or the sealing internals.
+    expect(blocked.body).not.toHaveProperty('secret_ref');
+    expect(blocked.body).not.toHaveProperty('secret_version');
+
+    // §5: denied. The renderer selects status = 'active', so a blocked NAS leaves clients.conf.
+    const loaded = await loadNasClientRows(deps.dbPlatform, { organizationIds: [a.orgId] });
+    expect(loaded.map((r) => r.id)).not.toContain(nas.id);
+
+    // Filterable, which is what the Pending list needs.
+    const list = await a.agent.get(`/api/v1/orgs/${a.orgId}/nas?status=blocked`);
+    expect(list.status).toBe(200);
+    expect((list.body.data as { id: string }[]).map((r) => r.id)).toEqual([nas.id]);
+  });
+
+  it('block: a reason is required, and PATCH cannot set the status at all', async () => {
+    const apps = freshApps();
+    const a = await orgAdmin(apps);
+    const nas = await createNas(a.agent, a.orgId, a.siteId);
+
+    // A prohibition with no recorded reason is indistinguishable from a mistake a week later.
+    const noReason = await a.agent
+      .post(`/api/v1/orgs/${a.orgId}/nas/${nas.id}/block`)
+      .set(BROWSER)
+      .send({});
+    // ValidationError is 400 here (packages/shared/src/errors.ts:81), not 422.
+    expect(noReason.status).toBe(400);
+    const blank = await a.agent
+      .post(`/api/v1/orgs/${a.orgId}/nas/${nas.id}/block`)
+      .set(BROWSER)
+      .send({ reason: '   ' });
+    expect(blank.status).toBe(400);
+
+    // THE CARVE-OUT THAT MATTERS: `status` is writable by PATCH, but only to active/disabled.
+    // If `blocked` were reachable here it would be settable without a reason and by anyone
+    // holding nas:update rather than nas:block.
+    const viaPatch = await a.agent
+      .patch(`/api/v1/orgs/${a.orgId}/nas/${nas.id}`)
+      .set(BROWSER)
+      .send({ status: 'blocked' });
+    expect(viaPatch.status).toBe(400);
+    const still = await a.agent.get(`/api/v1/orgs/${a.orgId}/nas/${nas.id}`);
+    expect(still.body.status).toBe('active');
+  });
+
+  it('unblock: lifts the prohibition to disabled, never straight to active (§11)', async () => {
+    const apps = freshApps();
+    const a = await orgAdmin(apps);
+    const nas = await createNas(a.agent, a.orgId, a.siteId);
+    await a.agent
+      .post(`/api/v1/orgs/${a.orgId}/nas/${nas.id}/block`)
+      .set(BROWSER)
+      .send({ reason: 'suspected spoofed identifier' });
+
+    const un = await a.agent.post(`/api/v1/orgs/${a.orgId}/nas/${nas.id}/unblock`).set(BROWSER);
+    expect(un.status, JSON.stringify(un.body)).toBe(200);
+    // Removing a prohibition and re-enabling a device are different decisions. Collapsing them
+    // is the silent re-enable §11 forbids, so this lands on `disabled` and the operator has to
+    // say so again to make it active.
+    expect(un.body).toMatchObject({ status: 'disabled', block_reason: null });
+    const loaded = await loadNasClientRows(deps.dbPlatform, { organizationIds: [a.orgId] });
+    expect(loaded.map((r) => r.id)).not.toContain(nas.id);
+
+    // Unblocking something that is not blocked is a 422 rather than a silent no-op, so a
+    // mistaken call on an active NAS cannot quietly disable it.
+    const again = await a.agent.post(`/api/v1/orgs/${a.orgId}/nas/${nas.id}/unblock`).set(BROWSER);
+    expect(again.status).toBe(400);
+  });
+
+  it('block: refused across organizations and audited on both transitions', async () => {
+    const apps = freshApps();
+    const a = await orgAdmin(apps);
+    const b = await orgAdmin(apps);
+    const nas = await createNas(a.agent, a.orgId, a.siteId);
+
+    const cross = await b.agent
+      .post(`/api/v1/orgs/${a.orgId}/nas/${nas.id}/block`)
+      .set(BROWSER)
+      .send({ reason: 'not mine to block' });
+    expect([403, 404]).toContain(cross.status);
+
+    await a.agent
+      .post(`/api/v1/orgs/${a.orgId}/nas/${nas.id}/block`)
+      .set(BROWSER)
+      .send({ reason: 'audited reason' });
+    await a.agent.post(`/api/v1/orgs/${a.orgId}/nas/${nas.id}/unblock`).set(BROWSER);
+    expect(await countAudit(deps.dbPlatform, 'nas:block', nas.id)).toBe(1);
+    expect(await countAudit(deps.dbPlatform, 'nas:unblock', nas.id)).toBe(1);
   });
 });

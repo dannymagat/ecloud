@@ -199,7 +199,7 @@ await describeIntegration('@ecloud/db schema', () => {
 
   it('seeds the shared permission catalogue and the six role templates exactly', async () => {
     const permissions = await platform.selectFrom('permissions').selectAll().execute();
-    expect(permissions).toHaveLength(111); // + nas:adopt (046); + nas:secret:reveal (D-045); + administrator:mfa_reset (D-038); + controller:* (5), compatibility:read (019); + portal_asset:* (3, 021), captive_portal:secret:rotate (P6-B)
+    expect(permissions).toHaveLength(112); // + nas:block (§5/§11); + nas:adopt (046); + nas:secret:reveal (D-045); + administrator:mfa_reset (D-038); + controller:* (5), compatibility:read (019); + portal_asset:* (3, 021), captive_portal:secret:rotate (P6-B)
     expect(permissions.map((p) => p.key).sort()).toEqual(
       PERMISSION_CATALOGUE.map((p) => p.key).sort(),
     );
@@ -240,7 +240,7 @@ await describeIntegration('@ecloud/db schema', () => {
       .select(({ fn }) => fn.countAll<number>().as('n'))
       .where('role_id', '=', superAdmin?.id ?? '')
       .executeTakeFirst();
-    expect(Number(count?.n)).toBe(111); // every key, incl. nas:adopt (046), nas:secret:reveal (D-045)
+    expect(Number(count?.n)).toBe(112); // every key, incl. nas:block (§5/§11), nas:adopt (046), nas:secret:reveal (D-045)
   });
 
   it('hides cross-tenant rows from ecloud_app and shows everything to the platform role', async () => {
@@ -836,7 +836,7 @@ await describeIntegration('@ecloud/db schema', () => {
       .selectFrom('permissions')
       .select(({ fn }) => fn.countAll<number>().as('n'))
       .executeTakeFirst();
-    expect(Number(perms?.n)).toBe(111);
+    expect(Number(perms?.n)).toBe(112); // + nas:block
     const templates = await platform
       .selectFrom('roles')
       .select(({ fn }) => fn.countAll<number>().as('n'))

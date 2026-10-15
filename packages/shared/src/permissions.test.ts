@@ -58,7 +58,7 @@ describe('PERMISSION_CATALOGUE', () => {
       organization: 6,
       site: 4,
       network_device: 5,
-      nas: 7, // + secret:reveal (D-045), + adopt (046)
+      nas: 8, // + secret:reveal (D-045), + adopt (046), + block (§5/§11)
       wireguard_peer: 5,
       controller: 5, // migration 019 (MULTI_VENDOR_INTEGRATION_PLAN.md §8.2)
       compatibility: 1,

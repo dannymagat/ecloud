@@ -480,6 +480,59 @@ function withoutKeys(row: Row, keys: readonly string[]): Row {
   return out;
 }
 
+/**
+ * Public shape of a `nas_clients` row (security review of 4ce2167/8aeda28).
+ *
+ * An ALLOWLIST, replacing `withoutKeys(row, ['secret_ref'])`. The denylist was correct for
+ * today's table — `secret_ref` is its only sensitive column and `secret_version` is an integer —
+ * but it publishes by default, so the next sensitive column leaks unless someone remembers to add
+ * it. This fails the other way: a new column is private until it is named here. That is the
+ * direction a NAS table should fail, since it is the one that holds a shared secret.
+ */
+const NAS_PUBLIC_COLUMNS = [
+  'id',
+  'organization_id',
+  'site_id',
+  'network_device_id',
+  'name',
+  'nas_identifier',
+  'nas_ip',
+  'adapter_type_key',
+  'adapter_key',
+  'coa_port',
+  'coa_supported',
+  'require_message_authenticator',
+  'status',
+  'created_at',
+  'updated_at',
+  'deleted_at',
+  'deployment_mode',
+  'controller_id',
+  'device_test_attributes',
+  'hotspot_address',
+  'hotspot_port',
+  'adapter_config',
+  'cloud_radius_auth_port',
+  'cloud_radius_acct_port',
+  'das_host',
+  'vendor_key',
+  'radsec_enabled',
+  'radsec_cert_serial',
+  'radsec_enrolled_at',
+  'block_reason',
+  'is_adopted',
+  // secret_ref: the sealed secret, never served. secret_version: deliberately withheld too —
+  // it is not sensitive, but it is internal to the sealing scheme and no client needs it.
+] as const;
+
+function serializeNasRow(row: Row): Row {
+  const out: Row = {};
+  for (const key of NAS_PUBLIC_COLUMNS) {
+    if (key in row) out[key] = row[key];
+  }
+  return out;
+}
+
 export function resourceRoutes(deps: AppDeps): AnyRouteSpec[] {
   const argonMemory = deps.config.base.argon2.memoryKib;
 
@@ -592,10 +645,12 @@ export function resourceRoutes(deps: AppDeps): AnyRouteSpec[] {
     softDelete: true,
     createSchema: NasCreate,
     updateSchema: NasUpdate,
-    filters: { status: z.enum(['active', 'disabled']).optional() },
+    // `blocked` is filterable but NOT settable through updateSchema above: a prohibition needs a
+    // reason and its own permission, so it is written only by the block route below (§5, §11).
+    filters: { status: z.enum(['active', 'disabled', 'blocked']).optional() },
     idempotency: 'optional',
     secretFields: ['secret'],
-    serialize: (row) => withoutKeys(row, ['secret_ref']),
+    serialize: serializeNasRow,
     prepareCreate: async (body, hook) => {
       await assertRef(hook.trx, 'sites', body.site_id as string, 'site');
       // Cycle E (D-044): Meraki NAS rules + listener port pair; nas_ip required for the others.
@@ -762,6 +817,137 @@ export function resourceRoutes(deps: AppDeps): AnyRouteSpec[] {
         }
       }
       return next;
+    },
+  });
+
+  /**
+   * Block and unblock a NAS (NAS_PENDING_ADOPTION_REQUIREMENTS §5, §11).
+   *
+   * `Blocked` is "explicitly prohibited": denied for authorization AND prohibited from automatic
+   * adoption. It is deliberately NOT reachable through `PATCH /nas/:id`, even though that endpoint
+   * already writes `status`. Two reasons, both from §11's "restoring a policy must never silently
+   * unblock or re-enable a NAS":
+   *
+   *  - a prohibition without a recorded reason is indistinguishable from a mistake a week later,
+   *    so `reason` is required here rather than optional on a partial update;
+   *  - it carries its own permission (`nas:block`), so holding `nas:update` does not confer the
+   *    ability to prohibit a device.
+   *
+   * Unblocking restores `disabled`, never `active`. Removing a prohibition and re-enabling a
+   * device are different decisions, and collapsing them is exactly the silent re-enable §11
+   * forbids — an operator who wants it active says so with a second, ordinary PATCH.
+   */
+  const BlockBody = z.object({
+    reason: z.string().trim().min(1).max(500),
+  });
+
+  const blockNas = defineRoute({
+    method: 'post',
+    path: '/api/v1/orgs/:orgId/nas/:id/block',
+    summary: 'Prohibit a NAS: denied for authorization and for automatic adoption (§5)',
+    tags: ['nas'],
+    auth: 'principal',
+    permission: 'nas:block',
+    scope: 'any-site',
+    params: OrgIdParams,
+    body: BlockBody,
+    idempotency: 'optional',
+    responses: { 200: { description: 'Blocked', schema: ResourceSchema }, ...problemResponses },
+    handler: async ({ params, body, ctx }) => {
+      const row = await inTenant(deps, params.orgId, async (trx) => {
+        const before = await loose(trx)
+          .selectFrom('nas_clients')
+          .select(['id', 'site_id', 'status', 'block_reason'])
+          .where('id', '=', params.id)
+          .where('deleted_at', 'is', null)
+          .forUpdate()
+          .executeTakeFirst();
+        if (before === undefined) throw new NotFoundError('nas_client', params.id);
+        requireOnSite(
+          ctx,
+          'nas:block',
+          params.orgId,
+          before.site_id as string,
+          'nas_client',
+          'nas:read',
+        );
+        const updated = await loose(trx)
+          .updateTable('nas_clients')
+          .set({ status: 'blocked', block_reason: body.reason })
+          .where('id', '=', params.id)
+          .returningAll()
+          .executeTakeFirstOrThrow();
+        // The reason is operator-entered text about a device, not a secret, so it is audited in
+        // full: a prohibition nobody can explain later is the thing this column exists to avoid.
+        await writeAudit(trx, ctx, {
+          organizationId: params.orgId,
+          action: 'nas:block',
+          targetType: 'nas_client',
+          targetId: params.id,
+          before: { status: before.status, block_reason: before.block_reason },
+          after: { status: 'blocked', block_reason: body.reason },
+        });
+        return updated;
+      });
+      // A blocked NAS must stop being served, so clients.conf is re-rendered. The renderer
+      // selects `status = 'active'` rows, so blocking removes it without any change there.
+      await signalRadiusClientsReload(deps.kv, `nas:block id=${params.id}`);
+      return { status: 200 as const, body: serializeNasRow(row) };
+    },
+  });
+
+  const unblockNas = defineRoute({
+    method: 'post',
+    path: '/api/v1/orgs/:orgId/nas/:id/unblock',
+    summary: 'Lift a block, leaving the NAS disabled rather than active (§11)',
+    tags: ['nas'],
+    auth: 'principal',
+    permission: 'nas:block',
+    scope: 'any-site',
+    params: OrgIdParams,
+    idempotency: 'optional',
+    responses: { 200: { description: 'Unblocked', schema: ResourceSchema }, ...problemResponses },
+    handler: async ({ params, ctx }) => {
+      const row = await inTenant(deps, params.orgId, async (trx) => {
+        const before = await loose(trx)
+          .selectFrom('nas_clients')
+          .select(['id', 'site_id', 'status', 'block_reason'])
+          .where('id', '=', params.id)
+          .where('deleted_at', 'is', null)
+          .forUpdate()
+          .executeTakeFirst();
+        if (before === undefined) throw new NotFoundError('nas_client', params.id);
+        requireOnSite(
+          ctx,
+          'nas:block',
+          params.orgId,
+          before.site_id as string,
+          'nas_client',
+          'nas:read',
+        );
+        if (before.status !== 'blocked') {
+          throw new ValidationError([
+            { path: 'params.id', message: 'this NAS is not blocked' },
+          ]);
+        }
+        const updated = await loose(trx)
+          .updateTable('nas_clients')
+          .set({ status: 'disabled', block_reason: null })
+          .where('id', '=', params.id)
+          .returningAll()
+          .executeTakeFirstOrThrow();
+        await writeAudit(trx, ctx, {
+          organizationId: params.orgId,
+          action: 'nas:unblock',
+          targetType: 'nas_client',
+          targetId: params.id,
+          before: { status: 'blocked', block_reason: before.block_reason },
+          after: { status: 'disabled', block_reason: null },
+        });
+        return updated;
+      });
+      await signalRadiusClientsReload(deps.kv, `nas:unblock id=${params.id}`);
+      return { status: 200 as const, body: serializeNasRow(row) };
     },
   });
 
@@ -1011,6 +1197,8 @@ export function resourceRoutes(deps: AppDeps): AnyRouteSpec[] {
     ...networkDevices,
     ...nas,
     rotateNasSecret,
+    blockNas,
+    unblockNas,
     ...users,
     ...userGroups,
     ...clientDevices,

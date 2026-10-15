@@ -109,7 +109,21 @@ const RESOURCES: readonly ResourceSpec[] = [
     // assigns ownership and a policy and triggers provisioning rather than editing a field.
     // It reaches org_admin (NON_PLATFORM_KEYS) and platform_super_admin (ALL_KEYS) only;
     // site_admin, operator and read_only list `['read']` explicitly and are unaffected.
-    actions: ['read', 'create', 'update', 'delete', 'adopt', 'secret:rotate', 'secret:reveal'],
+    // block (§5, §11): also not `update`, and for a sharper reason than adopt's. `Blocked` is
+    // "explicitly prohibited" and it PROHIBITS AUTOMATIC ADOPTION, so it is the one status an
+    // operator can set that overrides later automation — §11 requires that restoring a policy
+    // never silently unblocks. A status reachable through the ordinary PATCH would be settable
+    // without a reason and by anyone holding `nas:update`; both are wrong for a prohibition.
+    actions: [
+      'read',
+      'create',
+      'update',
+      'delete',
+      'adopt',
+      'block',
+      'secret:rotate',
+      'secret:reveal',
+    ],
   },
   {
     resource: 'wireguard_peer',
