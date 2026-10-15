@@ -219,3 +219,47 @@ Linking an observation to an existing NAS by natural key must order live rows fi
 partial on `deleted_at IS NULL`, so duplicates beside a live row are the expected state after any
 delete-and-recreate. Three worked examples exist in the tree (`005db2d` on `nas_clients`, `fea68cf`
 on `sites` and `users`); the adopt flow uses that exact form rather than a fourth variant.
+
+## 7. Section-5 reason coverage, as shipped
+
+What the Pending list can and cannot tell an operator today. Recorded because four of the six
+reasons work and two do not, and a demo that happens to show the working four implies a
+completeness the implementation does not have.
+
+Placed in this document rather than in `NAS_PENDING_ADOPTION_REQUIREMENTS.md`: that file is the
+owner's statement of what is wanted, and editing it to describe what was built would blur the
+difference between a requirement and its status. This is the audit deliverable §3 asks for, so the
+status belongs here.
+
+| §5 reason | Reachable | What produces it, or what is missing |
+| --- | --- | --- |
+| `NOT_ADOPTED` | **Yes** | `nas_clients.is_adopted` (migration 046). The main Pending case. |
+| `NO_POLICY` | **Yes** | `policyAvailabilityForSites` returning `missing` — no assignment could apply at the site, no active organization default, platform default off. |
+| `IDENTITY_CONFLICT` | **No** | Not evaluated. A cross-tenant uniqueness rule for NAS identifiers already exists, so it is expected to be unreachable — but "expected" is not "checked", and nothing in the response claims it was. |
+| `OWNERSHIP_UNRESOLVED` | **No, structurally** | `nasActivity` inner-joins `sites` on `deleted_at IS NULL`, so a NAS whose site is gone never appears in the list at all. It cannot be shown as Pending on an endpoint it cannot reach. Surfacing it needs a query that does not require a live site. |
+| `POLICY_DISABLED` | **No** | `policyAvailabilityForSites` returns three values and this is not one of them. A policy that resolves but is disabled currently reads as `missing`, so the NAS is Pending with the wrong reason rather than invisible. |
+| `POLICY_UNAVAILABLE` | **No** | §10's "policy service/configuration unavailable". A reachability query cannot produce it: it needs a resolution call that can **fail**, which is a different kind of operation from asking whether a policy exists. |
+
+Two administrative states are separate from the reasons above and both work: `blocked` with its
+`block_reason`, and `disabled`.
+
+### What this means for anyone demonstrating the feature
+
+An `active` NAS means "no reason we can evaluate applies", not "this NAS is fine". The honest
+sentence is that the list catches unadopted NAS, NAS whose site has no reachable policy, and NAS an
+operator has blocked or disabled — and that two policy sub-cases and one ownership case are not yet
+distinguished.
+
+`policy_evaluated` in the response exists for exactly this reason and should be believed: when it
+is false the policy dimension was not consulted at all, so `NO_POLICY` was neither ruled in nor
+out. It is true in the shipped build; it was false for the window between `6933629` and `16d240e`,
+before `policyAvailabilityForSites` landed.
+
+### Closing the gaps
+
+`POLICY_DISABLED` is the cheapest: it needs a fourth return value from
+`policyAvailabilityForSites`, which is the policy engine's to add, and then one line here.
+`POLICY_UNAVAILABLE` needs a resolution attempt rather than a reachability check and is better
+driven by observed failures than by a list query. `OWNERSHIP_UNRESOLVED` needs its own query and is
+arguably better served by a platform-level orphan report than by this per-organization list, since
+a NAS whose site is gone has no organization scope an operator could browse it under.
