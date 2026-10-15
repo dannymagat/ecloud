@@ -10,7 +10,8 @@ import { AdministratorsPage } from '../admins/AdministratorsPage';
 import type { Catalogue, CatalogueEntry, VendorGuide } from '../setup-guides/types';
 import { AccessPointsPage } from './AccessPointsPage';
 import { nasFields, validateMacRows } from './AddAccessPointWizard';
-import type { Overview } from './data';
+import { NAS_PENDING_REASON_LABEL } from '@ecloud/shared/nas-eligibility';
+import type { AdoptResult, Overview } from './data';
 import { REVEAL_SECONDS } from './RadiusSecretBox';
 import { EMPTY_TEXT } from './AccessPointsTable';
 
@@ -28,6 +29,7 @@ const ALL = [
   'nas:delete',
   'nas:secret:rotate',
   'nas:secret:reveal',
+  'nas:adopt',
   'administrator:invite',
   'policy:read',
   'site:read',
@@ -697,5 +699,193 @@ describe('Add Access Point wizard', () => {
       }),
     );
     expect(calls.some((c) => c.method === 'POST' && c.url.endsWith('/nas'))).toBe(false);
+  });
+});
+
+/**
+ * Adopt & Assign Policy (§7). The case worth protecting is the fourth one: the endpoint answers
+ * with DERIVED eligibility, so a 200 that still reports `pending` must not read as success on
+ * the page. That is §7 step 9, and it is the difference between "the write landed" and "guests
+ * can get online" — the only one an operator acts on.
+ */
+describe('NAS adoption (§7)', () => {
+  const POLICY = '01900000-0000-7000-8000-0000000000b1';
+  const OTHER_SITE_POLICY = '01900000-0000-7000-8000-0000000000b2';
+  const OTHER_SITE = '01900000-0000-7000-8000-0000000000f9';
+
+  const UNADOPTED: Overview = {
+    ...OVERVIEW,
+    nas: [
+      {
+        ...nas(NAS1, 'Aruba controller', 'external-portal-postback', 'aruba'),
+        state: 'pending' as const,
+        pending_reasons: ['NOT_ADOPTED' as const],
+        primary_reason: 'NOT_ADOPTED' as const,
+        is_adopted: false,
+      },
+    ],
+  };
+
+  const POLICY_PAGE = {
+    data: [
+      { id: POLICY, name: 'Guest default', version: 2, status: 'active', site_id: null },
+      {
+        id: OTHER_SITE_POLICY,
+        name: 'Branch only',
+        version: 1,
+        status: 'active',
+        site_id: OTHER_SITE,
+      },
+    ],
+    next_cursor: null,
+  };
+
+  const adoptReply = (over: Partial<AdoptResult> = {}): AdoptResult => ({
+    id: NAS1,
+    is_adopted: true,
+    state: 'active',
+    pending_reasons: [],
+    primary_reason: null,
+    advisories: [],
+    policy_source: 'assigned',
+    assigned_site_id: null,
+    ...over,
+  });
+
+  const adoptRoutes = (reply: AdoptResult, perms = ALL): MockRoute[] => [
+    { method: 'GET', path: `${base}/policies`, body: POLICY_PAGE },
+    { method: 'POST', path: `${base}/nas/${NAS1}/adopt`, body: reply },
+    ...routes(UNADOPTED, perms),
+  ];
+
+  function renderPage() {
+    const router = createMemoryRouter(PAGES, {
+      initialEntries: [`/orgs/${ORG_A}/access-points`],
+    });
+    return render(
+      <QueryClientProvider client={createQueryClient()}>
+        <AuthProvider>
+          <RouterProvider router={router} />
+        </AuthProvider>
+      </QueryClientProvider>,
+    );
+  }
+
+  it('offers Adopt on an unadopted NAS', async () => {
+    mockFetch(adoptRoutes(adoptReply()));
+    renderPage();
+    expect(await screen.findByRole('button', { name: 'Adopt' })).toBeInTheDocument();
+  });
+
+  it('offers no Adopt on an already adopted NAS', async () => {
+    mockFetch(routes(OVERVIEW));
+    renderPage();
+    // The NAS name appears in three panels, so wait on the state list itself.
+    const list = await screen.findByLabelText('NAS state');
+    expect(within(list).queryByRole('button', { name: 'Adopt' })).toBeNull();
+  });
+
+  it('adopts without a policy, sending only the site the operator was looking at', async () => {
+    const calls = mockFetch(adoptRoutes(adoptReply({ policy_source: 'platform_default' })));
+    renderPage();
+    fireEvent.click(await screen.findByRole('button', { name: 'Adopt' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Adopt Aruba controller' });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Adopt' }));
+    await waitFor(() =>
+      expect(calls.some((c) => c.method === 'POST' && c.url.endsWith('/adopt'))).toBe(true),
+    );
+    // No `policy_id`: the field is omitted rather than sent empty, because the endpoint treats
+    // its presence as "create a site assignment".
+    expect(calls.find((c) => c.method === 'POST' && c.url.endsWith('/adopt'))?.body).toEqual({
+      expect_site_id: SITE,
+    });
+    expect(
+      await screen.findByText(/Adopted and serving, on the platform default policy/),
+    ).toBeInTheDocument();
+  });
+
+  it('warns that a chosen policy covers the whole site, and sends it', async () => {
+    const calls = mockFetch(adoptRoutes(adoptReply({ assigned_site_id: SITE })));
+    renderPage();
+    fireEvent.click(await screen.findByRole('button', { name: 'Adopt' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Adopt Aruba controller' });
+    await waitFor(() =>
+      expect(within(dialog).getByRole('option', { name: /Guest default/ })).toBeInTheDocument(),
+    );
+    fireEvent.change(within(dialog).getByLabelText('Policy'), { target: { value: POLICY } });
+    // The assignment is site-scoped; saying otherwise would understate the blast radius.
+    expect(within(dialog).getByText(/reaches every NAS at Lobby site/)).toBeInTheDocument();
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Adopt' }));
+    await waitFor(() =>
+      expect(calls.some((c) => c.method === 'POST' && c.url.endsWith('/adopt'))).toBe(true),
+    );
+    expect(calls.find((c) => c.method === 'POST' && c.url.endsWith('/adopt'))?.body).toEqual({
+      policy_id: POLICY,
+      expect_site_id: SITE,
+    });
+  });
+
+  it('§7 step 9: a 200 that is still Pending reports the remaining reason, not success', async () => {
+    mockFetch(
+      adoptRoutes(
+        adoptReply({
+          state: 'pending',
+          pending_reasons: ['NO_POLICY'],
+          primary_reason: 'NO_POLICY',
+          policy_source: 'missing',
+        }),
+      ),
+    );
+    renderPage();
+    fireEvent.click(await screen.findByRole('button', { name: 'Adopt' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Adopt Aruba controller' });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Adopt' }));
+    const outcome = await screen.findByText(/Adopted, but still not serving/);
+    expect(outcome).toHaveTextContent(NAS_PENDING_REASON_LABEL.NO_POLICY);
+    expect(screen.queryByText(/Adopted and serving/)).toBeNull();
+  });
+
+  it('omits a policy belonging to another site, which the endpoint would refuse', async () => {
+    mockFetch(adoptRoutes(adoptReply()));
+    renderPage();
+    fireEvent.click(await screen.findByRole('button', { name: 'Adopt' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Adopt Aruba controller' });
+    await waitFor(() =>
+      expect(within(dialog).getByRole('option', { name: /Guest default/ })).toBeInTheDocument(),
+    );
+    expect(within(dialog).queryByRole('option', { name: /Branch only/ })).toBeNull();
+  });
+
+  it('shows no Adopt button without nas:adopt, even on an unadopted NAS', async () => {
+    mockFetch(adoptRoutes(adoptReply(), ['nas:read', 'policy:read', 'site:read']));
+    renderPage();
+    const list = await screen.findByLabelText('NAS state');
+    expect(within(list).getByText('Pending')).toBeInTheDocument();
+    expect(within(list).queryByRole('button', { name: 'Adopt' })).toBeNull();
+  });
+
+  it('keeps the dialog open and shows the problem when adopt is refused', async () => {
+    mockFetch([
+      { method: 'GET', path: `${base}/policies`, body: POLICY_PAGE },
+      {
+        method: 'POST',
+        path: `${base}/nas/${NAS1}/adopt`,
+        status: 422,
+        body: {
+          type: 'about:blank',
+          title: 'Validation failed',
+          status: 422,
+          errors: [{ path: 'body.policy_id', message: 'policy is not active' }],
+        },
+      },
+      ...routes(UNADOPTED),
+    ]);
+    renderPage();
+    fireEvent.click(await screen.findByRole('button', { name: 'Adopt' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Adopt Aruba controller' });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Adopt' }));
+    expect(await within(dialog).findByText(/policy is not active/)).toBeInTheDocument();
+    // Nothing claims an outcome: the write did not land.
+    expect(screen.queryByText(/^Adopted/)).toBeNull();
   });
 });

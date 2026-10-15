@@ -180,7 +180,7 @@ function Page() {
             onAdd={() => setWizard(true)}
           />
           <RadiusSecretBox orgId={orgId} nas={o.nas} />
-          <NasStateList rows={o.nas} />
+          <NasStateList orgId={orgId} rows={o.nas} />
           <div className="min-w-0">
             <AccessPointsTable
               orgId={orgId}

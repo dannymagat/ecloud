@@ -213,7 +213,7 @@ export function RadiusSecretBox({ orgId, nas }: { orgId: string; nas: readonly O
           className="min-h-[1rem] text-xs text-subtle lg:order-last lg:col-span-3"
         >
           {secret !== null
-            ? `${copied === 'ok' ? 'Copied to the clipboard (it stays there until you copy something else). ' : copied === 'failed' ? 'Copy failed: select and copy it manually. ' : ''}Hidden again in ${String(left)} s.`
+            ? `${copied === 'ok' ? 'Copied to the clipboard (it stays there until you copy something else). ' : copied === 'failed' ? 'Copy failed: select and copy it manually. ' : ''}Paste it into the RADIUS profile on your controller for ${current.name}; it must match exactly, with no trailing space. Hidden again in ${String(left)} s.`
             : ''}
         </p>
         <div className="flex flex-wrap items-center gap-2 lg:pb-1">

@@ -21,6 +21,7 @@ import {
   type NasState,
 } from '@ecloud/shared/nas-eligibility';
 import { Badge, type Tone } from '../../components/ui';
+import { AdoptNasButton } from './AdoptNasButton';
 import type { OverviewNas } from './data';
 
 /**
@@ -46,7 +47,13 @@ function reasonText(reason: NasPendingReason | null, blockReason: string | null)
   return reason === null ? null : NAS_PENDING_REASON_LABEL[reason];
 }
 
-export function NasStateList({ rows }: { rows: readonly OverviewNas[] }) {
+export function NasStateList({
+  orgId,
+  rows,
+}: {
+  orgId: string;
+  rows: readonly OverviewNas[];
+}) {
   if (rows.length === 0) return null;
   const pending = rows.filter((n) => n.state !== 'active').length;
   // §6 wants "which of my access points are not serving" answerable by glancing. The count in the
@@ -92,6 +99,9 @@ export function NasStateList({ rows }: { rows: readonly OverviewNas[] }) {
                     Policy not checked
                   </Badge>
                 ) : null}
+                {/* §7: the adopt action belongs on the row that needs it. Mounted only for an
+                    unadopted NAS, so an adopted one carries no button to press by mistake. */}
+                {!n.is_adopted ? <AdoptNasButton orgId={orgId} nas={n} /> : null}
               </span>
             </li>
           );

@@ -9,6 +9,9 @@
 import { render, screen } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 import { NasStateList } from './NasStateList';
+
+/** No adopt button mounts in these cases (every fixture is adopted), so no providers are needed. */
+const ORG = '01900000-0000-7000-8000-00000000000a';
 import type { OverviewNas } from './data';
 
 const base: OverviewNas = {
@@ -38,12 +41,12 @@ const row = (over: Partial<OverviewNas> = {}): OverviewNas => ({ ...base, ...ove
 
 describe('NasStateList', () => {
   it('renders nothing when there are no NAS', () => {
-    const { container } = render(<NasStateList rows={[]} />);
+    const { container } = render(<NasStateList orgId={ORG} rows={[]} />);
     expect(container).toBeEmptyDOMElement();
   });
 
   it('shows the state of an ordinary active NAS and no count', () => {
-    render(<NasStateList rows={[row()]} />);
+    render(<NasStateList orgId={ORG} rows={[row()]} />);
     expect(screen.getByText('Active')).toBeInTheDocument();
     expect(screen.queryByText(/not serving new connections/)).not.toBeInTheDocument();
   });
@@ -62,14 +65,14 @@ describe('NasStateList', () => {
   });
 
   it('shows the primary reason for a Pending NAS', () => {
-    render(<NasStateList rows={[row({ state: 'pending', primary_reason: 'NO_POLICY' })]} />);
+    render(<NasStateList orgId={ORG} rows={[row({ state: 'pending', primary_reason: 'NO_POLICY' })]} />);
     expect(screen.getByText('Pending')).toBeInTheDocument();
     expect(screen.getByText(/No applicable policy/)).toBeInTheDocument();
   });
 
   it('prefers the operator block reason over the generic label', () => {
     render(
-      <NasStateList rows={[row({ state: 'blocked', block_reason: 'replaced by AP1832' })]} />,
+      <NasStateList orgId={ORG} rows={[row({ state: 'blocked', block_reason: 'replaced by AP1832' })]} />,
     );
     expect(screen.getByText('Blocked')).toBeInTheDocument();
     expect(screen.getByText(/replaced by AP1832/)).toBeInTheDocument();
@@ -77,7 +80,7 @@ describe('NasStateList', () => {
 
   it('shows the platform-default advisory on an ACTIVE row', () => {
     // The whole reason this list shows every NAS rather than only the Pending ones.
-    render(<NasStateList rows={[row({ advisories: ['ON_PLATFORM_DEFAULT_PORTAL'] })]} />);
+    render(<NasStateList orgId={ORG} rows={[row({ advisories: ['ON_PLATFORM_DEFAULT_PORTAL'] })]} />);
     expect(screen.getByText('Active')).toBeInTheDocument();
     expect(screen.getByText('Default portal')).toBeInTheDocument();
   });
