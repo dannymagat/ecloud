@@ -365,20 +365,20 @@ await describeIntegration('@ecloud/api FreeRADIUS clients renderer (F-P10-07)', 
     function access(secret: string): string {
       const attrs =
         'User-Name = "it-user"\nUser-Password = "it-pass"\nMessage-Authenticator = 0x00\n';
+      // The secret goes in through the environment and a file (`-S`), never as a positional: a
+      // base64url token can start with `-`, which radclient's getopt would read as options
+      // (`invalid option -- 'M'`), a 1-in-64 flake. /dev/shm is a tmpfs even in a read-only
+      // container, and argv stays free of the secret (it is visible in `ps`).
       return docker(
         [
           'exec',
           '-i',
+          '-e',
+          `RADSECRET=${secret}`,
           container,
-          'radclient',
-          '-r',
-          '1',
-          '-t',
-          '2',
-          '-x',
-          `${network.ip}:1812`,
-          'auth',
-          secret,
+          'sh',
+          '-c',
+          `umask 077; printf '%s' "$RADSECRET" > /dev/shm/.radsecret && exec radclient -r 1 -t 2 -x -S /dev/shm/.radsecret ${network.ip}:1812 auth`,
         ],
         attrs,
       ).out;
