@@ -16,6 +16,7 @@ import {
   describeIntegration,
   migrateTestDatabase,
   publishPortalFixtureKysely,
+  PLACEHOLDER_NAS_SECRET_REF,
 } from '@ecloud/testing';
 import { parseMerakiCloudRadiusSettings } from '@ecloud/shared';
 import { generate } from 'otplib';
@@ -560,7 +561,7 @@ await describeIntegration('@ecloud/api multi-vendor Cycle E (Meraki)', () => {
         nas_ip: squatIp,
         adapter_type_key: 'generic-radius-8021x',
         adapter_key: 'generic-radius-8021x',
-        secret_ref: 'enc:placeholder',
+        secret_ref: PLACEHOLDER_NAS_SECRET_REF,
       })
       .execute();
 

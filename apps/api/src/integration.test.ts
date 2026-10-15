@@ -4,7 +4,7 @@
  * Skipped with a message when ECLOUD_TEST_DATABASE_URL is unset / unreachable.
  * Each test builds its own organizations, so the suite never truncates shared tables.
  */
-import { describeIntegration, migrateTestDatabase } from '@ecloud/testing';
+import { describeIntegration, migrateTestDatabase, PLACEHOLDER_NAS_SECRET_REF } from '@ecloud/testing';
 import { newId } from '@ecloud/shared';
 import { generate } from 'otplib';
 import { MemoryKv } from './kv.js';
@@ -550,7 +550,7 @@ await describeIntegration('@ecloud/api against ecloud_test', () => {
         nas_ip: randomIp(),
         adapter_type_key: 'coovachilli-uam',
         adapter_key: 'coovachilli-uam',
-        secret_ref: 'enc:placeholder',
+        secret_ref: PLACEHOLDER_NAS_SECRET_REF,
       })
       .returning('id')
       .executeTakeFirstOrThrow();

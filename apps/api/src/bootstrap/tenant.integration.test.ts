@@ -10,7 +10,12 @@
  */
 import { hashPassword } from '@ecloud/db';
 import { newId } from '@ecloud/shared';
-import { describeIntegration, makeOrganization, migrateTestDatabase } from '@ecloud/testing';
+import {
+  PLACEHOLDER_NAS_SECRET_REF,
+  describeIntegration,
+  makeOrganization,
+  migrateTestDatabase,
+} from '@ecloud/testing';
 import { afterAll, beforeAll, expect, it } from 'vitest';
 import type { AppDeps } from '../context.js';
 import { closeDeps, integrationDeps, unique } from '../test-support/deps.js';
@@ -87,7 +92,7 @@ await describeIntegration('tenant bootstrap', () => {
       .insertInto('nas_clients')
       .values({
         id: liveId, organization_id: org.id, site_id: siteId, name: 'live', nas_identifier: ident, nas_ip: ip,
-        adapter_type_key: 'openwifi-uspot-uam', adapter_key: 'openwifi-uspot-uam', secret_ref: 'secret://test/live', status: 'active',
+        adapter_type_key: 'openwifi-uspot-uam', adapter_key: 'openwifi-uspot-uam', secret_ref: PLACEHOLDER_NAS_SECRET_REF, status: 'active',
       })
       .execute();
     // Newer row: same identifier, soft-deleted, on a different address.
@@ -95,7 +100,7 @@ await describeIntegration('tenant bootstrap', () => {
       .insertInto('nas_clients')
       .values({
         id: deletedId, organization_id: org.id, site_id: siteId, name: 'deleted', nas_identifier: ident, nas_ip: uniqueIp(),
-        adapter_type_key: 'uspot-upstream-uam', adapter_key: 'uspot-upstream-uam', secret_ref: 'secret://test/deleted', status: 'active',
+        adapter_type_key: 'uspot-upstream-uam', adapter_key: 'uspot-upstream-uam', secret_ref: PLACEHOLDER_NAS_SECRET_REF, status: 'active',
         deleted_at: new Date(),
       })
       .execute();

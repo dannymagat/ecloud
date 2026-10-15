@@ -22,6 +22,7 @@ import {
   signUamQuery,
   type UamFlavour,
   type UamRedirectInput,
+  PLACEHOLDER_NAS_SECRET_REF,
 } from '@ecloud/testing';
 import { sql } from 'kysely';
 import { randomBytes } from 'node:crypto';
@@ -103,7 +104,7 @@ await describeIntegration('@ecloud/api captive portal broker (P6-A)', () => {
         adapter_type_key: adapterKey,
         adapter_key: adapterKey,
         deployment_mode: adapterKey === 'coovachilli-uam' ? 'gateway' : 'native',
-        secret_ref: 'enc:placeholder',
+        secret_ref: PLACEHOLDER_NAS_SECRET_REF,
       })
       .returning('id')
       .executeTakeFirstOrThrow();

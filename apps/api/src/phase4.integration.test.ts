@@ -4,7 +4,7 @@
  * Skipped with a message when ECLOUD_TEST_DATABASE_URL is unset / unreachable. Every test builds
  * its own organizations and uses its own in-memory rate-limit store.
  */
-import { describeIntegration, migrateTestDatabase } from '@ecloud/testing';
+import { describeIntegration, migrateTestDatabase, PLACEHOLDER_NAS_SECRET_REF } from '@ecloud/testing';
 import { newId } from '@ecloud/shared';
 import { generate } from 'otplib';
 import request from 'supertest';
@@ -209,7 +209,7 @@ await describeIntegration('@ecloud/api Phase 4 against ecloud_test', () => {
         nas_ip: legacyIp,
         adapter_type_key: 'openwifi-config',
         adapter_key: null,
-        secret_ref: 'enc:placeholder',
+        secret_ref: PLACEHOLDER_NAS_SECRET_REF,
       })
       .execute();
     const legacy = await authorize(

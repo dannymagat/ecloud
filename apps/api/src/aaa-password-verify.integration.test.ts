@@ -10,7 +10,7 @@
  */
 import { createDb, createPool, hashPassword, verifyPassword } from '@ecloud/db';
 import { newId } from '@ecloud/shared';
-import { describeIntegration, getTestAppDatabaseUrl, migrateTestDatabase } from '@ecloud/testing';
+import { describeIntegration, getTestAppDatabaseUrl, migrateTestDatabase, PLACEHOLDER_NAS_SECRET_REF } from '@ecloud/testing';
 import { sql } from 'kysely';
 import { randomBytes } from 'node:crypto';
 import request from 'supertest';
@@ -72,7 +72,7 @@ await describeIntegration('@ecloud/api AAA password verify outside the transacti
         nas_ip: nasIp,
         adapter_type_key: 'openwifi-hostapd-radius',
         adapter_key: 'openwifi-hostapd-radius',
-        secret_ref: 'enc:placeholder',
+        secret_ref: PLACEHOLDER_NAS_SECRET_REF,
       })
       .execute();
     const policy = await p

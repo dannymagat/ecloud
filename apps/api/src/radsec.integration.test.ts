@@ -20,7 +20,7 @@
  * Skipped without the dev stack (ECLOUD_TEST_DATABASE_URL).
  */
 import { randomBytes } from 'node:crypto';
-import { describeIntegration, migrateTestDatabase } from '@ecloud/testing';
+import { describeIntegration, migrateTestDatabase, PLACEHOLDER_NAS_SECRET_REF } from '@ecloud/testing';
 import { afterAll, beforeAll, expect, it } from 'vitest';
 import type { AppDeps } from './context.js';
 import { resolveNas } from './internal/aaa.js';
@@ -67,7 +67,7 @@ async function makeNas(
       nas_ip: ip,
       adapter_type_key: 'generic-radius-8021x',
       adapter_key: 'generic-radius-8021x',
-      secret_ref: 'enc:placeholder',
+      secret_ref: PLACEHOLDER_NAS_SECRET_REF,
       radsec_enabled: options.radsec,
       radsec_cert_serial: options.radsec ? serial : null,
       ...(options.active === false ? { status: 'disabled' as const } : {}),

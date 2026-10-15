@@ -6,6 +6,7 @@ export * from './aaa-stub.js';
 export * from './db-urls.js';
 export * from './probes.js';
 export * from './portal-publish.js';
+export * from './secret-refs.js';
 export * from './two-tenants.js';
 export * from './simulators/index.js';
 export * from './vendor-mock.js';

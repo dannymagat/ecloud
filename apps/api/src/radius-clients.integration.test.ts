@@ -13,7 +13,7 @@
  * secret gets no reply at all. The dev stack is never touched.
  */
 import { newId } from '@ecloud/shared';
-import { describeIntegration, migrateTestDatabase } from '@ecloud/testing';
+import { describeIntegration, migrateTestDatabase, PLACEHOLDER_NAS_SECRET_REF } from '@ecloud/testing';
 import { spawnSync } from 'node:child_process';
 import { randomBytes, randomInt } from 'node:crypto';
 import { chmod, mkdtemp, rm, stat } from 'node:fs/promises';
@@ -67,6 +67,9 @@ const CONTAINER_ENV = [
   'RADIUS_SQL_USER=ecloud_radius',
   'RADIUS_SQL_PASSWORD=ecloud_test_placeholder',
   'ECLOUD_INTERNAL_URL=http://127.0.0.1:1',
+  // 2599658 (2026-10-12) made the entrypoint refuse a cleartext internal URL in rendered mode; this
+  // container never reaches an api (port 1 is closed), so the acknowledgement is test-only.
+  'ECLOUD_INTERNAL_CLEARTEXT_ACK=1',
   'INTERNAL_API_TOKEN=ecloud_test_internal_placeholder',
   // Cycle E review F4: these containers have no database; skip the migration-032 schema check.
   'RADIUS_SCHEMA_CHECK=0',
@@ -287,7 +290,7 @@ await describeIntegration('@ecloud/api FreeRADIUS clients renderer (F-P10-07)', 
             nas_ip: ip,
             adapter_type_key: 'uspot-upstream-uam',
             adapter_key: 'uspot-upstream-uam',
-            secret_ref: 'enc:placeholder',
+            secret_ref: PLACEHOLDER_NAS_SECRET_REF,
           })
           .execute(),
         ip,
@@ -304,7 +307,7 @@ await describeIntegration('@ecloud/api FreeRADIUS clients renderer (F-P10-07)', 
         nas_ip: `127.${String(randomInt(1, 250))}.0.1`,
         adapter_type_key: 'uspot-upstream-uam',
         adapter_key: 'uspot-upstream-uam',
-        secret_ref: 'enc:placeholder',
+        secret_ref: PLACEHOLDER_NAS_SECRET_REF,
         status: 'disabled',
       })
       .execute();

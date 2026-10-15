@@ -7,7 +7,7 @@
  * not wait for it.
  */
 import { newId } from '@ecloud/shared';
-import { describeIntegration, migrateTestDatabase } from '@ecloud/testing';
+import { describeIntegration, migrateTestDatabase, PLACEHOLDER_NAS_SECRET_REF } from '@ecloud/testing';
 import { sql } from 'kysely';
 import { randomBytes } from 'node:crypto';
 import request from 'supertest';
@@ -46,7 +46,7 @@ await describeIntegration('@ecloud/api voucher authorize concurrency (P10-B)', (
         nas_ip: nasIp,
         adapter_type_key: 'openwifi-hostapd-radius',
         adapter_key: 'openwifi-hostapd-radius',
-        secret_ref: 'enc:placeholder',
+        secret_ref: PLACEHOLDER_NAS_SECRET_REF,
       })
       .execute();
     const policy = await p

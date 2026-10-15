@@ -15,7 +15,7 @@
 import { randomInt } from 'node:crypto';
 import { newId } from '@ecloud/shared';
 import { withTenant } from '@ecloud/db';
-import { describeIntegration, migrateTestDatabase } from '@ecloud/testing';
+import { describeIntegration, migrateTestDatabase, PLACEHOLDER_NAS_SECRET_REF } from '@ecloud/testing';
 import { afterAll, beforeAll, expect, it } from 'vitest';
 import type { AppDeps } from './context.js';
 import { createLogger } from '@ecloud/shared';
@@ -209,7 +209,7 @@ await describeIntegration('@ecloud/api platform-default portal (migration 041)',
         adapter_type_key: 'mikrotik-hotspot',
         adapter_key: 'mikrotik-hotspot',
         deployment_mode: 'gateway',
-        secret_ref: 'enc:placeholder',
+        secret_ref: PLACEHOLDER_NAS_SECRET_REF,
         hotspot_address: '10.5.50.1',
       })
       .execute();

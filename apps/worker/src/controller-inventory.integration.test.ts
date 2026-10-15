@@ -18,6 +18,7 @@ import {
   startMockController,
   testPki,
   type MockController,
+  PLACEHOLDER_NAS_SECRET_REF,
 } from '@ecloud/testing';
 import { VendorHttpClient, deriveVendorApiKey, sealSecret } from '@ecloud/vendor-api';
 import { afterAll, beforeAll, expect, it } from 'vitest';
@@ -79,7 +80,7 @@ await describeIntegration('@ecloud/worker controllers.inventory (Cycle D)', () =
         adapter_type_key: 'unifi-external-portal',
         adapter_key: 'unifi-external-portal',
         controller_id: controller,
-        secret_ref: 'enc:placeholder',
+        secret_ref: PLACEHOLDER_NAS_SECRET_REF,
       })
       .execute();
   }

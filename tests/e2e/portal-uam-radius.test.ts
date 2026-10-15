@@ -36,6 +36,7 @@ import {
   parseDeviceLogon,
   probeIntegration,
   publishPortalFixtureKysely,
+  PLACEHOLDER_NAS_SECRET_REF,
 } from '@ecloud/testing';
 import { sql } from 'kysely';
 import { randomBytes } from 'node:crypto';
@@ -168,7 +169,7 @@ suite(title, () => {
         nas_ip: containerIp,
         adapter_type_key: 'openwifi-uspot-uam',
         adapter_key: 'openwifi-uspot-uam',
-        secret_ref: 'enc:placeholder',
+        secret_ref: PLACEHOLDER_NAS_SECRET_REF,
       })
       .returning('id')
       .executeTakeFirstOrThrow();

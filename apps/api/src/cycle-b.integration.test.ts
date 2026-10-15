@@ -18,6 +18,7 @@ import {
   getTestRedisUrl,
   migrateTestDatabase,
   publishPortalFixtureKysely,
+  PLACEHOLDER_NAS_SECRET_REF,
 } from '@ecloud/testing';
 import { generate } from 'otplib';
 import { createHash, randomBytes } from 'node:crypto';
@@ -103,7 +104,7 @@ await describeIntegration('@ecloud/api multi-vendor Cycle B (MikroTik / Teltonik
         adapter_type_key: 'mikrotik-hotspot',
         adapter_key: 'mikrotik-hotspot',
         deployment_mode: 'gateway',
-        secret_ref: 'enc:placeholder',
+        secret_ref: PLACEHOLDER_NAS_SECRET_REF,
         device_test_attributes: opts.lab,
         hotspot_address: '10.5.50.1',
       })
