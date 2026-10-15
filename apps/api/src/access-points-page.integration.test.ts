@@ -16,7 +16,8 @@ import { generate } from 'otplib';
 import request from 'supertest';
 import { afterAll, beforeAll, expect, it } from 'vitest';
 import { createApp } from './app.js';
-import { Envelope, NAS_SECRET_PURPOSE, openNasSecret } from './crypto.js';
+import { openNasSecret } from './crypto.js';
+import type { PolicyStatus } from '@ecloud/db';
 import type { AppDeps } from './context.js';
 import { MemoryKv } from './kv.js';
 import {
@@ -170,7 +171,6 @@ await describeIntegration('@ecloud/api Access Points page (D-045)', () => {
   it('rotation raises secret_version, seals v2 against it, and retires the old ref (task 10)', async () => {
     const a = await orgAdmin();
     const nas = await createNas(a.agent, a.orgId, a.siteId);
-    const envelope = new Envelope(deps.config.dataEncryptionKey, NAS_SECRET_PURPOSE);
     const read = async () =>
       deps.dbPlatform
         .selectFrom('nas_clients')
@@ -184,7 +184,7 @@ await describeIntegration('@ecloud/api Access Points page (D-045)', () => {
     expect(before.secret_ref).toMatch(/^enc:v2\./);
     expect(Number(before.secret_version)).toBe(1);
     expect(
-      openNasSecret(envelope, String(before.secret_ref), {
+      openNasSecret(deps.config.dataEncryptionKey, String(before.secret_ref), {
         organizationId: a.orgId,
         nasId: nas.id,
         secretVersion: 1,
@@ -202,7 +202,7 @@ await describeIntegration('@ecloud/api Access Points page (D-045)', () => {
     const after = await read();
     expect(Number(after.secret_version)).toBe(2);
     expect(
-      openNasSecret(envelope, String(after.secret_ref), {
+      openNasSecret(deps.config.dataEncryptionKey, String(after.secret_ref), {
         organizationId: a.orgId,
         nasId: nas.id,
         secretVersion: 2,
@@ -213,7 +213,7 @@ await describeIntegration('@ecloud/api Access Points page (D-045)', () => {
     // very row, so AAD over identity alone would still open it — replaying it would restore the
     // retired secret. It is the version in the AAD that refuses.
     expect(() =>
-      openNasSecret(envelope, String(before.secret_ref), {
+      openNasSecret(deps.config.dataEncryptionKey, String(before.secret_ref), {
         organizationId: a.orgId,
         nasId: nas.id,
         secretVersion: 2,
@@ -589,5 +589,159 @@ await describeIntegration('@ecloud/api Access Points page (D-045)', () => {
       .send({ adapter_key: 'generic-radius-8021x' });
     expect(patch.status, JSON.stringify(patch.body)).toBe(200);
     expect(patch.body.vendor_key).toBeNull();
+  });
+
+  // ---------------------------------------------------------------------------------------------
+  // Adopt and assign a policy (NAS_PENDING_ADOPTION_REQUIREMENTS.md §7)
+  // ---------------------------------------------------------------------------------------------
+
+  /**
+   * A site-scoped policy. `policies.status` is ('draft', 'active', 'retired') — there is no
+   * 'disabled', so `retired` is the not-usable state the adopt endpoint has to refuse.
+   */
+  async function sitePolicy(
+    orgId: string,
+    siteId: string,
+    status: PolicyStatus = 'active',
+  ): Promise<string> {
+    const row = await deps.dbPlatform
+      .insertInto('policies')
+      .values({
+        organization_id: orgId,
+        site_id: siteId,
+        // The full id, not a prefix: `newId()` is a uuidv7, so its leading characters are the
+        // timestamp and two policies created in the same millisecond collide on
+        // `uq_policies_org_name`.
+        name: `p ${newId()}`,
+        scope_type: 'site',
+        status,
+        download_rate_kbps: 10_000,
+        upload_rate_kbps: 10_000,
+      })
+      .returning('id')
+      .executeTakeFirstOrThrow();
+    return row.id;
+  }
+
+  const adoptUrl = (orgId: string, id: string) => `/api/v1/orgs/${orgId}/nas/${id}/adopt`;
+
+  // LOGIN_LIMITS.perIp is 30 per 300 s and this file already spends most of it, so these tests
+  // share two administrators rather than minting one each. The first test below still takes its
+  // own organization, because it asserts `policy_source: 'missing'` and therefore needs a site
+  // no other test has given a policy to.
+  let shared: Awaited<ReturnType<typeof orgAdmin>> | null = null;
+  let other: Awaited<ReturnType<typeof orgAdmin>> | null = null;
+  const sharedAdmin = async () => (shared ??= await orgAdmin());
+  const otherAdmin = async () => (other ??= await orgAdmin());
+
+  it('adopts a NAS and reports Active only once a policy actually resolves', async () => {
+    const a = await orgAdmin();
+    const nas = await createNas(a.agent, a.orgId, a.siteId);
+    // A NAS created through /nas is adopted by default (migration 046), so the interesting case
+    // is the one §7 is about: adoption has to confirm a policy, not just flip a flag.
+    await deps.dbPlatform
+      .updateTable('nas_clients')
+      .set({ is_adopted: false })
+      .where('id', '=', nas.id)
+      .execute();
+
+    // No policy anywhere: adoption succeeds as an administrative act but must NOT claim Active.
+    // §7 step 9: "do not report Active just because a database update succeeded."
+    const first = await a.agent.post(adoptUrl(a.orgId, nas.id)).set(BROWSER).send({});
+    expect(first.status, JSON.stringify(first.body)).toBe(200);
+    expect(first.body.is_adopted).toBe(true);
+    expect(first.body.state).toBe('pending');
+    expect(first.body.pending_reasons).toEqual(['NO_POLICY']);
+    expect(first.body.policy_source).toBe('missing');
+    expect(first.body.assigned_site_id).toBeNull();
+
+    // Give the site a policy and adopt again: now it is genuinely Active.
+    const policyId = await sitePolicy(a.orgId, a.siteId);
+    const second = await a.agent
+      .post(adoptUrl(a.orgId, nas.id))
+      .set(BROWSER)
+      .send({ policy_id: policyId });
+    expect(second.status, JSON.stringify(second.body)).toBe(200);
+    expect(second.body.state).toBe('active');
+    expect(second.body.pending_reasons).toEqual([]);
+    expect(second.body.policy_source).toBe('assigned');
+    // The response names the site because the assignment is site-scoped and therefore affects
+    // every NAS there, not only the one being adopted.
+    expect(second.body.assigned_site_id).toBe(a.siteId);
+  });
+
+  it('is idempotent: adopting twice with the same policy creates one assignment', async () => {
+    const a = await sharedAdmin();
+    const nas = await createNas(a.agent, a.orgId, a.siteId);
+    const policyId = await sitePolicy(a.orgId, a.siteId);
+
+    for (const _ of [1, 2]) {
+      const res = await a.agent
+        .post(adoptUrl(a.orgId, nas.id))
+        .set(BROWSER)
+        .send({ policy_id: policyId });
+      expect(res.status, JSON.stringify(res.body)).toBe(200);
+      expect(res.body.state).toBe('active');
+    }
+    // Duplicates would then race on priority and make the effective policy depend on insert
+    // order, so §7's idempotence requirement is about correctness and not tidiness.
+    const assignments = await deps.dbPlatform
+      .selectFrom('policy_assignments')
+      .select(['id'])
+      .where('policy_id', '=', policyId)
+      .where('target_type', '=', 'site')
+      .where('site_id', '=', a.siteId)
+      .execute();
+    expect(assignments).toHaveLength(1);
+  });
+
+  it('refuses a disabled policy, a policy from another site, and an unknown one', async () => {
+    const a = await sharedAdmin();
+    const b = await otherAdmin();
+    const nas = await createNas(a.agent, a.orgId, a.siteId);
+
+    const retired = await sitePolicy(a.orgId, a.siteId, 'retired');
+    const bad = await a.agent
+      .post(adoptUrl(a.orgId, nas.id))
+      .set(BROWSER)
+      .send({ policy_id: retired });
+    // A retired policy resolves to nothing, so adopting against it would produce a NAS that is
+    // adopted and still cannot serve anybody.
+    expect(bad.status, JSON.stringify(bad.body)).toBe(400);
+
+    const otherSite = await sitePolicy(b.orgId, b.siteId);
+    const crossed = await a.agent
+      .post(adoptUrl(a.orgId, nas.id))
+      .set(BROWSER)
+      .send({ policy_id: otherSite });
+    // Cross-tenant: not found rather than forbidden, so the endpoint does not confirm the id
+    // exists in another organization.
+    expect([400, 404]).toContain(crossed.status);
+
+    const missing = await a.agent
+      .post(adoptUrl(a.orgId, nas.id))
+      .set(BROWSER)
+      .send({ policy_id: newId() });
+    expect(missing.status).toBe(404);
+  });
+
+  it('refuses when the caller names a different site than the NAS has', async () => {
+    const a = await sharedAdmin();
+    const nas = await createNas(a.agent, a.orgId, a.siteId);
+    const res = await a.agent
+      .post(adoptUrl(a.orgId, nas.id))
+      .set(BROWSER)
+      .send({ expect_site_id: newId() });
+    // §7 step 2: a caller acting on a stale view of ownership is refused, not silently adopted
+    // into whichever site the row actually holds.
+    expect(res.status, JSON.stringify(res.body)).toBe(400);
+  });
+
+  it('refuses a NAS of another organization as not found', async () => {
+    const a = await sharedAdmin();
+    const b = await otherAdmin();
+    const nas = await createNas(b.agent, b.orgId, b.siteId);
+    const res = await a.agent.post(adoptUrl(a.orgId, nas.id)).set(BROWSER).send({});
+    expect(res.status).toBe(404);
   });
 });

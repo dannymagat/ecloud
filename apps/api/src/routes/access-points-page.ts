@@ -32,6 +32,7 @@ import {
   NotFoundError,
   ValidationError,
   nasEligibility,
+  newId,
 } from '@ecloud/shared';
 import { sql } from 'kysely';
 import { z } from 'zod';
@@ -691,5 +692,200 @@ export function accessPointsPageRoutes(deps: AppDeps): AnyRouteSpec[] {
     },
   });
 
-  return [overview, reveal, script, loginHtml];
+  // -------------------------------------------------------------------------------------------
+  // Adopt and assign a policy (NAS_PENDING_ADOPTION_REQUIREMENTS.md §7)
+  // -------------------------------------------------------------------------------------------
+
+  const adopt = defineRoute({
+    method: 'post',
+    path: '/api/v1/orgs/:orgId/nas/:id/adopt',
+    summary: 'Adopt a NAS and confirm a policy resolves for it (§7)',
+    // `policy_id` is OPTIONAL and, when given, creates a SITE-SCOPED assignment. That is the
+    // only route by which a policy reaches a NAS: `policy_assignments.target_type` has no NAS
+    // target, so the assignment applies to EVERY NAS at that site rather than to this one. The
+    // response names the affected site. Omitting it adopts a NAS whose site already has a
+    // policy, which is the common case and changes nothing for its neighbours.
+    //
+    // Idempotent: adopting an adopted NAS re-checks eligibility and returns 200 without a second
+    // assignment. §7 step 9 holds by construction — `state` comes from the derivation, so this
+    // endpoint cannot report Active merely because a database write succeeded.
+    tags: ['access-points'],
+    auth: 'principal',
+    permission: 'nas:adopt',
+    scope: 'any-site',
+    params: OrgIdParams,
+    body: z.strictObject({
+      /** Site-scoped assignment to create; omit when the site already has a policy. */
+      policy_id: z.uuid().optional(),
+      /** §7 step 2: the caller's view of the site, refused if it disagrees with the row. */
+      expect_site_id: z.uuid().optional(),
+    }),
+    idempotency: 'optional',
+    responses: {
+      200: {
+        description: 'Adopted; `state` is the derived eligibility, not an assertion of success',
+        schema: z.object({
+          id: z.uuid(),
+          is_adopted: z.boolean(),
+          state: z.enum(NAS_STATES),
+          pending_reasons: z.array(z.enum(NAS_PENDING_REASONS)),
+          primary_reason: z.enum(NAS_PENDING_REASONS).nullable(),
+          advisories: z.array(z.enum(NAS_ADVISORIES)),
+          policy_source: z.enum(['assigned', 'platform_default', 'missing']),
+          /** Set when this call created a site assignment; names the site it affects. */
+          assigned_site_id: z.uuid().nullable(),
+        }),
+      },
+      ...problemResponses,
+    },
+    handler: async ({ params, body, ctx }) => {
+      const at = now();
+      const result = await inTenant(deps, params.orgId, async (trx) => {
+        // forUpdate: two administrators adopting the same NAS must not both create an
+        // assignment, and §7 requires concurrent adoption not to produce inconsistent state.
+        const nas = await loose(trx)
+          .selectFrom('nas_clients')
+          .select(['id', 'organization_id', 'site_id', 'status', 'is_adopted', 'adapter_key'])
+          .where('id', '=', params.id)
+          .where('deleted_at', 'is', null)
+          .forUpdate()
+          .executeTakeFirst();
+        if (nas === undefined) throw new NotFoundError('nas_client', params.id);
+        const siteId = nas.site_id as string;
+        requireOnSite(ctx, 'nas:adopt', params.orgId, siteId, 'nas_client', 'nas:read');
+        // §7 step 2: a caller acting on a stale view of which site this NAS belongs to is
+        // refused rather than silently adopting it into the site it actually has.
+        if (body.expect_site_id !== undefined && body.expect_site_id !== siteId) {
+          throw new ValidationError([
+            { path: 'body.expect_site_id', message: 'this NAS belongs to a different site' },
+          ]);
+        }
+
+        let assignedSiteId: string | null = null;
+        if (body.policy_id !== undefined) {
+          const policy = await loose(trx)
+            .selectFrom('policies')
+            .select(['id', 'status', 'site_id', 'scope_type'])
+            .where('id', '=', body.policy_id)
+            .where('deleted_at', 'is', null)
+            .executeTakeFirst();
+          if (policy === undefined) throw new NotFoundError('policy', body.policy_id);
+          // §7 step 5 "an ELIGIBLE policy": a disabled policy resolves to nothing, so adopting
+          // against one would produce a NAS that is adopted and still cannot serve.
+          if (policy.status !== 'active') {
+            throw new ValidationError([
+              { path: 'body.policy_id', message: 'policy is not active' },
+            ]);
+          }
+          // A site-scoped policy belonging to another site cannot apply here.
+          if (policy.site_id !== null && policy.site_id !== siteId) {
+            throw new ValidationError([
+              { path: 'body.policy_id', message: 'policy belongs to a different site' },
+            ]);
+          }
+          // Idempotence: an identical live site assignment already covers this, so adopting
+          // twice does not stack duplicates that would then race on priority.
+          const existing = await loose(trx)
+            .selectFrom('policy_assignments')
+            .select(['id'])
+            .where('organization_id', '=', params.orgId)
+            .where('policy_id', '=', body.policy_id)
+            .where('target_type', '=', 'site')
+            .where('site_id', '=', siteId)
+            .where((eb) =>
+              eb.or([eb('effective_until', 'is', null), eb('effective_until', '>', at)]),
+            )
+            .executeTakeFirst();
+          if (existing === undefined) {
+            await loose(trx)
+              .insertInto('policy_assignments')
+              .values({
+                id: newId(),
+                organization_id: params.orgId,
+                policy_id: body.policy_id,
+                target_type: 'site',
+                site_id: siteId,
+                // Explicit, and it has to be: `policyAvailabilityForSites` filters
+                // `effective_from <= now` against the `at` captured before this transaction
+                // opened, while the column default is the database's own `now()`, which is
+                // later. Letting it default made the assignment this call had just created
+                // invisible to the very check that decides whether the NAS is Active — adopt
+                // with a policy reported Pending every time.
+                effective_from: at,
+                created_by:
+                  ctx.principal?.kind === 'admin' && ctx.principal.impersonation === null
+                    ? ctx.principal.administratorId
+                    : null,
+                note: 'created by NAS adoption',
+              })
+              .execute();
+          }
+          assignedSiteId = siteId;
+        }
+
+        // §7 step 5 again, for the omitted-policy case, and step 9 for both: the policy must
+        // actually resolve. Read AFTER any assignment above so this call sees its own write.
+        const availability =
+          (await policyAvailabilityForSites(trx, [siteId], at)).get(siteId) ?? 'missing';
+
+        const adopted = await loose(trx)
+          .updateTable('nas_clients')
+          .set({ is_adopted: true })
+          .where('id', '=', params.id)
+          .returning(['id', 'status', 'is_adopted'])
+          .executeTakeFirstOrThrow();
+
+        const fallbackPortal = await trx
+          .selectFrom('captive_portals')
+          .select(['id'])
+          .where('organization_id', '=', params.orgId)
+          .where('site_id', '=', siteId)
+          .where('is_platform_default', '=', true)
+          .where('status', '=', 'active')
+          .executeTakeFirst();
+
+        const eligibility = nasEligibility({
+          adoptionComplete: adopted.is_adopted as boolean,
+          status: adopted.status as string,
+          deleted: false,
+          ownershipValid: true,
+          identifierConflict: false,
+          policy: availability,
+          onPlatformDefaultPortal: fallbackPortal !== undefined,
+        });
+
+        await writeAudit(trx, ctx, {
+          organizationId: params.orgId,
+          action: 'nas:adopt',
+          targetType: 'nas_client',
+          targetId: params.id,
+          before: { is_adopted: nas.is_adopted },
+          after: {
+            is_adopted: true,
+            state: eligibility.state,
+            policy_source: availability,
+            assigned_site_id: assignedSiteId,
+          },
+        });
+
+        return { adopted, eligibility, availability, assignedSiteId };
+      });
+
+      return {
+        status: 200 as const,
+        body: {
+          id: result.adopted.id as string,
+          is_adopted: result.adopted.is_adopted as boolean,
+          state: result.eligibility.state,
+          pending_reasons: result.eligibility.reasons,
+          primary_reason: result.eligibility.primaryReason,
+          advisories: result.eligibility.advisories,
+          policy_source: result.availability,
+          assigned_site_id: result.assignedSiteId,
+        },
+      };
+    },
+  });
+
+  return [overview, reveal, script, loginHtml, adopt];
 }
