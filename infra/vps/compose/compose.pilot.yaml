@@ -268,12 +268,18 @@ services:
       # api refuses it in production unless INTERNAL_CLEARTEXT_ACK=1 or the listener is TLS.
       ECLOUD_INTERNAL_URL: ${ECLOUD_INTERNAL_URL:-http://api:3001}
       INTERNAL_SECRET_TOKEN_FILE: /run/secrets/internal_secret_token
+      # The worker has NO reader for the shared INTERNAL_API_TOKEN (it uses the secret token
+      # above, D-061), so it is not given one: holding a credential it cannot use only means a
+      # compromised worker yields the token FreeRADIUS and the portal authenticate with. Emptying
+      # the *_FILE that the app-env anchor sets for every service is required as well as dropping
+      # the mount — resolveSecretFiles treats an unreadable path as a hard configuration error,
+      # and an empty value as "not set".
+      INTERNAL_API_TOKEN_FILE: ''
       NODE_OPTIONS: --max-old-space-size=224
     secrets:
       - database_url
       - database_url_platform
       - redis_url
-      - internal_api_token
       - internal_secret_token
     # no `ports:`; /healthz stays on 127.0.0.1 inside the container (image default)
     deploy:

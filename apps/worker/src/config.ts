@@ -98,7 +98,10 @@ export interface WorkerConfig {
 export function loadWorkerConfig(
   env: Record<string, string | undefined> = process.env,
 ): WorkerConfig {
-  const app = loadConfig(env);
+  // The worker has no reader for INTERNAL_API_TOKEN: it authenticates to the api's NAS-secret
+  // endpoint with INTERNAL_SECRET_TOKEN (D-061). Declaring that here is what lets compose stop
+  // giving it a credential it cannot use.
+  const app = loadConfig(env, { requireInternalApiToken: false });
   const parsed = workerEnvSchema.safeParse(resolveSecretFiles(env));
   if (!parsed.success) {
     throw new ConfigError(

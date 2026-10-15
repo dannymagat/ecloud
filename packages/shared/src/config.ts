@@ -246,7 +246,28 @@ export function resolveSecretFiles(
  * variables are resolved first (`resolveSecretFiles`).
  * Never logs: callers that want to print the effective config must use `redactConfig()`.
  */
-export function loadConfig(env: Record<string, string | undefined> = process.env): AppConfig {
+export interface LoadConfigOptions {
+  /**
+   * `false` for a process that never reads `INTERNAL_API_TOKEN`, so it is neither required nor
+   * length-checked in production and the process does not have to be given a credential it
+   * cannot use.
+   *
+   * The worker is the case this exists for. It authenticates to the api's NAS-secret endpoint
+   * with `INTERNAL_SECRET_TOKEN` (D-061) and has no reader for the shared token at all, yet the
+   * shared loader refused to start without one — so it was mounting both credentials and could
+   * only use one. Holding a credential it cannot read is pure blast radius: compromising the
+   * worker yielded the token FreeRADIUS and the portal authenticate with.
+   *
+   * Defaults to required, so every existing caller is unchanged.
+   */
+  readonly requireInternalApiToken?: boolean;
+}
+
+export function loadConfig(
+  env: Record<string, string | undefined> = process.env,
+  options: LoadConfigOptions = {},
+): AppConfig {
+  const requireInternalApiToken = options.requireInternalApiToken !== false;
   const parsed = envSchema.safeParse(resolveSecretFiles(env));
   if (!parsed.success) {
     throw new ConfigError(
@@ -259,11 +280,14 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
 
   if (isProduction) {
     for (const key of Object.keys(DEV_DEFAULTS) as (keyof typeof DEV_DEFAULTS)[]) {
+      // A process that declares no use of the shared token keeps the dev default harmlessly:
+      // it never reads the value, so refusing it would only force a pointless mount.
+      if (!requireInternalApiToken && key === 'INTERNAL_API_TOKEN') continue;
       if (raw[key] === DEV_DEFAULTS[key]) {
         problems.push(`${key}: dev default is not allowed when NODE_ENV=production`);
       }
     }
-    if (raw.INTERNAL_API_TOKEN.length < 32) {
+    if (requireInternalApiToken && raw.INTERNAL_API_TOKEN.length < 32) {
       problems.push('INTERNAL_API_TOKEN: must be at least 32 characters when NODE_ENV=production');
     }
   }
