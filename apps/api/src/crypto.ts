@@ -133,8 +133,16 @@ export class Envelope {
   }
 
   decryptBound(sealed: string, binding: SealBinding): string {
-    const [version, iv, ciphertext, tag] = sealed.split('.');
-    if (version !== ENVELOPE_VERSION_V2 || !iv || ciphertext === undefined || !tag) {
+    const parts = sealed.split('.');
+    const [version, iv, ciphertext, tag] = parts;
+    // `parts.length !== 4` rejects a trailing segment. Destructuring four and discarding the rest
+    // accepted `v2.<iv>.<ct>.<tag>.anything`, because the extra bytes sit OUTSIDE the GCM
+    // authentication — so two distinct `secret_ref` strings opened to the same plaintext and the
+    // format was non-canonical. Not exploitable by itself (refs are written by this code, and an
+    // attacker who can append to the column already has write access), but it breaks any equality,
+    // dedupe or "is this already v2?" check, which is precisely what the re-seal is built from.
+    // Found by EZECLOUD1 reviewing the v1/v2 fallback, 2026-10-15.
+    if (parts.length !== 4 || version !== ENVELOPE_VERSION_V2 || !iv || ciphertext === undefined || !tag) {
       throw new Error('unsupported envelope format');
     }
     const decipher = createDecipheriv('aes-256-gcm', this.key, Buffer.from(iv, 'base64url'));
@@ -147,8 +155,12 @@ export class Envelope {
   }
 
   decrypt(sealed: string): string {
-    const [version, iv, ciphertext, tag] = sealed.split('.');
-    if (version !== ENVELOPE_VERSION || !iv || ciphertext === undefined || !tag) {
+    const parts = sealed.split('.');
+    const [version, iv, ciphertext, tag] = parts;
+    // Canonical length, as in decryptBound above. The v1 path matters MORE for the re-seal: it is
+    // the format the migration reads, and `X` and `X.junk` holding one plaintext would make a
+    // "every row is v2 now" check lie.
+    if (parts.length !== 4 || version !== ENVELOPE_VERSION || !iv || ciphertext === undefined || !tag) {
       throw new Error('unsupported envelope format');
     }
     const decipher = createDecipheriv('aes-256-gcm', this.key, Buffer.from(iv, 'base64url'));

@@ -303,6 +303,28 @@ export function openUamSecret(
       },
     );
   } catch {
+    // FAILS CLOSED, but says so. Previously an unopenable secret and an absent one both became
+    // `null`, and first-party.ts:523 then refuses the redirect with
+    // `'NAS has no UAM secret; unsigned redirects are refused (SECURITY §5.2)'`. That detail is
+    // true of the absent case and MISLEADING of this one: during the 11:05Z-11:40Z label outage
+    // every portal login would have reported a missing UAM secret while the row held one, sending
+    // whoever investigated after a configuration gap instead of a key-derivation bug. A v2 AAD
+    // mismatch presents identically. So the refusal still happens — `requireSecret` is typed as
+    // the literal `true`, so no adapter can skip it — but the cause is now in the log.
+    //
+    // Nothing secret is logged: not the ref, not the ciphertext, not the plaintext. The envelope
+    // version is included because it is the single most useful fact for telling a label problem
+    // from a binding problem. Raised by EZECLOUD1 tracing the outage through to the portal reply.
+    deps.logger.warn(
+      {
+        event: 'uam_secret_unopenable',
+        portalId: binding.portalId,
+        organizationId: binding.organizationId,
+        secretVersion: binding.secretVersion,
+        envelopeVersion: ref.startsWith(`${SECRET_REF_PREFIX}v1.`) ? 'v1' : 'v2',
+      },
+      'uam_secret_ref is present but could not be opened; the portal will refuse as if unset',
+    );
     return null;
   }
 }

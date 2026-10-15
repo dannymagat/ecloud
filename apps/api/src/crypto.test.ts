@@ -133,6 +133,30 @@ describe('v2 bound envelope', () => {
     ).toThrow();
   });
 
+  it('rejects a ref with a trailing segment, in both envelope versions', () => {
+    // The format must be canonical, or two distinct strings open to one plaintext: the trailing
+    // bytes are outside the GCM authentication, so the tag cannot notice them. Harmless on its
+    // own — an attacker who can append to secret_ref already has write access — but it would make
+    // the re-seal's "is this row v2 yet?" and any dedupe silently wrong. Raised in review.
+    const v2 = sealBoundSecretRef(nasEnvelope(), SECRET, nasAt(ROW_A));
+    expect(() => openBoundSecretRef(nasEnvelope(), `${v2}.junk`, nasAt(ROW_A))).toThrow(
+      /unsupported envelope format/,
+    );
+    const v1 = sealSecretRef(new Envelope(KEY, 'ecloud:nas:secret:v1'), SECRET);
+    expect(() =>
+      openNasSecret(KEY, `${v1}.junk`, {
+        organizationId: ORG_A,
+        nasId: ROW_A,
+        secretVersion: 1,
+      }),
+    ).toThrow(/unsupported envelope format/);
+    // The canonical forms still open, so this is a tightening and not a format change.
+    expect(openBoundSecretRef(nasEnvelope(), v2, nasAt(ROW_A))).toBe(SECRET);
+    expect(
+      openNasSecret(KEY, v1, { organizationId: ORG_A, nasId: ROW_A, secretVersion: 1 }),
+    ).toBe(SECRET);
+  });
+
   it('keeps the NAS and UAM purpose labels distinct (§7.6)', () => {
     // Reads like a tautology and is the single test that would have caught S-1: the entire
     // defect was two differently-named constants holding the same string.
@@ -200,7 +224,10 @@ describe('v2 bound envelope', () => {
     //
     // The old label is the NAS one, written out literally, because that collision IS finding S-1:
     // the two secrets were sealed under one string.
-    const deps = { config: { dataEncryptionKey: KEY } } as unknown as AppDeps;
+    const deps = {
+      config: { dataEncryptionKey: KEY },
+      logger: { warn: () => {} },
+    } as unknown as AppDeps;
     const sealedByOldCode = sealSecretRef(new Envelope(KEY, 'ecloud:nas:secret:v1'), SECRET);
     const binding = { organizationId: ORG_A, portalId: ROW_A, secretVersion: 1 };
     expect(openUamSecret(deps, sealedByOldCode, binding)).toBe(SECRET);
@@ -215,9 +242,24 @@ describe('v2 bound envelope', () => {
     expect(openUamSecret(deps, current, binding)).toBe(SECRET);
 
     // And the reader still returns null rather than throwing for an unopenable value, which the
-    // portal path depends on.
-    expect(openUamSecret(deps, 'enc:v1.not-a-real-ciphertext', binding)).toBeNull();
-    expect(openUamSecret(deps, null, binding)).toBeNull();
+    // portal path depends on — but it now LOGS the difference, because "no UAM secret" and
+    // "secret present and unopenable" sent the 11:05Z investigation in the wrong direction.
+    const warnings: unknown[] = [];
+    const loud = {
+      config: { dataEncryptionKey: KEY },
+      logger: { warn: (o: unknown) => warnings.push(o) },
+    } as unknown as AppDeps;
+    expect(openUamSecret(loud, 'enc:v1.not-a-real-ciphertext', binding)).toBeNull();
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0]).toMatchObject({ event: 'uam_secret_unopenable', envelopeVersion: 'v1' });
+    // No secret material in the log line, which is the constraint that makes it safe to emit.
+    expect(JSON.stringify(warnings[0])).not.toContain(SECRET);
+    expect(JSON.stringify(warnings[0])).not.toContain('not-a-real-ciphertext');
+
+    // An ABSENT secret is not an error and must stay silent, or the log fills with normal state.
+    expect(openUamSecret(loud, null, binding)).toBeNull();
+    expect(openUamSecret(loud, '', binding)).toBeNull();
+    expect(warnings).toHaveLength(1);
   });
 
   it('refuses a v1 ref through openBoundSecretRef rather than using the wrong key (§7.7c)', () => {
