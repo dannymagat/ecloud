@@ -25,7 +25,8 @@ import type { AppDeps } from './context.js';
 import { Envelope, NAS_SECRET_PURPOSE, randomToken, sealSecretRef } from './crypto.js';
 import { MemoryKv } from './kv.js';
 import { loadNasClientRows, resolveNasSecrets } from './radius-clients/load.js';
-import { renderClientsConf, type RenderOutput } from './radius-clients/render.js';
+import { lookupNasByAddress } from './internal/radius-client-lookup.js';
+import { FLEET_DEFAULT_RADIUS_SECRET, renderClientsConf, type RenderOutput } from './radius-clients/render.js';
 import { writeClientsFileAtomic } from './radius-clients/write.js';
 import {
   TEST_ORIGIN,
@@ -224,6 +225,31 @@ await describeIntegration('@ecloud/api FreeRADIUS clients renderer (F-P10-07)', 
     expect(text).not.toContain(NAS_NAME); // no tenant free text
     expect((await stat(join(dir, 'ecloud-nas.conf'))).mode & 0o777).toBe(0o640);
     expect((await render()).changed).toBe(false);
+  });
+
+  it('dynamic lookup serves a NAS on the public fleet default secret (D-051, same rule as the file)', async () => {
+    const p = deps.dbPlatform;
+    const id = newId();
+    const ip = `10.${String(randomInt(2, 250))}.${String(randomInt(2, 250))}.${String(randomInt(2, 250))}`;
+    await p
+      .insertInto('nas_clients')
+      .values({
+        id,
+        organization_id: orgA,
+        site_id: siteA,
+        name: `${NAS_NAME}-fleet-default`,
+        nas_ip: ip,
+        adapter_type_key: 'uspot-upstream-uam',
+        adapter_key: 'uspot-upstream-uam',
+        secret_ref: sealSecretRef(envelope, FLEET_DEFAULT_RADIUS_SECRET),
+      })
+      .execute();
+    try {
+      const found = await lookupNasByAddress(p, deps.config.dataEncryptionKey, ip);
+      expect(found).toMatchObject({ id, nasIp: ip, secret: FLEET_DEFAULT_RADIUS_SECRET });
+    } finally {
+      await p.updateTable('nas_clients').set({ deleted_at: new Date() }).where('id', '=', id).execute();
+    }
   });
 
   it('drops disabled NAS rows', async () => {

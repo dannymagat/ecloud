@@ -27,7 +27,13 @@ import {
 import { basename, isAbsolute } from 'node:path';
 import { z } from 'zod';
 import { API_DEV_DEFAULTS } from '../config.js';
-import { RadiusClientsRenderError, fleetDefaultSecretCount, relaxedClientCount, renderClientsConf } from './render.js';
+import {
+  FLEET_DEFAULT_CONTROLLER_RELEASE,
+  RadiusClientsRenderError,
+  fleetDefaultSecretCount,
+  relaxedClientCount,
+  renderClientsConf,
+} from './render.js';
 import type { NasClientEntry, SkippedNas } from './render.js';
 import { writeClientsFileAtomic } from './write.js';
 import {
@@ -120,6 +126,8 @@ export interface RenderSummary {
   relaxedMessageAuthenticator: number;
   /** Clients rendered on the public fleet default secret (D-051): inheriting, not yet secured. */
   fleetDefaultSecret: number;
+  /** Controller release whose hotspot default the carve-out was written against (D-051 drift evidence). */
+  fleetDefaultControllerRelease: string;
   changed: boolean;
   checkOnly: boolean;
   file: string;
@@ -192,6 +200,7 @@ export async function renderRadiusClients(
     clients: rendered.length,
     relaxedMessageAuthenticator: relaxedClientCount(rendered),
     fleetDefaultSecret: fleetDefaultSecretCount(rendered),
+    fleetDefaultControllerRelease: FLEET_DEFAULT_CONTROLLER_RELEASE,
     changed,
     checkOnly,
     file: settings.outFile,

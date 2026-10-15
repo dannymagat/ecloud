@@ -70,6 +70,11 @@ async function main(): Promise<number> {
       { checkOnly: values.check === true },
     );
     process.stdout.write(`${JSON.stringify(summary)}\n`);
+    if (summary.fleetDefaultSecret > 0) {
+      process.stderr.write(
+        `radius-clients: WARNING ${String(summary.fleetDefaultSecret)} NAS client(s) rendered on the PUBLIC fleet default secret (D-051); give each a per-NAS secret before real use\n`,
+      );
+    }
     const merakiSkipped = summary.meraki?.skipped.count ?? 0;
     if (merakiSkipped > 0) {
       process.stderr.write(

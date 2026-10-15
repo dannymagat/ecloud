@@ -8,6 +8,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { MERAKI_RENDERED_HEADER, renderMerakiListeners, type MerakiNasEntry } from './meraki.js';
+import { FLEET_DEFAULT_RADIUS_SECRET, SECRET_RULE } from './render.js';
 import { loadRenderSettings, renderRadiusClients } from './run.js';
 
 const ID_M = '3e0c4b1a-7d2f-4a6b-9c8d-0e1f2a3b4c5d';
@@ -42,6 +43,12 @@ function m(overrides: Partial<MerakiNasEntry> = {}): MerakiNasEntry {
 }
 
 describe('renderMerakiListeners', () => {
+  it('still refuses the public fleet default secret on the Meraki cloud path (D-051 does not apply)', () => {
+    const out = renderMerakiListeners([m({ secret: FLEET_DEFAULT_RADIUS_SECRET })], ON);
+    expect(out.rendered).toEqual([]);
+    expect(out.skipped).toEqual([{ id: ID_M, reason: SECRET_RULE }]);
+  });
+
   it('flag ON: one private client list (per-NAS secret + shortname) and an auth/acct listener pair per NAS', () => {
     const out = renderMerakiListeners(
       [m(), m({ id: ID_N, secret: SECRET_N, authPort: 21002, acctPort: 21003 })],

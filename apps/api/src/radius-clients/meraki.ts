@@ -138,6 +138,10 @@ export function renderMerakiListeners(
       continue;
     }
     seen.add(e.id);
+    // Deliberately the raw floor, NOT isAcceptableSecret: the D-051 fleet-default exception does
+    // not apply here. A Meraki cloud source address is shared by every Meraki customer
+    // (packages/shared/src/meraki-cloud-radius.ts), so the secret and the port are the only
+    // things identifying the NAS; a public secret on this path has no second control.
     if (!SECRET_RE.test(e.secret)) {
       skipped.push({ id: e.id, reason: SECRET_RULE });
       continue;

@@ -16,7 +16,9 @@
 # Obviously-fake dev/CI values are allowed: anything containing `ecloud_dev_`, `ecloud_ci_`,
 # `PLACEHOLDER`, `placeholder`, `change_me`/`changeme`, `example`, `test`, `fake`, `dummy`, `<...>`, `${...}`,
 # `$ENV{...}`, `%{...}`, `xxx`. A line may opt out with the marker `check-no-secrets: allow`
-# (reviewers must check every use of it). Test sources (*.test.ts, test-support/, tests/,
+# (reviewers must check every use of it). Every marker in apps/ and packages/ sits on an HKDF
+# purpose LABEL, with one recorded exception on a VALUE: the public fleet default RADIUS secret
+# in apps/api/src/radius-clients/render.ts (DECISIONS.md D-051). That exception is not precedent. Test sources (*.test.ts, test-support/, tests/,
 # infra/freeradius/test/) are exempt from the assignment/URL rules only.
 # Exit status: 0 = clean, 1 = findings (printed as file:line: rule), 2 = usage error.
 set -euo pipefail

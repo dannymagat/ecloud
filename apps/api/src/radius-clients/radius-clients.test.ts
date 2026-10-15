@@ -324,6 +324,7 @@ describe('renderRadiusClients', () => {
       clients: 2,
       relaxedMessageAuthenticator: 1,
       fleetDefaultSecret: 0,
+      fleetDefaultControllerRelease: 'hsdefaults-20261014T102455Z',
       changed: true,
       checkOnly: false,
       file: outFile,
