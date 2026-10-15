@@ -74,6 +74,8 @@ export type AuditActorType = 'administrator' | 'api_key' | 'subscriber' | 'syste
 export type DeviceMode = 'bridge' | 'routed' | 'unknown';
 export type MgmtStatus = 'unknown' | 'online' | 'offline';
 export type EnabledStatus = 'active' | 'disabled';
+/** Migration 046: NAS administrative status; `blocked` fails closed in every existing reader. */
+export type NasStatus = EnabledStatus | 'blocked';
 export type AdapterVerificationStatus =
   'verified_code' | 'verified_docs' | 'proposed' | 'unknown' | 'requires_device_test';
 export type WebhookDeliveryStatus = 'success' | 'failed' | 'timeout';
@@ -417,7 +419,16 @@ export interface NasClientsTable {
   /** Migration 029 (review F1): browser login address of the NAS (private unicast IPv4). */
   hotspot_address: Inet | null;
   hotspot_port: number | null;
-  status: Generated<EnabledStatus>;
+  /**
+   * Migration 046: `active` | `disabled` | `blocked`. Widened rather than paired with an
+   * `is_blocked` boolean so the administrative state cannot contradict itself — see the
+   * migration for the compatibility check that made the widening safe.
+   */
+  status: Generated<NasStatus>;
+  /** Migration 046: required when `status = 'blocked'`, NULL otherwise (CHECK-enforced). */
+  block_reason: string | null;
+  /** Migration 046: adoption complete (§5); separate from `status`. DEFAULT true. */
+  is_adopted: Generated<boolean>;
   created_at: GeneratedTimestamp;
   updated_at: GeneratedTimestamp;
   deleted_at: NullableTimestamp;

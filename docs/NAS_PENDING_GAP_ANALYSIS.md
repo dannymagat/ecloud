@@ -122,7 +122,7 @@ that lives only in a chat log does not survive that.
 
 ### Blocked is a `status` value, not a boolean
 
-`ck_nas_clients_status` is widened to `('active','disabled','blocked')` (migration 047) rather than
+`ck_nas_clients_status` is widened to `('active','disabled','blocked')` (migration 046) rather than
 paired with an `is_blocked` boolean. A separate boolean makes `status = 'active'` with
 `is_blocked = true` representable and meaningless, so every reader must consult both columns and
 the reader that forgets one grants access — the shape of a defect that reached four call sites in

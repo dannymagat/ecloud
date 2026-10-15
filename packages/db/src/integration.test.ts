@@ -199,7 +199,7 @@ await describeIntegration('@ecloud/db schema', () => {
 
   it('seeds the shared permission catalogue and the six role templates exactly', async () => {
     const permissions = await platform.selectFrom('permissions').selectAll().execute();
-    expect(permissions).toHaveLength(110); // + nas:secret:reveal (D-045); + administrator:mfa_reset (D-038); + controller:* (5), compatibility:read (019); + portal_asset:* (3, 021), captive_portal:secret:rotate (P6-B)
+    expect(permissions).toHaveLength(111); // + nas:adopt (046); + nas:secret:reveal (D-045); + administrator:mfa_reset (D-038); + controller:* (5), compatibility:read (019); + portal_asset:* (3, 021), captive_portal:secret:rotate (P6-B)
     expect(permissions.map((p) => p.key).sort()).toEqual(
       PERMISSION_CATALOGUE.map((p) => p.key).sort(),
     );
@@ -240,7 +240,7 @@ await describeIntegration('@ecloud/db schema', () => {
       .select(({ fn }) => fn.countAll<number>().as('n'))
       .where('role_id', '=', superAdmin?.id ?? '')
       .executeTakeFirst();
-    expect(Number(count?.n)).toBe(110); // every key, incl. nas:secret:reveal (D-045)
+    expect(Number(count?.n)).toBe(111); // every key, incl. nas:adopt (046), nas:secret:reveal (D-045)
   });
 
   it('hides cross-tenant rows from ecloud_app and shows everything to the platform role', async () => {
@@ -541,6 +541,73 @@ await describeIntegration('@ecloud/db schema', () => {
       .values(makeClientDevice(orgA.id, { mac: '02:00:00:00:aa:bb' }))
       .execute();
 
+    // Migration 046: `blocked` and its reason cannot drift apart. The pair is CHECK-enforced
+    // rather than trusted to callers, because a reason left behind by an unblock would show an
+    // operator a block that is not in force, and a block with no reason is one nobody can act on.
+    const siteBlocked = makeSite(orgA.id);
+    await platform.insertInto('sites').values(siteBlocked).execute();
+    const blockedNas = makeNasClient(orgA.id, siteBlocked.id, { nas_ip: '192.0.2.210' });
+    await platform.insertInto('nas_clients').values(blockedNas).execute();
+    // 23514 = check_violation
+    expect(
+      await sqlState(
+        platform
+          .updateTable('nas_clients')
+          .set({ status: 'blocked' })
+          .where('id', '=', blockedNas.id)
+          .execute(),
+      ),
+      'blocked with no reason',
+    ).toBe('23514');
+    expect(
+      await sqlState(
+        platform
+          .updateTable('nas_clients')
+          .set({ block_reason: 'left behind' })
+          .where('id', '=', blockedNas.id)
+          .execute(),
+      ),
+      'reason while active',
+    ).toBe('23514');
+    expect(
+      await sqlState(
+        platform
+          .updateTable('nas_clients')
+          .set({ status: 'blocked', block_reason: '   ' })
+          .where('id', '=', blockedNas.id)
+          .execute(),
+      ),
+      'blank reason',
+    ).toBe('23514');
+    // Blocking with a reason is accepted, and unblocking has to clear it in the same statement.
+    await platform
+      .updateTable('nas_clients')
+      .set({ status: 'blocked', block_reason: 'suspected spoofed NAS-Identifier' })
+      .where('id', '=', blockedNas.id)
+      .execute();
+    expect(
+      await sqlState(
+        platform
+          .updateTable('nas_clients')
+          .set({ status: 'active' })
+          .where('id', '=', blockedNas.id)
+          .execute(),
+      ),
+      'unblock leaving the reason behind',
+    ).toBe('23514');
+    await platform
+      .updateTable('nas_clients')
+      .set({ status: 'active', block_reason: null })
+      .where('id', '=', blockedNas.id)
+      .execute();
+    // Adoption defaults true, so migration 046 is invisible to every NAS that already existed.
+    const adopted = await platform
+      .selectFrom('nas_clients')
+      .select(['is_adopted'])
+      .where('id', '=', blockedNas.id)
+      .executeTakeFirstOrThrow();
+    expect(adopted.is_adopted).toBe(true);
+
     // nas_ip is global, per DATABASE_DESIGN.md §3.2 (Q3 default)
     const siteA = makeSite(orgA.id);
     const siteB = makeSite(orgB.id);
@@ -769,7 +836,7 @@ await describeIntegration('@ecloud/db schema', () => {
       .selectFrom('permissions')
       .select(({ fn }) => fn.countAll<number>().as('n'))
       .executeTakeFirst();
-    expect(Number(perms?.n)).toBe(110);
+    expect(Number(perms?.n)).toBe(111);
     const templates = await platform
       .selectFrom('roles')
       .select(({ fn }) => fn.countAll<number>().as('n'))

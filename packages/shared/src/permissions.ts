@@ -105,7 +105,11 @@ const RESOURCES: readonly ResourceSpec[] = [
     label: 'NAS entries',
     minScope: 'site',
     // secret:reveal (D-045): MFA step-up reveal of the stored RADIUS secret; org_admin + platform_super_admin.
-    actions: ['read', 'create', 'update', 'delete', 'secret:rotate', 'secret:reveal'],
+    // adopt (046, NAS_PENDING_ADOPTION_REQUIREMENTS §7, §11): not `update`, because adoption
+    // assigns ownership and a policy and triggers provisioning rather than editing a field.
+    // It reaches org_admin (NON_PLATFORM_KEYS) and platform_super_admin (ALL_KEYS) only;
+    // site_admin, operator and read_only list `['read']` explicitly and are unaffected.
+    actions: ['read', 'create', 'update', 'delete', 'adopt', 'secret:rotate', 'secret:reveal'],
   },
   {
     resource: 'wireguard_peer',
