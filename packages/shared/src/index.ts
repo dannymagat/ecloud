@@ -9,6 +9,7 @@ export * from './tenancy.js';
 export * from './queues.js';
 export * from './net-guard.js';
 export * from './portal-theme.js';
+export * from './nas-eligibility.js';
 export * from './portal-methods.js';
 export * from './metrics.js';
 export * from './mac.js';
