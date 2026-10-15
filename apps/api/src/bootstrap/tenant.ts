@@ -32,7 +32,7 @@
  * have to guess why a NAS secret is a dictionary word, and does not "fix" it into something the
  * controller no longer matches.
  */
-import type { Kysely } from 'kysely';
+import { sql, type Kysely } from 'kysely';
 import type { Database } from '@ecloud/db';
 import { Envelope, NAS_SECRET_PURPOSE, sealSecretRef } from '../crypto.js';
 import { UAM_SECRET_PURPOSE } from '../internal/portal.js';
@@ -188,11 +188,18 @@ export async function bootstrapTenant(
   // Matched on nas_identifier, which is what the portal's byNasid lookup keys on. Two live rows
   // sharing an identifier make that lookup ambiguous, so a soft-deleted row is revived and
   // re-pointed rather than a second one added.
+  //
+  // A LIVE row with the identifier must win over any deleted one. The first production run
+  // (2026-10-15) ordered by created_at alone, picked the newest row (soft-deleted), revived it
+  // and set its address, and collided on uq_nas_clients_ip with the older row still live on
+  // that address. Live first, then newest: a live row is reconciled in place, and a deleted row
+  // is revived only when nothing live carries the identifier.
   const existingNas = await db
     .selectFrom('nas_clients')
     .select(['id'])
     .where('organization_id', '=', input.organizationId)
     .where('nas_identifier', '=', input.nasIdentifier)
+    .orderBy(sql`(deleted_at is null)`, 'desc')
     .orderBy('created_at', 'desc')
     .executeTakeFirst();
   const sealedNasSecret = sealSecretRef(nasEnvelope, input.radiusSecret);
