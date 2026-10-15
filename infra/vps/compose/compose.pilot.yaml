@@ -184,6 +184,15 @@ services:
       # api refuses its dev default in production, so the pepper is a host secret like the
       # voucher pepper: generated once by install-secrets.sh, never in this file.
       OTP_PEPPER_FILE: /run/secrets/otp_pepper
+      # Outbound mail for guest email OTP. Non-secret settings come from ecloud.env; unset
+      # SMTP_HOST disables email OTP (packages/shared/src/config.ts). The relay password is a host
+      # secret (SendGrid API key, SMTP_USER=apikey), installed by install-secrets.sh.
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_FROM: ${SMTP_FROM:-}
+      SMTP_IMPLICIT_TLS: ${SMTP_IMPLICIT_TLS:-false}
+      SMTP_PASSWORD_FILE: /run/secrets/smtp_password
       SESSION_COOKIE_NAME: __Host-ecloud_sid
       SESSION_COOKIE_SECURE: 'true'
       TRUST_PROXY_HOPS: '1'
@@ -203,6 +212,7 @@ services:
       - data_encryption_key
       - voucher_pepper
       - otp_pepper
+      - smtp_password
     volumes:
       - storage_data:/var/lib/ecloud/storage
     ports:
@@ -426,6 +436,7 @@ secrets:
   data_encryption_key: { file: '${ECLOUD_SECRETS_DIR:-/opt/ecloud/secrets}/data_encryption_key' }
   voucher_pepper: { file: '${ECLOUD_SECRETS_DIR:-/opt/ecloud/secrets}/voucher_pepper' }
   otp_pepper: { file: '${ECLOUD_SECRETS_DIR:-/opt/ecloud/secrets}/otp_pepper' }
+  smtp_password: { file: '${ECLOUD_SECRETS_DIR:-/opt/ecloud/secrets}/smtp_password' }
   portal_state_secret: { file: '${ECLOUD_SECRETS_DIR:-/opt/ecloud/secrets}/portal_state_secret' }
   database_url: { file: '${ECLOUD_SECRETS_DIR:-/opt/ecloud/secrets}/database_url' }
   database_url_platform:

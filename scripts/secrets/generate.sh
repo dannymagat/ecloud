@@ -86,6 +86,11 @@ rotated=0
 kept=0
 while IFS='|' read -r name _min kind _consumers _runbook; do
   path="$OUT/$name"
+  if [ "$kind" = external ]; then
+    # Operator-supplied (e.g. a SendGrid API key): never generated here; installed by hand.
+    [ -e "$path" ] && kept=$((kept + 1)) || echo "note: $name is external; supply it before install-secrets.sh" >&2
+    continue
+  fi
   if [ -e "$path" ] && ! is_rotated "$name"; then
     kept=$((kept + 1))
     continue

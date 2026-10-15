@@ -56,7 +56,11 @@ check_file() {
 }
 
 primary_hashes=()
-while IFS='|' read -r name min _kind _consumers _runbook; do
+while IFS='|' read -r name min kind _consumers _runbook; do
+  if [ "$kind" = external ] && [ ! -e "$DIR/$name" ]; then
+    echo "note: $name (external) not present; the api runs without that feature" >&2
+    continue
+  fi
   check_file "$name" "$min"
   if [ -f "$DIR/$name" ]; then
     primary_hashes+=("$(cksum <"$DIR/$name" | cut -d' ' -f1)")

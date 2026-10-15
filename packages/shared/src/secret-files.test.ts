@@ -15,6 +15,35 @@ function secretFile(name: string, content: string): string {
 }
 
 describe('resolveSecretFiles (P10-A, *_FILE secrets)', () => {
+  it('resolves SMTP_PASSWORD_FILE into the mail settings (SendGrid shape, STARTTLS on 587)', () => {
+    const path = secretFile('smtp_password', 'SG.not-a-real-key.placeholder\n'); // check-no-secrets: allow (test value)
+    const out = resolveSecretFiles({ SMTP_PASSWORD_FILE: path });
+    expect(out.SMTP_PASSWORD).toBe('SG.not-a-real-key.placeholder');
+    expect(out).not.toHaveProperty('SMTP_PASSWORD_FILE');
+    const config = loadConfig({
+      SMTP_HOST: 'smtp.sendgrid.net',
+      SMTP_PORT: '587',
+      SMTP_USER: 'apikey',
+      SMTP_FROM: 'noreply@example.test',
+      SMTP_IMPLICIT_TLS: 'false',
+      SMTP_PASSWORD_FILE: path,
+    });
+    expect(config.mail).toEqual({
+      host: 'smtp.sendgrid.net',
+      port: 587,
+      user: 'apikey',
+      password: 'SG.not-a-real-key.placeholder',
+      from: 'noreply@example.test',
+      implicitTls: false,
+    });
+    // An empty SMTP_HOST from Compose's `${SMTP_HOST:-}` means "no relay", not a relay at "".
+    expect(loadConfig({ SMTP_HOST: '', SMTP_PASSWORD_FILE: path }).mail).toBeNull();
+    // A relay without a sender is refused at boot, not at the first OTP.
+    expect(() => loadConfig({ SMTP_HOST: 'smtp.sendgrid.net', SMTP_PASSWORD_FILE: path })).toThrow(
+      /SMTP_FROM: required when SMTP_HOST is set/,
+    );
+  });
+
   it('reads <NAME>_FILE, trims one trailing newline and drops the _FILE key', () => {
     const path = secretFile('internal_api_token', `${'t'.repeat(40)}\n`);
     const out = resolveSecretFiles({ INTERNAL_API_TOKEN_FILE: path, OTHER: 'x' });
