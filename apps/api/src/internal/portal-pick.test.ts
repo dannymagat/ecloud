@@ -16,6 +16,8 @@ function row(over: Partial<PortalRow> & { id: string }): PortalRow {
   return {
     name: 'Portal',
     site_id: 'site-1',
+    organization_id: 'org-1',
+    uam_secret_version: 1,
     auth_methods: ['click_through'],
     theme_id: null,
     terms_version: null,

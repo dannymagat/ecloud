@@ -1035,14 +1035,25 @@ export function portalAdminRoutes(deps: AppDeps): AnyRouteSpec[] {
         await inTenant(deps, params.orgId, async (trx) => {
           const before = await trx
             .selectFrom('captive_portals')
-            .select(['id', 'uam_secret_ref'])
+            .select(['id', 'uam_secret_ref', 'uam_secret_version'])
             .where('id', '=', params.id)
             .forUpdate()
             .executeTakeFirst();
           if (before === undefined) throw new NotFoundError('captive_portal', params.id);
+          // Task 10: the version is bound into the AAD, so a rotation MUST bump it in the same
+          // UPDATE as the new ciphertext. Without the bump a pre-rotation ciphertext written back
+          // into this row would still verify, and rollback protection would be decorative.
+          const nextVersion = before.uam_secret_version + 1;
           await trx
             .updateTable('captive_portals')
-            .set({ uam_secret_ref: sealUamSecret(deps.config.dataEncryptionKey, secret) })
+            .set({
+              uam_secret_ref: sealUamSecret(deps.config.dataEncryptionKey, secret, {
+                organizationId: params.orgId,
+                portalId: params.id,
+                secretVersion: nextVersion,
+              }),
+              uam_secret_version: nextVersion,
+            })
             .where('id', '=', params.id)
             .execute();
           await writeAudit(trx, ctx, {

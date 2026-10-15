@@ -518,10 +518,14 @@ await describeIntegration('@ecloud/api portal administration (P6-B) against eclo
 
     const stored = await deps.dbPlatform
       .selectFrom('captive_portals')
-      .select('uam_secret_ref')
+      .select(['uam_secret_ref', 'uam_secret_version'])
       .where('id', '=', portal.id)
       .executeTakeFirstOrThrow();
-    expect(stored.uam_secret_ref).toMatch(/^enc:v1\./);
+    // Task 10: a rotation writes the v2 envelope, which is bound by AAD to this row and to the
+    // version below. The version bump is part of the rotation rather than a separate write,
+    // because a ciphertext and the version it is sealed against must never disagree.
+    expect(stored.uam_secret_ref).toMatch(/^enc:v2\./);
+    expect(stored.uam_secret_version).toBe(2);
     expect(stored.uam_secret_ref).not.toContain(secret);
 
     // reads and PATCH responses never carry the secret or its sealed form

@@ -173,17 +173,25 @@ suite(title, () => {
       .returning('id')
       .executeTakeFirstOrThrow();
     f.nasId = nas.id;
+    const portalId = newId();
     const portalRow = await p
       .insertInto('captive_portals')
       .values({
         organization_id: f.orgId,
+        // Task 10: the v2 envelope binds the ciphertext to its row, so the id must exist before
+        // the secret is sealed rather than be assigned by the insert.
+        id: portalId,
         site_id: f.siteId,
         name: 'Lobby Wi-Fi',
         public_slug: `e2e-${randomBytes(5).toString('hex')}`,
         portal_type: 'uspot',
         network_ref: 'guest',
         auth_methods: ['password', 'voucher', 'click_through'],
-        uam_secret_ref: sealUamSecret(config.dataEncryptionKey, SIM_UAM_SECRET),
+        uam_secret_ref: sealUamSecret(config.dataEncryptionKey, SIM_UAM_SECRET, {
+          organizationId: f.orgId,
+          portalId,
+          secretVersion: 1,
+        }),
       })
       .returning('id')
       .executeTakeFirstOrThrow();

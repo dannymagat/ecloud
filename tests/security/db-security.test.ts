@@ -36,8 +36,12 @@ import {
 
 /** Column names that would hold a secret in clear text. */
 const SECRET_NAME_RE = /(password|passwd|secret|token|api_?key|private_?key|psk|preshared)/i;
-/** Accepted storage forms: hash, reference to a secret store, encrypted blob, display hint/prefix. */
-const SAFE_SUFFIX_RE = /_(hash|hashes|ref|enc|hint|prefix)$/i;
+/**
+ * Suffixes that mean the column does not hold the secret itself: a hash, a reference to a secret
+ * store, an encrypted blob, a display hint/prefix, or — migration 047 — the monotonic rotation
+ * counter bound into the envelope's AAD, which is an integer and is meant to be readable.
+ */
+const SAFE_SUFFIX_RE = /_(hash|hashes|ref|enc|hint|prefix|version)$/i;
 /**
  * Documented exceptions. radius.nas.secret is the official rlm_sql `nas` shape (009); it is
  * empty in the pilot (clients.conf is rendered instead) and unreachable for ecloud_app, which

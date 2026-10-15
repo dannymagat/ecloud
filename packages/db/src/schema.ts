@@ -401,6 +401,8 @@ export interface NasClientsTable {
   /** Migration 019: optional vendor controller of the same organization. */
   controller_id: Uuid | null;
   secret_ref: string;
+  /** Monotonic; bound into the v2 envelope AAD (migration 047). */
+  secret_version: Generated<number>;
   /** Migration 030 (Cycle C): per-NAS adapter settings (post-back profile; no secrets). */
   adapter_config: GeneratedJsonb<Record<string, unknown>>;
   coa_port: number | null;
@@ -924,6 +926,8 @@ export interface CaptivePortalsTable {
   auth_methods: Generated<string[]>;
   identity_provider_ids: Generated<Uuid[]>;
   uam_secret_ref: string | null;
+  /** Monotonic; bound into the v2 envelope AAD (migration 047). */
+  uam_secret_version: Generated<number>;
   redirect_url: string | null;
   terms_version: string | null;
   walled_garden: Generated<string[]>;

@@ -29,6 +29,10 @@ export const PORTAL_COLUMNS = [
   'terms_version',
   'redirect_url',
   'uam_secret_ref',
+  // Task 10: the v2 envelope's AAD is recomputed from the row, so every query feeding a portal
+  // resolution must carry the organization, the id and the version, or the secret cannot open.
+  'organization_id',
+  'uam_secret_version',
   'adapter_config',
   'status',
   'published_version_id',
@@ -39,6 +43,8 @@ export interface PortalRow {
   id: string;
   name: string;
   site_id: string;
+  organization_id: string;
+  uam_secret_version: number;
   auth_methods: string[];
   theme_id: string | null;
   terms_version: string | null;

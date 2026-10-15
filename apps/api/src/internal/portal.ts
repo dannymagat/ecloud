@@ -46,7 +46,14 @@ import express, { type Request, type Response, type Router } from 'express';
 import { isIP } from 'node:net';
 import { z } from 'zod';
 import type { AppDeps } from '../context.js';
-import { Envelope, openSecretRef, sealSecretRef, sha256Hex } from '../crypto.js';
+import {
+  Envelope,
+  openBoundSecretRef,
+  openSecretRef,
+  sealBoundSecretRef,
+  sealSecretRef,
+  sha256Hex,
+} from '../crypto.js';
 import { logPortalSecurityEvent } from '../security-events.js';
 import { consumePortalLoginToken, issuePortalLoginToken } from './login-token-store.js';
 import { completeVendorApiAuthorization } from '../vendor-api/portal.js';
@@ -99,11 +106,26 @@ import {
 
 /** UAM secrets are per-NAS shared secrets sealed like RADIUS secrets (SECURITY §5.2). */
 // HKDF purpose label, not a secret. check-no-secrets: allow
-export const UAM_SECRET_PURPOSE = 'ecloud:nas:secret:v1'; // check-no-secrets: allow
+// Task 10, S-1: this was byte-identical to NAS_SECRET_PURPOSE, so the two secrets were sealed
+// under the same derived key and a ciphertext was interchangeable between the columns. The
+// middle segment is the fix; the version moves with the envelope format.
+export const UAM_SECRET_PURPOSE = 'ecloud:uam:secret:v2'; // was ecloud:nas:secret:v1 / check-no-secrets: allow
 
-/** `captive_portals.uam_secret_ref` value for a UAM secret (`enc:v1…`, data key). */
-export function sealUamSecret(dataEncryptionKey: string, secret: string): string {
-  return sealSecretRef(new Envelope(dataEncryptionKey, UAM_SECRET_PURPOSE), secret);
+/** The column a UAM secret is bound to; shared by the seal and open paths so they cannot drift. */
+export const UAM_SECRET_COLUMN = 'captive_portals.uam_secret_ref';
+
+/** `captive_portals.uam_secret_ref` value for a UAM secret (`enc:v2…`, data key). */
+export function sealUamSecret(
+  dataEncryptionKey: string,
+  secret: string,
+  binding: { organizationId: string; portalId: string; secretVersion: number },
+): string {
+  return sealBoundSecretRef(new Envelope(dataEncryptionKey, UAM_SECRET_PURPOSE), secret, {
+    organizationId: binding.organizationId,
+    rowId: binding.portalId,
+    column: UAM_SECRET_COLUMN,
+    secretVersion: binding.secretVersion,
+  });
 }
 
 const PORTAL_ACCESS = Object.freeze({ reason: 'portal', audit: false });
@@ -248,10 +270,25 @@ function pickPortal(rows: PortalRow[], nasId: string): PortalPick {
   return fallback === undefined ? { kind: 'none' } : { kind: 'fallback' };
 }
 
-function openUamSecret(deps: AppDeps, ref: string | null): string | null {
+function openUamSecret(
+  deps: AppDeps,
+  ref: string | null,
+  binding: { organizationId: string; portalId: string; secretVersion: number },
+): string | null {
   if (ref === null || ref === '') return null;
   try {
-    return openSecretRef(new Envelope(deps.config.dataEncryptionKey, UAM_SECRET_PURPOSE), ref);
+    return openBoundSecretRef(
+      new Envelope(deps.config.dataEncryptionKey, UAM_SECRET_PURPOSE),
+      ref,
+      {
+        organizationId: binding.organizationId,
+        rowId: binding.portalId,
+        column: UAM_SECRET_COLUMN,
+        secretVersion: binding.secretVersion,
+      },
+      // Transitional: the database still holds v1 refs until the re-seal runs.
+      { allowV1: true },
+    );
   } catch {
     return null;
   }
@@ -660,7 +697,11 @@ export async function resolvePortal(
         deploymentMode,
         uamServerUrl:
           flavour === 'meraki' ? null : uamServerUrl(deps, flavour, portal.adapter_config),
-        uamSecret: openUamSecret(deps, portal.uam_secret_ref),
+        uamSecret: openUamSecret(deps, portal.uam_secret_ref, {
+          organizationId: portal.organization_id,
+          portalId: portal.id,
+          secretVersion: portal.uam_secret_version,
+        }),
         hotspotAddress: n.hotspot_address ?? null,
         hotspotPort: n.hotspot_port ?? null,
       },
@@ -1502,7 +1543,11 @@ export function portalInternalRouter(deps: AppDeps): Router {
         return {
           ok: true,
           identity,
-          uamSecret: openUamSecret(deps, portal.uam_secret_ref),
+          uamSecret: openUamSecret(deps, portal.uam_secret_ref, {
+          organizationId: portal.organization_id,
+          portalId: portal.id,
+          secretVersion: portal.uam_secret_version,
+        }),
           // Migration 041: recorded on the credential so AAA and the session know the guest was
           // admitted by a fallback portal rather than one somebody configured.
           platformDefaultPortal: portal.is_platform_default,
