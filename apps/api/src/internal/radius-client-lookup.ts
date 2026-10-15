@@ -27,7 +27,7 @@ import { withPlatform, type Db } from '@ecloud/db';
 import { isIP } from 'node:net';
 import type { Request, RequestHandler, Response } from 'express';
 import type { AppDeps } from '../context.js';
-import { Envelope, NAS_SECRET_PURPOSE, openNasSecret } from '../crypto.js';
+import { openNasSecret } from '../crypto.js';
 import { isAcceptableSecret } from '../radius-clients/render.js';
 
 /** `rlm_rest` JSON: one attribute per key, `control:` targets the control list. */
@@ -82,15 +82,11 @@ export async function lookupNasByAddress(
 
   let secret: string;
   try {
-    secret = openNasSecret(
-      new Envelope(dataEncryptionKey, NAS_SECRET_PURPOSE),
-      String(row.secret_ref),
-      {
-        organizationId: String(row.organization_id),
-        nasId: String(row.id),
-        secretVersion: Number(row.secret_version),
-      },
-    );
+    secret = openNasSecret(dataEncryptionKey, String(row.secret_ref), {
+      organizationId: String(row.organization_id),
+      nasId: String(row.id),
+      secretVersion: Number(row.secret_version),
+    });
   } catch {
     // Tampered, sealed under another key, or — task 10 — bound to a different row: skip this
     // NAS exactly as the renderer does.

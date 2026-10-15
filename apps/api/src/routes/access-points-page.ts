@@ -48,7 +48,7 @@ import {
   recordKeyFailure,
 } from '../auth/rate-limit.js';
 import type { AppDeps, Principal } from '../context.js';
-import { Envelope, NAS_SECRET_PURPOSE, SECRET_REF_PREFIX, openNasSecret } from '../crypto.js';
+import { SECRET_REF_PREFIX, openNasSecret } from '../crypto.js';
 import { nasActivity, nasFilter, resolveScope, siteFilter } from '../dashboard-queries.js';
 import { activityDefinition, activityThresholds } from '../dashboard-views.js';
 import { OrgIdParams, OrgParams, problemResponses } from '../http/common.js';
@@ -231,7 +231,6 @@ const iso = (d: Date | null | undefined): string | null =>
 export function accessPointsPageRoutes(deps: AppDeps): AnyRouteSpec[] {
   const now = () => (deps.now ?? (() => new Date()))();
   const mfa = new MfaCodec(deps.config.mfaEncryptionKey);
-  const nasEnvelope = new Envelope(deps.config.dataEncryptionKey, NAS_SECRET_PURPOSE);
 
   const overview = defineRoute({
     method: 'get',
@@ -536,7 +535,7 @@ export function accessPointsPageRoutes(deps: AppDeps): AnyRouteSpec[] {
         // The binding comes from the ROW, not from params.orgId. They agree here because
         // inTenant scopes the read, but recomputing the AAD from the row is the whole point:
         // a value derived from the request would authenticate the request, not the storage.
-        const value = openNasSecret(nasEnvelope, nas.secret_ref as string, {
+        const value = openNasSecret(deps.config.dataEncryptionKey, nas.secret_ref as string, {
           organizationId: nas.organization_id as string,
           nasId: nas.id as string,
           secretVersion: Number(nas.secret_version),

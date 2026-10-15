@@ -14,7 +14,7 @@ import { describeIntegration, makeOrganization, migrateTestDatabase } from '@ecl
 import { afterAll, beforeAll, expect, it } from 'vitest';
 import type { AppDeps } from '../context.js';
 import { closeDeps, integrationDeps, unique } from '../test-support/deps.js';
-import { Envelope, NAS_SECRET_PURPOSE, openNasSecret } from '../crypto.js';
+import { openNasSecret } from '../crypto.js';
 import { bootstrapTenant, type BootstrapInput } from './tenant.js';
 
 await describeIntegration('tenant bootstrap', () => {
@@ -120,11 +120,11 @@ await describeIntegration('tenant bootstrap', () => {
     expect(live[0]?.secret_ref).toMatch(/^enc:v2\./);
     expect(Number(live[0]?.secret_version)).toBe(2);
     expect(
-      openNasSecret(
-        new Envelope(deps.config.dataEncryptionKey, NAS_SECRET_PURPOSE),
-        String(live[0]?.secret_ref),
-        { organizationId: org.id, nasId: liveId, secretVersion: 2 },
-      ),
+      openNasSecret(deps.config.dataEncryptionKey, String(live[0]?.secret_ref), {
+        organizationId: org.id,
+        nasId: liveId,
+        secretVersion: 2,
+      }),
     ).toBe('fixture-radius-secret');
     expect(rows.find((r) => r.id === deletedId)?.deleted_at).not.toBeNull();
   });

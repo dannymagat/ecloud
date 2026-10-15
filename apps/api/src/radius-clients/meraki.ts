@@ -31,7 +31,7 @@ import {
   merakiListenersRenderable,
   type MerakiCloudRadiusSettings,
 } from '@ecloud/shared';
-import { Envelope, NAS_SECRET_PURPOSE, SECRET_REF_PREFIX, openNasSecret } from '../crypto.js';
+import { SECRET_REF_PREFIX, openNasSecret } from '../crypto.js';
 import { SECRET_RE, SECRET_RULE, type SkippedNas } from './render.js';
 import type { LoadNasOptions } from './load.js';
 
@@ -216,14 +216,13 @@ export async function loadMerakiEntries(
       return query.orderBy('n.id').execute();
     },
   );
-  const envelope = new Envelope(dataEncryptionKey, NAS_SECRET_PURPOSE);
   const entries: MerakiNasEntry[] = [];
   const skipped: SkippedNas[] = [];
   for (const row of rows) {
     const ref = String(row.secret_ref);
     let secret: string;
     try {
-      secret = openNasSecret(envelope, ref, {
+      secret = openNasSecret(dataEncryptionKey, ref, {
         organizationId: String(row.organization_id),
         nasId: String(row.id),
         secretVersion: Number(row.secret_version),

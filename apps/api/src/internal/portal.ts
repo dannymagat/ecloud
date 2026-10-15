@@ -48,6 +48,8 @@ import { z } from 'zod';
 import type { AppDeps } from '../context.js';
 import {
   Envelope,
+  LEGACY_SECRET_PURPOSE,
+  SECRET_REF_PREFIX,
   openBoundSecretRef,
   sealBoundSecretRef,
   sealSecretRef,
@@ -269,13 +271,27 @@ function pickPortal(rows: PortalRow[], nasId: string): PortalPick {
   return fallback === undefined ? { kind: 'none' } : { kind: 'fallback' };
 }
 
-function openUamSecret(
+export function openUamSecret(
   deps: AppDeps,
   ref: string | null,
   binding: { organizationId: string; portalId: string; secretVersion: number },
 ): string | null {
   if (ref === null || ref === '') return null;
   try {
+    // Transitional: the database still holds v1 refs until the re-seal runs, and a v1 ref was
+    // sealed under LEGACY_SECRET_PURPOSE. The purpose is the HKDF info, so it has to be derived
+    // from the OLD label — opening it with UAM_SECRET_PURPOSE fails on every legacy row, which is
+    // the outage this branch exists to avoid. A v1 ref carries no AAD, hence no binding here.
+    const body = ref.startsWith(SECRET_REF_PREFIX) ? ref.slice(SECRET_REF_PREFIX.length) : '';
+    if (body.startsWith('v1.')) {
+      // Both labels, as in openNasSecret: legacy for every row sealed before today, current for
+      // anything a v1-format path wrote after the label moved.
+      try {
+        return new Envelope(deps.config.dataEncryptionKey, LEGACY_SECRET_PURPOSE).decrypt(body);
+      } catch {
+        return new Envelope(deps.config.dataEncryptionKey, UAM_SECRET_PURPOSE).decrypt(body);
+      }
+    }
     return openBoundSecretRef(
       new Envelope(deps.config.dataEncryptionKey, UAM_SECRET_PURPOSE),
       ref,
@@ -285,8 +301,6 @@ function openUamSecret(
         column: UAM_SECRET_COLUMN,
         secretVersion: binding.secretVersion,
       },
-      // Transitional: the database still holds v1 refs until the re-seal runs.
-      { allowV1: true },
     );
   } catch {
     return null;

@@ -35,7 +35,7 @@
 import { sql, type Kysely } from 'kysely';
 import type { Database } from '@ecloud/db';
 import { newId } from '@ecloud/shared';
-import { Envelope, NAS_SECRET_PURPOSE, sealNasSecret } from '../crypto.js';
+import { sealNasSecret } from '../crypto.js';
 import { sealUamSecret } from '../internal/portal.js';
 import { buildSnapshot } from '../internal/portal-snapshot.js';
 
@@ -141,7 +141,6 @@ export async function bootstrapTenant(
 ): Promise<readonly BootstrapStep[]> {
   const steps: BootstrapStep[] = [];
   const note = secretNote(input.secretsArePlatformDefaults);
-  const nasEnvelope = new Envelope(input.dataEncryptionKey, NAS_SECRET_PURPOSE);
 
   // --- site ---------------------------------------------------------------------------------
   // Matched on name within the organization, which is what the unique index uses. A soft-deleted
@@ -229,7 +228,7 @@ export async function bootstrapTenant(
         nas_ip: input.nasIp,
         adapter_type_key: input.adapterKey,
         adapter_key: input.adapterKey,
-        secret_ref: sealNasSecret(nasEnvelope, input.radiusSecret, {
+        secret_ref: sealNasSecret(input.dataEncryptionKey, input.radiusSecret, {
           organizationId: input.organizationId,
           nasId,
           secretVersion: 1,
@@ -256,7 +255,7 @@ export async function bootstrapTenant(
         nas_ip: input.nasIp,
         adapter_type_key: input.adapterKey,
         adapter_key: input.adapterKey,
-        secret_ref: sealNasSecret(nasEnvelope, input.radiusSecret, {
+        secret_ref: sealNasSecret(input.dataEncryptionKey, input.radiusSecret, {
           organizationId: input.organizationId,
           nasId,
           secretVersion: nextVersion,

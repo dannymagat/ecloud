@@ -214,12 +214,11 @@ describe('renderClientsConf', () => {
 
 describe('resolveNasSecrets', () => {
   const key = 'unit-test-data-encryption-key-0123456789';
-  const envelope = new Envelope(key, NAS_SECRET_PURPOSE);
   const good = {
     id: ID_A,
     organizationId: ORG,
     nasIp: '192.168.203.198',
-    secretRef: sealNasSecret(envelope, SECRET, {
+    secretRef: sealNasSecret(key, SECRET, {
       organizationId: ORG,
       nasId: ID_A,
       secretVersion: 1,

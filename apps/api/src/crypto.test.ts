@@ -18,7 +18,8 @@ import {
   sealSecretRef,
   type SealBinding,
 } from './crypto.js';
-import { UAM_SECRET_COLUMN, UAM_SECRET_PURPOSE } from './internal/portal.js';
+import { UAM_SECRET_COLUMN, UAM_SECRET_PURPOSE, openUamSecret } from './internal/portal.js';
+import type { AppDeps } from './context.js';
 
 const KEY = 'unit-test-data-encryption-key-0123456789'; // check-no-secrets: allow (test value)
 const SECRET = 'Ab3_-xyzAb3_-xyzAb3_-xyzAb3_-xyzAb3_-xyzAb3'; // check-no-secrets: allow (test value)
@@ -41,7 +42,7 @@ describe('v2 bound envelope', () => {
   it('round trips under each of the two column bindings (§7.1)', () => {
     const nasRef = sealBoundSecretRef(nasEnvelope(), SECRET, nasAt(ROW_A));
     expect(nasRef).toMatch(/^enc:v2\./);
-    expect(openBoundSecretRef(nasEnvelope(), nasRef, nasAt(ROW_A), { allowV1: false })).toBe(
+    expect(openBoundSecretRef(nasEnvelope(), nasRef, nasAt(ROW_A))).toBe(
       SECRET,
     );
 
@@ -52,17 +53,17 @@ describe('v2 bound envelope', () => {
       secretVersion: 1,
     };
     const uamRef = sealBoundSecretRef(uamEnvelope(), SECRET, uamBinding);
-    expect(openBoundSecretRef(uamEnvelope(), uamRef, uamBinding, { allowV1: false })).toBe(SECRET);
+    expect(openBoundSecretRef(uamEnvelope(), uamRef, uamBinding)).toBe(SECRET);
   });
 
   it('refuses a ciphertext moved to another row (§7.2)', () => {
-    const ref = sealNasSecret(nasEnvelope(), SECRET, {
+    const ref = sealNasSecret(KEY, SECRET, {
       organizationId: ORG_A,
       nasId: ROW_A,
       secretVersion: 1,
     });
     expect(() =>
-      openNasSecret(nasEnvelope(), ref, {
+      openNasSecret(KEY, ref, {
         organizationId: ORG_A,
         nasId: ROW_B,
         secretVersion: 1,
@@ -72,13 +73,13 @@ describe('v2 bound envelope', () => {
 
   it('refuses a ciphertext moved to another tenant, same row id (§7.3)', () => {
     // The row id alone is not the identity. A restored backup or a copied row keeps the id.
-    const ref = sealNasSecret(nasEnvelope(), SECRET, {
+    const ref = sealNasSecret(KEY, SECRET, {
       organizationId: ORG_A,
       nasId: ROW_A,
       secretVersion: 1,
     });
     expect(() =>
-      openNasSecret(nasEnvelope(), ref, {
+      openNasSecret(KEY, ref, {
         organizationId: ORG_B,
         nasId: ROW_A,
         secretVersion: 1,
@@ -97,7 +98,7 @@ describe('v2 bound envelope', () => {
       column: UAM_SECRET_COLUMN,
       secretVersion: 1,
     });
-    expect(() => openNasSecret(nasEnvelope(), uamRef, {
+    expect(() => openNasSecret(KEY, uamRef, {
       organizationId: ORG_A,
       nasId: ROW_A,
       secretVersion: 1,
@@ -111,20 +112,20 @@ describe('v2 bound envelope', () => {
       secretVersion: 1,
     });
     expect(() =>
-      openBoundSecretRef(nasEnvelope(), sameKeyOtherColumn, nasAt(ROW_A), { allowV1: false }),
+      openBoundSecretRef(nasEnvelope(), sameKeyOtherColumn, nasAt(ROW_A)),
     ).toThrow();
   });
 
   it('refuses a pre-rotation ciphertext replayed at the new version (§7.5)', () => {
     // This is the case AAD over identity alone does NOT catch, and the reason secret_version is
     // a column with a trigger: a row's identity is unchanged by a rotation.
-    const old = sealNasSecret(nasEnvelope(), SECRET, {
+    const old = sealNasSecret(KEY, SECRET, {
       organizationId: ORG_A,
       nasId: ROW_A,
       secretVersion: 1,
     });
     expect(() =>
-      openNasSecret(nasEnvelope(), old, {
+      openNasSecret(KEY, old, {
         organizationId: ORG_A,
         nasId: ROW_A,
         secretVersion: 2,
@@ -139,18 +140,93 @@ describe('v2 bound envelope', () => {
     expect(NAS_SECRET_COLUMN).not.toBe(UAM_SECRET_COLUMN);
   });
 
-  it('opens a v1 ref only while allowV1 is set (§7.7)', () => {
-    // The transitional branch: the database holds both formats until the re-seal completes.
-    const v1 = sealSecretRef(nasEnvelope(), SECRET);
-    expect(v1).toMatch(/^enc:v1\./);
-    expect(openBoundSecretRef(nasEnvelope(), v1, nasAt(ROW_A), { allowV1: true })).toBe(SECRET);
-    expect(() =>
-      openBoundSecretRef(nasEnvelope(), v1, nasAt(ROW_A), { allowV1: false }),
-    ).toThrow(/v1 secret_ref is no longer accepted/);
-    // A v1 ref carries no AAD, so it opens under ANY binding while the allowance stands. That is
-    // the cost of the transition, stated here rather than discovered during the re-seal.
-    expect(openBoundSecretRef(nasEnvelope(), v1, nasAt(ROW_B, ORG_B, 9), { allowV1: true })).toBe(
-      SECRET,
+  it('opens a v1 ref sealed by the OLD code, under the literal old label (§7.7)', () => {
+    // THE TEST THAT WAS MISSING, and the reason it was missing is the lesson. The previous
+    // version of this test sealed its "v1" fixture with the envelope under test — carrying the
+    // NEW purpose label — so it proved only that this code can read its own output. It passed
+    // while production could not open a single real row: the Orchestrator's renderer reported
+    // `DATA_ENCRYPTION_KEY opens none of the 1 sealed NAS secrets (wrong key?)` against vps-local
+    // at 11:40Z with an unchanged key.
+    //
+    // The label is written out as a LITERAL here, not taken from LEGACY_SECRET_PURPOSE. A fixture
+    // that reads the constant follows the constant, which is exactly how the first version of
+    // this test managed to agree with the bug.
+    const sealedByOldCode = sealSecretRef(new Envelope(KEY, 'ecloud:nas:secret:v1'), SECRET);
+    expect(sealedByOldCode).toMatch(/^enc:v1\./);
+    expect(
+      openNasSecret(KEY, sealedByOldCode, {
+        organizationId: ORG_A,
+        nasId: ROW_A,
+        secretVersion: 1,
+      }),
+    ).toBe(SECRET);
+
+    // The same ciphertext through the v2 envelope is the failure that reached production: right
+    // key material, wrong derived key, because the purpose is the HKDF info parameter.
+    expect(() => nasEnvelope().decrypt(sealedByOldCode.slice('enc:'.length))).toThrow();
+
+    // A v1 ref carries no AAD, so it opens under ANY binding while the transition stands. That is
+    // the cost of the window, stated here rather than discovered during the re-seal.
+    expect(
+      openNasSecret(KEY, sealedByOldCode, {
+        organizationId: ORG_B,
+        nasId: ROW_B,
+        secretVersion: 9,
+      }),
+    ).toBe(SECRET);
+  });
+
+  it('also opens a v1 ref sealed under the NEW label, the 11:05-11:40Z window (§7.7b)', () => {
+    // Part one moved the label but had not yet converted the NAS seal sites, so a NAS created or
+    // rotated while it was live holds a v1-FORMAT ref sealed under the ':v2' LABEL. Neither the
+    // old image nor a legacy-only fix can open it, so the v1 path tries both labels.
+    const sealedInTheWindow = sealSecretRef(nasEnvelope(), SECRET);
+    expect(sealedInTheWindow).toMatch(/^enc:v1\./);
+    expect(
+      openNasSecret(KEY, sealedInTheWindow, {
+        organizationId: ORG_A,
+        nasId: ROW_A,
+        secretVersion: 1,
+      }),
+    ).toBe(SECRET);
+  });
+
+  it('opens a UAM v1 ref sealed under the old label too (§7.7d)', () => {
+    // The Orchestrator asked whether the UAM reader had the same fault as the NAS one. It did,
+    // and worse in one respect: UAM_SECRET_PURPOSE moved from 'ecloud:nas:secret:v1' to
+    // 'ecloud:uam:secret:v2', so BOTH segments changed and every existing uam_secret_ref became
+    // unopenable the moment part one deployed. The portal login that worked at 09:47Z on the old
+    // image would have failed from 11:05Z.
+    //
+    // The old label is the NAS one, written out literally, because that collision IS finding S-1:
+    // the two secrets were sealed under one string.
+    const deps = { config: { dataEncryptionKey: KEY } } as unknown as AppDeps;
+    const sealedByOldCode = sealSecretRef(new Envelope(KEY, 'ecloud:nas:secret:v1'), SECRET);
+    const binding = { organizationId: ORG_A, portalId: ROW_A, secretVersion: 1 };
+    expect(openUamSecret(deps, sealedByOldCode, binding)).toBe(SECRET);
+
+    // A v2 ref sealed under the current label still opens, so the transition is additive.
+    const current = sealBoundSecretRef(uamEnvelope(), SECRET, {
+      organizationId: ORG_A,
+      rowId: ROW_A,
+      column: UAM_SECRET_COLUMN,
+      secretVersion: 1,
+    });
+    expect(openUamSecret(deps, current, binding)).toBe(SECRET);
+
+    // And the reader still returns null rather than throwing for an unopenable value, which the
+    // portal path depends on.
+    expect(openUamSecret(deps, 'enc:v1.not-a-real-ciphertext', binding)).toBeNull();
+    expect(openUamSecret(deps, null, binding)).toBeNull();
+  });
+
+  it('refuses a v1 ref through openBoundSecretRef rather than using the wrong key (§7.7c)', () => {
+    // `allowV1` took a boolean when the real question was WHICH KEY to derive, and no boolean can
+    // answer that. The flag is gone; a v1 ref must go through the column helper, which holds the
+    // key and can derive either label.
+    const v1 = sealSecretRef(new Envelope(KEY, 'ecloud:nas:secret:v1'), SECRET);
+    expect(() => openBoundSecretRef(nasEnvelope(), v1, nasAt(ROW_A))).toThrow(
+      /must be opened through the column helper/,
     );
   });
 });

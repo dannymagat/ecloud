@@ -170,6 +170,23 @@ export const SECRET_REF_PREFIX = 'enc:';
 /** HKDF purpose label of the envelope that seals `nas_clients.secret_ref` (data key). */
 export const NAS_SECRET_PURPOSE = 'ecloud:nas:secret:v2'; // was :v1 / check-no-secrets: allow
 
+/**
+ * The pre-split label, and the ONLY key that can open a v1 ref.
+ *
+ * The purpose is the HKDF `info` parameter, so it selects the derived key: a ciphertext sealed
+ * under 'ecloud:nas:secret:v1' is not openable by an envelope built with ':v2', AAD or no AAD.
+ * The first version of this transition missed that — it ran the v1 branch on the v2 envelope, so
+ * every pre-existing NAS and UAM ref became unopenable the moment the new label deployed. Found
+ * on vps-local by the Orchestrator running the renderer in --check mode at 11:40Z, which reported
+ * `DATA_ENCRYPTION_KEY opens none of the 1 sealed NAS secrets (wrong key?)` with an unchanged key.
+ *
+ * BOTH secrets share this one label, and that is not a mistake here — it IS finding S-1. The NAS
+ * secret and the portal UAM secret were sealed under the same string, which is why a ciphertext
+ * from one column opened in the other. So both v1 branches derive from it, and the re-seal is what
+ * finally separates them.
+ */
+export const LEGACY_SECRET_PURPOSE = 'ecloud:nas:secret:v1'; // check-no-secrets: allow (label)
+
 /** The `secret_ref` column name as it appears in the v2 AAD. */
 export const NAS_SECRET_COLUMN = 'nas_clients.secret_ref';
 
@@ -188,20 +205,48 @@ export interface NasSecretBinding {
  * here, once.
  */
 export function sealNasSecret(
-  envelope: Envelope,
+  dataEncryptionKey: string,
   secret: string,
   binding: NasSecretBinding,
 ): string {
-  return sealBoundSecretRef(envelope, secret, nasBinding(binding));
+  return sealBoundSecretRef(
+    new Envelope(dataEncryptionKey, NAS_SECRET_PURPOSE),
+    secret,
+    nasBinding(binding),
+  );
 }
 
+/**
+ * These take the KEY, not a pre-derived `Envelope`, and that is the fix for the outage above
+ * rather than a tidying. Opening a ref needs a choice between TWO derived keys that only the ref
+ * itself can decide, so a caller handing in one envelope cannot be right for both cases — and the
+ * caller who hands in the current one looks completely correct while failing on every legacy row.
+ */
 export function openNasSecret(
-  envelope: Envelope,
+  dataEncryptionKey: string,
   ref: string,
   binding: NasSecretBinding,
 ): string {
-  // allowV1 stays true until the tightening migration reports zero v1 rows in production.
-  return openBoundSecretRef(envelope, ref, nasBinding(binding), { allowV1: true });
+  if (!ref.startsWith(SECRET_REF_PREFIX)) throw new Error('unsupported secret_ref scheme');
+  const body = ref.slice(SECRET_REF_PREFIX.length);
+  if (body.startsWith(`${ENVELOPE_VERSION}.`)) {
+    // Transitional, until the re-seal reports zero v1 rows. A v1 ref carries no AAD, so the
+    // binding is unused here: that is the cost of the window, not an oversight.
+    //
+    // TWO labels are tried, because today produced three states rather than two. Part one
+    // (750b6b2, live 11:05Z-11:40Z) moved NAS_SECRET_PURPOSE to ':v2' but had NOT yet converted
+    // the NAS seal sites, so a NAS created or rotated in that window holds a v1-FORMAT ref sealed
+    // under the ':v2' LABEL. Legacy first because it is the overwhelming majority — every row
+    // sealed before today — then current for anything written in that window. Both are a plain
+    // GCM authentication check, so a wrong guess costs one failed decrypt and reveals nothing.
+    const legacy = new Envelope(dataEncryptionKey, LEGACY_SECRET_PURPOSE);
+    try {
+      return legacy.decrypt(body);
+    } catch {
+      return new Envelope(dataEncryptionKey, NAS_SECRET_PURPOSE).decrypt(body);
+    }
+  }
+  return new Envelope(dataEncryptionKey, NAS_SECRET_PURPOSE).decryptBound(body, nasBinding(binding));
 }
 
 function nasBinding(b: NasSecretBinding): SealBinding {
@@ -245,17 +290,14 @@ export function sealBoundSecretRef(
  * DB-column call sites and only until the tightening migration lands. Sealing is v2 from the
  * moment this code deploys, so the set of v1 refs can only shrink.
  */
-export function openBoundSecretRef(
-  envelope: Envelope,
-  ref: string,
-  binding: SealBinding,
-  opts: { readonly allowV1: boolean },
-): string {
+export function openBoundSecretRef(envelope: Envelope, ref: string, binding: SealBinding): string {
   if (!ref.startsWith(SECRET_REF_PREFIX)) throw new Error('unsupported secret_ref scheme');
   const body = ref.slice(SECRET_REF_PREFIX.length);
   if (body.startsWith(`${ENVELOPE_VERSION}.`)) {
-    if (!opts.allowV1) throw new Error('v1 secret_ref is no longer accepted');
-    return envelope.decrypt(body);
+    // v2-only by design. The `allowV1` flag this replaced took a boolean when the real question
+    // was WHICH KEY to derive, and an envelope built for v2 cannot answer it. The v1 fallback
+    // lives in openNasSecret / openUamSecret, which hold the key and can derive either label.
+    throw new Error('v1 secret_ref must be opened through the column helper, not openBoundSecretRef');
   }
   return envelope.decryptBound(body, binding);
 }

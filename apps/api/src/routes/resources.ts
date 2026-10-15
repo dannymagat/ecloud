@@ -24,7 +24,7 @@ import { z } from 'zod';
 import { writeAudit } from '../audit.js';
 import { requestIsImpersonating } from '../auth/middleware.js';
 import type { AppDeps } from '../context.js';
-import { Envelope, NAS_SECRET_PURPOSE, randomToken, sealNasSecret } from '../crypto.js';
+import { randomToken, sealNasSecret } from '../crypto.js';
 import { OrgIdParams, ResourceSchema, problemResponses } from '../http/common.js';
 import { ImpersonationForbiddenError } from '../http/errors.js';
 import { defineRoute, type AnyRouteSpec } from '../http/route.js';
@@ -481,7 +481,6 @@ function withoutKeys(row: Row, keys: readonly string[]): Row {
 }
 
 export function resourceRoutes(deps: AppDeps): AnyRouteSpec[] {
-  const dataEnvelope = new Envelope(deps.config.dataEncryptionKey, NAS_SECRET_PURPOSE);
   const argonMemory = deps.config.base.argon2.memoryKib;
 
   const sites = crudRoutes(deps, {
@@ -647,7 +646,7 @@ export function resourceRoutes(deps: AppDeps): AnyRouteSpec[] {
         ...merakiColumns,
         deployment_mode: deploymentMode,
         adapter_type_key: body.adapter_key,
-        secret_ref: sealNasSecret(dataEnvelope, secret, {
+        secret_ref: sealNasSecret(deps.config.dataEncryptionKey, secret, {
           organizationId: hook.orgId,
           nasId,
           secretVersion: 1,
@@ -806,7 +805,7 @@ export function resourceRoutes(deps: AppDeps): AnyRouteSpec[] {
         await trx
           .updateTable('nas_clients')
           .set({
-            secret_ref: sealNasSecret(dataEnvelope, secret, {
+            secret_ref: sealNasSecret(deps.config.dataEncryptionKey, secret, {
               organizationId: before.organization_id as string,
               nasId: params.id,
               secretVersion: nextVersion,

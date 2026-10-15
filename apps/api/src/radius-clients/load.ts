@@ -8,7 +8,7 @@
  * key that opens none of the sealed secrets fails the whole render (previous file kept).
  */
 import { withPlatform, type Db } from '@ecloud/db';
-import { Envelope, NAS_SECRET_PURPOSE, SECRET_REF_PREFIX, openNasSecret } from '../crypto.js';
+import { SECRET_REF_PREFIX, openNasSecret } from '../crypto.js';
 import { RadiusClientsRenderError, type NasClientEntry, type SkippedNas } from './render.js';
 
 export interface NasClientRow {
@@ -84,7 +84,6 @@ export function resolveNasSecrets(
   rows: readonly NasClientRow[],
   dataEncryptionKey: string,
 ): ResolvedNas {
-  const envelope = new Envelope(dataEncryptionKey, NAS_SECRET_PURPOSE);
   const entries: NasClientEntry[] = [];
   const skipped: SkippedNas[] = [];
   let sealed = 0;
@@ -94,7 +93,7 @@ export function resolveNasSecrets(
     if (isSealed) sealed += 1;
     let secret: string;
     try {
-      secret = openNasSecret(envelope, row.secretRef, {
+      secret = openNasSecret(dataEncryptionKey, row.secretRef, {
         organizationId: row.organizationId,
         nasId: row.id,
         secretVersion: row.secretVersion,
