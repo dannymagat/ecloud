@@ -856,6 +856,27 @@ describe('NAS adoption (§7)', () => {
     expect(within(dialog).queryByRole('option', { name: /Branch only/ })).toBeNull();
   });
 
+  it('offers no Adopt on a blocked NAS, which §5 prohibits adopting', async () => {
+    const blocked: Overview = {
+      ...OVERVIEW,
+      nas: [
+        {
+          ...nas(NAS1, 'Aruba controller', 'external-portal-postback', 'aruba'),
+          status: 'blocked',
+          state: 'blocked' as const,
+          is_adopted: false,
+          block_reason: 'suspected spoofed identifier',
+        },
+      ],
+    };
+    mockFetch([{ method: 'GET', path: `${base}/policies`, body: POLICY_PAGE }, ...routes(blocked)]);
+    renderPage();
+    const list = await screen.findByLabelText('NAS state');
+    expect(within(list).getByText('Blocked')).toBeInTheDocument();
+    // The endpoint answers 409 `nas-blocked`; a button here would invite a pointless retry.
+    expect(within(list).queryByRole('button', { name: 'Adopt' })).toBeNull();
+  });
+
   it('shows no Adopt button without nas:adopt, even on an unadopted NAS', async () => {
     mockFetch(adoptRoutes(adoptReply(), ['nas:read', 'policy:read', 'site:read']));
     renderPage();
@@ -870,11 +891,11 @@ describe('NAS adoption (§7)', () => {
       {
         method: 'POST',
         path: `${base}/nas/${NAS1}/adopt`,
-        status: 422,
+        status: 400,
         body: {
           type: 'about:blank',
-          title: 'Validation failed',
-          status: 422,
+          title: 'Validation Failed',
+          status: 400,
           errors: [{ path: 'body.policy_id', message: 'policy is not active' }],
         },
       },

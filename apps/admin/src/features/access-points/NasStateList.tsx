@@ -100,8 +100,13 @@ export function NasStateList({
                   </Badge>
                 ) : null}
                 {/* §7: the adopt action belongs on the row that needs it. Mounted only for an
-                    unadopted NAS, so an adopted one carries no button to press by mistake. */}
-                {!n.is_adopted ? <AdoptNasButton orgId={orgId} nas={n} /> : null}
+                    unadopted NAS, so an adopted one carries no button to press by mistake —
+                    and never on a BLOCKED one: §5 prohibits adopting those, the endpoint
+                    refuses with 409, and offering a button that cannot succeed would read as
+                    "try again" when the answer is "someone blocked this on purpose". */}
+                {!n.is_adopted && n.state !== 'blocked' ? (
+                  <AdoptNasButton orgId={orgId} nas={n} />
+                ) : null}
               </span>
             </li>
           );

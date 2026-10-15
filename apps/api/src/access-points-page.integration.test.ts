@@ -737,6 +737,45 @@ await describeIntegration('@ecloud/api Access Points page (D-045)', () => {
     expect(res.status, JSON.stringify(res.body)).toBe(400);
   });
 
+  it('refuses to adopt a blocked NAS, and leaves it unadopted (§5)', async () => {
+    const a = await sharedAdmin();
+    const nas = await createNas(a.agent, a.orgId, a.siteId);
+    // A site policy exists, so NOTHING else would stop this adoption: the refusal has to come
+    // from the block itself rather than from a missing policy.
+    const policyId = await sitePolicy(a.orgId, a.siteId);
+    // `block_reason` is required whenever status is `blocked` (046's bidirectional CHECK).
+    await deps.dbPlatform
+      .updateTable('nas_clients')
+      .set({ status: 'blocked', block_reason: 'suspected spoofed identifier', is_adopted: false })
+      .where('id', '=', nas.id)
+      .execute();
+
+    const res = await a.agent
+      .post(adoptUrl(a.orgId, nas.id))
+      .set(BROWSER)
+      .send({ policy_id: policyId });
+    // §5: "Blocked | Explicitly prohibited | Denied; automatic adoption prohibited". A 409 with
+    // its own reason code, so the admin UI can say "someone blocked this" rather than "retry".
+    expect(res.status, JSON.stringify(res.body)).toBe(409);
+    expect(String(res.body.type)).toContain('nas-blocked');
+    expect(String(res.body.detail)).toContain('suspected spoofed identifier');
+
+    // The refusal is a refusal: no adoption, and no policy assignment created on the way out.
+    const after = await deps.dbPlatform
+      .selectFrom('nas_clients')
+      .select(['is_adopted', 'status'])
+      .where('id', '=', nas.id)
+      .executeTakeFirstOrThrow();
+    expect(after.is_adopted).toBe(false);
+    expect(after.status).toBe('blocked');
+    const assignments = await deps.dbPlatform
+      .selectFrom('policy_assignments')
+      .select(['id'])
+      .where('policy_id', '=', policyId)
+      .execute();
+    expect(assignments).toEqual([]);
+  });
+
   it('refuses a NAS of another organization as not found', async () => {
     const a = await sharedAdmin();
     const b = await otherAdmin();

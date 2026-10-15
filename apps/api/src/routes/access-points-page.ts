@@ -736,6 +736,7 @@ export function accessPointsPageRoutes(deps: AppDeps): AnyRouteSpec[] {
           assigned_site_id: z.uuid().nullable(),
         }),
       },
+      409: { description: 'The NAS is blocked; adoption is prohibited (§5)' },
       ...problemResponses,
     },
     handler: async ({ params, body, ctx }) => {
@@ -745,7 +746,15 @@ export function accessPointsPageRoutes(deps: AppDeps): AnyRouteSpec[] {
         // assignment, and §7 requires concurrent adoption not to produce inconsistent state.
         const nas = await loose(trx)
           .selectFrom('nas_clients')
-          .select(['id', 'organization_id', 'site_id', 'status', 'is_adopted', 'adapter_key'])
+          .select([
+            'id',
+            'organization_id',
+            'site_id',
+            'status',
+            'block_reason',
+            'is_adopted',
+            'adapter_key',
+          ])
           .where('id', '=', params.id)
           .where('deleted_at', 'is', null)
           .forUpdate()
@@ -753,6 +762,25 @@ export function accessPointsPageRoutes(deps: AppDeps): AnyRouteSpec[] {
         if (nas === undefined) throw new NotFoundError('nas_client', params.id);
         const siteId = nas.site_id as string;
         requireOnSite(ctx, 'nas:adopt', params.orgId, siteId, 'nas_client', 'nas:read');
+        // §5: `Blocked` is the one state whose row reads "Denied; automatic adoption
+        // prohibited", and §5's state precedence says Blocked overrides any automatic
+        // activation. Checked BEFORE `expect_site_id`, because a prohibition outranks a stale
+        // view: telling an operator the site is wrong would send them to fix the wrong thing.
+        //
+        // REFUSED rather than adopted-and-reported-blocked. A silent no-op would set
+        // `is_adopted` on a device someone explicitly prohibited, and leave the operator
+        // believing the remaining obstacle is a policy — when what is required is an explicit
+        // unblock by whoever decided to block it. Disabled is deliberately NOT refused: §5
+        // gives it no adoption clause, and the derived state still denies access.
+        if (nas.status === 'blocked') {
+          const reason = nas.block_reason === null ? null : String(nas.block_reason);
+          throw new AppError(409, 'nas-blocked', 'NAS is blocked', {
+            detail:
+              reason === null
+                ? 'This NAS is blocked; adoption is prohibited until it is unblocked.'
+                : `This NAS is blocked (${reason}); adoption is prohibited until it is unblocked.`,
+          });
+        }
         // §7 step 2: a caller acting on a stale view of which site this NAS belongs to is
         // refused rather than silently adopting it into the site it actually has.
         if (body.expect_site_id !== undefined && body.expect_site_id !== siteId) {
