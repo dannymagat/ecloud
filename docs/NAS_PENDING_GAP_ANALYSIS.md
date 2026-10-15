@@ -113,3 +113,109 @@ surface it. See `docs/CAPTIVE_PORTAL_GAP_ANALYSIS.md` §7 for that side.
 
 Steps 2–6 do not depend on the AAA audit. Step 7 does, and §6 explicitly allows documenting that
 discovery is unavailable at that layer if the listener rejects unknown clients first.
+
+## 6. Settled decisions (2026-10-15)
+
+Agreed with the session that owns `packages/db`, `resolve.ts` and NAS provisioning. Recorded here
+rather than left in message history, because the Orchestrator restarted once today and a decision
+that lives only in a chat log does not survive that.
+
+### Blocked is a `status` value, not a boolean
+
+`ck_nas_clients_status` is widened to `('active','disabled','blocked')` (migration 047) rather than
+paired with an `is_blocked` boolean. A separate boolean makes `status = 'active'` with
+`is_blocked = true` representable and meaningless, so every reader must consult both columns and
+the reader that forgets one grants access — the shape of a defect that reached four call sites in
+the captive-portal resolver this week.
+
+The compatibility claim was verified twice, independently, because it is the part that would
+quietly grant access if wrong: every reader of `nas_clients.status` in `apps/` and `packages/` is
+a positive `= 'active'` comparison, and no negative form (`!== 'disabled'`, `<> 'disabled'`,
+`NOT ... disabled`) exists in TypeScript or SQL. A new value therefore fails closed everywhere.
+
+`block_reason text` is a genuine second field — `status` carries the state and cannot carry why —
+with a CHECK requiring it when blocked and forbidding it otherwise, so a reason cannot survive an
+unblock and a block cannot exist without one. `is_adopted boolean NOT NULL DEFAULT true` keeps
+adoption separate from administrative status, which is what lets a policy loss leave adoption
+history intact (§5).
+
+### `NO_POLICY` for a NAS means site reachability, and that is an approximation
+
+Policy resolution is per SUBJECT: `resolveEffectivePolicy` answers for a user, voucher or device,
+and `no_policy` is what a subject gets. A NAS has no policy. Three definitions were considered:
+
+- **Per-subject truth** — undefined for the case that matters, because the Pending case is a NAS no
+  subject has ever used, so there is nothing to run the engine against.
+- **Observed rejections** — honest about reality but silent exactly when an operator most wants the
+  warning, on a NAS adopted five minutes ago. Worth adding later as a supplement.
+- **Site reachability** — the only one that answers the question §5 asks. Adopted.
+
+`policyAvailabilityForSites(trx, siteIds): Map<siteId, 'assigned' | 'platform_default' | 'missing'>`
+is written on the policy-engine side, not here, so the tree does not grow a second definition of
+policy availability (§2: "do not implement a second NAS registry or authorization engine
+unnecessarily"). Its precedence:
+
+| Result | Condition |
+| --- | --- |
+| `assigned` | A `policy_assignments` row whose target could apply at this site, **or** an organization default policy (`policies.is_default = true`, active, not deleted, inside its validity window) |
+| `platform_default` | None of the above, and `platform_default_policy.enabled = true` |
+| `missing` | None of the above, and the platform default is disabled or absent |
+
+The organization-default branch is easy to miss and loud when missed. A tenant can resolve policy
+with **zero** assignment rows — `is_default = true` is injected by `rankCandidates` at the
+`organization_default` layer — so a test for assignments alone would report `missing` for a tenant
+that works fine.
+
+**The approximation, which belongs in the UI copy and not only here:** site reachability can report
+a NAS as fine while a particular user still gets `no_policy` because their group has no assignment.
+That is a subject problem and correctly not a NAS Pending reason; a NAS-level warning that fired on
+per-user gaps would be noise within a week.
+
+### Two of the six Pending reasons are not yet reachable
+
+`policyAvailabilityForSites` returns three values, so `POLICY_DISABLED` and `POLICY_UNAVAILABLE`
+have nothing that can produce them yet. `nasEligibility` accepts and tests both, and the Pending
+list must not be described as covering all six §5 reasons until something supplies them —
+`POLICY_UNAVAILABLE` in particular is §10's "policy service/configuration unavailable", which needs
+a resolution call that can fail rather than a reachability query that cannot.
+
+### The platform-default flip is intended
+
+With `platform_default_policy.enabled = true` an unassigned NAS is `platform_default` → **Active**
+with an `ON_PLATFORM_DEFAULT_POLICY` advisory. With it `false` the same NAS is `missing` →
+**Pending** with `NO_POLICY`. The same NAS changes state on that switch, which is the owner's
+2026-10-14 ruling implemented: he chose a permissive fallback for any NAS with nothing assigned
+over the modest alternative, and the switch is the control.
+
+The switch is currently **off and the row does not exist** — `platform_default_policy` is a
+singleton whose migration deliberately creates no row — so today every unassigned NAS is
+`missing`. An absent row is disabled, not an error.
+
+Two UI obligations follow from the flip. The advisory must be visibly rendered rather than merely
+present in the response, because at generous limits no guest complains and a forgotten NAS serves
+customers anonymously for months. And the list must distinguish `platform_default` from `assigned`
+plainly: "working" and "working because a fallback caught it" are different operational states and
+only one of them wants attention.
+
+### §6 discovery: conditionally available
+
+Settled by the RADIUS-side audit. `GET /internal/radius/client?ip=…` is application code that
+receives an unknown source address before answering 404, so an observation can be recorded with no
+wildcard trusted client, no weakened validation and the packet still discarded. **But that holds
+only where dynamic clients are enabled**; with static `clients.conf` the daemon rejects at the
+socket and there is nothing to observe, which is the case §6 permits documenting as unavailable at
+that layer.
+
+The UI must say which of the two it is. An empty list meaning "we cannot see" and an empty list
+meaning "nothing unknown arrived" look identical, and only one of them is reassuring.
+
+The observation table itself is owned by the RADIUS side and written with the client lookup; this
+lane consumes it for the Pending list and the §7 adopt flow.
+
+### Adopt-flow reconciliation
+
+Linking an observation to an existing NAS by natural key must order live rows first:
+`.orderBy(sql`(deleted_at is null)`, 'desc').orderBy('created_at', 'desc')`. Unique indexes are
+partial on `deleted_at IS NULL`, so duplicates beside a live row are the expected state after any
+delete-and-recreate. Three worked examples exist in the tree (`005db2d` on `nas_clients`, `fea68cf`
+on `sites` and `users`); the adopt flow uses that exact form rather than a fourth variant.
