@@ -36,8 +36,13 @@ await describeIntegration('@ecloud/api secret re-seal', () => {
 
   /** A tenant whose two secrets are sealed the way the OLD code sealed them. */
   async function legacyTenant(): Promise<{ orgId: string; nasId: string; portalId: string }> {
-    // 198.51.100.0/24 is the RFC 5737 documentation range; uq_nas_clients_ip is global.
-    const ip = `198.51.100.${String(1 + Math.floor(Math.random() * 253))}`;
+    // uq_nas_clients_ip is GLOBAL (unique on nas_ip where deleted_at is null) and this suite does
+    // not truncate, so addresses accumulate across every run. A /24 gives 253 of them and this
+    // file creates four per run — it collided on the second day of use, which is the same trap I
+    // flagged in cycle-f and then walked into. 10.200.0.0/13 is ~524k addresses and is disjoint
+    // from cycle-f's 10.77/16 and platform-default-portal's 10.120.0.0/13 by construction.
+    const r = Math.floor(Math.random() * 0x7ffff);
+    const ip = `10.${String(200 + (r >> 16))}.${String((r >> 8) & 0xff)}.${String((r & 0xfd) + 1)}`;
     const legacy = new Envelope(key(), 'ecloud:nas:secret:v1');
     return withPlatform(db(), REASON, async (trx) => {
       const org = await trx

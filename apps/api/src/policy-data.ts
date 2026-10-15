@@ -156,6 +156,67 @@ export interface ResolutionFacts {
   voucherBatchId: string | null;
 }
 
+/**
+ * Migration 043's fleet-wide fallback, as a PolicyIntent, or null when it is off.
+ *
+ * WHY THIS EXISTS AT ALL: until now nothing loaded this row, so `input.platform_default` was
+ * undefined on every production path and the resolver's `platform_default` branch was
+ * unreachable. The table, the layer, the candidate builder and the trace entry were all in place
+ * and inert — and `policyAvailabilityForSites` was already reporting `platform_default` as an
+ * availability state, so the Pending list could say a policy would resolve at a site where a real
+ * session still got `no_policy`. Loading it here is what makes those two agree.
+ *
+ * BEHAVIOUR-NEUTRAL UNTIL SOMEONE ENABLES IT. The migration deliberately creates no row, and
+ * `enabled` defaults to false, so "not configured" and "switched off" are the same state and both
+ * return null here. Turning it on is an operator decision with real consequences — every
+ * unassigned access point starts serving guests instead of rejecting them — and it is not one
+ * this function makes.
+ *
+ * The synthetic identity fields are what they are because the row is a singleton with no policy
+ * identity of its own: `id` is a stable sentinel so a trace or a provenance record names it
+ * recognisably, `organization_id` is the organization being resolved FOR (not an owner, since it
+ * has none), and `version` is 1 because the table has no version column. A limit change therefore
+ * does not move the version — re-authorization is driven by the snapshot hash, which does change.
+ */
+export const PLATFORM_DEFAULT_POLICY_ID = 'platform-default';
+
+export async function loadPlatformDefaultPolicy(
+  trx: DbTransaction,
+  organizationId: string,
+): Promise<PolicyIntent | null> {
+  const row = await trx.selectFrom('platform_default_policy').selectAll().executeTakeFirst();
+  if (row === undefined || row.enabled !== true) return null;
+  return PolicyIntentSchema.parse({
+    id: PLATFORM_DEFAULT_POLICY_ID,
+    organization_id: organizationId,
+    site_id: null,
+    name: 'Platform default',
+    description: row.description === '' ? null : row.description,
+    scope_type: 'site',
+    status: 'active',
+    version: 1,
+    // Lowest precedence there is; the resolver injects it at its own layer regardless, so this
+    // only matters if someone ever ranks it alongside configured policies.
+    priority: Number.MAX_SAFE_INTEGER,
+    is_default: false,
+    download_rate_kbps: row.download_rate_kbps ?? null,
+    upload_rate_kbps: row.upload_rate_kbps ?? null,
+    session_timeout_s: row.session_timeout_s ?? null,
+    idle_timeout_s: row.idle_timeout_s ?? null,
+    quota_daily_bytes: row.quota_daily_bytes ?? null,
+    quota_total_bytes: row.quota_total_bytes ?? null,
+    online_time_total_s: row.online_time_total_s ?? null,
+    max_concurrent_sessions: row.max_concurrent_sessions ?? null,
+    max_devices: row.max_devices ?? null,
+    valid_from: null,
+    valid_until: null,
+    schedule: null,
+    // No validity window: migration 043 gives this row `enabled` and limits, and nothing else.
+    // `enabled` is the whole of its lifecycle, so there is no date to filter against and no
+    // reason to take `now`.
+  });
+}
+
 export async function loadResolutionInput(
   trx: DbTransaction,
   facts: ResolutionFacts,
@@ -329,6 +390,9 @@ export async function loadResolutionInput(
     group_ids: facts.groupIds,
     candidates,
     default_policy: defaultPolicy ?? null,
+    // Reached only when nothing an operator configured applied, so it cannot override a choice.
+    // Null whenever the row is absent or disabled, which is every estate until someone enables it.
+    platform_default: await loadPlatformDefaultPolicy(trx, facts.organizationId),
     usage,
     active_sessions: activeSessions,
   };
