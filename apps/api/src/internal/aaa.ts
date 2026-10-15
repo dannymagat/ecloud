@@ -167,6 +167,18 @@ interface DecisionFacts {
   policy_id: string | null;
   auth_method: string | null;
   reason: string | null;
+  /**
+   * Which bound produced the emitted Session-Timeout: `policy`, `validity_end`, `quota_reset`,
+   * `online_time`, `window_end`, `voucher_end`, `quota_drain` or `policy_change_cap`
+   * (`deriveSessionTimeout`). Null when no Session-Timeout was emitted.
+   *
+   * `deriveSessionTimeout` takes the MINIMUM of its candidates, so the emitted number alone does
+   * not say which rule produced it, and the answer is only recoverable by reasoning backwards
+   * from the policy. That became load-bearing when the uspot Session-Timeout cap was removed
+   * (`sessionTimeoutCapFor`): an operator seeing an unexpected value now needs to know whether a
+   * quota reset, an account validity end or the policy itself bounded the session.
+   */
+  session_timeout_bound_by: string | null;
 }
 
 class Reject extends Error {
@@ -696,6 +708,7 @@ async function decide(deps: AppDeps, body: RadiusRequestBody, now: Date): Promis
         policy_id: null,
         auth_method: null,
         reason: 'unknown_nas',
+        session_timeout_bound_by: null,
       },
     };
   }
@@ -707,6 +720,7 @@ async function decide(deps: AppDeps, body: RadiusRequestBody, now: Date): Promis
     policy_id: null,
     auth_method: null,
     reason: null,
+    session_timeout_bound_by: null,
   };
   if (nas.adapter_key === MERAKI_ADAPTER) {
     // Cycle E (D-044): build/test only until the platform flag is on (D-043: no public RADIUS).
@@ -825,6 +839,8 @@ async function decide(deps: AppDeps, body: RadiusRequestBody, now: Date): Promis
       let emitted: unknown = [];
       let unsupported: unknown = [];
       let adapterVersion: string | null = null;
+      // Which bound produced the emitted Session-Timeout; see DecisionFacts.
+      let sessionTimeoutBoundBy: string | null = null;
       if (adapter !== null) {
         adapterVersion = adapter.version;
         // Q44 (P7-A): without a lab-validated CoA / Disconnect a policy change reaches a live
@@ -865,6 +881,7 @@ async function decide(deps: AppDeps, body: RadiusRequestBody, now: Date): Promis
         for (const a of attributes) builder.add('reply', dictionaryName(a.name), a.value);
         emitted = attributes;
         unsupported = plan.unenforceable;
+        sessionTimeoutBoundBy = plan.sessionTimeout.boundBy;
       } else {
         unsupported = [
           { field: '*', reason: `NAS has no engine adapter_key (type ${nas.adapter_type_key})` },
@@ -944,6 +961,7 @@ async function decide(deps: AppDeps, body: RadiusRequestBody, now: Date): Promis
           policy_id: resolution.snapshot.policy_id,
           auth_method: identity.authMethod,
           reason: null,
+          session_timeout_bound_by: sessionTimeoutBoundBy,
         },
       };
     });
@@ -1027,6 +1045,7 @@ export function authorizeHandler(deps: AppDeps): RequestHandler {
           organizationId: decision.facts.organization_id,
           nasClientId: decision.facts.nas_client_id,
           sessionId: decision.facts.session_id,
+          sessionTimeoutBoundBy: decision.facts.session_timeout_bound_by,
         },
         'aaa authorize',
       );
@@ -1086,6 +1105,9 @@ export function postAuthHandler(deps: AppDeps): RequestHandler {
                   ? 'password'
                   : null,
             reason: null,
+            // Accounting reconstructs facts from the session row, which does not record which
+            // bound set the Session-Timeout; it was only known at authorize time.
+            session_timeout_bound_by: null,
           };
         }
       }
