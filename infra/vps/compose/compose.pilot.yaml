@@ -290,6 +290,35 @@ services:
     deploy:
       resources:
         limits: { memory: 128M, cpus: '0.25', pids: 32 }
+  # One-shot tenant bootstrap (apps/api/src/bootstrap/tenant.ts): the minimum rows a NAS needs
+  # before a guest can reach the internet, including the two shared secrets no API route can set.
+  # Idempotent, one transaction, an audit row per write; every secret comes from the operator's
+  # shell, never from this file. Needs the platform role and the data key, the same two secrets
+  # radius-clients mounts; the migrate service carries neither, which is why this is its own
+  # service rather than a command override. Never started by `up`: profile-gated, and it writes
+  # production rows, so it runs only by hand:
+  #   docker compose --profile bootstrap run --rm \
+  #     -e BOOTSTRAP_ORGANIZATION_ID -e BOOTSTRAP_NAS_IDENTIFIER -e BOOTSTRAP_NAS_IP \
+  #     -e BOOTSTRAP_RADIUS_SECRET -e BOOTSTRAP_UAM_SECRET -e BOOTSTRAP_USER_PASSWORD bootstrap
+  bootstrap:
+    <<: *hardening
+    image: ${ECLOUD_REGISTRY:-ghcr.io/OWNER}/ecloud-api:${IMAGE_TAG:?IMAGE_TAG is required}
+    container_name: ecloud-bootstrap
+    profiles: ['bootstrap']
+    restart: 'no'
+    depends_on:
+      db-roles: { condition: service_completed_successfully }
+    command: ['node', 'apps/api/dist/tenant-bootstrap-cli.js']
+    environment:
+      NODE_ENV: production
+      DATABASE_URL_PLATFORM_FILE: /run/secrets/database_url_platform
+      DATA_ENCRYPTION_KEY_FILE: /run/secrets/data_encryption_key
+    secrets:
+      - database_url_platform
+      - data_encryption_key
+    deploy:
+      resources:
+        limits: { memory: 128M, cpus: '0.25', pids: 32 }
 
   # RADIUS front-end. Opt-in profile `radius` (VPS-RADIUS-1): needs the WireGuard hub address
   # below and at least one NAS in EZECLOUD. Clients come ONLY from the rendered volume mounted
