@@ -184,10 +184,17 @@ await describeIntegration('@ecloud/api platform-default portal (migration 041)',
 
   const logger = createLogger({ name: 'test', level: 'silent' });
 
-  // `uq_nas_clients_ip` is global and not scoped to the run, so a fixed sequence collides with
-  // rows left by an earlier run of this suite.
+  // `uq_nas_clients_ip` is GLOBAL (`unique(nas_ip) where deleted_at is null`), not per-tenant,
+  // and these suites do not truncate — so a hardcoded address is a time bomb rather than a flake:
+  // the first aborted run that leaves a row behind poisons it permanently with a 409.
+  //
+  // Randomised, and deliberately DISJOINT from other suites rather than merely unlikely to
+  // collide. `cycle-f.integration.test.ts` randomises inside 10.77.0.0/16, and an earlier version
+  // of this range spanned second octets 77 to 116, so the two shared 10.77/16 — a low per-insert
+  // probability, but cumulative across runs because nothing clears the rows. 10.120.0.0/13 has no
+  // other fixture in it; keep it that way rather than widening this back over 10.77.
   const randomNasIp = () =>
-    `10.${String(77 + (randomInt(0, 40) % 40))}.${String(randomInt(0, 256))}.${String(randomInt(1, 255))}`;
+    `10.${String(120 + randomInt(0, 8))}.${String(randomInt(0, 256))}.${String(randomInt(1, 255))}`;
 
   async function nas(orgId: string, siteId: string) {
     const identifier = unique('mt');
