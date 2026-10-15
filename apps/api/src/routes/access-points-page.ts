@@ -773,7 +773,7 @@ export function accessPointsPageRoutes(deps: AppDeps): AnyRouteSpec[] {
         // unblock by whoever decided to block it. Disabled is deliberately NOT refused: §5
         // gives it no adoption clause, and the derived state still denies access.
         if (nas.status === 'blocked') {
-          const reason = nas.block_reason === null ? null : String(nas.block_reason);
+          const reason = typeof nas.block_reason === 'string' ? nas.block_reason : null;
           throw new AppError(409, 'nas-blocked', 'NAS is blocked', {
             detail:
               reason === null
