@@ -74,21 +74,37 @@ interface PortalRow {
   uam_secret_version: number;
 }
 
+/**
+ * Restrict a run to these organizations.
+ *
+ * Omitted means the whole fleet, which is what the migration is for. It exists because a
+ * fleet-wide re-seal is safer done one tenant at a time on a large estate — and because a run
+ * that touches every row will stop on the FIRST ref it cannot open, so a single unopenable row
+ * anywhere blocks every other tenant's re-seal until someone deals with it. Scoping lets an
+ * operator make progress around it.
+ */
+export interface ResealScope {
+  readonly organizationIds?: readonly string[];
+}
+
 async function readRows(
   trx: DbTransaction,
+  scope: ResealScope = {},
 ): Promise<{ nas: NasRow[]; portals: PortalRow[] }> {
-  const nasRows = await trx
+  const orgs = scope.organizationIds;
+  if (orgs !== undefined && orgs.length === 0) return { nas: [], portals: [] };
+  let nasQuery = trx
     .selectFrom('nas_clients')
     .select(['id', 'organization_id', 'secret_ref', 'secret_version'])
-    .where('deleted_at', 'is', null)
-    .orderBy('id')
-    .execute();
+    .where('deleted_at', 'is', null);
+  if (orgs !== undefined) nasQuery = nasQuery.where('organization_id', 'in', [...orgs]);
+  const nasRows = await nasQuery.orderBy('id').execute();
   // captive_portals has no deleted_at, so every row is live; the ref is nullable there.
-  const portalRows = await trx
+  let portalQuery = trx
     .selectFrom('captive_portals')
-    .select(['id', 'organization_id', 'uam_secret_ref', 'uam_secret_version'])
-    .orderBy('id')
-    .execute();
+    .select(['id', 'organization_id', 'uam_secret_ref', 'uam_secret_version']);
+  if (orgs !== undefined) portalQuery = portalQuery.where('organization_id', 'in', [...orgs]);
+  const portalRows = await portalQuery.orderBy('id').execute();
   return {
     nas: nasRows
       .filter((r) => typeof r.secret_ref === 'string' && r.secret_ref !== '')
@@ -117,13 +133,16 @@ async function readRows(
  * no production code can open) is counted in `*_rows` but in neither `*_v1` nor `*_v2`, so a
  * mismatch between the totals is visible in the output rather than silently skipped.
  */
-export async function planReseal(trx: DbTransaction): Promise<{
+export async function planReseal(
+  trx: DbTransaction,
+  scope: ResealScope = {},
+): Promise<{
   counts: ResealCounts;
   dump: ResealDump;
   nas: NasRow[];
   portals: PortalRow[];
 }> {
-  const { nas, portals } = await readRows(trx);
+  const { nas, portals } = await readRows(trx, scope);
   const nasV1 = nas.filter((r) => isV1Ref(r.secret_ref));
   const portalV1 = portals.filter((r) => isV1Ref(r.uam_secret_ref));
   const v2 = (ref: string): boolean => ref.startsWith(`${SECRET_REF_PREFIX}v2.`);
@@ -166,8 +185,9 @@ export async function planReseal(trx: DbTransaction): Promise<{
 export async function applyReseal(
   trx: DbTransaction,
   dataEncryptionKey: string,
+  scope: ResealScope = {},
 ): Promise<ResealResult> {
-  const { counts, dump, nas, portals } = await planReseal(trx);
+  const { counts, dump, nas, portals } = await planReseal(trx, scope);
 
   let nasUpdated = 0;
   for (const row of nas) {

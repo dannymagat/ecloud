@@ -19,6 +19,13 @@
  *   secret-reseal --dump <path>             re-seal, writing the rollback dump to <path> first
  *   secret-reseal --restore <path>          put the dumped refs back
  *
+ *   --org <uuid>                            restrict to one organization; repeatable
+ *
+ * `--org` exists because a run that touches every row stops on the FIRST ref it cannot open, so
+ * one unopenable row anywhere blocks every other tenant until someone deals with it. Scoping lets
+ * an operator make progress around it, and lets a large estate be re-sealed a tenant at a time
+ * with a separate dump for each.
+ *
  * `--dump` is REQUIRED for a real run. A re-seal with no rollback is not a procedure, and making
  * the operator name the file is the cheapest way to ensure one exists and they know where.
  *
@@ -49,8 +56,17 @@ function required(env: NodeJS.ProcessEnv, name: string): string {
 function parseArgs(argv: readonly string[]): {
   mode: 'dry-run' | 'apply' | 'restore';
   path: string | null;
+  organizationIds: string[] | undefined;
 } {
   const dryRun = argv.includes('--dry-run');
+  const organizationIds: string[] = [];
+  for (let i = 0; i < argv.length; i += 1) {
+    if (argv[i] !== '--org') continue;
+    const value = argv[i + 1];
+    if (value === undefined || value.startsWith('--')) throw new Error('--org needs a value');
+    organizationIds.push(value);
+  }
+  const scopeIds = organizationIds.length > 0 ? organizationIds : undefined;
   const dumpAt = argv.indexOf('--dump');
   const restoreAt = argv.indexOf('--restore');
   const dump = dumpAt === -1 ? null : (argv[dumpAt + 1] ?? null);
@@ -58,18 +74,21 @@ function parseArgs(argv: readonly string[]): {
 
   if (restore !== null) {
     if (dryRun || dump !== null) throw new Error('--restore cannot be combined with other modes');
-    return { mode: 'restore', path: restore };
+    // A restore writes exactly the rows in the dump, so scoping it would silently skip some of
+    // them — which is the opposite of what a rollback is for.
+    if (scopeIds !== undefined) throw new Error('--restore writes the whole dump; --org is not allowed');
+    return { mode: 'restore', path: restore, organizationIds: undefined };
   }
   if (dryRun) {
     if (dump !== null) throw new Error('--dry-run writes nothing, so --dump is meaningless');
-    return { mode: 'dry-run', path: null };
+    return { mode: 'dry-run', path: null, organizationIds: scopeIds };
   }
   if (dump === null || dump.startsWith('--')) {
     // Refusing rather than defaulting a path: a dump the operator did not choose is one they
     // will not find when they need it.
     throw new Error('a real run requires --dump <path> (the rollback); or pass --dry-run');
   }
-  return { mode: 'apply', path: dump };
+  return { mode: 'apply', path: dump, organizationIds: scopeIds };
 }
 
 async function main(): Promise<number> {
@@ -77,7 +96,11 @@ async function main(): Promise<number> {
 
   let databaseUrl: string;
   let dataEncryptionKey: string;
-  let args: { mode: 'dry-run' | 'apply' | 'restore'; path: string | null };
+  let args: {
+    mode: 'dry-run' | 'apply' | 'restore';
+    path: string | null;
+    organizationIds: string[] | undefined;
+  };
   try {
     args = parseArgs(process.argv.slice(2));
     databaseUrl = required(env, 'DATABASE_URL_PLATFORM');
@@ -90,9 +113,16 @@ async function main(): Promise<number> {
   const db = createDb(databaseUrl);
   try {
     if (args.mode === 'dry-run') {
-      const { counts } = await db.transaction().execute((trx) => planReseal(trx));
+      const { counts } = await db
+        .transaction()
+        .execute((trx) => planReseal(trx, { organizationIds: args.organizationIds }));
       process.stdout.write(
-        `${JSON.stringify({ event: 'reseal_dry_run', would_reseal: counts.nas_v1 + counts.portal_v1, counts })}\n`,
+        `${JSON.stringify({
+          event: 'reseal_dry_run',
+          organizations: args.organizationIds ?? 'all',
+          would_reseal: counts.nas_v1 + counts.portal_v1,
+          counts,
+        })}\n`,
       );
       return 0;
     }
@@ -109,7 +139,9 @@ async function main(): Promise<number> {
     // One transaction for the dump AND the writes. A rotation landing between them would
     // otherwise be silently reverted by a later restore; here it makes this run fail instead.
     const result = await db.transaction().execute(async (trx) => {
-      const applied = await applyReseal(trx, dataEncryptionKey);
+      const applied = await applyReseal(trx, dataEncryptionKey, {
+        organizationIds: args.organizationIds,
+      });
       writeFileSync(args.path as string, `${JSON.stringify(applied.dump, null, 2)}\n`, {
         mode: 0o600,
       });
@@ -118,6 +150,7 @@ async function main(): Promise<number> {
     process.stdout.write(
       `${JSON.stringify({
         event: 'reseal_done',
+        organizations: args.organizationIds ?? 'all',
         dump_path: args.path,
         nas_updated: result.nas_updated,
         portals_updated: result.portals_updated,

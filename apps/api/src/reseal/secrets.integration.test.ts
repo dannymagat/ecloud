@@ -1,6 +1,13 @@
 /**
  * The v1 → v2 re-seal (task 10).
  *
+ * EVERY CALL IS SCOPED to the organization the case created. `planReseal` and `applyReseal` are
+ * FLEET-WIDE by default, which is what the migration is for — but this database is shared and the
+ * suites run in parallel, so an unscoped `applyReseal` picks up other files' v1 fixtures, and the
+ * first one sealed under a different key fails the whole run with `Unsupported state or unable to
+ * authenticate data`. That is correct behaviour for a production migration and wrong for a test:
+ * it would make these cases fail for reasons that have nothing to do with the re-seal.
+ *
  * The fixtures are sealed under the LITERAL old label `'ecloud:nas:secret:v1'`, written out here
  * rather than read from `LEGACY_SECRET_PURPOSE`. That is the whole point: a fixture built from
  * the constants the code under test uses agrees with that code by construction, which is exactly
@@ -116,9 +123,8 @@ await describeIntegration('@ecloud/api secret re-seal', () => {
     const before = await readNas(t.nasId);
     const beforePortal = await readPortal(t.portalId);
 
-    const { counts, dump } = await withPlatform(db(), REASON, (trx) => planReseal(trx));
-    expect(counts.nas_v1).toBeGreaterThanOrEqual(1);
-    expect(counts.portal_v1).toBeGreaterThanOrEqual(1);
+    const { counts, dump } = await withPlatform(db(), REASON, (trx) => planReseal(trx, { organizationIds: [t.orgId] }));
+    expect(counts).toMatchObject({ nas_rows: 1, nas_v1: 1, nas_v2: 0, portal_rows: 1, portal_v1: 1, portal_v2: 0 });
     // The dump carries only what a run would change, and it is the rollback.
     expect(dump.nas.some((r) => r.id === t.nasId)).toBe(true);
     expect(dump.captive_portals.some((r) => r.id === t.portalId)).toBe(true);
@@ -137,9 +143,9 @@ await describeIntegration('@ecloud/api secret re-seal', () => {
     const before = await readNas(t.nasId);
     expect(before.secret_ref).toMatch(/^enc:v1\./);
 
-    const result = await withPlatform(db(), REASON, (trx) => applyReseal(trx, key()));
-    expect(result.nas_updated).toBeGreaterThanOrEqual(1);
-    expect(result.portals_updated).toBeGreaterThanOrEqual(1);
+    const result = await withPlatform(db(), REASON, (trx) => applyReseal(trx, key(), { organizationIds: [t.orgId] }));
+    expect(result.nas_updated).toBe(1);
+    expect(result.portals_updated).toBe(1);
 
     const after = await readNas(t.nasId);
     expect(after.secret_ref).toMatch(/^enc:v2\./);
@@ -175,13 +181,23 @@ await describeIntegration('@ecloud/api secret re-seal', () => {
     ).toThrow();
   });
 
-  it('is idempotent: a second run finds nothing left to do', async () => {
-    await legacyTenant();
-    await withPlatform(db(), REASON, (trx) => applyReseal(trx, key()));
-    const second = await withPlatform(db(), REASON, (trx) => planReseal(trx));
-    expect(second.counts.nas_v1).toBe(0);
-    expect(second.counts.portal_v1).toBe(0);
-    expect(second.dump.nas).toEqual([]);
+  it('is idempotent: a second run has nothing left to do for the rows it sealed', async () => {
+    const t = await legacyTenant();
+    await withPlatform(db(), REASON, (trx) => applyReseal(trx, key(), { organizationIds: [t.orgId] }));
+    const second = await withPlatform(db(), REASON, (trx) => planReseal(trx, { organizationIds: [t.orgId] }));
+
+    // SCOPED TO THIS TENANT'S ROWS, not to the global counts, and the reason is the direction of
+    // the error. `planReseal` deliberately has no tenant filter — it is a fleet-wide migration —
+    // so any suite running in parallel that creates a legacy v1 fixture lands in those counts.
+    // Contamination pushes the count UP, which is the same direction a genuinely missed row
+    // pushes it, so `nas_v1 === 0` cannot tell "the CLI left a row behind" from "another file
+    // added one". It would be unreliable in exactly the case it exists to catch, and flaky in CI
+    // depending on file scheduling. Asserting the absence of THESE ids says the same thing and
+    // can only fail for the right reason. Raised by EZECLOUD1, who hit the flake.
+    expect(second.dump.nas.some((r) => r.id === t.nasId)).toBe(false);
+    expect(second.dump.captive_portals.some((r) => r.id === t.portalId)).toBe(false);
+    expect((await readNas(t.nasId)).secret_ref).toMatch(/^enc:v2\./);
+    expect((await readPortal(t.portalId)).uam_secret_ref).toMatch(/^enc:v2\./);
   });
 
   it('restore puts the dumped refs back exactly', async () => {
@@ -189,7 +205,7 @@ await describeIntegration('@ecloud/api secret re-seal', () => {
     const before = await readNas(t.nasId);
     const beforePortal = await readPortal(t.portalId);
 
-    const { dump } = await withPlatform(db(), REASON, (trx) => applyReseal(trx, key()));
+    const { dump } = await withPlatform(db(), REASON, (trx) => applyReseal(trx, key(), { organizationIds: [t.orgId] }));
     expect((await readNas(t.nasId)).secret_ref).toMatch(/^enc:v2\./);
 
     await withPlatform(db(), REASON, (trx) => restoreReseal(trx, dump));
