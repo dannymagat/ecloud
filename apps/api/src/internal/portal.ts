@@ -50,7 +50,7 @@ import { Envelope, openSecretRef, sealSecretRef, sha256Hex } from '../crypto.js'
 import { logPortalSecurityEvent } from '../security-events.js';
 import { consumePortalLoginToken, issuePortalLoginToken } from './login-token-store.js';
 import { completeVendorApiAuthorization } from '../vendor-api/portal.js';
-import { findNasByIdentity } from './nas-lookup.js';
+import { findNasByIdentity, type NasRefusalReason } from './nas-lookup.js';
 import { registerPostbackRoutes } from './portal-postback.js';
 import { PORTAL_COLUMNS, type PortalRow } from './portal-row.js';
 import {
@@ -582,17 +582,39 @@ export function resolveExternalPortalId(
  * but exactly one active NAS fails closed, and `nasid` + a registered AP MAC of another NAS is a
  * conflict. The UAM `md` signature is still verified against the resolved NAS's secret.
  */
+/**
+ * Why a refusal is a reason and not a null (2026-10-14).
+ *
+ * This function used to answer `ResolvedPortal | null`, and the caller reported every null as
+ * `unknown_nas`. Three unrelated conditions arrived under that one name in a single day — the
+ * site was soft-deleted, the NAS row was absent, and the NAS's adapter was not one the flavour
+ * accepts — and each sent the investigation somewhere different and wrong. The NAS registration
+ * and its shared secret were examined at length while the actual cause was a deleted site.
+ *
+ * So the refusal carries its cause. `unknown_nas` now means only what it says.
+ */
+export type PortalResolution =
+  | { readonly ok: true; readonly portal: ResolvedPortal }
+  | { readonly ok: false; readonly reason: PortalRefusal };
+
+export type PortalRefusal =
+  | NasRefusalReason
+  /** The NAS exists and its tenant is live, but this flavour does not serve its adapter. */
+  | 'adapter_mismatch'
+  /** No portal is configured for the NAS's site and portal type. */
+  | 'no_portal';
+
 export async function resolvePortal(
   deps: AppDeps,
   flavour: PortalFlavour,
   identity: { nasid: string | undefined; apMac: string | null },
   logger: Logger,
-): Promise<ResolvedPortal | null> {
+): Promise<PortalResolution> {
   const found = await findNasByIdentity(deps, {
     nasid: identity.nasid ?? null,
     apMac: identity.apMac,
   });
-  if (!found.ok) return null;
+  if (!found.ok) return { ok: false, reason: found.reason };
   if (found.apMacClaimedElsewhere) {
     // Review M1a: a hint only; the NAS's own `md` signature still decides. No tenant detail.
     logPortalSecurityEvent(logger, 'ap_mac_claimed_elsewhere', { apMac: identity.apMac });
@@ -601,7 +623,9 @@ export async function resolvePortal(
   return withPlatform(deps.dbPlatform, PORTAL_ACCESS, async (trx) => {
     const spec = flavourSpec(flavour);
     if (!spec.adapterKeys.includes(n.adapter_key ?? '')) {
-      return null;
+      // Named, not silent: on 2026-10-14 a NAS recreated with `uspot-upstream-uam` instead of
+      // `openwifi-uspot-uam` reported `unknown_nas`, and the row was present and correct.
+      return { ok: false, reason: 'adapter_mismatch' };
     }
     const portals = await trx
       .selectFrom('captive_portals')
@@ -620,9 +644,11 @@ export async function resolvePortal(
       // The owner's ruling: a NAS whose site has no portal still serves a connect page.
       allowFallback: true,
     });
-    if (portal === null) return null;
+    if (portal === null) return { ok: false, reason: 'no_portal' };
     const deploymentMode = n.deployment_mode;
     return {
+      ok: true,
+      portal: {
       captivePortalId: portal.id,
       nas: {
         id: n.id,
@@ -637,6 +663,7 @@ export async function resolvePortal(
         uamSecret: openUamSecret(deps, portal.uam_secret_ref),
         hotspotAddress: n.hotspot_address ?? null,
         hotspotPort: n.hotspot_port ?? null,
+      },
       },
     };
   });
@@ -921,7 +948,8 @@ export function portalInternalRouter(deps: AppDeps): Router {
     const parsed = adapter.parseRedirect({ url: `/?${raw}`, method: 'GET' });
     if ('unsupported' in parsed) return { refused: 'malformed', detail: parsed.reason };
     const apMac = canonicalUnicastMac(parsed.params.ap_mac ?? parsed.params.node_mac);
-    const resolved = await resolvePortal(deps, 'meraki', { nasid, apMac }, deps.logger);
+    const resolution = await resolvePortal(deps, 'meraki', { nasid, apMac }, deps.logger);
+    const resolved = resolution.ok ? resolution.portal : null;
     const lookup: NasLookup = {
       findNas: () => Promise.resolve(resolved?.nas ?? null),
       expectedOrganizationId: null,
@@ -1019,9 +1047,10 @@ export function portalInternalRouter(deps: AppDeps): Router {
                 apMac: canonicalUnicastMac(split.params.called),
               };
             })();
-      const resolved = await resolvePortal(deps, flavour, identity, req.log);
+      const resolution = await resolvePortal(deps, flavour, identity, req.log);
       const adapter = getVendorAdapter(
-        resolved?.nas.adapterKey ?? UAM_FLAVOURS[flavour].adapterKeys[0],
+        (resolution.ok ? resolution.portal.nas.adapterKey : null) ??
+          UAM_FLAVOURS[flavour].adapterKeys[0],
       );
       const parsed = adapter.parseRedirect({ url: `/?${raw}`, method: 'GET' });
       if ('unsupported' in parsed) {
@@ -1034,20 +1063,24 @@ export function portalInternalRouter(deps: AppDeps): Router {
         parsed.result === 'failed' ||
         parsed.result === 'logoff';
       const lookup: NasLookup = {
-        findNas: () => Promise.resolve(resolved?.nas ?? null),
+        findNas: () => Promise.resolve(resolution.ok ? resolution.portal.nas : null),
         expectedOrganizationId: null,
         // Callbacks legitimately repeat a consumed redirect identity (same sessionid/challenge).
         isReplay: (k) => (callback ? Promise.resolve(false) : isReplayed(deps.kv, k)),
         now: () => at,
       };
       const validation = await adapter.validateContext(parsed, lookup);
-      if (!validation.ok || resolved === null) {
+      if (!validation.ok || !resolution.ok) {
+        // The resolver's own reason, not `unknown_nas` for everything. An adapter signature or
+        // context failure still wins, because it is the more specific statement about the
+        // request; resolution failures explain the NAS, the tenant or the adapter.
         generic(
-          validation.ok ? 'unknown_nas' : validation.reason,
+          !resolution.ok ? resolution.reason : validation.ok ? 'unknown_nas' : validation.reason,
           validation.ok ? undefined : validation.detail,
         );
         return;
       }
+      const resolved = resolution.portal;
       const ctx = validation.context;
       const indexKey = { nasId: ctx.nas.id, clientMac: ctx.clientMac, sessionId: ctx.nasSessionId };
 

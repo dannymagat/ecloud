@@ -37,6 +37,9 @@ export interface ResolvedNasRow {
   hotspot_port?: number | null;
 }
 
+/** Why a NAS could not be resolved; each value names a different place to look. */
+export type NasRefusalReason = Extract<NasIdentityResult, { ok: false }>['reason'];
+
 export type NasIdentityResult =
   | {
       readonly ok: true;
@@ -50,6 +53,16 @@ export type NasIdentityResult =
       readonly reason:
         | 'no_identity'
         | 'unknown_nas'
+        /**
+         * The NAS is registered, but its site or organization is deleted or disabled. Split out
+         * of `unknown_nas` because the two send an operator to opposite places: `unknown_nas`
+         * means check the registration, `tenant_inactive` means check the site. On 2026-10-14 a
+         * deleted site reported `unknown_nas` and cost most of a day in the NAS registration and
+         * its shared secret, both of which were correct. It is also the code the RADIUS
+         * authorize path already uses for this condition (`aaa.ts:769`), so the two paths now
+         * agree on the name as well as the verdict.
+         */
+        | 'tenant_inactive'
         | 'ambiguous_nasid'
         | 'unknown_ap'
         | 'ap_inactive'
@@ -69,20 +82,40 @@ const NAS_COLUMNS = [
   'n.hotspot_port',
 ] as const;
 
-async function byNasid(trx: DbTransaction, nasid: string): Promise<ResolvedNasRow[]> {
-  return await trx
+/**
+ * Tenant state travels WITH the row instead of filtering it out, so the caller can say why a
+ * registered NAS was refused. The NAS's own predicates stay in SQL: a deleted or disabled NAS
+ * is not this NAS at all, and including those rows would make an unrelated retired row look
+ * like an ambiguity.
+ */
+export interface NasidRow extends ResolvedNasRow {
+  site_status: string;
+  site_deleted_at: Date | null;
+  org_status: string;
+}
+
+function tenantLive(r: NasidRow): boolean {
+  return r.site_deleted_at === null && r.site_status === 'active' && r.org_status === 'active';
+}
+
+async function byNasid(trx: DbTransaction, nasid: string): Promise<NasidRow[]> {
+  return (await trx
     .selectFrom('nas_clients as n')
     .innerJoin('sites as s', 's.id', 'n.site_id')
     .innerJoin('organizations as o', 'o.id', 'n.organization_id')
-    .select([...NAS_COLUMNS])
+    .select([
+      ...NAS_COLUMNS,
+      's.status as site_status',
+      's.deleted_at as site_deleted_at',
+      'o.status as org_status',
+    ])
     .where('n.nas_identifier', '=', nasid)
     .where('n.status', '=', 'active')
     .where('n.deleted_at', 'is', null)
-    .where('s.deleted_at', 'is', null)
-    .where('s.status', '=', 'active')
-    .where('o.status', '=', 'active')
-    .limit(2)
-    .execute();
+    // Two live rows on live tenants is the ambiguity worth reporting; a row whose tenant is
+    // inactive must still be fetched to be explained, so the limit allows for both.
+    .limit(4)
+    .execute()) as NasidRow[];
 }
 
 interface ApRow extends ResolvedNasRow {
@@ -139,7 +172,7 @@ function strip(row: ApRow): ResolvedNasRow {
 export function decideNasIdentity(input: {
   nasid: string | null;
   apMac: string | null;
-  byNasid: readonly ResolvedNasRow[] | null;
+  byNasid: readonly NasidRow[] | null;
   byApMac: readonly ApRow[] | null;
 }): NasIdentityResult {
   const { nasid, apMac } = input;
@@ -149,9 +182,14 @@ export function decideNasIdentity(input: {
   if (nasid !== null) {
     // nasid decides; the AP row is only a hint (review M1a).
     const rows = input.byNasid ?? [];
-    if (rows.length > 1) return { ok: false, reason: 'ambiguous_nasid' };
-    const nas = rows[0];
-    if (nas === undefined) return { ok: false, reason: 'unknown_nas' };
+    if (rows.length === 0) return { ok: false, reason: 'unknown_nas' };
+    // Live tenants decide. Preserving the previous behaviour exactly: when one row's tenant is
+    // live it wins, and rows on dead tenants neither win nor create an ambiguity. They are only
+    // consulted when nothing is live, to say `tenant_inactive` instead of `unknown_nas`.
+    const live = rows.filter(tenantLive);
+    if (live.length > 1) return { ok: false, reason: 'ambiguous_nasid' };
+    const nas = live[0];
+    if (nas === undefined) return { ok: false, reason: 'tenant_inactive' };
     const sameNas = apRows.some(
       (r) => r.id === nas.id && r.organization_id === nas.organization_id,
     );

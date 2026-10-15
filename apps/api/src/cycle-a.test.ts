@@ -7,7 +7,7 @@ import { EAP_ADAPTER_KEYS, isEapInner, macAuthKind } from './internal/aaa.js';
 import { createHash } from 'node:crypto';
 import { canonicalJson } from '@ecloud/policy-engine';
 import { requestFingerprint } from './http/idempotency.js';
-import { calledStationMac, decideNasIdentity, type ResolvedNasRow } from './internal/nas-lookup.js';
+import { calledStationMac, decideNasIdentity, type NasidRow, type ResolvedNasRow } from './internal/nas-lookup.js';
 import { isReplayed, legacyReplayKey, markReplayed, replayKey } from './internal/portal-store.js';
 import { MemoryKv } from './kv.js';
 import type { RadiusRequestBody } from './internal/radius.js';
@@ -19,7 +19,10 @@ import {
   serializeVendorApiCredential,
 } from './routes/controllers.js';
 
-const NAS_A: ResolvedNasRow = {
+const NAS_A: NasidRow = {
+  site_status: 'active',
+  site_deleted_at: null,
+  org_status: 'active',
   id: 'nas-a',
   organization_id: 'org-a',
   site_id: 'site-a',
@@ -28,7 +31,7 @@ const NAS_A: ResolvedNasRow = {
   deployment_mode: 'native',
   controller_id: null,
 };
-const NAS_B: ResolvedNasRow = { ...NAS_A, id: 'nas-b', organization_id: 'org-b' };
+const NAS_B: NasidRow = { ...NAS_A, id: 'nas-b', organization_id: 'org-b' };
 
 function ap(nas: ResolvedNasRow, over: Record<string, unknown> = {}) {
   return {

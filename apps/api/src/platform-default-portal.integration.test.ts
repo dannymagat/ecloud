@@ -209,8 +209,15 @@ await describeIntegration('@ecloud/api platform-default portal (migration 041)',
     return identifier;
   }
 
-  const resolve = (nasid: string) =>
-    resolvePortal(deps, 'mikrotik', { nasid, apMac: null }, logger);
+  const resolve = async (nasid: string) => {
+    const r = await resolvePortal(deps, 'mikrotik', { nasid, apMac: null }, logger);
+    return r.ok ? r.portal : null;
+  };
+  /** The refusal reason, for the assertions that care WHY rather than that it refused. */
+  const resolveReason = async (nasid: string) => {
+    const r = await resolvePortal(deps, 'mikrotik', { nasid, apMac: null }, logger);
+    return r.ok ? null : r.reason;
+  };
 
   async function configuredPortal(orgId: string, siteId: string, status: 'active' | 'disabled') {
     const row = await deps.dbPlatform
@@ -270,6 +277,40 @@ await describeIntegration('@ecloud/api platform-default portal (migration 041)',
     // "Offline" must stay offline. Before this check the leftover fallback row was served here,
     // silently reopening the site as an anonymous click-through portal.
     expect(await resolve(identifier)).toBeNull();
+    // ...and it says WHY. `no_portal` sends an operator to the portal they disabled;
+    // `unknown_nas`, which this used to report, sent them to the NAS registration instead.
+    expect(await resolveReason(identifier)).toBe('no_portal');
+  });
+
+  it('names a deleted site as tenant_inactive, not as an unknown NAS', async () => {
+    const { orgId, siteId } = await tenant();
+    const identifier = await nas(orgId, siteId);
+    await configuredPortal(orgId, siteId, 'active');
+    expect(await resolveReason(identifier)).toBeNull();
+    await deps.dbPlatform
+      .updateTable('sites')
+      .set({ deleted_at: new Date() })
+      .where('id', '=', siteId)
+      .execute();
+    // 2026-10-14: this reported `unknown_nas` and cost most of a day in the NAS registration
+    // and its shared secret, both of which were correct the whole time.
+    expect(await resolveReason(identifier)).toBe('tenant_inactive');
+  });
+
+  it('names an adapter the flavour does not serve as adapter_mismatch', async () => {
+    const { orgId, siteId } = await tenant();
+    const identifier = await nas(orgId, siteId);
+    await configuredPortal(orgId, siteId, 'active');
+    expect(await resolveReason(identifier)).toBeNull();
+    // The third condition that arrived as `unknown_nas` in one day: a NAS recreated with a
+    // sibling adapter the flavour's key list does not include.
+    await deps.dbPlatform
+      .updateTable('nas_clients')
+      .set({ adapter_key: 'openwifi-uspot-uam', adapter_type_key: 'openwifi-uspot-uam' })
+      .where('nas_identifier', '=', identifier)
+      .where('deleted_at', 'is', null)
+      .execute();
+    expect(await resolveReason(identifier)).toBe('adapter_mismatch');
   });
 
   it('refuses rather than falling back when two configured portals match', async () => {
