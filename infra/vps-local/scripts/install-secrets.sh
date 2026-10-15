@@ -35,6 +35,7 @@ portal_state_secret database_url database_url_platform redis_url redis_conf"
 # refuses to start a service whose secret file is missing: install it with the rest, or place an
 # empty-feature placeholder and leave SMTP_HOST unset in ecloud.env.
 required="$required smtp_password"
+required="$required internal_secret_token"
 missing=0
 for n in $required; do
   if [ ! -s "$SRC/$n" ]; then echo "missing or empty: $n" >&2; missing=1; fi

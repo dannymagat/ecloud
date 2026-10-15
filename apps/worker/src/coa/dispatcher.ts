@@ -25,7 +25,7 @@ import type { EnforcementPlan } from '@ecloud/policy-engine';
 import type { Logger } from '@ecloud/shared';
 import { resolveAdapter } from '../nas-adapter.js';
 import { emitEvent } from '../events.js';
-import type { SecretResolver } from '../infra/secrets.js';
+import { SecretFetchError, type SecretResolver } from '../infra/secrets.js';
 import {
   sendDynamicAuthorization,
   type RadclientOutcome,
@@ -233,7 +233,23 @@ export async function performDispatch(
       reason: target.unsupported,
     });
   }
-  const secret = await deps.resolveSecret(row.secret_ref);
+  // D-056: an `enc:` reference is opened by the api on request (the worker holds no key). A
+  // transient failure of that fetch is retried like a lost radclient reply, never reported as
+  // `unsupported`: unsupported means "this NAS cannot be told", not "the api was down".
+  let secret: string | undefined;
+  try {
+    secret = await deps.resolveSecret(row.secret_ref, { nasId: row.id });
+  } catch (error) {
+    if (!(error instanceof SecretFetchError)) throw error;
+    const isFinalFetch = ctx.attempt >= ctx.maxAttempts;
+    return isFinalFetch
+      ? final('timeout', `NAS secret fetch failed: ${error.message}`, {
+          status: 'error',
+          message: `NAS secret fetch failed: ${error.message}`,
+          final: true,
+        })
+      : { kind: 'retry', message: `NAS secret fetch failed: ${error.message}` };
+  }
   if (secret === undefined) {
     const reason = 'NAS secret reference could not be resolved';
     return final('unsupported', reason, { status: 'unsupported', reason });

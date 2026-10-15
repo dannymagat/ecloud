@@ -72,7 +72,8 @@ export async function startWorker(options: StartOptions): Promise<RunningWorker>
         logger.warn({ err: error.message }, 'postgres idle connection lost; pool will reconnect'),
     });
   const state: WorkerState = new RedisWorkerState(redis);
-  const resolveSecret = options.resolveSecret ?? createSecretResolver();
+  const resolveSecret =
+    options.resolveSecret ?? createSecretResolver(process.env, { internal: config.internal });
   const connection = { connection: redis, prefix: QUEUE_PREFIX };
 
   const queues = new Map<string, Queue>();

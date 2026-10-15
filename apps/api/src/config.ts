@@ -133,6 +133,26 @@ export const apiEnvSchema = z.object({
   //  An empty value counts as unset: compose passes `${INTERNAL_TLS_CERT_FILE:-}`.
   INTERNAL_TLS_CERT_FILE: emptyAsUnset(),
   INTERNAL_TLS_KEY_FILE: emptyAsUnset(),
+  /**
+   * D-056: the worker fetches opened NAS secrets from GET /internal/nas/:id/secret. In
+   * production that endpoint refuses a cleartext internal listener unless this is '1', the same
+   * acknowledgement FreeRADIUS uses (ECLOUD_INTERNAL_CLEARTEXT_ACK) for the private docker network.
+   */
+  INTERNAL_CLEARTEXT_ACK: z.enum(['true', 'false', '1', '0', '']).optional(),
+  /**
+   * D-056/D-061: the ONLY credential GET /internal/nas/:id/secret accepts (never the shared
+   * INTERNAL_API_TOKEN), so a leak of the shared token cannot yield plaintext RADIUS secrets. Held by
+   * the api and the worker only. Same alphabet as INTERNAL_API_TOKEN; 32+ chars in production.
+   */
+  INTERNAL_SECRET_TOKEN: z
+    .string()
+    .trim()
+    .transform((v) => (v === '' ? undefined : v))
+    .optional()
+    .refine(
+      (v) => v === undefined || /^[A-Za-z0-9_-]+$/.test(v),
+      'INTERNAL_SECRET_TOKEN may contain only letters, digits, _ and -',
+    ),
   API_BIND_HOST: z.string().trim().min(1).default('0.0.0.0'),
   /** Use the in-process memory store instead of Redis (tests / single-process dev only). */
   KV_DRIVER: z.enum(['redis', 'memory']).default('redis'),
@@ -185,6 +205,10 @@ export interface ApiConfig {
   internalBindHost: string;
   /** PEM paths for the internal listener's TLS, or null for plaintext (dev / loopback only). */
   internalTls: { certFile: string; keyFile: string } | null;
+  /** D-056: accept serving NAS secrets over a cleartext internal listener (private network only). */
+  internalCleartextAck: boolean;
+  /** D-061: token for the NAS-secret endpoint, or null when unset (endpoint answers 503). */
+  internalSecretToken: string | null;
   apiBindHost: string;
   kvDriver: 'redis' | 'memory';
   impersonationRoleTemplate: string;
@@ -244,6 +268,14 @@ export function loadApiConfig(
           'INTERNAL_API_TOKEN_PREVIOUS: must be at least 32 characters when NODE_ENV=production',
         );
       }
+      if (raw.INTERNAL_SECRET_TOKEN !== undefined) {
+        if (base.isProduction && raw.INTERNAL_SECRET_TOKEN.length < 32) {
+          problems.push('INTERNAL_SECRET_TOKEN: at least 32 characters in production');
+        }
+        if (raw.INTERNAL_SECRET_TOKEN === base.internalApiToken || raw.INTERNAL_SECRET_TOKEN === raw.INTERNAL_API_TOKEN_PREVIOUS) {
+          problems.push('INTERNAL_SECRET_TOKEN: must differ from INTERNAL_API_TOKEN (D-061: separate credential)');
+        }
+      }
       if (raw.INTERNAL_API_TOKEN_PREVIOUS === base.internalApiToken) {
         problems.push('INTERNAL_API_TOKEN_PREVIOUS: must differ from INTERNAL_API_TOKEN');
       }
@@ -287,6 +319,7 @@ export function loadApiConfig(
     );
   }
   const internalTls = certFile !== undefined && keyFile !== undefined ? { certFile, keyFile } : null;
+  const internalCleartextAck = raw.INTERNAL_CLEARTEXT_ACK === '1' || raw.INTERNAL_CLEARTEXT_ACK === 'true';
 
   return {
     base,
@@ -305,6 +338,8 @@ export function loadApiConfig(
     trustProxyHops: raw.TRUST_PROXY_HOPS,
     internalBindHost: raw.INTERNAL_BIND_HOST,
     internalTls,
+    internalCleartextAck,
+    internalSecretToken: raw.INTERNAL_SECRET_TOKEN ?? null,
     apiBindHost: raw.API_BIND_HOST,
     kvDriver: raw.KV_DRIVER,
     impersonationRoleTemplate: raw.IMPERSONATION_ROLE_TEMPLATE,

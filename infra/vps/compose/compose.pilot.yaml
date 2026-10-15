@@ -202,6 +202,9 @@ services:
       # one without the other refuses to boot rather than falling back silently.
       INTERNAL_TLS_CERT_FILE: ${INTERNAL_TLS_CERT_FILE:-}
       INTERNAL_TLS_KEY_FILE: ${INTERNAL_TLS_KEY_FILE:-}
+      INTERNAL_CLEARTEXT_ACK: ${INTERNAL_CLEARTEXT_ACK:-}
+      # D-061: the NAS-secret endpoint's own token; the shared internal token is refused there.
+      INTERNAL_SECRET_TOKEN_FILE: /run/secrets/internal_secret_token
       NODE_OPTIONS: --max-old-space-size=256
     secrets:
       - database_url
@@ -213,6 +216,7 @@ services:
       - voucher_pepper
       - otp_pepper
       - smtp_password
+      - internal_secret_token
     volumes:
       - storage_data:/var/lib/ecloud/storage
     ports:
@@ -259,12 +263,18 @@ services:
       redis: { condition: service_healthy }
     environment:
       <<: *app-env
+      # D-056: the worker fetches opened NAS secrets for CoA/Disconnect from the api's internal
+      # listener with the endpoint's own token (D-061). Cleartext inside the private network; the
+      # api refuses it in production unless INTERNAL_CLEARTEXT_ACK=1 or the listener is TLS.
+      ECLOUD_INTERNAL_URL: ${ECLOUD_INTERNAL_URL:-http://api:3001}
+      INTERNAL_SECRET_TOKEN_FILE: /run/secrets/internal_secret_token
       NODE_OPTIONS: --max-old-space-size=224
     secrets:
       - database_url
       - database_url_platform
       - redis_url
       - internal_api_token
+      - internal_secret_token
     # no `ports:`; /healthz stays on 127.0.0.1 inside the container (image default)
     deploy:
       resources:
@@ -437,6 +447,7 @@ secrets:
   voucher_pepper: { file: '${ECLOUD_SECRETS_DIR:-/opt/ecloud/secrets}/voucher_pepper' }
   otp_pepper: { file: '${ECLOUD_SECRETS_DIR:-/opt/ecloud/secrets}/otp_pepper' }
   smtp_password: { file: '${ECLOUD_SECRETS_DIR:-/opt/ecloud/secrets}/smtp_password' }
+  internal_secret_token: { file: '${ECLOUD_SECRETS_DIR:-/opt/ecloud/secrets}/internal_secret_token' }
   portal_state_secret: { file: '${ECLOUD_SECRETS_DIR:-/opt/ecloud/secrets}/portal_state_secret' }
   database_url: { file: '${ECLOUD_SECRETS_DIR:-/opt/ecloud/secrets}/database_url' }
   database_url_platform:

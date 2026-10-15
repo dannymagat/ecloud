@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import { SecretFetchError } from '../infra/secrets.js';
 import type { RadclientRunner } from './radclient.js';
 import {
   SKIPPED_DISABLED,
@@ -187,5 +188,63 @@ describe('withRequestHygiene', () => {
     const out = withRequestHygiene([{ name: 'Event-Timestamp', value: 1 }], NOW);
     expect(out.filter((a) => a.name === 'Event-Timestamp')).toHaveLength(1);
     expect(out.map((a) => a.name)).toContain('Message-Authenticator');
+  });
+});
+
+describe('performDispatch: sealed secret fetched from the api (D-056)', () => {
+  const never: RadclientRunner = () => {
+    throw new Error('radclient must not run');
+  };
+
+  it('passes the NAS id to the resolver for an enc: reference', async () => {
+    const seen: unknown[] = [];
+    const d = await performDispatch(
+      action({ secret_ref: 'enc:v2.sealed' }),
+      deps(reply('Received Disconnect-ACK'), {
+        resolveSecret: (ref, ctx) => {
+          seen.push([ref, ctx]);
+          return Promise.resolve('placeholder-secret');
+        },
+      }),
+      { attempt: 1, maxAttempts: 3 },
+      NOW,
+    );
+    expect(d).toMatchObject({ kind: 'final', status: 'ack' });
+    expect(seen).toEqual([['enc:v2.sealed', { nasId: '0199b0a4-0000-7000-8000-000000000001' }]]);
+  });
+
+  it('retries when the api is unreachable, then records an error, never unsupported', async () => {
+    const failing = deps(never, {
+      resolveSecret: () => Promise.reject(new SecretFetchError('internal api unreachable')),
+    });
+    const first = await performDispatch(
+      action({ secret_ref: 'enc:v2.sealed' }),
+      failing,
+      { attempt: 1, maxAttempts: 3 },
+      NOW,
+    );
+    expect(first).toMatchObject({ kind: 'retry' });
+    const last = await performDispatch(
+      action({ secret_ref: 'enc:v2.sealed' }),
+      failing,
+      { attempt: 3, maxAttempts: 3 },
+      NOW,
+    );
+    expect(last).toMatchObject({
+      kind: 'final',
+      status: 'timeout',
+      result: { status: 'error', final: true },
+    });
+    expect(JSON.stringify(last)).not.toContain('unsupported');
+  });
+
+  it('still records unsupported when the api says the NAS does not exist (404 -> undefined)', async () => {
+    const d = await performDispatch(
+      action({ secret_ref: 'enc:v2.sealed' }),
+      deps(never, { resolveSecret: () => Promise.resolve(undefined) }),
+      { attempt: 1, maxAttempts: 3 },
+      NOW,
+    );
+    expect(d).toMatchObject({ kind: 'final', status: 'unsupported' });
   });
 });

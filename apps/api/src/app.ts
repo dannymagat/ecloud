@@ -16,6 +16,7 @@ import { createApiMetrics, httpMetrics, metricsHandler } from './metrics.js';
 import { authorizeHandler, internalTokenGuard, postAuthHandler } from './internal/aaa.js';
 import { portalInternalRouter } from './internal/portal.js';
 import { dynamicClientHandler } from './internal/radius-client-lookup.js';
+import { nasSecretHandler } from './internal/nas-secret.js';
 import { vendorPortalInternalRouter } from './vendor-api/portal.js';
 import { OPENAPI_PATH, buildOpenApiDocument } from './openapi.js';
 import { internalAssetHandler, portalAdminRoutes } from './portal-admin/routes.js';
@@ -225,6 +226,10 @@ export function createApp(appDeps: AppDeps): Apps {
   });
   // Prometheus scrape target: internal listener only (loopback / compose network, never Caddy).
   internalApp.get('/metrics', metricsHandler(metrics));
+  // D-056/D-061: the worker's per-dispatch fetch of ONE opened NAS secret, guarded by its OWN
+  // token inside the handler and registered BEFORE the shared-token guard on purpose: the shared
+  // INTERNAL_API_TOKEN must never be able to yield plaintext RADIUS secrets.
+  internalApp.get('/internal/nas/:id/secret', nasSecretHandler(deps));
   internalApp.use('/internal', internalTokenGuard(deps));
   internalApp.use(express.json({ limit: INTERNAL_BODY_LIMIT }));
   internalApp.post('/internal/aaa/authorize', authorizeHandler(deps));

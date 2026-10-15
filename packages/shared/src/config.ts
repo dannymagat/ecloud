@@ -184,6 +184,8 @@ export const SECRET_FILE_VARIABLES = Object.freeze([
   'REDIS_URL',
   'INTERNAL_API_TOKEN',
   'INTERNAL_API_TOKEN_PREVIOUS',
+  // D-061: the NAS-secret endpoint's own token (api + worker).
+  'INTERNAL_SECRET_TOKEN',
   'S3_ACCESS_KEY_ID',
   'S3_SECRET_ACCESS_KEY',
   'MFA_ENCRYPTION_KEY',

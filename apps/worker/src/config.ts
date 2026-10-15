@@ -64,6 +64,13 @@ export const workerEnvSchema = z.object({
   VENDOR_API_SECRET_KEY: z.string().min(1).optional(),
   /** Platform deny-list for outbound vendor-API calls (CIDRs, comma separated). */
   VENDOR_API_DENY_CIDRS: z.string().optional(),
+  /**
+   * D-056/D-061: the api's internal listener and the NAS-secret endpoint's OWN token (never the
+   * shared INTERNAL_API_TOKEN), used to fetch the opened secret of a sealed (`enc:`) NAS per CoA
+   * dispatch. Both unset = `enc:` NAS stay `unsupported`.
+   */
+  ECLOUD_INTERNAL_URL: z.string().trim().url().optional(),
+  INTERNAL_SECRET_TOKEN: z.string().min(1).optional(),
 });
 
 export interface WorkerConfig {
@@ -84,6 +91,8 @@ export interface WorkerConfig {
   };
   /** Cycle E (D-044): Meraki Disconnect is sent only while MERAKI_CLOUD_RADIUS_ENABLED is true. */
   merakiCloudRadius: MerakiCloudRadiusSettings;
+  /** D-056: where to fetch opened NAS secrets from, or null when either half is unset. */
+  internal: { url: string; token: string } | null;
 }
 
 export function loadWorkerConfig(
@@ -128,5 +137,9 @@ export function loadWorkerConfig(
       denyCidrs: raw.VENDOR_API_DENY_CIDRS ?? null,
     },
     merakiCloudRadius,
+    internal:
+      raw.ECLOUD_INTERNAL_URL !== undefined && raw.INTERNAL_SECRET_TOKEN !== undefined
+        ? { url: raw.ECLOUD_INTERNAL_URL, token: raw.INTERNAL_SECRET_TOKEN }
+        : null,
   };
 }
