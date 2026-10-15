@@ -35,6 +35,7 @@ import {
 } from '@ecloud/shared';
 import { sql } from 'kysely';
 import { z } from 'zod';
+import { policyAvailabilityForSites } from '../policy-availability.js';
 import { writeAudit } from '../audit.js';
 import { requestIsImpersonating } from '../auth/middleware.js';
 import { MfaCodec } from '../auth/mfa.js';
@@ -327,6 +328,15 @@ export function accessPointsPageRoutes(deps: AppDeps): AnyRouteSpec[] {
           .execute();
         const onFallbackPortal = new Set(fallbackSites.map((r) => r.site_id));
 
+        // 76fc0e5: policy availability per site, from the policy engine's own definition rather
+        // than a second one here. One query for the whole list. A site missing from the map is
+        // treated as `missing`, which fails towards Pending rather than towards access.
+        const policyBySite = await policyAvailabilityForSites(
+          trx,
+          [...new Set(activity.rows.map((r) => r.site_id))],
+          at,
+        );
+
         const apsByNas = new Map(apsPerNas.rows.map((r) => [r.nas_client_id, Number(r.n)]));
         const activityByNas = new Map(activity.rows.map((r) => [r.nas_client_id, r.activity]));
         const nas = activity.rows.map((r) => {
@@ -349,17 +359,19 @@ export function accessPointsPageRoutes(deps: AppDeps): AnyRouteSpec[] {
           //  - `identifierConflict: false` — not evaluated here. A cross-tenant uniqueness rule
           //    already exists for NAS identifiers, so this is expected to be unreachable, but
           //    "expected" is not "checked" and this field does not claim it was.
-          //  - `policy: 'unevaluated'` — `policyAvailabilityForSites` is owned by the policy
-          //    engine and has not landed. Passing `assigned` would assert a policy nobody looked
-          //    for; passing `missing` would mark every NAS Pending on no evidence. The response
-          //    carries `policy_evaluated: false` so the surface can say which.
+          //
+          // The policy dimension IS evaluated, by `policyAvailabilityForSites` (76fc0e5) rather
+          // than by a second definition here. It answers at site granularity, which is an
+          // approximation named in docs/NAS_PENDING_GAP_ANALYSIS.md §6: it can report a NAS as
+          // fine while one user still gets `no_policy` through a group with no assignment. That
+          // is a subject problem and correctly not a NAS Pending reason.
           const eligibility = nasEligibility({
             adoptionComplete: x?.is_adopted ?? true,
             status: r.admin_status,
             deleted: false,
             ownershipValid: true,
             identifierConflict: false,
-            policy: 'unevaluated',
+            policy: policyBySite.get(r.site_id) ?? 'missing',
             onPlatformDefaultPortal: onFallbackPortal.has(r.site_id),
           });
           return {
