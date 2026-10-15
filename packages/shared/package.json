@@ -18,6 +18,10 @@
     "./portal-methods": {
       "types": "./dist/portal-methods.d.ts",
       "import": "./dist/portal-methods.js"
+    },
+    "./nas-eligibility": {
+      "types": "./dist/nas-eligibility.d.ts",
+      "import": "./dist/nas-eligibility.js"
     }
   },
   "files": [

@@ -30,6 +30,7 @@ import {
   type OverviewNas,
 } from './data';
 import { RadiusSecretBox } from './RadiusSecretBox';
+import { NasStateList } from './NasStateList';
 import { SetupProgressCard } from './SetupProgressCard';
 import { VendorGrid } from './VendorGrid';
 
@@ -179,6 +180,7 @@ function Page() {
             onAdd={() => setWizard(true)}
           />
           <RadiusSecretBox orgId={orgId} nas={o.nas} />
+          <NasStateList rows={o.nas} />
           <div className="min-w-0">
             <AccessPointsTable
               orgId={orgId}

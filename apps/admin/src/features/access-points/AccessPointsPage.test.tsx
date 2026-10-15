@@ -86,6 +86,16 @@ const nas = (id: string, name: string, adapter_key: string, vendor_key: string |
   activity: 'quiet' as const,
   last_activity_at: null,
   access_points: 1,
+  // Migration 046 / §5: the default fixture is an adopted, active NAS with a policy, so these
+  // tests keep asserting what they asserted before the Pending state existed. Tests that care
+  // about a state override them.
+  state: 'active' as const,
+  pending_reasons: [],
+  primary_reason: null,
+  advisories: [],
+  policy_evaluated: true,
+  is_adopted: true,
+  block_reason: null,
 });
 
 const OVERVIEW: Overview = {

@@ -1,3 +1,8 @@
+import type {
+  NasAdvisory,
+  NasPendingReason,
+  NasState,
+} from '@ecloud/shared/nas-eligibility';
 /**
  * Access Points page data (D-045): the overview payload (`GET …/access-points/overview`), the
  * secret reveal call and the MikroTik downloads. The revealed secret is NEVER put in the
@@ -29,6 +34,15 @@ export interface OverviewNas {
   activity: Activity;
   last_activity_at: string | null;
   access_points: number;
+  /** Migration 046 / §5: derived per request; only `active` is eligible for new access. */
+  state: NasState;
+  pending_reasons: NasPendingReason[];
+  primary_reason: NasPendingReason | null;
+  advisories: NasAdvisory[];
+  /** False while the policy dimension was not evaluated; see nas-eligibility. */
+  policy_evaluated: boolean;
+  is_adopted: boolean;
+  block_reason: string | null;
 }
 
 export interface OverviewAccessPoint {
