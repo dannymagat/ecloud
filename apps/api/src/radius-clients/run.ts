@@ -27,7 +27,7 @@ import {
 import { basename, isAbsolute } from 'node:path';
 import { z } from 'zod';
 import { API_DEV_DEFAULTS } from '../config.js';
-import { RadiusClientsRenderError, relaxedClientCount, renderClientsConf } from './render.js';
+import { RadiusClientsRenderError, fleetDefaultSecretCount, relaxedClientCount, renderClientsConf } from './render.js';
 import type { NasClientEntry, SkippedNas } from './render.js';
 import { writeClientsFileAtomic } from './write.js';
 import {
@@ -118,6 +118,8 @@ export interface RenderSummary {
   clients: number;
   /** Clients rendered with require_message_authenticator = no. */
   relaxedMessageAuthenticator: number;
+  /** Clients rendered on the public fleet default secret (D-051): inheriting, not yet secured. */
+  fleetDefaultSecret: number;
   changed: boolean;
   checkOnly: boolean;
   file: string;
@@ -189,6 +191,7 @@ export async function renderRadiusClients(
     event: 'radius_clients_rendered',
     clients: rendered.length,
     relaxedMessageAuthenticator: relaxedClientCount(rendered),
+    fleetDefaultSecret: fleetDefaultSecretCount(rendered),
     changed,
     checkOnly,
     file: settings.outFile,

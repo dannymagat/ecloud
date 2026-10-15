@@ -8,9 +8,12 @@ import { API_DEV_DEFAULTS } from '../config.js';
 import { Envelope, NAS_SECRET_PURPOSE, sealSecretRef } from '../crypto.js';
 import { resolveNasSecrets } from './load.js';
 import {
+  FLEET_DEFAULT_RADIUS_SECRET,
   INVALID_ID_MARKER,
   RENDERED_HEADER,
   RadiusClientsRenderError,
+  fleetDefaultSecretCount,
+  isAcceptableSecret,
   renderClientsConf,
   type NasClientEntry,
 } from './render.js';
@@ -141,6 +144,38 @@ describe('renderClientsConf', () => {
     expect(JSON.stringify(out.skipped)).not.toContain(secret);
     expect(out.content).not.toContain(secret);
     expect(out.content).not.toContain(SECRET);
+  });
+
+  // D-051 (owner, 2026-10-15, option B): the 12-char fleet default is the ONE value below the
+  // 16-char floor the renderer accepts, by exact match only, and every client on it is counted.
+  it('accepts exactly the public fleet default secret and counts clients inheriting it', () => {
+    expect(FLEET_DEFAULT_RADIUS_SECRET).toHaveLength(12); // below the floor: the exception is real
+    expect(isAcceptableSecret(FLEET_DEFAULT_RADIUS_SECRET)).toBe(true);
+    const out = renderClientsConf([
+      entry({ id: ID_B, nasIp: '10.9.9.9', secret: OTHER_SECRET }),
+      entry({ secret: FLEET_DEFAULT_RADIUS_SECRET }),
+    ]);
+    expect(out.skipped).toEqual([]);
+    expect(out.rendered).toHaveLength(2);
+    expect(out.content).toContain(`secret = '${FLEET_DEFAULT_RADIUS_SECRET}'`);
+    expect(fleetDefaultSecretCount(out.rendered)).toBe(1);
+  });
+
+  it.each([
+    ['one extra character', `${FLEET_DEFAULT_RADIUS_SECRET}1`],
+    ['one character changed', 'ezeradsecreT'],
+    ['leading space', ` ${FLEET_DEFAULT_RADIUS_SECRET}`],
+    ['the 2026 variant truncated', 'ezeradsecret20'],
+  ])('still refuses a short secret that is not exactly the fleet default (%s)', (_l, secret) => {
+    expect(isAcceptableSecret(secret)).toBe(false);
+    const out = renderClientsConf([
+      entry({ id: ID_B, nasIp: '10.9.9.9', secret: OTHER_SECRET }),
+      entry({ secret }),
+    ]);
+    expect(out.skipped).toEqual([
+      { id: ID_A, reason: expect.stringMatching(/^shared secret must be/) },
+    ]);
+    expect(fleetDefaultSecretCount(out.rendered)).toBe(0);
   });
 
   it('skips a non-UUID id without echoing it', () => {
@@ -288,6 +323,7 @@ describe('renderRadiusClients', () => {
       event: 'radius_clients_rendered',
       clients: 2,
       relaxedMessageAuthenticator: 1,
+      fleetDefaultSecret: 0,
       changed: true,
       checkOnly: false,
       file: outFile,

@@ -66,6 +66,23 @@ export const SECRET_RE = /^[A-Za-z0-9._~+/=-]{16,128}$/;
 
 export const SECRET_RULE = 'shared secret must be 16-128 characters of [A-Za-z0-9._~+/=-]';
 
+/**
+ * The fleet default RADIUS secret: a PUBLIC constant by owner decision (2026-10-14, D-050/D-051),
+ * served unauthenticated by the EzeSwitch controller as the hotspot default of release
+ * `FLEET_DEFAULT_CONTROLLER_RELEASE`. It is 12 characters, below the `SECRET_RE` floor, and is the
+ * ONE exact value the floor lets through (D-051 option B). It provides no secrecy and is accepted
+ * only so that an unconfigured AP and an unconfigured NAS match; every NAS still inheriting it is
+ * counted in the run summary (`fleetDefaultSecret`) and must be given a per-NAS secret before real
+ * use. Any other value under 16 characters, including this one with any change, is still refused.
+ */
+export const FLEET_DEFAULT_RADIUS_SECRET = 'ezeradsecret'; // check-no-secrets: allow (public fleet constant, D-051)
+export const FLEET_DEFAULT_CONTROLLER_RELEASE = 'hsdefaults-20261014T102455Z';
+
+/** `SECRET_RE`, plus the single exact-match exception of D-051. */
+export function isAcceptableSecret(secret: string): boolean {
+  return SECRET_RE.test(secret) || secret === FLEET_DEFAULT_RADIUS_SECRET;
+}
+
 export const RENDERED_HEADER =
   '# EZECLOUD rendered FreeRADIUS clients (apps/api radius-clients). DO NOT EDIT: regenerated\n' +
   '# from nas_clients; contains shared secrets (keep 0640, never commit, never print).\n';
@@ -112,7 +129,7 @@ export function renderClientsConf(
       skipped.push({ id: entry.id, reason: `nas_ip ${NAS_ADDRESS_RULE}` });
       continue;
     }
-    if (!SECRET_RE.test(entry.secret)) {
+    if (!isAcceptableSecret(entry.secret)) {
       skipped.push({ id: entry.id, reason: SECRET_RULE });
       continue;
     }
@@ -145,6 +162,11 @@ export function renderClientsConf(
     rendered: kept.map((v) => v.entry),
     skipped,
   };
+}
+
+/** Count of clients rendered on the public fleet default secret (D-051; for the run summary). */
+export function fleetDefaultSecretCount(entries: readonly NasClientEntry[]): number {
+  return entries.filter((e) => e.secret === FLEET_DEFAULT_RADIUS_SECRET).length;
 }
 
 /** Count of clients rendered without Message-Authenticator enforcement (for the run summary). */
