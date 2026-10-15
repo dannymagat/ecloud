@@ -49,7 +49,6 @@ import type { AppDeps } from '../context.js';
 import {
   Envelope,
   openBoundSecretRef,
-  openSecretRef,
   sealBoundSecretRef,
   sealSecretRef,
   sha256Hex,
