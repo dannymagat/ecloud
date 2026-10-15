@@ -380,8 +380,11 @@ await describeIntegration('@ecloud/api multi-vendor (controllers, registry)', ()
         kind: 'on_premises',
         base_url: 'https://10.3.3.5/',
       });
-    expect(withoutCredential.status).toBe(201);
-    expect(withoutCredential.body.has_credential).toBe(false);
+    // Was 201: a credential-free create used to be allowed under impersonation, since the
+    // D-027 refusal was about the secret rather than the write. The 2026-10-15 ruling refuses
+    // the write itself, so there is no longer a shape of create that gets through.
+    expect(withoutCredential.status, JSON.stringify(withoutCredential.body)).toBe(403);
+    expect(withoutCredential.body.type).toBe('urn:ecloud:problem:impersonation-forbidden');
     const rotate = await agent
       .post(`/api/v1/orgs/${a.orgId}/controllers/${id}/rotate-credential`)
       .set(BROWSER)

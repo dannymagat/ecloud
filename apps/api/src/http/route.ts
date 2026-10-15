@@ -10,7 +10,7 @@ import { pipeline } from 'node:stream/promises';
 import { type z } from 'zod';
 import { assertPermissionKey, evaluate, type AuthzTarget } from '../auth/authorize.js';
 import type { AppDeps, RequestContext } from '../context.js';
-import { zodToValidationError } from './errors.js';
+import { ImpersonationForbiddenError, zodToValidationError } from './errors.js';
 import { withIdempotency } from './idempotency.js';
 
 export type HttpMethod = 'get' | 'post' | 'patch' | 'delete';
@@ -85,6 +85,14 @@ export interface RouteSpec<
   secretFields?: readonly string[];
   /** Mutations must write an audit row; set false for self-service endpoints audited elsewhere. */
   audit?: boolean;
+  /**
+   * Owner ruling 2026-10-15: every write is refused while a support administrator impersonates
+   * an organization. Set this only on a write that REDUCES the caller's own access — ending the
+   * impersonation, logging out — never on one that exercises the tenant's authority. Refusing
+   * `DELETE /platform/support/impersonate` would make impersonation permanent, which is why the
+   * opt-out exists at all rather than being a convenience.
+   */
+  allowWhileImpersonating?: true;
   responses: Record<number, ResponseSpec>;
   handler: (
     input: HandlerInput<z.output<PS>, z.output<QS>, z.output<BS>>,
@@ -140,6 +148,19 @@ function checkRouteAccess(spec: AnyRouteSpec, req: Request): void {
     if (spec.auth === 'session' && ctx.principal.kind !== 'admin') {
       throw new ForbiddenError({ detail: 'This endpoint requires an administrator session.' });
     }
+  }
+  // Owner ruling 2026-10-15: no writes while impersonating, enforced here rather than per route.
+  // D-027 already refused bulk export this way; this widens the same rule from egress to writes.
+  // Central because a per-route guard is a rule every future write route has to remember, and the
+  // one that forgets is the one nobody notices. `api_key` principals cannot impersonate, so only
+  // an admin session is affected.
+  if (
+    isMutation(spec.method) &&
+    spec.allowWhileImpersonating === undefined &&
+    ctx.principal?.kind === 'admin' &&
+    ctx.principal.impersonation !== null
+  ) {
+    throw new ImpersonationForbiddenError(`${spec.method.toUpperCase()} ${spec.path}`);
   }
   if (spec.permission !== undefined && spec.scope !== undefined) {
     const target = resolveTarget(spec.scope, req, req.params as Record<string, string>);

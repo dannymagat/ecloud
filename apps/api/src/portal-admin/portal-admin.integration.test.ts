@@ -613,16 +613,28 @@ await describeIntegration('@ecloud/api portal administration (P6-B) against eclo
     expect(start.status).toBe(201);
 
     const o = `/api/v1/orgs/${orgId}`;
+    // Owner ruling 2026-10-15: every write is refused while impersonating. Both of these used
+    // to succeed — the point of the old test was that support could fix a portal but not touch
+    // its secret. Support can now read under impersonation and change nothing.
     const patched = await agent
       .patch(`${o}/captive-portals/${portal.id}`)
       .set(BROWSER)
       .send({ name: 'Fixed by support' });
-    expect(patched.status).toBe(200);
+    expect(patched.status, JSON.stringify(patched.body)).toBe(403);
+    expect(patched.body.type).toBe('urn:ecloud:problem:impersonation-forbidden');
     const theme = await agent
       .post(`${o}/portal-themes`)
       .set(BROWSER)
       .send({ name: `S ${slug()}` });
-    expect(theme.status).toBe(201);
+    expect(theme.status, JSON.stringify(theme.body)).toBe(403);
+    expect(theme.body.type).toBe('urn:ecloud:problem:impersonation-forbidden');
+    // The refused PATCH left the row alone, rather than changing it unaudited.
+    const unchanged = await deps.dbPlatform
+      .selectFrom('captive_portals')
+      .select(['name'])
+      .where('id', '=', portal.id)
+      .executeTakeFirstOrThrow();
+    expect(unchanged.name).not.toBe('Fixed by support');
     const rotate = await agent
       .post(`${o}/captive-portals/${portal.id}/rotate-uam-secret`)
       .set(BROWSER)
@@ -630,15 +642,18 @@ await describeIntegration('@ecloud/api portal administration (P6-B) against eclo
     expect(rotate.status).toBe(403);
     expect(rotate.body.type).toBe('urn:ecloud:problem:impersonation-forbidden');
     expect(await countAudit(deps.dbPlatform, 'captive_portal:secret:rotate', portal.id)).toBe(0);
-    // the impersonator is recorded on the audit row of the change
-    const row = await deps.dbPlatform
+    // There is no `captive_portal:update` row to carry the impersonator any more, because the
+    // update is refused. Ending the impersonation is audited from a still-impersonating
+    // principal, so that is where `impersonator_id` is now observable.
+    const stop = await agent.delete('/api/v1/platform/support/impersonate').set(BROWSER);
+    expect(stop.status).toBe(204);
+    const endRow = await deps.dbPlatform
       .selectFrom('audit_logs')
       .select(['impersonator_id'])
-      .where('action', '=', 'captive_portal:update')
-      .where('target_id', '=', portal.id)
+      .where('action', '=', 'tenant:impersonate:end')
+      .where('organization_id', '=', orgId)
       .executeTakeFirstOrThrow();
-    expect(row.impersonator_id).toBe(support.id);
-    await agent.delete('/api/v1/platform/support/impersonate').set(BROWSER);
+    expect(endRow.impersonator_id).toBe(support.id);
   });
 
   it('sets the NAS pin and UAM server URL (validated, audited, clearable)', async () => {

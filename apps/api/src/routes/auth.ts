@@ -472,6 +472,9 @@ export function authRoutes(deps: AppDeps): AnyRouteSpec[] {
     summary: 'Revoke the current session',
     tags: TAG,
     auth: 'session',
+    // Ending a session only ever reduces access, so refusing it while impersonating would strand
+    // the caller without protecting anything.
+    allowWhileImpersonating: true,
     responses: { 204: { description: 'Logged out' } },
     handler: async ({ req, res, ctx }) => {
       const cookies = parseCookies(req.get('Cookie'));

@@ -513,19 +513,23 @@ await describeIntegration('@ecloud/api against ecloud_test', () => {
     expect(me.headers['x-ecloud-impersonating']).toBe(a.orgId);
     expect(me.body.impersonation.organization_id).toBe(a.orgId);
 
+    // Owner ruling 2026-10-15: EVERY write is refused while impersonating, not only the
+    // secret-bearing ones D-027 named. This used to be an audited impersonated write.
     const site = await agent
       .post(`/api/v1/orgs/${a.orgId}/sites`)
       .set(BROWSER)
       .send({ slug: 'imp', name: 'Imp' });
-    expect(site.status).toBe(201);
-    const row = await deps.dbPlatform
-      .selectFrom('audit_logs')
-      .select(['actor_id', 'impersonator_id'])
-      .where('action', '=', 'site:create')
-      .where('target_id', '=', site.body.id as string)
-      .executeTakeFirstOrThrow();
-    expect(row.impersonator_id).toBe(support.id);
-    expect(row.actor_id).toBe(support.id);
+    expect(site.status, JSON.stringify(site.body)).toBe(403);
+    expect(site.body.type).toBe('urn:ecloud:problem:impersonation-forbidden');
+    // Refused means nothing was written, not written-but-unaudited.
+    expect(
+      await deps.dbPlatform
+        .selectFrom('sites')
+        .select(['id'])
+        .where('organization_id', '=', a.orgId)
+        .where('slug', '=', 'imp')
+        .executeTakeFirst(),
+    ).toBeUndefined();
 
     const readOnly = await templateRoleId(deps.dbPlatform, 'read_only');
     const key = await agent
@@ -571,6 +575,18 @@ await describeIntegration('@ecloud/api against ecloud_test', () => {
     expect(after.headers['x-ecloud-impersonating']).toBeUndefined();
     expect(await countAudit(deps.dbPlatform, 'tenant:impersonate', a.orgId)).toBe(1);
     expect(await countAudit(deps.dbPlatform, 'tenant:impersonate:end', a.orgId)).toBe(1);
+    // `audit_logs.impersonator_id` is still populated, and ending the impersonation is now the
+    // only ordinary way to reach it: the stop route runs WHILE impersonating, so the principal
+    // still carries an impersonation when its audit row is written. Asserted here because the
+    // impersonated tenant writes that used to cover this column are now refused outright.
+    const endRow = await deps.dbPlatform
+      .selectFrom('audit_logs')
+      .select(['actor_id', 'impersonator_id'])
+      .where('action', '=', 'tenant:impersonate:end')
+      .where('organization_id', '=', a.orgId)
+      .executeTakeFirstOrThrow();
+    expect(endRow.impersonator_id).toBe(support.id);
+    expect(endRow.actor_id).toBe(support.id);
   });
 
   // -------------------------------------------------------------------- platform + adapters

@@ -518,6 +518,9 @@ export function platformRoutes(deps: AppDeps): AnyRouteSpec[] {
     summary: 'End the current impersonation and restore the parent session',
     tags: TAG,
     auth: 'session',
+    // The one write that MUST work while impersonating: refusing it would make impersonation
+    // permanent until the session expired, with no way back to the parent session.
+    allowWhileImpersonating: true,
     responses: { 204: { description: 'Impersonation ended' }, ...problemResponses },
     handler: async ({ req, res, ctx }) => {
       const principal = ctx.principal as Extract<Principal, { kind: 'admin' }>;
