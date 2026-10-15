@@ -33,6 +33,7 @@ import { dynamicAuthorizationEvidence } from '@ecloud/adapters';
 import {
   chooseEnforcementStrategy,
   resolveEffectivePolicy,
+  sessionTimeoutCapFor,
   toJsonValue,
   type Subject,
 } from '@ecloud/policy-engine';
@@ -840,7 +841,14 @@ async function decide(deps: AppDeps, body: RadiusRequestBody, now: Date): Promis
           controls: resolution.controls,
           now,
           interimIntervalS: deps.config.aaaInterimIntervalS,
-          sessionTimeoutCapS: strategy === 'next_reauth' ? deps.config.aaaSessionTimeoutCapS : null,
+          // Q44 cap, but not on a UAM gateway: see `sessionTimeoutCapFor`. On uspot a
+          // Session-Timeout is a visible logout rather than a silent re-auth, so the cap returned
+          // the guest to the login page every 1800 s against a one-day policy.
+          sessionTimeoutCapS: sessionTimeoutCapFor({
+            adapterKey: nas.adapter_key,
+            strategy,
+            configuredCapS: deps.config.aaaSessionTimeoutCapS,
+          }),
           // Migration 029 lab opt-in (D-028/D-034): REQUIRES_DEVICE_TEST attributes are emitted
           // only for a NAS flagged for device testing, and stay marked `experimental`.
           includeDeviceTestAttributes: nas.device_test_attributes,

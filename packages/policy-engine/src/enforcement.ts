@@ -29,6 +29,55 @@ export type EnforcementState = (typeof ENFORCEMENT_STATES)[number];
 /** Q44 default: Session-Timeout cap when no lab-validated CoA exists (policy-change latency). */
 export const DEFAULT_SESSION_TIMEOUT_CAP_S = 1800;
 
+/**
+ * Adapters where a Session-Timeout is a VISIBLE LOGOUT rather than a silent re-authentication.
+ *
+ * The Q44 cap trades session length for policy-change latency: with `next_reauth` a change reaches
+ * a live session only at its next Access-Request, so capping Session-Timeout bounds the wait. That
+ * trade is sound when re-authentication is invisible — 802.1X and MAC-auth clients re-auth without
+ * the user noticing, so the cap costs nothing a guest can see.
+ *
+ * On a UAM captive-portal gateway it is not invisible. uspot has no silent re-auth: when
+ * Session-Timeout expires the client is deauthorised and the next HTTP request lands back on the
+ * login page. Observed on the pilot AP1832 (profile 141) on 2026-10-15: login at 08:16:15Z,
+ * portal again at 08:46:15Z, exactly 1800 s later, against a policy promising a one-day validity.
+ *
+ * So for these adapters the cap is removed and the policy's own session timeout is emitted. The
+ * cost is real and is NOT hidden: a policy or quota change for a uspot session now applies only at
+ * the guest's next login, which may be a day away. Interim accounting still reports usage, so
+ * exhaustion is DETECTED on schedule — it simply cannot be ENFORCED mid-session until this
+ * adapter has a device-validated CoA or Disconnect, at which point `chooseEnforcementStrategy`
+ * stops returning `next_reauth` here and the question disappears.
+ *
+ * `coovachilli-uam` is the same shape and deliberately NOT listed: CoovaChilli does expose a CoA
+ * path (`coaport`, `chilli_query`), nobody has observed the logout on it, and adding an adapter to
+ * this list on reasoning alone is how a capability claim becomes a fiction. Add it when someone
+ * observes it.
+ */
+export const NO_SILENT_REAUTH_ADAPTERS: readonly string[] = Object.freeze([
+  'openwifi-uspot-uam',
+  'uspot-upstream-uam',
+]);
+
+/**
+ * The Session-Timeout cap to apply, or null for no cap.
+ *
+ * Null for every strategy but `next_reauth` (the others carry the change themselves, so nothing
+ * needs bounding), and null for an adapter in {@link NO_SILENT_REAUTH_ADAPTERS}, where the cap
+ * would log a guest out rather than quietly re-authenticate them.
+ */
+export function sessionTimeoutCapFor(input: {
+  readonly adapterKey: string | null;
+  readonly strategy: EnforcementStrategy;
+  readonly configuredCapS: number;
+}): number | null {
+  if (input.strategy !== 'next_reauth') return null;
+  if (input.adapterKey !== null && NO_SILENT_REAUTH_ADAPTERS.includes(input.adapterKey)) {
+    return null;
+  }
+  return input.configuredCapS;
+}
+
 /** Evidence of one dynamic-authorization mechanism of an adapter. */
 export interface MechanismEvidence {
   readonly status: AdapterFieldStatus;

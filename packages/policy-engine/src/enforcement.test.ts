@@ -3,9 +3,11 @@ import { captive32, untested } from './adapters.fixture.js';
 import { INTENT_COLUMNS } from './intent.js';
 import {
   DEFAULT_SESSION_TIMEOUT_CAP_S,
+  NO_SILENT_REAUTH_ADAPTERS,
   chooseEnforcementStrategy,
   expectedReauthBy,
   impactMessage,
+  sessionTimeoutCapFor,
   type MechanismEvidence,
 } from './enforcement.js';
 import type { Clip, EffectivePolicy } from './resolve.js';
@@ -169,5 +171,68 @@ describe('translate: Q44 Session-Timeout cap (policy_change_cap)', () => {
       sessionTimeoutCapS: 1800,
     });
     expect(flagged.radiusReplyAttributes.some((a) => a.name === 'Session-Timeout')).toBe(false);
+  });
+});
+
+describe('sessionTimeoutCapFor (pilot observation 2026-10-15)', () => {
+  const cap = DEFAULT_SESSION_TIMEOUT_CAP_S;
+
+  it('caps a next_reauth session on an adapter that re-authenticates silently', () => {
+    // The Q44 trade as designed: bound how long a policy change waits, at no cost a guest sees.
+    expect(
+      sessionTimeoutCapFor({
+        adapterKey: 'openwifi-hostapd-radius',
+        strategy: 'next_reauth',
+        configuredCapS: cap,
+      }),
+    ).toBe(cap);
+  });
+
+  it('does not cap uspot, because there the cap is a logout rather than a re-auth', () => {
+    // Observed on the pilot AP1832: login 08:16:15Z, portal again 08:46:15Z, exactly 1800 s, on a
+    // policy promising one day. uspot has no silent re-auth, so Session-Timeout ends the session.
+    for (const adapterKey of ['openwifi-uspot-uam', 'uspot-upstream-uam']) {
+      expect(
+        sessionTimeoutCapFor({ adapterKey, strategy: 'next_reauth', configuredCapS: cap }),
+        adapterKey,
+      ).toBeNull();
+    }
+  });
+
+  it('never caps when the strategy carries the change itself', () => {
+    // coa_change and disconnect_reauth reach a live session directly, so nothing needs bounding;
+    // `none` means the NAS has no adapter and EZECLOUD sends it no attributes at all.
+    for (const strategy of ['coa_change', 'disconnect_reauth', 'none'] as const) {
+      expect(
+        sessionTimeoutCapFor({
+          adapterKey: 'openwifi-hostapd-radius',
+          strategy,
+          configuredCapS: cap,
+        }),
+        strategy,
+      ).toBeNull();
+      expect(
+        sessionTimeoutCapFor({ adapterKey: 'openwifi-uspot-uam', strategy, configuredCapS: cap }),
+        `uspot/${strategy}`,
+      ).toBeNull();
+    }
+  });
+
+  it('caps a null adapter key under next_reauth rather than exempting it', () => {
+    // A null key is "no adapter we recognise", not "an adapter we know logs people out". Failing
+    // towards the cap keeps policy-change latency bounded for anything unidentified.
+    expect(
+      sessionTimeoutCapFor({ adapterKey: null, strategy: 'next_reauth', configuredCapS: cap }),
+    ).toBe(cap);
+  });
+
+  it('lists only adapters whose logout has actually been observed', () => {
+    // coovachilli-uam is the same shape but exposes a CoA path and nobody has observed the logout
+    // on it. Adding an adapter here on reasoning alone turns a capability claim into fiction,
+    // which is what the evidence registry exists to prevent.
+    expect([...NO_SILENT_REAUTH_ADAPTERS].sort()).toEqual([
+      'openwifi-uspot-uam',
+      'uspot-upstream-uam',
+    ]);
   });
 });
