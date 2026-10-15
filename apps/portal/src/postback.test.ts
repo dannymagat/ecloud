@@ -30,6 +30,10 @@ function view(over: Partial<FlowView> = {}): FlowView {
     state: 'ARRIVED',
     expiresAt: EXPIRES,
     methods: ['password', 'click_through'],
+    // Stage 3: the published template and language set; defaults match an uncustomised portal.
+    templateKey: 'branded_multi_login',
+    locales: ['en'],
+    defaultLocale: 'en',
     portal: { id: 'p', name: 'Guest', siteName: 'Site A' },
     theme: null,
     terms: null,

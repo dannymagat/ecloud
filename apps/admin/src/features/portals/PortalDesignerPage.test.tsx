@@ -37,7 +37,8 @@ function api(permissions: string[]): MockRoute[] {
         public_slug: 'lobby',
         portal_type: 'uspot',
         theme_id: THEME_ID,
-        auth_methods: ['password'],
+        // `email_otp` is enabled and unserveable: that pair is what §5's reason exists for.
+        auth_methods: ['password', 'email_otp'],
         social_login: 'not_configured',
       },
     },
@@ -56,6 +57,17 @@ function api(permissions: string[]): MockRoute[] {
           },
         ],
         next_cursor: null,
+      },
+    },
+    {
+      method: 'GET',
+      path: `${base}/captive-portals/${PORTAL_ID}/versions`,
+      body: {
+        portal: { id: PORTAL_ID },
+        rows: [],
+        problems: [],
+        // §5: enabled by the operator, withheld from guests, and the reason says which.
+        unavailable: [{ method: 'email_otp', reasons: ['no mail delivery is configured'] }],
       },
     },
     {
@@ -114,9 +126,18 @@ describe('PortalDesignerPage', () => {
       theme_id: THEME_ID,
     });
 
-    // social login is shown, but never configurable
-    expect(screen.getByText('not configured')).toBeInTheDocument();
-    expect(screen.getByLabelText('Social login')).toBeDisabled();
+    // §5: every registry method is listed, and one the operator enabled but the platform cannot
+    // serve says so with the API's reason. The old assertion here pinned a hardcoded "not
+    // configured" badge on a fake Social login row, which could not have been wrong about
+    // anything — it was not reading availability at all.
+    expect(screen.getByLabelText('Social login')).toBeInTheDocument();
+    expect(screen.getByLabelText('Email code')).toBeInTheDocument();
+    expect(
+      await screen.findByText(/Enabled but not offered to guests: no mail delivery is configured/),
+    ).toBeInTheDocument();
+    // Enableable, not a permanently disabled stub: the platform decides whether a guest is
+    // offered it, and the operator is told the reason rather than being prevented from asking.
+    expect(screen.getByLabelText('Social login')).not.toBeDisabled();
 
     await user.click(screen.getByLabelText('Voucher'));
     await user.click(screen.getByRole('button', { name: 'Save portal' }));
@@ -125,7 +146,15 @@ describe('PortalDesignerPage', () => {
         calls.find((c) => c.method === 'PATCH' && c.url.includes('captive-portals'))?.body,
       ).toEqual({
         theme_id: THEME_ID,
-        auth_methods: ['password', 'voucher'],
+        auth_methods: ['password', 'email_otp', 'voucher'],
+        // Stage 3: the published template, the display order and the language set travel with
+        // every save. `method_order` is derived from the enabled set, so it holds exactly the
+        // two enabled methods in registry order rather than a stale stored list.
+        template_key: 'branded_multi_login',
+        // Registry order, because this portal has no stored order yet.
+        method_order: ['password', 'voucher', 'email_otp'],
+        locales: ['en'],
+        default_locale: 'en',
       }),
     );
 

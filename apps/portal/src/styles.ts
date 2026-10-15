@@ -28,6 +28,14 @@ input[type=text],input[type=password]{display:block;inline-size:100%;padding:.6r
 button,.button{display:block;inline-size:100%;margin-block-start:1rem;padding:.7rem;border:0;border-radius:.4rem;background:var(--p-brand,#0b6bcb);color:var(--p-brand-text,#fff);font:inherit;font-weight:600;text-align:center;text-decoration:none;cursor:pointer}
 .methods{list-style:none;padding:0;margin:0}
 .methods a{margin-block-start:.75rem}
+/* A demoted method stays a full-width target (thumb reach on a phone) but reads as secondary. */
+.button.secondary{background:transparent;color:var(--p-brand,#0b6bcb);border:1px solid var(--p-brand,#0b6bcb)}
+.primary-first{margin-block-end:.25rem}
+/* Language choice is a list of links: no script anywhere in this portal, so no <select>. */
+.langs{margin-block-start:1.25rem;text-align:center;font-size:.9rem}
+.langs ul{list-style:none;display:flex;flex-wrap:wrap;gap:.5rem;justify-content:center;padding:0;margin:.25rem 0 0}
+.langs a{text-decoration:underline}
+.langs [aria-current=true]{font-weight:700;text-decoration:none;color:var(--p-text,#1d2733)}
 .terms{max-block-size:14rem;overflow:auto;border:1px solid var(--p-muted,#55606e);border-radius:.4rem;padding:.75rem;white-space:pre-wrap;font-size:.9rem}
 dl{display:grid;grid-template-columns:auto 1fr;gap:.25rem 1rem}
 dt{font-weight:600}

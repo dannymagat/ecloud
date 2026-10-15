@@ -54,6 +54,7 @@ describe('NasStateList', () => {
   it('counts the NAS that are not serving, in the heading', () => {
     render(
       <NasStateList
+        orgId={ORG}
         rows={[
           row(),
           row({ id: 'n2', state: 'pending', primary_reason: 'NOT_ADOPTED' }),
@@ -88,6 +89,7 @@ describe('NasStateList', () => {
   it('shows both defaults, and says when the policy was not evaluated', () => {
     render(
       <NasStateList
+        orgId={ORG}
         rows={[
           row({
             advisories: ['ON_PLATFORM_DEFAULT_POLICY', 'ON_PLATFORM_DEFAULT_PORTAL'],

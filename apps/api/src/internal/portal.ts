@@ -64,7 +64,7 @@ import { PORTAL_COLUMNS, type PortalRow } from './portal-row.js';
 import {
   buildSnapshot,
   loadPublishedSnapshot,
-  offeredLegacyMethods,
+  offeredGuestMethods,
   portalCapabilities,
   type PortalSnapshot,
 } from './portal-snapshot.js';
@@ -766,7 +766,7 @@ async function publishedConfig(
   });
   return {
     snapshot: published.snapshot,
-    methods: offeredLegacyMethods(published.snapshot, capabilities),
+    methods: offeredGuestMethods(published.snapshot, capabilities),
   };
 }
 
@@ -1339,6 +1339,15 @@ export function portalInternalRouter(deps: AppDeps): Router {
           state: flow.state,
           expires_at: flow.expiresAt,
           methods: config.methods,
+          // Stage 3: the published template and language set reach the renderer. `methods` is
+          // already in the operator's `method_order` (applied by `offeredMethods`), so the
+          // portal renders the order it is given rather than sorting again.
+          template_key: snapshot.template_key,
+          locales: snapshot.locales,
+          default_locale: snapshot.default_locale,
+          // Sent so the registration page can render its form from the SNAPSHOT rather than the
+          // draft; the form is only reachable once stage 4 adds the route and the method.
+          registration_fields: snapshot.registration_fields,
           portal: { id: portal.id, name: snapshot.name, site_name: site?.name ?? '' },
           theme:
             theme === undefined

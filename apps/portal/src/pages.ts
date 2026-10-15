@@ -7,6 +7,11 @@
  */
 import {
   DEFAULT_PORTAL_COLORS,
+  DEFAULT_PORTAL_TEMPLATE,
+  portalMethod,
+  portalTemplate,
+  type PortalMethodKey,
+  type PortalTemplateKey,
   DEFAULT_PORTAL_STRINGS,
   HEX_COLOR_RE,
   localeDirection,
@@ -17,7 +22,7 @@ import {
   type PortalStringKey,
   type RenderPortalPreview,
 } from '@ecloud/shared';
-import { DEFAULT_LOCALE, t, type MessageKey } from './i18n.js';
+import { DEFAULT_LOCALE, localeName, t, type MessageKey } from './i18n.js';
 import { PORTAL_CSS, PORTAL_CSS_PATH } from './styles.js';
 
 export function escapeHtml(value: string): string {
@@ -36,6 +41,13 @@ export interface PageTheme {
   readonly logoSrc: string | null;
   readonly locale: string;
   readonly dir: 'ltr' | 'rtl';
+  /**
+   * §6 language selector. The published locale set and a builder for the link that switches to
+   * one; empty or single-entry means no selector is rendered, and `null` means the caller has no
+   * way to switch (the designer preview), which is also no selector.
+   */
+  readonly locales?: readonly string[];
+  readonly localeHref?: ((locale: string) => string) | null;
 }
 
 export const DEFAULT_THEME: PageTheme = Object.freeze({
@@ -44,6 +56,8 @@ export const DEFAULT_THEME: PageTheme = Object.freeze({
   logoSrc: null,
   locale: DEFAULT_LOCALE,
   dir: localeDirection(DEFAULT_LOCALE),
+  locales: [],
+  localeHref: null,
 });
 
 export interface Branding {
@@ -51,7 +65,48 @@ export interface Branding {
   readonly siteName: string;
 }
 
-export type PortalMethod = 'password' | 'voucher' | 'click_through';
+/**
+ * Stage 3: the renderer speaks the whole registry, not the three methods that shipped first.
+ * Which of them a guest is actually offered is decided by the API (`offeredGuestMethods`), so a
+ * method with no built page never reaches this type at runtime — but the designer preview does
+ * render them, and the stage that ships a page should not have to widen a union here as well.
+ */
+export type PortalMethod = PortalMethodKey;
+
+/**
+ * Product label per method, exhaustive over the registry so a new method cannot be added without
+ * one. `t()` indexes its catalogue directly, so a missing key is a runtime TypeError rather than
+ * a blank button; the exhaustive `Record` makes that a compile error instead.
+ */
+const METHOD_LABEL_KEY: Readonly<Record<PortalMethodKey, MessageKey>> = {
+  click_through: 'method.click_through',
+  password: 'method.password',
+  voucher: 'method.voucher',
+  email_otp: 'method.email_otp',
+  sms_otp: 'method.sms_otp',
+  registration: 'method.registration',
+  social: 'method.social',
+  sso: 'method.sso',
+  sponsor: 'method.sponsor',
+  hotel: 'method.hotel',
+  paid: 'method.paid',
+  mac: 'method.mac',
+  idp: 'method.idp',
+};
+
+/**
+ * The operator's own wording wins where the registry marks the label overridable
+ * (`buttonStringKey`), otherwise the product text. Checked for emptiness because a theme row may
+ * carry a blank string, and a blank button is worse than the default.
+ */
+function methodLabel(theme: PageTheme, method: PortalMethodKey): string {
+  const stringKey = portalMethod(method)?.buttonStringKey ?? null;
+  if (stringKey !== null) {
+    const override = theme.strings[stringKey];
+    if (typeof override === 'string' && override.trim() !== '') return override;
+  }
+  return t(METHOD_LABEL_KEY[method], {}, theme.locale);
+}
 
 /** A form target; `null` renders a non-functional form (preview). */
 export interface FormTarget {
@@ -77,6 +132,8 @@ export type PageBody =
       readonly page: 'landing';
       readonly methods: readonly { readonly method: PortalMethod; readonly href: string | null }[];
       readonly notice: 'session_expired' | 'login_failed' | null;
+      /** Published template (§4). Decides whether the page leads with one action (§4.6). */
+      readonly templateKey: PortalTemplateKey;
     }
   | {
       readonly page: 'login';
@@ -209,22 +266,36 @@ function body(theme: PageTheme, b: PageBody): string {
           : b.notice === 'login_failed'
             ? `<p class="notice" role="status">${escapeHtml(t('notice.login_failed', {}, l))}</p>`
             : '';
-      const items = b.methods
-        .map(
-          (m) =>
-            `<li><a class="button" ${m.href === null ? '' : `href="${escapeHtml(m.href)}"`}>${escapeHtml(
-              m.method === 'password'
-                ? s.login_button
-                : m.method === 'voucher'
-                  ? s.voucher_button
-                  : s.click_through_button,
-            )}</a></li>`,
-        )
-        .join('');
+      // `demoted` rather than `primary`: on a plain-list template every method is a peer and
+      // none is demoted, so the flag has to default to false there. Naming it `primary` made the
+      // list pass `false` for each item and style them all as secondary.
+      const item = (
+        m: { readonly method: PortalMethodKey; readonly href: string | null },
+        demoted: boolean,
+      ): string =>
+        `<li><a class="button${demoted ? ' secondary' : ''}" ${
+          m.href === null ? '' : `href="${escapeHtml(m.href)}"`
+        }>${escapeHtml(methodLabel(theme, m.method))}</a></li>`;
+      // §4.6: a primary-action template leads with ONE action and demotes the rest; the others
+      // render the plain ordered list. The order itself is the operator's `method_order`, applied
+      // by the API — the renderer never re-sorts, or the published order would be advisory.
+      const primaryAction = portalTemplate(b.templateKey)?.primaryAction ?? false;
+      const lead = b.methods[0];
       const list =
         b.methods.length === 0
           ? `<p>${escapeHtml(t('landing.none', {}, l))}</p>`
-          : `<p class="muted">${escapeHtml(t('landing.choose', {}, l))}</p><ul class="methods">${items}</ul>`;
+          : primaryAction && lead !== undefined
+            ? `<ul class="methods primary-first">${item(lead, false)}</ul>${
+                b.methods.length > 1
+                  ? `<p class="muted">${escapeHtml(t('landing.choose_other', {}, l))}</p><ul class="methods">${b.methods
+                      .slice(1)
+                      .map((m) => item(m, true))
+                      .join('')}</ul>`
+                  : ''
+              }`
+            : `<p class="muted">${escapeHtml(t('landing.choose', {}, l))}</p><ul class="methods">${b.methods
+                .map((m) => item(m, false))
+                .join('')}</ul>`;
       return `${notice}<p>${escapeHtml(s.welcome_text)}</p>${list}`;
     }
     case 'login':
@@ -331,7 +402,23 @@ export function renderPage(
     theme.strings.footer_text === ''
       ? ''
       : `<footer class="muted">${escapeHtml(theme.strings.footer_text)}</footer>`;
-  return `<!doctype html><html lang="${escapeHtml(l)}" dir="${theme.dir}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="referrer" content="no-referrer"><title>${escapeHtml(heading)}</title>${head}</head><body><a class="skip" href="#main">${escapeHtml(t('skip.main', {}, l))}</a><main id="main"><div class="card">${logo}<h1>${escapeHtml(heading)}</h1>${site}${body(theme, page)}</div>${footer}</main></body></html>`;
+  // §6 language selector. Plain links with `aria-current` on the active one: a <select> would
+  // need script to act on a change, and this portal has none (ADMIN_UI §4). The current locale
+  // is still listed, so the guest can see which one they are on rather than only the others.
+  const locales = theme.locales ?? [];
+  const localeHref = theme.localeHref ?? null;
+  const langs =
+    locales.length < 2 || localeHref === null
+      ? ''
+      : `<nav class="langs" aria-label="${escapeHtml(t('lang.select', {}, l))}"><ul>${locales
+          .map((code) => {
+            const current = code === theme.locale;
+            return `<li><a href="${escapeHtml(localeHref(code))}" lang="${escapeHtml(code)}"${
+              current ? ' aria-current="true"' : ''
+            }>${escapeHtml(localeName(code))}</a></li>`;
+          })
+          .join('')}</ul></nav>`;
+  return `<!doctype html><html lang="${escapeHtml(l)}" dir="${theme.dir}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="referrer" content="no-referrer"><title>${escapeHtml(heading)}</title>${head}</head><body><a class="skip" href="#main">${escapeHtml(t('skip.main', {}, l))}</a><main id="main"><div class="card">${logo}<h1>${escapeHtml(heading)}</h1>${site}${body(theme, page)}</div>${langs}${footer}</main></body></html>`;
 }
 
 const DATA_IMAGE_RE = /^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/]+=*$/;
@@ -341,6 +428,7 @@ function sampleBody(page: PortalPreviewPage, sample: PortalPreviewSample): PageB
     case 'landing':
       return {
         page: 'landing',
+        templateKey: sample.templateKey ?? DEFAULT_PORTAL_TEMPLATE,
         methods: sample.loginMethods.map((method) => ({ method, href: null })),
         notice: null,
       };
@@ -373,6 +461,12 @@ function sampleBody(page: PortalPreviewPage, sample: PortalPreviewSample): PageB
         },
         logout: null,
       };
+    // Both were renderable before this change and simply missing from the preview list; neither
+    // takes sample data, so the preview is the real page rather than a mock of it.
+    case 'logout':
+      return { page: 'logout' };
+    case 'connected':
+      return { page: 'connected' };
   }
 }
 

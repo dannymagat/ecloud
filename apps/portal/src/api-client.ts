@@ -3,6 +3,15 @@
  * API_ARCHITECTURE.md §1 "talks only to api"). Every transport or 5xx failure surfaces as
  * `unavailable` so pages fail closed (Q32) — the portal never authorizes anything on its own.
  */
+import {
+  DEFAULT_PORTAL_TEMPLATE,
+  isPortalMethodKey,
+  isPortalTemplateKey,
+  type PortalMethodKey,
+  type PortalTemplateKey,
+} from '@ecloud/shared';
+import { DEFAULT_LOCALE } from './i18n.js';
+
 export type RedirectOutcome =
   | { kind: 'flow'; flowId: string; expiresAt: Date }
   | { kind: 'success'; flowId: string }
@@ -17,7 +26,17 @@ export interface FlowView {
   id: string;
   state: string;
   expiresAt: Date;
-  methods: ('password' | 'voucher' | 'click_through')[];
+  /**
+   * In the operator's published order, already filtered by the API to methods that are both
+   * configured and implemented in this build — the portal renders this list as given and never
+   * re-sorts or re-filters it.
+   */
+  methods: PortalMethodKey[];
+  /** Published template (§4); decides the landing layout. Unknown value falls back to the default. */
+  templateKey: PortalTemplateKey;
+  /** Languages the operator published, and which one to render by default (§6). */
+  locales: string[];
+  defaultLocale: string;
   portal: { id: string; name: string; siteName: string };
   theme: {
     colors: Record<string, unknown>;
@@ -285,17 +304,29 @@ export class HttpPortalApi implements PortalApi {
     const nas = j.nas as Json | null;
     const pb = j.postback as Json | null | undefined;
     const meraki = j.meraki as Json | null | undefined;
+    // The API has already applied availability, implementation and the operator's order, so this
+    // only discards values this build does not recognise at all. It must NOT re-narrow to the
+    // three original methods: that was what stopped every later method from ever reaching a page.
     const methods = Array.isArray(j.methods)
-      ? (j.methods as unknown[]).filter(
-          (m): m is 'password' | 'voucher' | 'click_through' =>
-            m === 'password' || m === 'voucher' || m === 'click_through',
-        )
+      ? (j.methods as unknown[]).filter((m): m is PortalMethodKey => isPortalMethodKey(m))
+      : [];
+    const templateKey = isPortalTemplateKey(j.template_key)
+      ? j.template_key
+      : DEFAULT_PORTAL_TEMPLATE;
+    const locales = Array.isArray(j.locales)
+      ? (j.locales as unknown[]).filter((l): l is string => typeof l === 'string')
       : [];
     return {
       id: String(j.id),
       state: String(j.state),
       expiresAt: new Date(String(j.expires_at)),
       methods,
+      templateKey,
+      locales,
+      defaultLocale:
+        typeof j.default_locale === 'string' && j.default_locale !== ''
+          ? j.default_locale
+          : (locales[0] ?? DEFAULT_LOCALE),
       portal: {
         id: String(portal.id),
         name: str(portal.name) ?? '',

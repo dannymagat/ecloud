@@ -15,6 +15,11 @@ const view: FlowView = {
   state: 'ARRIVED',
   expiresAt: EXPIRES,
   methods: ['click_through'],
+  // Stage 3: the published template and language set. Defaults here match a portal an operator
+  // has not customised, so these fixtures keep asserting what they asserted before.
+  templateKey: 'branded_multi_login',
+  locales: ['en'],
+  defaultLocale: 'en',
   portal: { id: 'p', name: 'Guest', siteName: 'Site A' },
   theme: null,
   terms: null,

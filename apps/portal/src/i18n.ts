@@ -23,9 +23,25 @@ const EN = {
   'title.handoff': 'Connecting',
   'landing.choose': 'Choose how to connect:',
   'landing.none': 'No sign-in method is available on this network.',
+  'landing.choose_other': 'Or connect another way:',
   'method.password': 'Sign in with username and password',
   'method.voucher': 'Use a voucher code',
   'method.click_through': 'Accept the terms and connect',
+  // One label per registry method (`METHOD_LABEL_KEY` in pages.ts maps them exhaustively, so a
+  // method added to the registry without a label here fails the build rather than rendering an
+  // empty button). Methods whose guest page is not built yet still need the label: the designer
+  // preview shows them, and the stage that ships the page should not also have to find this file.
+  'method.email_otp': 'Get a code by email',
+  'method.sms_otp': 'Get a code by text message',
+  'method.registration': 'Register for access',
+  'method.social': 'Continue with a social account',
+  'method.sso': 'Sign in with your organization',
+  'method.sponsor': 'Ask someone to approve access',
+  'method.hotel': 'Sign in as a guest of this property',
+  'method.paid': 'Buy access',
+  'method.mac': 'Connect this device automatically',
+  'method.idp': 'Sign in with an identity provider',
+  'lang.select': 'Language',
   'form.username': 'Username',
   'form.password': 'Password', // UI label. check-no-secrets: allow
   'form.voucher': 'Voucher code',
@@ -85,3 +101,18 @@ export function t(
 }
 
 export const MESSAGE_KEYS = Object.keys(EN) as MessageKey[];
+
+/**
+ * A language's name in its OWN language, which is what a guest who cannot read the current one
+ * needs to find theirs. `Intl.DisplayNames` is used rather than a hand-kept table so adding a
+ * catalogue does not also mean editing a list of names; it throws on a malformed tag and can
+ * return the tag unchanged on a trimmed ICU, so both fall back to the uppercased code.
+ */
+export function localeName(code: string): string {
+  try {
+    const name = new Intl.DisplayNames([code], { type: 'language' }).of(code);
+    return name === undefined || name === code ? code.toUpperCase() : name;
+  } catch {
+    return code.toUpperCase();
+  }
+}

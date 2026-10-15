@@ -618,11 +618,23 @@ export function createServer(options: ServerOptions = {}): Express {
     });
   }
 
-  const METHOD_PAGE: Readonly<Record<PortalMethod, 'login' | 'voucher' | 'terms'>> = {
-    password: 'login',
-    voucher: 'voucher',
-    click_through: 'terms',
-  };
+  /**
+   * GET page per method, for the methods whose page is built. PARTIAL on purpose: the registry
+   * knows 13 methods and this build renders three, so a method with no entry gets no link rather
+   * than a link to a route that 404s. Each stage that ships a page adds its entry.
+   *
+   * NOT taken from the registry's `page` field, which for `click_through` is `click` — that is
+   * its POST target, while its GET page is `terms`. Pointing this at the registry would silently
+   * move a live guest URL.
+   */
+  const GUEST_PAGES = [
+    { method: 'password', page: 'login' },
+    { method: 'voucher', page: 'voucher' },
+    { method: 'click_through', page: 'terms' },
+  ] as const;
+
+  const METHOD_PAGE: Readonly<Partial<Record<PortalMethod, 'login' | 'voucher' | 'terms'>>> =
+    Object.fromEntries(GUEST_PAGES.map((g) => [g.method, g.page]));
 
   // ------------------------------------------------------- Cycle D vendor-API entry points
   // UniFi external portal: the controller sends the guest to `<portal>/guest/s/<site>/?ap=…`;
@@ -696,17 +708,20 @@ export function createServer(options: ServerOptions = {}): Express {
       branding: brandingOf(l.view),
       body: {
         page: 'landing',
-        methods: l.view.methods.map((method) => ({
-          method,
-          href: flowHref(l.token, `/${METHOD_PAGE[method]}`),
-        })),
+        templateKey: l.view.templateKey,
+        methods: l.view.methods.flatMap((method) => {
+          const page = METHOD_PAGE[method];
+          // A method the API offers but this build has no page for is dropped, not linked: §5
+          // says a guest is only shown a method that works, and a dead button is worse than an
+          // absent one. The designer is where the administrator learns it is unavailable.
+          return page === undefined ? [] : [{ method, href: flowHref(l.token, `/${page}`) }];
+        }),
         notice: l.view.notice,
       },
     });
   });
 
-  for (const method of ['password', 'voucher', 'click_through'] as const) {
-    const page = METHOD_PAGE[method];
+  for (const { method, page } of GUEST_PAGES) {
     app.get(`/f/:token/${page}`, async (req, res) => {
       const l = await load(req, res);
       if (l === null) return;
@@ -720,16 +735,18 @@ export function createServer(options: ServerOptions = {}): Express {
 
   const urlencoded = express.urlencoded({ extended: false, limit: '4kb', parameterLimit: 10 });
 
+  // `path` is the POST target and `page` the GET page to re-render on a failure; they differ for
+  // click_through (`click` vs `terms`), which is why both are listed rather than derived.
   const postRoutes = [
-    { path: 'login', method: 'password' },
-    { path: 'voucher', method: 'voucher' },
-    { path: 'click', method: 'click_through' },
+    { path: 'login', method: 'password', page: 'login' },
+    { path: 'voucher', method: 'voucher', page: 'voucher' },
+    { path: 'click', method: 'click_through', page: 'terms' },
   ] as const;
   for (const route of postRoutes) {
     app.post(`/f/:token/${route.path}`, urlencoded, async (req, res) => {
       const l = await load(req, res);
       if (l === null) return;
-      const page = METHOD_PAGE[route.method];
+      const page = route.page;
       const form = (req.body ?? {}) as Record<string, unknown>;
       const field = (name: string) => (typeof form[name] === 'string' ? form[name] : '');
       if (!verifyCsrf(secret, l.view.id, readCookie(req.headers.cookie, cookie), form.csrf)) {

@@ -3,8 +3,10 @@ import {
   DEFAULT_PORTAL_STRINGS,
   PORTAL_PREVIEW_PAGES,
   loadConfig,
+  type PortalMethodKey,
   type PortalPreviewSample,
   type PortalPreviewTheme,
+  type PortalTemplateKey,
 } from '@ecloud/shared';
 import { describe, expect, it } from 'vitest';
 import { PORTAL_DEV_DEFAULTS, loadPortalConfig } from './config.js';
@@ -146,5 +148,87 @@ describe('renderPreview (P6-B designer contract)', () => {
       sample,
     );
     expect(remote).not.toContain('evil.example');
+  });
+});
+
+describe('stage 3: template-driven landing, labels and language selector', () => {
+  const landing = (
+    over: Partial<Parameters<typeof renderPage>[0]> = {},
+    methods: readonly { method: PortalMethodKey; href: string | null }[] = [
+      { method: 'password', href: '/f/t/login' },
+      { method: 'voucher', href: '/f/t/voucher' },
+    ],
+    templateKey: PortalTemplateKey = 'branded_multi_login',
+  ): string =>
+    renderPage(
+      { ...DEFAULT_THEME, ...over },
+      null,
+      { page: 'landing', templateKey, methods, notice: null },
+      { mode: 'inline' },
+    );
+
+  it('leads with one primary action on a primary-action template', () => {
+    // quick_connect is primaryAction; the first method is promoted and the rest demoted.
+    const html = landing({}, undefined, 'quick_connect');
+    expect(html).toContain('class="methods primary-first"');
+    expect(html).toContain('class="button secondary"');
+    expect(html).toContain('Or connect another way');
+  });
+
+  it('renders a plain ordered list on a template without a primary action', () => {
+    const html = landing({}, undefined, 'branded_multi_login');
+    // Markup, not the stylesheet: the inline CSS defines `.primary-first` and `.button.secondary`
+    // on every page, so a bare substring would pass here whatever the body contained.
+    expect(html).not.toContain('class="methods primary-first"');
+    expect(html).not.toContain('class="button secondary"');
+    expect(html).toContain('Choose how to connect');
+  });
+
+  it('renders the methods in the order given, never re-sorted', () => {
+    // The operator's published order arrives applied; re-sorting here would make it advisory.
+    const html = landing({}, [
+      { method: 'voucher', href: '/f/t/voucher' },
+      { method: 'password', href: '/f/t/login' },
+    ]);
+    expect(html.indexOf('/f/t/voucher')).toBeLessThan(html.indexOf('/f/t/login'));
+  });
+
+  it('prefers the operator label and falls back to the product text', () => {
+    const custom = landing({
+      strings: { ...DEFAULT_PORTAL_STRINGS, login_button: 'Staff sign-in' },
+    });
+    expect(custom).toContain('Staff sign-in');
+    // A method whose override is blank must not render a blank button.
+    const blank = landing({ strings: { ...DEFAULT_PORTAL_STRINGS, login_button: '   ' } });
+    expect(blank).toContain('Sign in with username and password');
+  });
+
+  it('labels a method that has no operator-overridable string from the catalogue', () => {
+    const html = landing({}, [{ method: 'sponsor', href: '/f/t/sponsor' }]);
+    expect(html).toContain('Ask someone to approve access');
+  });
+
+  it('shows the language selector only with more than one language and a way to switch', () => {
+    const two = landing({ locales: ['en', 'ar'], localeHref: (c) => `/f/t?lang=${c}` });
+    expect(two).toContain('<nav class="langs"');
+    expect(two).toContain('aria-current="true"');
+    expect(two).toContain('/f/t?lang=ar');
+    // One language is not a choice, and no switch link means the caller cannot act on one.
+    // Matched on the `<nav>` rather than the class name, which the stylesheet also contains.
+    expect(landing({ locales: ['en'], localeHref: (c) => `?lang=${c}` })).not.toContain(
+      '<nav class="langs"',
+    );
+    expect(landing({ locales: ['en', 'ar'], localeHref: null })).not.toContain(
+      '<nav class="langs"',
+    );
+  });
+
+  it('escapes a locale code into the switch link rather than trusting it', () => {
+    const html = landing({
+      locales: ['en', 'a"b'],
+      localeHref: (c) => `/f/t?lang=${c}`,
+    });
+    expect(html).not.toContain('lang="a"b"');
+    expect(html).toContain('&quot;');
   });
 });

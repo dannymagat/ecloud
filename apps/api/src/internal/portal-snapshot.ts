@@ -323,18 +323,22 @@ export async function loadPublishedSnapshot(
 }
 
 /**
- * The methods a guest may be offered by this published snapshot, narrowed to those the portal
- * renderer implements. Two filters, both deliberate:
+ * The methods a guest may be offered by this published snapshot. Two filters, both deliberate:
  *
  *  - `methodAvailability` (inside `offeredMethods`) drops a method whose provider is not
  *    configured, so a portal that lists `email_otp` without SMTP shows no email button (§5);
- *  - `isLegacyPortalMethod` drops a method whose guest page has not been built yet, so a stored
- *    method cannot reach a route that does not exist. Each stage that adds a page widens this.
+ *  - `isLegacyPortalMethod` drops a method whose guest page HAS NOT BEEN BUILT IN THIS BUILD, so
+ *    a stored method cannot render a button to a route that does not exist. Each stage that ships
+ *    a page widens this, and `legacy` is the accident of which three came first rather than a
+ *    statement about age.
  *
- * `identify` uses the same function, so a method the landing page does not offer cannot be
- * submitted directly either.
+ * NOT a security control, despite the shape. `identify`'s body is a discriminated union of three
+ * `z.literal` method values, so an unimplemented method is refused by the schema with a 400
+ * before `methods` is consulted; the `methods.includes(method)` check in `identify` is defence in
+ * depth for the three that exist. What this function actually prevents is a guest-facing dead
+ * link, which is why it stays narrow while the renderer below it becomes template-aware.
  */
-export function offeredLegacyMethods(
+export function offeredGuestMethods(
   snapshot: PortalSnapshot,
   capabilities: PortalCapabilities,
 ): PortalLoginMethod[] {

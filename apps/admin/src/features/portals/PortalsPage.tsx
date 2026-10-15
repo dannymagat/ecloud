@@ -9,10 +9,21 @@ import { formatDateTime, str } from '../../lib/format';
 import type { FieldDef } from '../resource/form';
 import { ResourcePage, type ResourceConfig } from '../resource/ResourcePage';
 
+/** Every registry method, so the designer can list and explain the ones it cannot enable yet. */
 export const LOGIN_METHOD_LABELS: Record<string, string> = {
   password: 'Username / password',
   voucher: 'Voucher',
   click_through: 'Click-through (terms)',
+  email_otp: 'Email code',
+  sms_otp: 'SMS code',
+  registration: 'Registration form',
+  social: 'Social login',
+  sso: 'Enterprise SSO',
+  sponsor: 'Sponsor approval',
+  hotel: 'Hotel / PMS guest',
+  paid: 'Paid access',
+  mac: 'MAC device (no page)',
+  idp: 'Identity provider',
 };
 
 export function PortalsPage() {

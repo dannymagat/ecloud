@@ -10,6 +10,11 @@
  * holds a `portal_assets.id` (served on the portal origin at `/a/{assetId}`).
  */
 
+// TYPE-ONLY, and deliberately so: `portal-methods.ts` imports values from this file, so a value
+// import here would be a real cycle. `import type` is erased at compile time, so the dependency
+// exists for the checker and not for the bundler.
+import type { PortalMethodKey, PortalTemplateKey } from './portal-methods.js';
+
 /** Colour tokens, injected as CSS custom properties (`--p-<token>`) by the renderer. */
 export const PORTAL_COLOR_TOKENS = [
   'brand',
@@ -156,7 +161,13 @@ export function resolvePortalStrings(
 // Page-preview contract (P6-B ↔ P6-A)
 // ---------------------------------------------------------------------------------------------
 
-/** Pages the designer can preview (the portal pages of P6-A, AC 1). */
+/**
+ * States the designer can preview (the portal pages of P6-A, AC 1). §6 asks for "every important state, not just the welcome
+ * screen", so this lists every page the portal ACTUALLY RENDERS — `logout` and `connected` were
+ * renderable all along and simply absent from the list. A page is added here when its renderer
+ * exists, never before: previewing a state the portal cannot produce would show an administrator
+ * a design that no guest will ever see.
+ */
 export const PORTAL_PREVIEW_PAGES = [
   'landing',
   'login',
@@ -166,6 +177,8 @@ export const PORTAL_PREVIEW_PAGES = [
   'error',
   'expired',
   'status',
+  'logout',
+  'connected',
 ] as const;
 export type PortalPreviewPage = (typeof PORTAL_PREVIEW_PAGES)[number];
 
@@ -187,9 +200,16 @@ export interface PortalPreviewTheme {
 export interface PortalPreviewSample {
   portalName: string;
   siteName: string;
-  loginMethods: readonly PortalLoginMethod[];
+  /**
+   * Widened from the three original methods to the whole registry: the designer previews what the
+   * operator has enabled, including a method whose guest page is not built yet, which is how an
+   * administrator sees the layout they are configuring before the stage that ships the page.
+   */
+  loginMethods: readonly PortalMethodKey[];
   termsText: string | null;
   termsVersion: string | null;
+  /** Published/selected template (§4); decides the landing layout. Absent = the default. */
+  templateKey?: PortalTemplateKey;
 }
 
 /**
