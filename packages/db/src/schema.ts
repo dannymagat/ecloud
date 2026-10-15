@@ -97,6 +97,8 @@ export interface OrganizationsTable {
   max_devices: number | null;
   max_users: number | null;
   max_concurrent_sessions: number | null;
+  /** Migration 049: months portal_registrations rows are kept (§13). Default 12, range 1-120. */
+  registration_retention_months: Generated<number>;
   created_at: GeneratedTimestamp;
   updated_at: GeneratedTimestamp;
   deleted_at: NullableTimestamp;
@@ -909,6 +911,8 @@ export interface PortalThemesTable {
   colors: GeneratedJsonb<Record<string, unknown>>;
   strings: GeneratedJsonb<Record<string, unknown>>;
   custom_css: string | null;
+  /** Migration 049: font stack key, background asset id, overlay (§6). Validated by the renderer. */
+  layout: GeneratedJsonb<Record<string, unknown>>;
   version: Generated<number>;
   created_at: GeneratedTimestamp;
   updated_at: GeneratedTimestamp;
@@ -968,6 +972,58 @@ export interface PortalVersionsTable {
   snapshot: GeneratedJsonb<Record<string, unknown>>;
   published_by: Uuid | null;
   published_at: GeneratedTimestamp;
+}
+
+/**
+ * Migration 049: a guest's registration-form submission (§5, §13). Personal data — partitioned
+ * monthly and purged per `organizations.registration_retention_months`.
+ */
+export interface PortalRegistrationsTable {
+  id: Generated<number>;
+  organization_id: Uuid;
+  captive_portal_id: Uuid;
+  /** The published version whose form was shown; without it a stored value cannot be read back. */
+  portal_version_id: Uuid | null;
+  nas_client_id: Uuid | null;
+  /** macaddr: text on both sides, per the driver conventions above. */
+  mac: string | null;
+  locale: Generated<string>;
+  fields: GeneratedJsonb<Record<string, unknown>>;
+  /** Kept out of `fields` so required terms stay distinguishable from marketing consent (§13). */
+  consents: GeneratedJsonb<Record<string, unknown>>;
+  created_at: GeneratedTimestamp;
+}
+
+/** Migration 049: which device or subscriber accepted which terms version, and when (§5). */
+export interface TermsAcceptancesTable {
+  id: Generated<Uuid>;
+  organization_id: Uuid;
+  captive_portal_id: Uuid;
+  terms_version: string;
+  mac: string | null;
+  subscriber_id: Uuid | null;
+  locale: Generated<string>;
+  accepted_at: GeneratedTimestamp;
+}
+
+/** Migration 049: a registered device MAC (§5). Revocation is recorded, never deleted. */
+export interface DeviceRegistrationsTable {
+  id: Generated<Uuid>;
+  organization_id: Uuid;
+  site_id: Uuid | null;
+  mac: string;
+  label: string | null;
+  /** 'guest' (self-registered) or 'admin'. Kept distinct from `registered_by`, which may be
+   *  nulled when an administrator is deleted. */
+  source: 'guest' | 'admin';
+  registered_by: Uuid | null;
+  subscriber_id: Uuid | null;
+  expires_at: NullableTimestamp;
+  revoked_at: NullableTimestamp;
+  revoked_by: Uuid | null;
+  revoke_reason: string | null;
+  created_at: GeneratedTimestamp;
+  updated_at: GeneratedTimestamp;
 }
 
 /** Migration 021: metadata of branding objects in @ecloud/storage (key = org/{org}/{purpose}/{id}). */
@@ -1376,6 +1432,9 @@ export interface Database {
   portal_assets: PortalAssetsTable;
   portal_terms_versions: PortalTermsVersionsTable;
   portal_versions: PortalVersionsTable;
+  portal_registrations: PortalRegistrationsTable;
+  terms_acceptances: TermsAcceptancesTable;
+  device_registrations: DeviceRegistrationsTable;
   sessions: SessionsTable;
   accounting_records: AccountingRecordsTable;
   auth_events: AuthEventsTable;
