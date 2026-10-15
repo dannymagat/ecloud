@@ -116,6 +116,77 @@ await describeIntegration('tenant bootstrap', () => {
     expect(rows.find((r) => r.id === deletedId)?.deleted_at).not.toBeNull();
   });
 
+  it('reconciles the LIVE site when a newer soft-deleted site shares the name', async () => {
+    // The same defect as the NAS one, in the site query, and production is set up to trigger it:
+    // the live EZELINK-HQ carries slug `ezelink123` while a DELETED row holds `ezelink-hq`.
+    const db = deps.dbPlatform;
+    const org = makeOrganization({ slug: unique('org'), name: unique('Org') });
+    await db.insertInto('organizations').values(org).execute();
+    const name = unique('Site');
+    const liveId = newId();
+    const deletedId = newId();
+    await db
+      .insertInto('sites')
+      .values({ id: liveId, organization_id: org.id, slug: unique('live'), name, timezone: 'UTC', status: 'active', settings: {} })
+      .execute();
+    await db
+      .insertInto('sites')
+      .values({ id: deletedId, organization_id: org.id, slug: unique('dead'), name, timezone: 'UTC', status: 'active', settings: {}, deleted_at: new Date() })
+      .execute();
+
+    const ident = `bb${unique('id').replace(/[^a-z0-9]/g, '').slice(0, 10)}`;
+    const base = input(org.id, ident, uniqueIp());
+    const steps = await db
+      .transaction()
+      .execute((trx) => bootstrapTenant(trx, { ...base, siteName: name }));
+
+    expect(steps.find((s) => s.entity === 'site')).toMatchObject({ id: liveId, created: false });
+    const rows = await db
+      .selectFrom('sites')
+      .select(['id', 'deleted_at'])
+      .where('organization_id', '=', org.id)
+      .where('name', '=', name)
+      .execute();
+    expect(rows.filter((r) => r.deleted_at === null).map((r) => r.id)).toEqual([liveId]);
+  });
+
+  it('reconciles the LIVE user when a newer soft-deleted user shares the username', async () => {
+    const db = deps.dbPlatform;
+    const org = makeOrganization({ slug: unique('org'), name: unique('Org') });
+    await db.insertInto('organizations').values(org).execute();
+    const siteId = newId();
+    await db
+      .insertInto('sites')
+      .values({ id: siteId, organization_id: org.id, slug: unique('site'), name: 'Seed', timezone: 'UTC', status: 'active', settings: {} })
+      .execute();
+    const username = unique('user').toLowerCase().replace(/[^a-z0-9-]/g, '');
+    const liveId = newId();
+    await db
+      .insertInto('users')
+      .values({ id: liveId, organization_id: org.id, site_id: siteId, username, password_hash: 'x', auth_methods: ['password'], status: 'active', origin: 'admin' })
+      .execute();
+    await db
+      .insertInto('users')
+      .values({ id: newId(), organization_id: org.id, site_id: siteId, username, password_hash: 'x', auth_methods: ['password'], status: 'active', origin: 'admin', deleted_at: new Date() })
+      .execute();
+
+    const ident = `cc${unique('id').replace(/[^a-z0-9]/g, '').slice(0, 10)}`;
+    const base = input(org.id, ident, uniqueIp());
+    const steps = await db
+      .transaction()
+      .execute((trx) => bootstrapTenant(trx, { ...base, username }));
+
+    expect(steps.find((s) => s.entity === 'user')).toMatchObject({ id: liveId, created: false });
+    const live = await db
+      .selectFrom('users')
+      .select(['id'])
+      .where('organization_id', '=', org.id)
+      .where('username', '=', username)
+      .where('deleted_at', 'is', null)
+      .execute();
+    expect(live.map((r) => r.id)).toEqual([liveId]);
+  });
+
   it('is idempotent: a second run creates nothing and keeps one live NAS', async () => {
     const db = deps.dbPlatform;
     const org = makeOrganization({ slug: unique('org'), name: unique('Org') });

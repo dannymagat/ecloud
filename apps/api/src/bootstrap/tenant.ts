@@ -147,11 +147,19 @@ export async function bootstrapTenant(
   // Matched on name within the organization, which is what the unique index uses. A soft-deleted
   // site of that name is REVIVED rather than duplicated: two sites with one name is exactly the
   // confusion that cost an afternoon, and the index would refuse the second anyway.
+  // Live first, then newest, for the reason the NAS query learned on 2026-10-15: picking an
+  // arbitrary row among a live one and older deleted ones revives the wrong row. `uq_sites_org_slug`
+  // is partial on `deleted_at IS NULL`, so deleted rows CAN share a name or slug with a live one.
+  // Matched on name, not slug: production's live EZELINK-HQ carries slug `ezelink123` while a
+  // DELETED row holds `ezelink-hq`, which is this CLI's default — matching on slug would revive
+  // the deleted row and leave two live sites with the NAS still pointing at the first.
   const existingSite = await db
     .selectFrom('sites')
     .select(['id', 'deleted_at'])
     .where('organization_id', '=', input.organizationId)
     .where('name', '=', input.siteName)
+    .orderBy(sql`(deleted_at is null)`, 'desc')
+    .orderBy('created_at', 'desc')
     .executeTakeFirst();
   let siteId: string;
   if (existingSite === undefined) {
@@ -388,11 +396,14 @@ export async function bootstrapTenant(
 
   // --- sample user ----------------------------------------------------------------------
   const validUntil = new Date(input.now.getTime() + input.userValidDays * 86_400_000);
+  // Same ordering, same reason: `uq_users_org_username` is partial on `deleted_at IS NULL`.
   const existingUser = await db
     .selectFrom('users')
     .select(['id'])
     .where('organization_id', '=', input.organizationId)
     .where('username', '=', input.username)
+    .orderBy(sql`(deleted_at is null)`, 'desc')
+    .orderBy('created_at', 'desc')
     .executeTakeFirst();
   let userId: string;
   if (existingUser === undefined) {
