@@ -48,9 +48,9 @@ import { z } from 'zod';
 import type { AppDeps } from '../context.js';
 import {
   Envelope,
-  LEGACY_SECRET_PURPOSE,
   SECRET_REF_PREFIX,
   openBoundSecretRef,
+  openV1Ref,
   sealBoundSecretRef,
   sealSecretRef,
   sha256Hex,
@@ -284,13 +284,7 @@ export function openUamSecret(
     // the outage this branch exists to avoid. A v1 ref carries no AAD, hence no binding here.
     const body = ref.startsWith(SECRET_REF_PREFIX) ? ref.slice(SECRET_REF_PREFIX.length) : '';
     if (body.startsWith('v1.')) {
-      // Both labels, as in openNasSecret: legacy for every row sealed before today, current for
-      // anything a v1-format path wrote after the label moved.
-      try {
-        return new Envelope(deps.config.dataEncryptionKey, LEGACY_SECRET_PURPOSE).decrypt(body);
-      } catch {
-        return new Envelope(deps.config.dataEncryptionKey, UAM_SECRET_PURPOSE).decrypt(body);
-      }
+      return openV1Ref(deps.config.dataEncryptionKey, body, UAM_SECRET_PURPOSE);
     }
     return openBoundSecretRef(
       new Envelope(deps.config.dataEncryptionKey, UAM_SECRET_PURPOSE),

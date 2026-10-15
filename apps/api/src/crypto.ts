@@ -234,6 +234,29 @@ export function sealNasSecret(
  * itself can decide, so a caller handing in one envelope cannot be right for both cases — and the
  * caller who hands in the current one looks completely correct while failing on every legacy row.
  */
+/**
+ * Open a v1 ref, trying the legacy label then `currentPurpose`.
+ *
+ * Shared by the NAS and UAM readers and by the re-seal, because all three need the same two-label
+ * decision and a second copy of it is a second chance to get the label wrong — which is the fault
+ * that took the api down at 11:05Z. A v1 ref carries no AAD, so there is no binding to check.
+ */
+export function openV1Ref(dataEncryptionKey: string, body: string, currentPurpose: string): string {
+  // Legacy first: it is every row sealed before the label split. `currentPurpose` second covers a
+  // v1-format ref written after the label moved but before the seal sites were converted.
+  // Each attempt is a GCM authentication check, so a wrong guess costs one failed decrypt.
+  try {
+    return new Envelope(dataEncryptionKey, LEGACY_SECRET_PURPOSE).decrypt(body);
+  } catch {
+    return new Envelope(dataEncryptionKey, currentPurpose).decrypt(body);
+  }
+}
+
+/** True when a ref is the pre-AAD format, i.e. a row the re-seal still has to visit. */
+export function isV1Ref(ref: string): boolean {
+  return ref.startsWith(`${SECRET_REF_PREFIX}${ENVELOPE_VERSION}.`);
+}
+
 export function openNasSecret(
   dataEncryptionKey: string,
   ref: string,
@@ -251,12 +274,7 @@ export function openNasSecret(
     // under the ':v2' LABEL. Legacy first because it is the overwhelming majority — every row
     // sealed before today — then current for anything written in that window. Both are a plain
     // GCM authentication check, so a wrong guess costs one failed decrypt and reveals nothing.
-    const legacy = new Envelope(dataEncryptionKey, LEGACY_SECRET_PURPOSE);
-    try {
-      return legacy.decrypt(body);
-    } catch {
-      return new Envelope(dataEncryptionKey, NAS_SECRET_PURPOSE).decrypt(body);
-    }
+    return openV1Ref(dataEncryptionKey, body, NAS_SECRET_PURPOSE);
   }
   return new Envelope(dataEncryptionKey, NAS_SECRET_PURPOSE).decryptBound(body, nasBinding(binding));
 }

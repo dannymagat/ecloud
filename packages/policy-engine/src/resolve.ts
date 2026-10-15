@@ -951,7 +951,6 @@ export function resolveEffectivePolicy(input: ResolutionInput): ResolutionResult
   }
 
   let ordered = rankCandidates(input, trace);
-  let platformDefault = false;
   if (ordered.length === 0 && input.platform_default) {
     // Migration 043. Reached only when nothing an operator configured applied, so it cannot
     // override a choice; it answers where there was no answer. Recorded as its own layer rather
@@ -959,7 +958,6 @@ export function resolveEffectivePolicy(input: ResolutionInput): ResolutionResult
     // assignment is the failure this feature has to avoid: at generous limits nobody complains
     // and a forgotten access point would serve real guests for months unnoticed.
     ordered = [platformDefaultCandidate(input.platform_default)];
-    platformDefault = true;
     trace.push({
       step: 'candidate',
       order: 0,
