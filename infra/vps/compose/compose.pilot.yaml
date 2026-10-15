@@ -180,6 +180,10 @@ services:
       ADMIN_MFA_MODE: ${ADMIN_MFA_MODE:-off} # D-046: off | required
       DATA_ENCRYPTION_KEY_FILE: /run/secrets/data_encryption_key
       VOUCHER_PEPPER_FILE: /run/secrets/voucher_pepper
+      # Captive-portal email OTP codes are stored as HMAC(code, OTP_PEPPER) (migration 035). The
+      # api refuses its dev default in production, so the pepper is a host secret like the
+      # voucher pepper: generated once by install-secrets.sh, never in this file.
+      OTP_PEPPER_FILE: /run/secrets/otp_pepper
       SESSION_COOKIE_NAME: __Host-ecloud_sid
       SESSION_COOKIE_SECURE: 'true'
       TRUST_PROXY_HOPS: '1'
@@ -198,6 +202,7 @@ services:
       - mfa_encryption_key
       - data_encryption_key
       - voucher_pepper
+      - otp_pepper
     volumes:
       - storage_data:/var/lib/ecloud/storage
     ports:
@@ -420,6 +425,7 @@ secrets:
   mfa_encryption_key: { file: '${ECLOUD_SECRETS_DIR:-/opt/ecloud/secrets}/mfa_encryption_key' }
   data_encryption_key: { file: '${ECLOUD_SECRETS_DIR:-/opt/ecloud/secrets}/data_encryption_key' }
   voucher_pepper: { file: '${ECLOUD_SECRETS_DIR:-/opt/ecloud/secrets}/voucher_pepper' }
+  otp_pepper: { file: '${ECLOUD_SECRETS_DIR:-/opt/ecloud/secrets}/otp_pepper' }
   portal_state_secret: { file: '${ECLOUD_SECRETS_DIR:-/opt/ecloud/secrets}/portal_state_secret' }
   database_url: { file: '${ECLOUD_SECRETS_DIR:-/opt/ecloud/secrets}/database_url' }
   database_url_platform:

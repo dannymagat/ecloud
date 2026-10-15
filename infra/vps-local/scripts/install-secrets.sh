@@ -29,7 +29,7 @@ elif [ "$existing" != ecloud-secrets ]; then
 fi
 
 required="postgres_password ecloud_app_password ecloud_platform_password radius_sql_password
-radius_status_secret internal_api_token mfa_encryption_key data_encryption_key voucher_pepper
+radius_status_secret internal_api_token mfa_encryption_key data_encryption_key voucher_pepper otp_pepper
 portal_state_secret database_url database_url_platform redis_url redis_conf"
 missing=0
 for n in $required; do
