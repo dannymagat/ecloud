@@ -189,7 +189,11 @@ await describeIntegration('@ecloud/api multi-vendor Cycle F (setup-guide gallery
       .send({
         site_id: siteId,
         name: unique('cambium'),
-        nas_ip: '10.77.0.2',
+        // uq_nas_clients_ip is GLOBAL (unique on nas_ip where deleted_at is null), and this
+        // suite does not truncate, so a hardcoded address poisons the test permanently the first
+        // time a run aborts after the NAS is created — which is exactly what happened on
+        // 2026-10-15. Randomised in 10.77.0.0/16 so a leftover row cannot collide.
+        nas_ip: `10.77.${String(1 + Math.floor(Math.random() * 250))}.${String(1 + Math.floor(Math.random() * 250))}`,
         adapter_key: 'external-portal-postback',
         adapter_config: { profile: 'cambium-hotspot' },
       });

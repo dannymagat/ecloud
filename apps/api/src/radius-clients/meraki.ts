@@ -31,7 +31,7 @@ import {
   merakiListenersRenderable,
   type MerakiCloudRadiusSettings,
 } from '@ecloud/shared';
-import { Envelope, NAS_SECRET_PURPOSE, SECRET_REF_PREFIX, openSecretRef } from '../crypto.js';
+import { Envelope, NAS_SECRET_PURPOSE, SECRET_REF_PREFIX, openNasSecret } from '../crypto.js';
 import { SECRET_RE, SECRET_RULE, type SkippedNas } from './render.js';
 import type { LoadNasOptions } from './load.js';
 
@@ -198,7 +198,9 @@ export async function loadMerakiEntries(
         .innerJoin('organizations as o', 'o.id', 'n.organization_id')
         .select([
           'n.id',
+          'n.organization_id',
           'n.secret_ref',
+          'n.secret_version',
           'n.require_message_authenticator',
           'n.cloud_radius_auth_port',
           'n.cloud_radius_acct_port',
@@ -221,7 +223,11 @@ export async function loadMerakiEntries(
     const ref = String(row.secret_ref);
     let secret: string;
     try {
-      secret = openSecretRef(envelope, ref);
+      secret = openNasSecret(envelope, ref, {
+        organizationId: String(row.organization_id),
+        nasId: String(row.id),
+        secretVersion: Number(row.secret_version),
+      });
     } catch {
       skipped.push({
         id: String(row.id),

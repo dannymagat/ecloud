@@ -27,7 +27,7 @@ import { withPlatform, type Db } from '@ecloud/db';
 import { isIP } from 'node:net';
 import type { Request, RequestHandler, Response } from 'express';
 import type { AppDeps } from '../context.js';
-import { Envelope, NAS_SECRET_PURPOSE, openSecretRef } from '../crypto.js';
+import { Envelope, NAS_SECRET_PURPOSE, openNasSecret } from '../crypto.js';
 import { isAcceptableSecret } from '../radius-clients/render.js';
 
 /** `rlm_rest` JSON: one attribute per key, `control:` targets the control list. */
@@ -64,7 +64,14 @@ export async function lookupNasByAddress(
       trx
         .selectFrom('nas_clients as n')
         .innerJoin('organizations as o', 'o.id', 'n.organization_id')
-        .select(['n.id', 'n.nas_ip', 'n.secret_ref', 'n.require_message_authenticator'])
+        .select([
+          'n.id',
+          'n.organization_id',
+          'n.nas_ip',
+          'n.secret_ref',
+          'n.secret_version',
+          'n.require_message_authenticator',
+        ])
         .where('n.status', '=', 'active')
         .where('n.deleted_at', 'is', null)
         .where('o.deleted_at', 'is', null)
@@ -75,9 +82,18 @@ export async function lookupNasByAddress(
 
   let secret: string;
   try {
-    secret = openSecretRef(new Envelope(dataEncryptionKey, NAS_SECRET_PURPOSE), String(row.secret_ref));
+    secret = openNasSecret(
+      new Envelope(dataEncryptionKey, NAS_SECRET_PURPOSE),
+      String(row.secret_ref),
+      {
+        organizationId: String(row.organization_id),
+        nasId: String(row.id),
+        secretVersion: Number(row.secret_version),
+      },
+    );
   } catch {
-    // Tampered or sealed under another key: skip this NAS exactly as the renderer does.
+    // Tampered, sealed under another key, or — task 10 — bound to a different row: skip this
+    // NAS exactly as the renderer does.
     return null;
   }
   // Same rule as the rendered file, including the D-051 fleet-default exception: a secret that

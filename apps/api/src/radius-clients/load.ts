@@ -8,13 +8,16 @@
  * key that opens none of the sealed secrets fails the whole render (previous file kept).
  */
 import { withPlatform, type Db } from '@ecloud/db';
-import { Envelope, NAS_SECRET_PURPOSE, SECRET_REF_PREFIX, openSecretRef } from '../crypto.js';
+import { Envelope, NAS_SECRET_PURPOSE, SECRET_REF_PREFIX, openNasSecret } from '../crypto.js';
 import { RadiusClientsRenderError, type NasClientEntry, type SkippedNas } from './render.js';
 
 export interface NasClientRow {
   id: string;
+  /** Part of the v2 envelope's AAD, so it is read from the row rather than assumed. */
+  organizationId: string;
   nasIp: string;
   secretRef: string;
+  secretVersion: number;
   requireMessageAuthenticator: boolean;
 }
 
@@ -37,7 +40,14 @@ export async function loadNasClientRows(
       let query = trx
         .selectFrom('nas_clients as n')
         .innerJoin('organizations as o', 'o.id', 'n.organization_id')
-        .select(['n.id', 'n.nas_ip', 'n.secret_ref', 'n.require_message_authenticator'])
+        .select([
+          'n.id',
+          'n.organization_id',
+          'n.nas_ip',
+          'n.secret_ref',
+          'n.secret_version',
+          'n.require_message_authenticator',
+        ])
         .where('n.status', '=', 'active')
         .where('n.deleted_at', 'is', null)
         .where('o.deleted_at', 'is', null)
@@ -52,8 +62,10 @@ export async function loadNasClientRows(
   );
   return rows.map((row) => ({
     id: String(row.id),
+    organizationId: String(row.organization_id),
     nasIp: String(row.nas_ip),
     secretRef: String(row.secret_ref),
+    secretVersion: Number(row.secret_version),
     requireMessageAuthenticator: row.require_message_authenticator !== false,
   }));
 }
@@ -82,12 +94,20 @@ export function resolveNasSecrets(
     if (isSealed) sealed += 1;
     let secret: string;
     try {
-      secret = openSecretRef(envelope, row.secretRef);
+      secret = openNasSecret(envelope, row.secretRef, {
+        organizationId: row.organizationId,
+        nasId: row.id,
+        secretVersion: row.secretVersion,
+      });
     } catch {
       skipped.push({
         id: row.id,
         reason: isSealed
-          ? 'secret_ref cannot be opened with DATA_ENCRYPTION_KEY'
+          ? // Task 10: a v2 ref also fails here when its AAD does not match the row it sits in,
+            // which is the transplant this sealing exists to refuse. Deliberately not
+            // distinguished in the message: the operator action is the same, and naming which
+            // check failed would tell an attacker which half of the binding they got right.
+            'secret_ref cannot be opened with DATA_ENCRYPTION_KEY'
           : 'secret_ref scheme is not supported',
       });
       continue;

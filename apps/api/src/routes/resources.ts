@@ -16,6 +16,7 @@ import {
   NotFoundError,
   ValidationError,
   canonicalNasAddress,
+  newId,
 } from '@ecloud/shared';
 import type { DbTransaction } from '@ecloud/db';
 import { sql } from 'kysely';
@@ -23,7 +24,7 @@ import { z } from 'zod';
 import { writeAudit } from '../audit.js';
 import { requestIsImpersonating } from '../auth/middleware.js';
 import type { AppDeps } from '../context.js';
-import { Envelope, NAS_SECRET_PURPOSE, randomToken, sealSecretRef } from '../crypto.js';
+import { Envelope, NAS_SECRET_PURPOSE, randomToken, sealNasSecret } from '../crypto.js';
 import { OrgIdParams, ResourceSchema, problemResponses } from '../http/common.js';
 import { ImpersonationForbiddenError } from '../http/errors.js';
 import { defineRoute, type AnyRouteSpec } from '../http/route.js';
@@ -627,6 +628,12 @@ export function resourceRoutes(deps: AppDeps): AnyRouteSpec[] {
       // 32 random bytes → 43 base64url chars; RADIUS shared secrets ≤ 128 octets.
       const secret = randomToken(32);
       hook.scratch.secret = secret;
+      // Task 10: the v2 envelope binds the ciphertext to its row, so the id has to exist BEFORE
+      // the secret is sealed. Pre-generated here and handed to the insert through `scratch`,
+      // rather than sealing in afterCreate and updating: that would write the secret twice and
+      // leave a window in which the row holds a ciphertext bound to a version it does not carry.
+      const nasId = newId();
+      hook.scratch.id = nasId;
       // Cycle B: without an explicit CoA port the adapter's documented DAS default is stored
       // (MikroTik /radius incoming 1700); other adapters keep NULL (deployment default).
       const defaultCoaPort = nasAdapter(body.adapter_key as string)?.capabilities().disconnect
@@ -640,7 +647,11 @@ export function resourceRoutes(deps: AppDeps): AnyRouteSpec[] {
         ...merakiColumns,
         deployment_mode: deploymentMode,
         adapter_type_key: body.adapter_key,
-        secret_ref: sealSecretRef(dataEnvelope, secret),
+        secret_ref: sealNasSecret(dataEnvelope, secret, {
+          organizationId: hook.orgId,
+          nasId,
+          secretVersion: 1,
+        }),
       };
     },
     afterCreate: async (row, hook) => {
@@ -773,7 +784,7 @@ export function resourceRoutes(deps: AppDeps): AnyRouteSpec[] {
       const row = await inTenant(deps, params.orgId, async (trx) => {
         const before = await loose(trx)
           .selectFrom('nas_clients')
-          .select(['id', 'site_id', 'name'])
+          .select(['id', 'organization_id', 'site_id', 'name', 'secret_version'])
           .where('id', '=', params.id)
           .where('deleted_at', 'is', null)
           .forUpdate()
@@ -787,9 +798,21 @@ export function resourceRoutes(deps: AppDeps): AnyRouteSpec[] {
           'nas_client',
           'nas:read',
         );
+        // The version rises in the SAME statement as the new ciphertext. Two statements, or a
+        // bump left to a later write, would leave the row holding a ciphertext sealed against a
+        // version the row does not carry — and a rotation that does not raise the version gives
+        // the rollback protection nothing to refuse.
+        const nextVersion = Number(before.secret_version) + 1;
         await trx
           .updateTable('nas_clients')
-          .set({ secret_ref: sealSecretRef(dataEnvelope, secret) })
+          .set({
+            secret_ref: sealNasSecret(dataEnvelope, secret, {
+              organizationId: before.organization_id as string,
+              nasId: params.id,
+              secretVersion: nextVersion,
+            }),
+            secret_version: nextVersion,
+          })
           .where('id', '=', params.id)
           .execute();
         await writeAudit(trx, ctx, {

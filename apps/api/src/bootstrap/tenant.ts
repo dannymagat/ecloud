@@ -34,8 +34,9 @@
  */
 import { sql, type Kysely } from 'kysely';
 import type { Database } from '@ecloud/db';
-import { Envelope, NAS_SECRET_PURPOSE, sealSecretRef } from '../crypto.js';
-import { UAM_SECRET_PURPOSE } from '../internal/portal.js';
+import { newId } from '@ecloud/shared';
+import { Envelope, NAS_SECRET_PURPOSE, sealNasSecret } from '../crypto.js';
+import { sealUamSecret } from '../internal/portal.js';
 import { buildSnapshot } from '../internal/portal-snapshot.js';
 
 export interface BootstrapInput {
@@ -141,7 +142,6 @@ export async function bootstrapTenant(
   const steps: BootstrapStep[] = [];
   const note = secretNote(input.secretsArePlatformDefaults);
   const nasEnvelope = new Envelope(input.dataEncryptionKey, NAS_SECRET_PURPOSE);
-  const uamEnvelope = new Envelope(input.dataEncryptionKey, UAM_SECRET_PURPOSE);
 
   // --- site ---------------------------------------------------------------------------------
   // Matched on name within the organization, which is what the unique index uses. A soft-deleted
@@ -204,18 +204,24 @@ export async function bootstrapTenant(
   // is revived only when nothing live carries the identifier.
   const existingNas = await db
     .selectFrom('nas_clients')
-    .select(['id'])
+    .select(['id', 'secret_version'])
     .where('organization_id', '=', input.organizationId)
     .where('nas_identifier', '=', input.nasIdentifier)
     .orderBy(sql`(deleted_at is null)`, 'desc')
     .orderBy('created_at', 'desc')
     .executeTakeFirst();
-  const sealedNasSecret = sealSecretRef(nasEnvelope, input.radiusSecret);
+  // Task 10: there is NO shared `sealedNasSecret` any more, and that is the point of the change.
+  // One ciphertext was computed here and written to whichever row the branch below chose; under
+  // the v2 envelope a ciphertext is bound to one row id and one version, so a value sealed for
+  // the insert cannot legally be written by the update, and vice versa. Each branch seals its own.
   let nasId: string;
   if (existingNas === undefined) {
-    const row = await db
+    // The id is pre-generated because the seal needs it; the insert then carries it.
+    nasId = newId();
+    await db
       .insertInto('nas_clients')
       .values({
+        id: nasId,
         organization_id: input.organizationId,
         site_id: siteId,
         name: input.nasName,
@@ -223,15 +229,23 @@ export async function bootstrapTenant(
         nas_ip: input.nasIp,
         adapter_type_key: input.adapterKey,
         adapter_key: input.adapterKey,
-        secret_ref: sealedNasSecret,
+        secret_ref: sealNasSecret(nasEnvelope, input.radiusSecret, {
+          organizationId: input.organizationId,
+          nasId,
+          secretVersion: 1,
+        }),
         status: 'active',
       })
-      .returning('id')
-      .executeTakeFirstOrThrow();
-    nasId = row.id;
+      .execute();
     steps.push({ entity: 'nas_client', id: nasId, created: true });
   } else {
     nasId = existingNas.id;
+    // The version RISES on the reconcile path. Bootstrap takes the secret from the environment
+    // and cannot tell whether it differs from the one already sealed in the row without opening
+    // it, so it treats every reconcile as a possible rotation. Over-counting a rotation is
+    // harmless — the counter is monotonic and only its order matters — whereas writing a new
+    // plaintext at an unchanged version would leave the previous ciphertext replayable.
+    const nextVersion = Number(existingNas.secret_version) + 1;
     await db
       .updateTable('nas_clients')
       .set({
@@ -242,7 +256,12 @@ export async function bootstrapTenant(
         nas_ip: input.nasIp,
         adapter_type_key: input.adapterKey,
         adapter_key: input.adapterKey,
-        secret_ref: sealedNasSecret,
+        secret_ref: sealNasSecret(nasEnvelope, input.radiusSecret, {
+          organizationId: input.organizationId,
+          nasId,
+          secretVersion: nextVersion,
+        }),
+        secret_version: nextVersion,
       })
       .where('id', '=', nasId)
       .execute();
@@ -259,12 +278,12 @@ export async function bootstrapTenant(
   // pointed at here rather than left as a step someone has to remember.
   const existingPortal = await db
     .selectFrom('captive_portals')
-    .select(['id'])
+    .select(['id', 'uam_secret_version'])
     .where('organization_id', '=', input.organizationId)
     .where('site_id', '=', siteId)
     .where('portal_type', '=', 'uspot')
     .executeTakeFirst();
-  const sealedUam = sealSecretRef(uamEnvelope, input.uamSecret);
+  // As with the NAS above: no shared ciphertext, because each row's seal is bound to that row.
   const draft = {
     name: input.portalName,
     template_key: 'quick_connect',
@@ -280,9 +299,11 @@ export async function bootstrapTenant(
   const snapshot = buildSnapshot(draft);
   let portalId: string;
   if (existingPortal === undefined) {
-    const row = await db
+    portalId = newId();
+    await db
       .insertInto('captive_portals')
       .values({
+        id: portalId,
         organization_id: input.organizationId,
         site_id: siteId,
         name: input.portalName,
@@ -291,15 +312,18 @@ export async function bootstrapTenant(
         portal_type: 'uspot',
         auth_methods: [...draft.auth_methods],
         walled_garden: [...input.walledGarden],
-        uam_secret_ref: sealedUam,
+        uam_secret_ref: sealUamSecret(input.dataEncryptionKey, input.uamSecret, {
+          organizationId: input.organizationId,
+          portalId,
+          secretVersion: 1,
+        }),
         status: 'active',
       })
-      .returning('id')
-      .executeTakeFirstOrThrow();
-    portalId = row.id;
+      .execute();
     steps.push({ entity: 'captive_portal', id: portalId, created: true });
   } else {
     portalId = existingPortal.id;
+    const nextUamVersion = Number(existingPortal.uam_secret_version) + 1;
     await db
       .updateTable('captive_portals')
       .set({
@@ -307,7 +331,12 @@ export async function bootstrapTenant(
         name: input.portalName,
         auth_methods: [...draft.auth_methods],
         walled_garden: [...input.walledGarden],
-        uam_secret_ref: sealedUam,
+        uam_secret_ref: sealUamSecret(input.dataEncryptionKey, input.uamSecret, {
+          organizationId: input.organizationId,
+          portalId,
+          secretVersion: nextUamVersion,
+        }),
+        uam_secret_version: nextUamVersion,
       })
       .where('id', '=', portalId)
       .execute();

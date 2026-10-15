@@ -16,6 +16,7 @@ import { generate } from 'otplib';
 import request from 'supertest';
 import { afterAll, beforeAll, expect, it } from 'vitest';
 import { createApp } from './app.js';
+import { Envelope, NAS_SECRET_PURPOSE, openNasSecret } from './crypto.js';
 import type { AppDeps } from './context.js';
 import { MemoryKv } from './kv.js';
 import {
@@ -128,6 +129,97 @@ await describeIntegration('@ecloud/api Access Points page (D-045)', () => {
     expect(res.status, JSON.stringify(res.body)).toBe(201);
     return { id: res.body.id as string, secret: res.body.secret as string, ip };
   }
+
+  it('refuses a client-chosen primary key on create (crud.ts takes the id from scratch)', async () => {
+    // `crud.ts` honours a pre-generated id so the NAS secret can be sealed against its own row.
+    // It reads that id from the per-request `scratch`, never from the request body — otherwise
+    // every createSchema in the codebase would become responsible for rejecting `id`. This test
+    // is the pin for that: a caller must not be able to choose a row's primary key, on a table
+    // whose ids appear in URLs and in an envelope's AAD.
+    const a = await orgAdmin();
+    const chosen = newId();
+    const ip = randomIp();
+    const res = await a.agent
+      .post(`/api/v1/orgs/${a.orgId}/nas`)
+      .set(BROWSER)
+      .send({
+        id: chosen,
+        site_id: a.siteId,
+        name: `nas ${ip}`,
+        nas_ip: ip,
+        adapter_key: 'generic-radius-8021x',
+      });
+    // Today every createSchema is a z.strictObject, so an unknown key is a 422 outright. If a
+    // future schema is loosened, the id must still be ignored rather than honoured — hence the
+    // second branch instead of asserting only the status.
+    if (res.status === 201) {
+      expect(res.body.id).not.toBe(chosen);
+    } else {
+      // A strict schema rejects the unknown key (400 today). The status is not the subject of
+      // this test, the absence of the row is.
+      expect(res.status).toBeGreaterThanOrEqual(400);
+      const rows = await deps.dbPlatform
+        .selectFrom('nas_clients')
+        .select('id')
+        .where('id', '=', chosen)
+        .execute();
+      expect(rows).toEqual([]);
+    }
+  });
+
+  it('rotation raises secret_version, seals v2 against it, and retires the old ref (task 10)', async () => {
+    const a = await orgAdmin();
+    const nas = await createNas(a.agent, a.orgId, a.siteId);
+    const envelope = new Envelope(deps.config.dataEncryptionKey, NAS_SECRET_PURPOSE);
+    const read = async () =>
+      deps.dbPlatform
+        .selectFrom('nas_clients')
+        .select(['secret_ref', 'secret_version'])
+        .where('id', '=', nas.id)
+        .executeTakeFirstOrThrow();
+
+    // Created sealed at version 1, bound to the row the insert actually wrote. If create had
+    // sealed against an id the row did not get, this open would throw rather than compare.
+    const before = await read();
+    expect(before.secret_ref).toMatch(/^enc:v2\./);
+    expect(Number(before.secret_version)).toBe(1);
+    expect(
+      openNasSecret(envelope, String(before.secret_ref), {
+        organizationId: a.orgId,
+        nasId: nas.id,
+        secretVersion: 1,
+      }),
+    ).toBe(nas.secret);
+
+    const rotate = await a.agent
+      .post(`/api/v1/orgs/${a.orgId}/nas/${nas.id}/rotate-secret`)
+      .set(BROWSER)
+      .set('Idempotency-Key', newId());
+    expect(rotate.status, JSON.stringify(rotate.body)).toBe(200);
+    const rotated = rotate.body.secret as string;
+    expect(rotated).not.toBe(nas.secret);
+
+    const after = await read();
+    expect(Number(after.secret_version)).toBe(2);
+    expect(
+      openNasSecret(envelope, String(after.secret_ref), {
+        organizationId: a.orgId,
+        nasId: nas.id,
+        secretVersion: 2,
+      }),
+    ).toBe(rotated);
+
+    // THE POINT OF THE VERSION COLUMN. The pre-rotation ciphertext is intact and belongs to this
+    // very row, so AAD over identity alone would still open it — replaying it would restore the
+    // retired secret. It is the version in the AAD that refuses.
+    expect(() =>
+      openNasSecret(envelope, String(before.secret_ref), {
+        organizationId: a.orgId,
+        nasId: nas.id,
+        secretVersion: 2,
+      }),
+    ).toThrow();
+  });
 
   function mikrotik(agent: Agent, orgId: string, siteId: string) {
     return createNas(agent, orgId, siteId, 'mikrotik-hotspot', {

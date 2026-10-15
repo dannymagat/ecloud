@@ -48,7 +48,7 @@ import {
   recordKeyFailure,
 } from '../auth/rate-limit.js';
 import type { AppDeps, Principal } from '../context.js';
-import { Envelope, NAS_SECRET_PURPOSE, SECRET_REF_PREFIX, openSecretRef } from '../crypto.js';
+import { Envelope, NAS_SECRET_PURPOSE, SECRET_REF_PREFIX, openNasSecret } from '../crypto.js';
 import { nasActivity, nasFilter, resolveScope, siteFilter } from '../dashboard-queries.js';
 import { activityDefinition, activityThresholds } from '../dashboard-views.js';
 import { OrgIdParams, OrgParams, problemResponses } from '../http/common.js';
@@ -520,7 +520,7 @@ export function accessPointsPageRoutes(deps: AppDeps): AnyRouteSpec[] {
       const secret = await inTenant(deps, params.orgId, async (trx) => {
         const nas = await loose(trx)
           .selectFrom('nas_clients')
-          .select(['id', 'site_id', 'secret_ref'])
+          .select(['id', 'organization_id', 'site_id', 'secret_ref', 'secret_version'])
           .where('id', '=', params.id)
           .where('deleted_at', 'is', null)
           .executeTakeFirst();
@@ -533,7 +533,14 @@ export function accessPointsPageRoutes(deps: AppDeps): AnyRouteSpec[] {
           'nas_client',
           'nas:read',
         );
-        const value = openSecretRef(nasEnvelope, nas.secret_ref as string);
+        // The binding comes from the ROW, not from params.orgId. They agree here because
+        // inTenant scopes the read, but recomputing the AAD from the row is the whole point:
+        // a value derived from the request would authenticate the request, not the storage.
+        const value = openNasSecret(nasEnvelope, nas.secret_ref as string, {
+          organizationId: nas.organization_id as string,
+          nasId: nas.id as string,
+          secretVersion: Number(nas.secret_version),
+        });
         await writeAudit(trx, ctx, {
           organizationId: params.orgId,
           action: 'nas:secret:revealed',

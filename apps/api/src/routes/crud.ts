@@ -233,7 +233,24 @@ export function crudRoutes(deps: AppDeps, config: CrudConfig): AnyRouteSpec[] {
             }
             const created = await loose(trx)
               .insertInto(config.table)
-              .values({ ...values, id: newId(), organization_id: params.orgId })
+              // A prepareCreate hook may need the id BEFORE the insert — the NAS secret is
+              // sealed against its own row id (task 10), so it pre-generates one. Overwriting it
+              // here produced a row whose ciphertext was bound to an id nothing had: create
+              // returned 201 with a plausible secret, the reveal endpoint then 500'd, and the
+              // renderer wrote a clients.conf with that NAS silently missing.
+              //
+              // The id is taken from `scratch`, NOT from `values`, and that is a security
+              // boundary rather than a style choice. `scratch` is created empty per request and
+              // only a hook writes it, whereas `values` derives from the request body. Honouring
+              // `values.id` would make every caller's createSchema responsible for rejecting
+              // `id` — today they are all z.strictObject so it would be safe, but it would move
+              // "no client-settable primary key" out of this generic code and into eleven schemas
+              // where nothing states it. `id` below still overrides anything `values` carried.
+              .values({
+                ...values,
+                id: typeof hook.scratch.id === 'string' ? hook.scratch.id : newId(),
+                organization_id: params.orgId,
+              })
               .returningAll()
               .executeTakeFirstOrThrow();
             await writeAudit(trx, ctx, {

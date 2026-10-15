@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { API_DEV_DEFAULTS } from '../config.js';
-import { Envelope, NAS_SECRET_PURPOSE, sealSecretRef } from '../crypto.js';
+import { Envelope, NAS_SECRET_PURPOSE, sealNasSecret, sealSecretRef } from '../crypto.js';
 import { resolveNasSecrets } from './load.js';
 import {
   FLEET_DEFAULT_RADIUS_SECRET,
@@ -28,6 +28,7 @@ import { writeClientsFileAtomic } from './write.js';
 
 const ID_A = '0b6f3c2e-1d2a-4c5e-9f00-112233445566';
 const ID_B = '7c1d9e40-2a3b-4c5d-8e6f-778899aabbcc';
+const ORG = '5e9a1b7c-3d4e-4f50-8a1b-2c3d4e5f6071';
 const SECRET = 'Ab3_-xyzAb3_-xyzAb3_-xyzAb3_-xyzAb3_-xyzAb3'; // check-no-secrets: allow (test value)
 
 function entry(overrides: Partial<NasClientEntry> = {}): NasClientEntry {
@@ -216,8 +217,14 @@ describe('resolveNasSecrets', () => {
   const envelope = new Envelope(key, NAS_SECRET_PURPOSE);
   const good = {
     id: ID_A,
+    organizationId: ORG,
     nasIp: '192.168.203.198',
-    secretRef: sealSecretRef(envelope, SECRET),
+    secretRef: sealNasSecret(envelope, SECRET, {
+      organizationId: ORG,
+      nasId: ID_A,
+      secretVersion: 1,
+    }),
+    secretVersion: 1,
     requireMessageAuthenticator: true,
   };
 
@@ -244,12 +251,48 @@ describe('resolveNasSecrets', () => {
     'skips one row with %s (others still render), without leaking the ref',
     (_label, secretRef, reason) => {
       const { entries, skipped } = resolveNasSecrets(
-        [good, { id: ID_B, nasIp: '10.0.0.1', secretRef, requireMessageAuthenticator: true }],
+        [
+          good,
+          {
+            id: ID_B,
+            organizationId: ORG,
+            nasIp: '10.0.0.1',
+            secretRef,
+            secretVersion: 1,
+            requireMessageAuthenticator: true,
+          },
+        ],
         key,
       );
       expect(entries.map((e) => e.id)).toEqual([ID_A]);
       expect(skipped).toEqual([{ id: ID_B, reason: expect.stringMatching(reason) }]);
       expect(JSON.stringify(skipped)).not.toContain(secretRef);
+    },
+  );
+
+  it.each<[string, Partial<typeof good>]>([
+    ['another row', {}],
+    ['another organization', { organizationId: `${ORG.slice(0, -1)}2` }],
+    ['an older version', { secretVersion: 2 }],
+  ])(
+    'refuses a secret transplanted to %s, with the correct key (task 10, finding S-2)',
+    (_label, moved) => {
+      // `good`'s own ciphertext, intact, written into a DIFFERENT row. The key is right and the
+      // GCM tag is valid; only the AAD disagrees. Before the v2 envelope every one of these
+      // opened, which is exactly what made a sealed secret transplantable between rows and
+      // tenants and replayable from before a rotation.
+      //
+      // TWO rows, and the second one is not padding. `resolveNasSecrets` treats "every sealed ref
+      // failed" as a wrong DATA_ENCRYPTION_KEY and refuses to write anything — and under the v2
+      // envelope a failure to open no longer tells you WHICH of the two it was, because GCM
+      // cannot distinguish a wrong key from a wrong AAD. So a lone transplanted row still trips
+      // the global guard. That is the fail-safe direction (refusing to write beats writing a
+      // clients.conf with every NAS missing), but it means the per-row skip is only observable
+      // when at least one other row opens, which is the realistic estate anyway.
+      const transplanted = { ...good, ...moved, id: ID_B };
+      const { entries, skipped } = resolveNasSecrets([good, transplanted], key);
+      expect(entries.map((e) => e.id)).toEqual([ID_A]);
+      expect(skipped).toEqual([{ id: ID_B, reason: expect.stringMatching(/cannot be opened/) }]);
     },
   );
 
