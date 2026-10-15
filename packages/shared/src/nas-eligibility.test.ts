@@ -33,6 +33,7 @@ describe('nasEligibility: the happy path', () => {
       reasons: [],
       primaryReason: null,
       advisories: [],
+      policyEvaluated: true,
     });
   });
 });
@@ -190,5 +191,33 @@ describe('labels and helpers', () => {
     for (const state of ['pending', 'disabled', 'blocked'] as const) {
       expect(allowsNewAccess(state), state).toBe(false);
     }
+  });
+});
+
+describe('an unevaluated policy says so instead of guessing', () => {
+  it('contributes no Pending reason and marks the policy dimension unchecked', () => {
+    const result = nasEligibility(facts({ policy: 'unevaluated' }));
+    // Not Pending: marking every NAS Pending on no evidence would destroy trust in the list.
+    // Not silently fine either — `policyEvaluated` is how the surface says which it is.
+    expect(result.state).toBe('active');
+    expect(result.reasons).toEqual([]);
+    expect(result.policyEvaluated).toBe(false);
+  });
+
+  it('still reports the non-policy reasons it can evaluate', () => {
+    const result = nasEligibility(facts({ policy: 'unevaluated', adoptionComplete: false }));
+    expect(result.state).toBe('pending');
+    expect(result.reasons).toEqual(['NOT_ADOPTED']);
+    expect(result.policyEvaluated).toBe(false);
+  });
+
+  it('marks the policy evaluated for every other value', () => {
+    for (const policy of ['assigned', 'platform_default', 'missing', 'disabled', 'unavailable'] as const) {
+      expect(nasEligibility(facts({ policy })).policyEvaluated, policy).toBe(true);
+    }
+  });
+
+  it('raises no platform-default advisory, because that is also unknown', () => {
+    expect(nasEligibility(facts({ policy: 'unevaluated' })).advisories).toEqual([]);
   });
 });

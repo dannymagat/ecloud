@@ -101,7 +101,22 @@ export type NasPolicyFact =
   /** Something resolved but it is disabled. */
   | 'disabled'
   /** Resolution itself failed — §10 requires denying by default and showing the real failure. */
-  | 'unavailable';
+  | 'unavailable'
+  /**
+   * The policy dimension was not evaluated for this NAS.
+   *
+   * Not a synonym for any of the above, and deliberately not defaulted to one. The caller that
+   * cannot answer the policy question must say so: `assigned` would assert a policy exists when
+   * nobody checked, and `missing` would mark every NAS Pending on no evidence. Either is a lie
+   * with a different direction, and on a list an operator acts from, the second is the one that
+   * destroys trust in the list.
+   *
+   * It contributes no Pending reason, and sets {@link NasEligibility.policyEvaluated} false so
+   * the surface can say "policy not checked" rather than imply a verdict. This exists because
+   * `policyAvailabilityForSites` is owned by the policy engine and had not landed when the
+   * Pending list was built; when it lands, callers stop passing this and the flag goes true.
+   */
+  | 'unevaluated';
 
 /**
  * The facts the state is derived from. Facts, not states: nothing here is itself a decision, so
@@ -137,6 +152,12 @@ export interface NasEligibility {
   readonly primaryReason: NasPendingReason | null;
   /** Visible but non-denying signals; independent of `state`. */
   readonly advisories: readonly NasAdvisory[];
+  /**
+   * False when the policy dimension was not evaluated (`policy: 'unevaluated'`), meaning
+   * `NO_POLICY`, `POLICY_DISABLED` and `POLICY_UNAVAILABLE` could not be ruled in or out. An
+   * `active` state with this false means "nothing else is wrong", not "this NAS is fine".
+   */
+  readonly policyEvaluated: boolean;
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -144,6 +165,8 @@ export interface NasEligibility {
 // ---------------------------------------------------------------------------------------------
 
 function pendingReasons(facts: NasEligibilityFacts): NasPendingReason[] {
+  // `unevaluated` matches none of the three policy reasons, so an unchecked policy contributes
+  // nothing rather than guessing in either direction.
   const applies: Readonly<Record<NasPendingReason, boolean>> = {
     NOT_ADOPTED: !facts.adoptionComplete,
     IDENTITY_CONFLICT: facts.identifierConflict,
@@ -184,6 +207,7 @@ export function nasEligibility(facts: NasEligibilityFacts): NasEligibility {
     reasons,
     primaryReason: reasons[0] ?? null,
     advisories: advisory,
+    policyEvaluated: facts.policy !== 'unevaluated',
   });
 
   if (facts.status === 'blocked') return settle('blocked');

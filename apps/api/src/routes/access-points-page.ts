@@ -24,7 +24,15 @@ import {
   renderMikrotikLoginHtml,
 } from '@ecloud/adapters';
 import { withPlatform } from '@ecloud/db';
-import { AppError, NotFoundError, ValidationError } from '@ecloud/shared';
+import {
+  AppError,
+  NAS_ADVISORIES,
+  NAS_PENDING_REASONS,
+  NAS_STATES,
+  NotFoundError,
+  ValidationError,
+  nasEligibility,
+} from '@ecloud/shared';
 import { sql } from 'kysely';
 import { z } from 'zod';
 import { writeAudit } from '../audit.js';
@@ -169,6 +177,21 @@ const OverviewSchema = z.object({
       activity: ActivityEnum,
       last_activity_at: z.string().nullable(),
       access_points: z.number(),
+      /** §5 state, derived per request; only `active` is eligible for new access. */
+      state: z.enum(NAS_STATES),
+      /** Every applicable Pending reason, most fundamental first. Empty unless `state` is pending. */
+      pending_reasons: z.array(z.enum(NAS_PENDING_REASONS)),
+      primary_reason: z.enum(NAS_PENDING_REASONS).nullable(),
+      /** Visible but non-denying, e.g. running on a platform-default portal. */
+      advisories: z.array(z.enum(NAS_ADVISORIES)),
+      /**
+       * False while the policy dimension is not evaluated: NO_POLICY, POLICY_DISABLED and
+       * POLICY_UNAVAILABLE were neither ruled in nor out, so an `active` state means "nothing
+       * else is wrong" rather than "this NAS is fine".
+       */
+      policy_evaluated: z.boolean(),
+      is_adopted: z.boolean(),
+      block_reason: z.string().nullable(),
     }),
   ),
   access_points: z.array(
@@ -233,8 +256,11 @@ export function accessPointsPageRoutes(deps: AppDeps): AnyRouteSpec[] {
           adapter_key: string | null;
           adapter_config: unknown;
           secret_ref: string;
+          is_adopted: boolean;
+          block_reason: string | null;
         }>`
-          SELECT n.id, n.vendor_key, n.adapter_key, n.adapter_config, n.secret_ref
+          SELECT n.id, n.vendor_key, n.adapter_key, n.adapter_config, n.secret_ref,
+                 n.is_adopted, n.block_reason
           FROM nas_clients n
           WHERE n.organization_id = ${scope.orgId} AND n.deleted_at IS NULL
             AND ${siteFilter(scope, 'n.site_id')}
@@ -288,6 +314,19 @@ export function accessPointsPageRoutes(deps: AppDeps): AnyRouteSpec[] {
           LIMIT 1
         `.execute(trx);
 
+        // Migration 041: sites whose guests are being served an anonymous fallback portal. The
+        // owner's ruling makes that working rather than broken, so it is an advisory and not a
+        // Pending reason — but it has to be visible, because at the chosen limits no guest
+        // complains and a forgotten access point serves customers anonymously for months.
+        const fallbackSites = await trx
+          .selectFrom('captive_portals')
+          .select(['site_id'])
+          .where('organization_id', '=', scope.orgId)
+          .where('is_platform_default', '=', true)
+          .where('status', '=', 'active')
+          .execute();
+        const onFallbackPortal = new Set(fallbackSites.map((r) => r.site_id));
+
         const apsByNas = new Map(apsPerNas.rows.map((r) => [r.nas_client_id, Number(r.n)]));
         const activityByNas = new Map(activity.rows.map((r) => [r.nas_client_id, r.activity]));
         const nas = activity.rows.map((r) => {
@@ -300,6 +339,29 @@ export function accessPointsPageRoutes(deps: AppDeps): AnyRouteSpec[] {
                   adapter_key: x.adapter_key,
                   adapter_config: x.adapter_config,
                 });
+          // §5 state, derived rather than stored (`@ecloud/shared` nasEligibility). Three inputs
+          // are honest constants here rather than guesses, and each for a different reason:
+          //
+          //  - `ownershipValid: true` — `nasActivity` inner-joins `sites` on `deleted_at IS NULL`,
+          //    so a NAS whose site is gone is absent from this list entirely. It cannot be shown
+          //    as OWNERSHIP_UNRESOLVED on an endpoint it never reaches; surfacing that case needs
+          //    a query that does not require a live site.
+          //  - `identifierConflict: false` — not evaluated here. A cross-tenant uniqueness rule
+          //    already exists for NAS identifiers, so this is expected to be unreachable, but
+          //    "expected" is not "checked" and this field does not claim it was.
+          //  - `policy: 'unevaluated'` — `policyAvailabilityForSites` is owned by the policy
+          //    engine and has not landed. Passing `assigned` would assert a policy nobody looked
+          //    for; passing `missing` would mark every NAS Pending on no evidence. The response
+          //    carries `policy_evaluated: false` so the surface can say which.
+          const eligibility = nasEligibility({
+            adoptionComplete: x?.is_adopted ?? true,
+            status: r.admin_status,
+            deleted: false,
+            ownershipValid: true,
+            identifierConflict: false,
+            policy: 'unevaluated',
+            onPlatformDefaultPortal: onFallbackPortal.has(r.site_id),
+          });
           return {
             id: r.nas_client_id,
             name: r.name,
@@ -314,6 +376,13 @@ export function accessPointsPageRoutes(deps: AppDeps): AnyRouteSpec[] {
             activity: r.activity,
             last_activity_at: r.last_activity_at,
             access_points: apsByNas.get(r.nas_client_id) ?? 0,
+            state: eligibility.state,
+            pending_reasons: eligibility.reasons,
+            primary_reason: eligibility.primaryReason,
+            advisories: eligibility.advisories,
+            policy_evaluated: eligibility.policyEvaluated,
+            is_adopted: x?.is_adopted ?? true,
+            block_reason: x?.block_reason ?? null,
           };
         });
         const accessPoints = aps.rows.slice(0, OVERVIEW_AP_CAP).map((r) => {
