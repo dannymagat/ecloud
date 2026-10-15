@@ -34,6 +34,8 @@ import {
   createDb,
   createPlatformAdmin,
   createPool,
+  resetPlatformAdminPassword,
+  setPlatformAdmin,
   discoverMigrations,
   ensureMonthPartitions,
   migrationStatus,
@@ -769,6 +771,156 @@ await describeIntegration('@ecloud/db schema', () => {
       expect(cols.rows).toHaveLength(3);
     } finally {
       await client.query('ROLLBACK');
+      await client.end();
+    }
+  });
+
+  it('resets an existing admin password, revokes its sessions, and audits without the password', async () => {
+    // D-059: the recovery path for a lockout, so it never needs hand-written SQL against a
+    // production database — which is how admin@ezecloud.local had to be disabled on 2026-10-15.
+    const client = new pg.Client({ connectionString: databaseUrl });
+    await client.connect();
+    try {
+      const exec = pgExecutor(client);
+      const created = await createPlatformAdmin(exec, {
+        email: 'reset-me@example.test',
+        password: 'first long password',
+      });
+
+      // Two live sessions and one already-revoked, to prove the revoke counts only live ones.
+      for (const token of ['live-a', 'live-b']) {
+        await platform
+          .insertInto('admin_sessions')
+          .values({
+            administrator_id: created.administratorId,
+            token_hash: `hash-${token}`,
+            expires_at: new Date(Date.now() + 3_600_000),
+          })
+          .execute();
+      }
+      await platform
+        .insertInto('admin_sessions')
+        .values({
+          administrator_id: created.administratorId,
+          token_hash: 'hash-already-revoked',
+          expires_at: new Date(Date.now() + 3_600_000),
+          revoked_at: new Date(),
+        })
+        .execute();
+
+      const result = await resetPlatformAdminPassword(exec, {
+        email: ' Reset-Me@Example.TEST ',
+        password: 'second long password',
+        displayName: 'Administrator',
+      });
+      expect(result.administratorId).toBe(created.administratorId);
+      expect(result.email).toBe('reset-me@example.test');
+      expect(result.sessionsRevoked).toBe(2);
+      expect(result.displayNameSet).toBe(true);
+
+      const admin = await platform
+        .selectFrom('administrators')
+        .selectAll()
+        .where('id', '=', created.administratorId)
+        .executeTakeFirstOrThrow();
+      // The NEW password works and the old one does not: the point of the command.
+      expect(await verifyPassword(admin.password_hash ?? '', 'second long password')).toBe(true);
+      expect(await verifyPassword(admin.password_hash ?? '', 'first long password')).toBe(false);
+      expect(admin.display_name).toBe('Administrator');
+      expect(admin.status).toBe('active');
+
+      const live = await platform
+        .selectFrom('admin_sessions')
+        .select(({ fn }) => fn.countAll<number>().as('n'))
+        .where('administrator_id', '=', created.administratorId)
+        .where('revoked_at', 'is', null)
+        .executeTakeFirstOrThrow();
+      expect(Number(live.n)).toBe(0);
+
+      // THE AUDIT ROW MUST NOT CARRY PASSWORD MATERIAL, not even its length.
+      const audit = await platform
+        .selectFrom('audit_logs')
+        .selectAll()
+        .where('action', '=', 'platform:password_reset')
+        .where('target_id', '=', created.administratorId)
+        .executeTakeFirstOrThrow();
+      expect(audit.actor_type).toBe('system');
+      const payload = JSON.stringify(audit.after);
+      expect(payload).toContain('reset-me@example.test');
+      expect(payload).toContain('"sessions_revoked":2');
+      expect(payload).not.toContain('second long password');
+      expect(payload).not.toContain('first long password');
+      expect(payload).not.toContain('argon2');
+
+      // It refuses rather than creating: a typo in --email must not mint an account.
+      await expect(
+        resetPlatformAdminPassword(exec, {
+          email: 'nobody@example.test',
+          password: 'long enough password',
+        }),
+      ).rejects.toThrow(/no live administrator/);
+      await expect(
+        resetPlatformAdminPassword(exec, { email: 'reset-me@example.test', password: 'short' }),
+      ).rejects.toThrow(/at least 12/);
+
+      // A soft-deleted administrator is not revived by a password reset.
+      await platform
+        .updateTable('administrators')
+        .set({ deleted_at: new Date() })
+        .where('id', '=', created.administratorId)
+        .execute();
+      await expect(
+        resetPlatformAdminPassword(exec, {
+          email: 'reset-me@example.test',
+          password: 'third long password',
+        }),
+      ).rejects.toThrow(/no live administrator/);
+    } finally {
+      await client.end();
+    }
+  });
+
+  it('sets a display name without touching the password', async () => {
+    const client = new pg.Client({ connectionString: databaseUrl });
+    await client.connect();
+    try {
+      const exec = pgExecutor(client);
+      const created = await createPlatformAdmin(exec, {
+        email: 'rename-me@example.test',
+        password: 'a long enough password',
+        displayName: 'Before',
+      });
+      const result = await setPlatformAdmin(exec, {
+        email: 'rename-me@example.test',
+        displayName: '  Administrator  ',
+      });
+      expect(result.displayName).toBe('Administrator');
+
+      const admin = await platform
+        .selectFrom('administrators')
+        .selectAll()
+        .where('id', '=', created.administratorId)
+        .executeTakeFirstOrThrow();
+      expect(admin.display_name).toBe('Administrator');
+      // The credential is untouched — renaming must not require or change it.
+      expect(await verifyPassword(admin.password_hash ?? '', 'a long enough password')).toBe(true);
+
+      const audit = await platform
+        .selectFrom('audit_logs')
+        .selectAll()
+        .where('action', '=', 'platform:display_name_set')
+        .where('target_id', '=', created.administratorId)
+        .executeTakeFirstOrThrow();
+      expect(JSON.stringify(audit.before)).toContain('Before');
+      expect(JSON.stringify(audit.after)).toContain('Administrator');
+
+      await expect(
+        setPlatformAdmin(exec, { email: 'rename-me@example.test', displayName: '   ' }),
+      ).rejects.toThrow(/must not be empty/);
+      await expect(
+        setPlatformAdmin(exec, { email: 'nobody@example.test', displayName: 'X' }),
+      ).rejects.toThrow(/no live administrator/);
+    } finally {
       await client.end();
     }
   });

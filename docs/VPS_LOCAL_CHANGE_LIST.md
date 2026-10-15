@@ -277,7 +277,7 @@ health), 5432, 6379 (EZECLOUD Redis; the system Redis is untouched), 3799.
 | `infra/vps-local/scripts/apply-firewall.sh` | — | snapshot / config / apply (dead-man) / confirm / rollback / check |
 | `infra/vps-local/scripts/apply-docker.sh` | — | stage / config / enable / rollback. Not needed now that Docker is enabled; kept for a rebuild |
 | `infra/vps-local/scripts/make-lan-tls.sh` | — | internal CA + leaf |
-| `infra/vps-local/scripts/install-secrets.sh`, `create-admin.sh`, `reload-radius.sh`, `ecloud-compose`, `check-host.sh` | — | secrets install, first admin, compose wrapper, read-only checks |
+| `infra/vps-local/scripts/install-secrets.sh`, `create-admin.sh`, `reset-admin-password.sh`, `reload-radius.sh`, `ecloud-compose`, `check-host.sh` | — | secrets install, first admin, admin password reset (D-059), compose wrapper, read-only checks |
 | `infra/vps-local/backup/upload-github.sh`, `backup.env.example`, `backup-github.env.example`, `scripts/setup-backup.sh`, `systemd/ecloud-backup.service.d/10-vps-local.conf` | `/opt/ecloud/bin/`, `/etc/ecloud/`, `/etc/systemd/system/` | GitHub backup branch |
 | `infra/vps-local/systemd/ecloud-check.{service,timer}` | `/etc/systemd/system/` | LCL-MON-1 |
 | `infra/vps-local/systemd/docker.service.d/10-ecloud-network-online.conf` | `/etc/systemd/system/docker.service.d/` | LCL-DOCKER-4 |

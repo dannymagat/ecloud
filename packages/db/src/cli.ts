@@ -10,6 +10,13 @@
  *   registry-check [--json]                   compare the registry mirror with @ecloud/adapters; exit 2 on drift
  *   ensure-partitions [--months-ahead N]      create monthly partitions (default 2 months ahead)
  *   create-platform-admin --email E --password-stdin [--display-name N]
+ *   reset-platform-admin-password --email E --password-stdin [--display-name N]
+ *   set-platform-admin --email E --display-name N
+  reset-platform-admin-password --email E --password-stdin [--display-name N]
+                                           set a new password on an EXISTING administrator and
+                                           revoke all of its live sessions (D-059)
+  set-platform-admin --email E --display-name N
+                                           change an administrator's display name only
  *
  * Global flags: --url <postgres url> (default: DATABASE_URL_PLATFORM from the environment),
  *               --dir <migrations dir>.
@@ -18,7 +25,7 @@
 import { parseArgs } from 'node:util';
 import { ConfigError, loadConfig, redactUrl } from '@ecloud/shared';
 import pg from 'pg';
-import { createPlatformAdmin } from './admin.js';
+import { createPlatformAdmin, resetPlatformAdminPassword, setPlatformAdmin } from './admin.js';
 import {
   MigrationError,
   baselineMigrations,
@@ -40,6 +47,8 @@ const COMMANDS = [
   'registry-check',
   'ensure-partitions',
   'create-platform-admin',
+  'reset-platform-admin-password',
+  'set-platform-admin',
 ] as const;
 type Command = (typeof COMMANDS)[number];
 
@@ -221,6 +230,45 @@ export async function main(
         );
       }
       out('ensure-partitions: done');
+      return 0;
+    }
+    case 'reset-platform-admin-password': {
+      if (values.email === undefined) {
+        throw new Error('reset-platform-admin-password requires --email');
+      }
+      if (!values['password-stdin']) {
+        throw new Error(
+          'reset-platform-admin-password requires --password-stdin (the password is read from stdin, never from arguments)',
+        );
+      }
+      const password = (await readStdin()).replace(/\r?\n$/, '');
+      const memoryKib = loadConfig(env).argon2.memoryKib;
+      const result = await withClient(url, (exec) =>
+        resetPlatformAdminPassword(exec, {
+          email: values.email as string,
+          password,
+          displayName: values['display-name'],
+          argon2MemoryKib: memoryKib,
+        }),
+      );
+      // Only the email and the id. No password, no hash, no length.
+      out(
+        `reset-platform-admin-password: reset ${result.email} (administrator ${result.administratorId}); ${String(result.sessionsRevoked)} live session(s) revoked${result.displayNameSet ? '; display name set' : ''}`,
+      );
+      return 0;
+    }
+    case 'set-platform-admin': {
+      if (values.email === undefined) throw new Error('set-platform-admin requires --email');
+      const displayName = values['display-name'];
+      if (displayName === undefined) {
+        throw new Error('set-platform-admin requires --display-name');
+      }
+      const result = await withClient(url, (exec) =>
+        setPlatformAdmin(exec, { email: values.email as string, displayName }),
+      );
+      out(
+        `set-platform-admin: ${result.email} (administrator ${result.administratorId}) display name is now ${result.displayName}`,
+      );
       return 0;
     }
     case 'create-platform-admin': {
