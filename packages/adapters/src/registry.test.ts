@@ -110,14 +110,16 @@ describe('describeDisconnect / buildDisconnect', () => {
       target: 'hostapd-das',
       status: 'REQUIRES_DEVICE_TEST',
       mandatory: ['Calling-Station-Id'],
-      identifyBy: ['Calling-Station-Id'],
+      identifyBy: ['User-Name', 'Calling-Station-Id'],
       acctStopEmitted: false,
     });
     expect(u.note).toContain('no Acct-Stop');
     const req = getAdapter('ezeap-uam').buildDisconnect(session);
     // uspot's session kick rides on hostapd's CoA handler (ubus `coa`), never on Disconnect.
     expect('packet' in req ? req.packet : undefined).toBe('coa');
+    // User-Name first: the MAC alone drew CoA-NAK Missing-Attribute from hostapd (device test 2026-10-16).
     expect('attributes' in req ? req.attributes : []).toEqual([
+      { name: 'User-Name', value: 'alice' },
       { name: 'Calling-Station-Id', value: 'AA-BB-CC-DD-EE-01' },
     ]);
     expect(getAdapter('ezeap-uam').buildDisconnect({ sessionId: 'x' })).toMatchObject({
