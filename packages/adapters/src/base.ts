@@ -35,6 +35,8 @@ export interface AdapterExtras {
   readonly disconnectNote?: string;
   /** Packet type for the session kick; see `DisconnectRequest.packet`. */
   readonly disconnectPacket?: 'disconnect' | 'coa';
+  /** Attributes the NAS needs in the kick beyond identification (appended verbatim). */
+  readonly disconnectExtraAttributes?: readonly RadiusAttribute[];
   readonly renderConfig?: (plan: EnforcementPlan) => ConfigFragment | Unsupported;
 }
 
@@ -163,7 +165,10 @@ export function createAdapter(
         reason: `${capabilities.key} has no Disconnect target (${capabilities.disconnect.evidence})`,
       };
     }
-    const attributes = identityAttributes(session, capabilities.disconnect.identifyBy);
+    const attributes = [
+      ...identityAttributes(session, capabilities.disconnect.identifyBy),
+      ...(extras.disconnectExtraAttributes ?? []),
+    ];
     const present = new Set(attributes.map((a) => a.name));
     const missing = extras.disconnectMandatory.filter((m) => !present.has(m));
     if (missing.length > 0)
