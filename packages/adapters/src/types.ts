@@ -60,6 +60,14 @@ export interface DisconnectDescription {
 export interface DisconnectRequest {
   readonly kind: 'disconnect';
   readonly target: DisconnectCapability['target'];
+  /**
+   * RFC 5176 packet that carries the session kick. Default `disconnect` (Disconnect-Request).
+   * `coa` for a NAS whose session layer only reacts to a CoA-Request: TIP hostapd raises the
+   * ubus `coa` event (which uspot handles by removing the session) from its CoA handler only
+   * (hostapd.c hostapd_das_coa); a Disconnect-Request merely deauthenticates the station and the
+   * captive session stays authorized.
+   */
+  readonly packet?: 'disconnect' | 'coa';
   readonly status: AdapterFieldStatus;
   readonly attributes: readonly RadiusAttribute[];
   readonly acctStopEmitted: boolean | 'unknown';

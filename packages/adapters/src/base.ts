@@ -33,6 +33,8 @@ export interface AdapterExtras {
   /** Attributes the NAS requires in a Disconnect (subset of `disconnect.identifyBy`). */
   readonly disconnectMandatory: readonly string[];
   readonly disconnectNote?: string;
+  /** Packet type for the session kick; see `DisconnectRequest.packet`. */
+  readonly disconnectPacket?: 'disconnect' | 'coa';
   readonly renderConfig?: (plan: EnforcementPlan) => ConfigFragment | Unsupported;
 }
 
@@ -177,6 +179,7 @@ export function createAdapter(
     return {
       kind: 'disconnect',
       target: capabilities.disconnect.target,
+      ...(extras.disconnectPacket ? { packet: extras.disconnectPacket } : {}),
       status: capabilities.disconnect.status,
       attributes,
       acctStopEmitted: capabilities.disconnect.acctStopEmitted,

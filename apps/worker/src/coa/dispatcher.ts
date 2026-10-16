@@ -259,7 +259,7 @@ export async function performDispatch(
     radclientPath: deps.radclientPath,
     host: target.host,
     port: target.port,
-    command: row.action === 'disconnect' ? 'disconnect' : 'coa',
+    command: built.kind === 'disconnect' ? (built.packet ?? 'disconnect') : 'coa',
     secret,
     attributes: withRequestHygiene(built.attributes, now),
     timeoutS: deps.timeoutS,

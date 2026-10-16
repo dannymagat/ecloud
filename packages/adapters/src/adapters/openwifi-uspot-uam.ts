@@ -95,7 +95,7 @@ export const capabilities: AdapterCapabilities = {
   disconnect: {
     status: 'REQUIRES_DEVICE_TEST',
     target: 'hostapd-das',
-    identifyBy: ['Calling-Station-Id', 'NAS-Identifier'],
+    identifyBy: ['Calling-Station-Id'],
     acctStopEmitted: false,
     evidence: DISCONNECT_RDT,
     evidenceLevel: 'DOCUMENTED',
@@ -228,6 +228,12 @@ export const capabilities: AdapterCapabilities = {
 
 export const adapter: NasAdapter = createAdapter(capabilities, {
   disconnectMandatory: ['Calling-Station-Id'],
+  // A CoA-Request, not a Disconnect-Request: TIP hostapd raises the ubus `coa` event (which
+  // uspot answers by removing the captive session) from hostapd_das_coa only; its Disconnect
+  // handler deauthenticates the station and leaves the uspot session authorized, so the client
+  // re-associates straight back onto the internet. Calling-Station-Id alone: the ubus path runs
+  // before hostapd's NAS-Identifier check, and the captive BSS carries no nas_identifier.
+  disconnectPacket: 'coa',
   disconnectNote:
-    'Send to the hostapd DAS of the captive SSID (ssid.radius.dynamic-authorization); expect ACK; EZECLOUD closes the session (no Acct-Stop). REQUIRES DEVICE TEST.',
+    'Send a CoA-Request (not Disconnect) to the hostapd DAS of the captive SSID (ssid.radius.dynamic-authorization) identified by Calling-Station-Id; hostapd hands it to uspot over ubus (coa) which removes the session; expect CoA-ACK; EZECLOUD closes the session (no Acct-Stop). REQUIRES DEVICE TEST.',
 });

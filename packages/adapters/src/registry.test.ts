@@ -110,14 +110,15 @@ describe('describeDisconnect / buildDisconnect', () => {
       target: 'hostapd-das',
       status: 'REQUIRES_DEVICE_TEST',
       mandatory: ['Calling-Station-Id'],
-      identifyBy: ['Calling-Station-Id', 'NAS-Identifier'],
+      identifyBy: ['Calling-Station-Id'],
       acctStopEmitted: false,
     });
     expect(u.note).toContain('no Acct-Stop');
     const req = getAdapter('openwifi-uspot-uam').buildDisconnect(session);
+    // uspot's session kick rides on hostapd's CoA handler (ubus `coa`), never on Disconnect.
+    expect('packet' in req ? req.packet : undefined).toBe('coa');
     expect('attributes' in req ? req.attributes : []).toEqual([
       { name: 'Calling-Station-Id', value: 'AA-BB-CC-DD-EE-01' },
-      { name: 'NAS-Identifier', value: 'ap-serial-1' },
     ]);
     expect(getAdapter('openwifi-uspot-uam').buildDisconnect({ sessionId: 'x' })).toMatchObject({
       unsupported: true,
