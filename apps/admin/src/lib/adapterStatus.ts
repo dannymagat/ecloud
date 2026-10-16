@@ -75,9 +75,9 @@ export const ADAPTER_KEYS = [
 /** Human labels for the NAS adapter dropdown (the key stays visible for support). */
 export const ADAPTER_LABELS: Readonly<Record<(typeof ADAPTER_KEYS)[number], string>> = {
   'openwifi-hostapd-radius': 'EZEAP 802.1X / MAC auth (hostapd)',
-  'ezeap-uam': 'EZEAP captive portal (TIP uspot)',
+  'ezeap-uam': 'EZEAP Captive Portal Remote',
   'uspot-upstream-uam': 'OpenWrt uspot captive portal',
-  'ezecloud-uam': 'CoovaChilli gateway captive portal',
+  'ezecloud-uam': 'EZECloud Gateway Captive Portal',
   'generic-radius-8021x': 'Any vendor: 802.1X / MAC auth (generic RADIUS)',
   'mikrotik-hotspot': 'MikroTik RouterOS Hotspot (EZECLOUD login page)',
   'external-portal-postback':

@@ -231,6 +231,13 @@ export const adapter: NasAdapter = createAdapter(capabilities, {
   // re-associates straight back onto the internet. No NAS-Identifier: the captive BSS carries
   // none. User-Name + Calling-Station-Id: the MAC alone drew Missing-Attribute on the device.
   disconnectPacket: 'coa',
+  // hostapd's CoA parser (radius_das.c, CONFIG_HS20) answers CoA-NAK Error-Cause=Missing-Attribute
+  // ("No supported authorization change attribute") unless the request carries the WFA HS2.0
+  // T-C-Filtering VSA (vendor 40808, type 9); only then does it reach hostapd_das_coa and the ubus
+  // hook uspot answers. Value 0 = no T&C filtering, also accepted on the non-ubus path. Raw form:
+  // the worker's radclient dictionary has no dictionary.wfa. Device test AP1832 2026-10-16 11:02Z:
+  // three NAKs without it (session_actions 01a14460…, 01a14461…).
+  disconnectExtraAttributes: [{ name: 'Attr-26.40808.9', value: '0x00000000' }],
   disconnectNote:
     'Send a CoA-Request (not Disconnect) to the hostapd DAS of the captive SSID (ssid.radius.dynamic-authorization) identified by User-Name and Calling-Station-Id; hostapd hands it to uspot over ubus (coa) which removes the session; expect CoA-ACK; EZECLOUD closes the session (no Acct-Stop). REQUIRES DEVICE TEST.',
 });

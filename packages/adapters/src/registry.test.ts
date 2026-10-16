@@ -121,6 +121,8 @@ describe('describeDisconnect / buildDisconnect', () => {
     expect('attributes' in req ? req.attributes : []).toEqual([
       { name: 'User-Name', value: 'alice' },
       { name: 'Calling-Station-Id', value: 'AA-BB-CC-DD-EE-01' },
+      // WFA HS2.0 T-C-Filtering (vendor 40808 / 9): hostapd's CoA parser refuses the request without it.
+      { name: 'Attr-26.40808.9', value: '0x00000000' },
     ]);
     expect(getAdapter('ezeap-uam').buildDisconnect({ sessionId: 'x' })).toMatchObject({
       unsupported: true,
