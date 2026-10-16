@@ -29,6 +29,8 @@ function action(overrides: Partial<ActionContext> = {}): ActionContext {
     nas_identifier: 'nas-1',
     coa_port: null,
     secret_ref: 'env:TEST_NAS_SECRET',
+    // Distinct from the action id on purpose: the secret resolver must receive the NAS row id.
+    nas_client_id: '0199b0a4-0000-7000-8000-00000000000a',
     adapter_key: 'ezecloud-uam',
     ...overrides,
   };
@@ -210,7 +212,7 @@ describe('performDispatch: sealed secret fetched from the api (D-056)', () => {
       NOW,
     );
     expect(d).toMatchObject({ kind: 'final', status: 'ack' });
-    expect(seen).toEqual([['enc:v2.sealed', { nasId: '0199b0a4-0000-7000-8000-000000000001' }]]);
+    expect(seen).toEqual([['enc:v2.sealed', { nasId: '0199b0a4-0000-7000-8000-00000000000a' }]]);
   });
 
   it('retries when the api is unreachable, then records an error, never unsupported', async () => {

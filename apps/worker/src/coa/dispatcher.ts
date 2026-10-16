@@ -124,6 +124,8 @@ export interface ActionContext {
   nas_identifier: string | null;
   coa_port: number | null;
   secret_ref: string;
+  /** The NAS row (`nas_clients.id`): the `enc:` secret resolver needs it, never the action id. */
+  nas_client_id: string;
   adapter_key: string | null;
   /** Migration 032: Meraki dashboard host receiving Disconnect on UDP 3799. */
   das_host?: string | null;
@@ -238,7 +240,7 @@ export async function performDispatch(
   // `unsupported`: unsupported means "this NAS cannot be told", not "the api was down".
   let secret: string | undefined;
   try {
-    secret = await deps.resolveSecret(row.secret_ref, { nasId: row.id });
+    secret = await deps.resolveSecret(row.secret_ref, { nasId: row.nas_client_id });
   } catch (error) {
     if (!(error instanceof SecretFetchError)) throw error;
     const isFinalFetch = ctx.attempt >= ctx.maxAttempts;
@@ -327,6 +329,7 @@ export async function dispatchSessionAction(
       's.acct_session_id',
       's.calling_station_id',
       's.framed_ip',
+      'n.id as nas_client_id',
       'n.nas_ip',
       'n.nas_identifier',
       'n.coa_port',

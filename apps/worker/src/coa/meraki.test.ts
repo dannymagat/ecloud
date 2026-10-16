@@ -34,6 +34,7 @@ function action(overrides: Partial<ActionContext> = {}): ActionContext {
     nas_identifier: 'meraki-lobby',
     coa_port: null,
     secret_ref: 'env:TEST_NAS_SECRET',
+    nas_client_id: '0199b0a4-0000-7000-8000-00000000000a',
     adapter_key: 'meraki-splash',
     das_host: 'n165.meraki.com',
     ...overrides,
