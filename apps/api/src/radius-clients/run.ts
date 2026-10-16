@@ -124,9 +124,9 @@ export interface RenderSummary {
   clients: number;
   /** Clients rendered with require_message_authenticator = no. */
   relaxedMessageAuthenticator: number;
-  /** Clients rendered on the public fleet default secret (D-051): inheriting, not yet secured. */
+  /** Clients rendered on the public fleet default secret (D-071): inheriting the shared public value. */
   fleetDefaultSecret: number;
-  /** Controller release whose hotspot default the carve-out was written against (D-051 drift evidence). */
+  /** Controller release whose hotspot default the constant was copied from (drift evidence). */
   fleetDefaultControllerRelease: string;
   changed: boolean;
   checkOnly: boolean;

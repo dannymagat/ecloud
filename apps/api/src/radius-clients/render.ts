@@ -59,29 +59,24 @@ export const INVALID_ID_MARKER = '(invalid-id)';
 /**
  * Shared-secret alphabet: base64 / base64url and a few unreserved symbols. The API generates
  * 43-char base64url secrets (`randomToken(32)`); quotes, backslash, `$`, braces, `#`, whitespace
- * and control characters are rejected outright. Length 16..128 (FreeRADIUS clients.conf asks for
- * at least 16, RADIUS tooling and most NAS UIs cap at 128).
+ * and control characters are rejected outright. Length 12..128: the floor is 12 by owner decision
+ * D-071 (2026-10-16, "same as controller"), aligned with the EzeSwitch fleet default; RADIUS
+ * tooling and most NAS UIs cap at 128. The same floor applies to UAM secrets (D-071 point 5).
  */
-export const SECRET_RE = /^[A-Za-z0-9._~+/=-]{16,128}$/;
+export const SECRET_RE = /^[A-Za-z0-9._~+/=-]{12,128}$/;
 
-export const SECRET_RULE = 'shared secret must be 16-128 characters of [A-Za-z0-9._~+/=-]';
+export const SECRET_RULE = 'shared secret must be 12-128 characters of [A-Za-z0-9._~+/=-]';
 
 /**
- * The fleet default RADIUS secret: a PUBLIC constant by owner decision (2026-10-14, D-050/D-051),
- * served unauthenticated by the EzeSwitch controller as the hotspot default of release
- * `FLEET_DEFAULT_CONTROLLER_RELEASE`. It is 12 characters, below the `SECRET_RE` floor, and is the
- * ONE exact value the floor lets through (D-051 option B). It provides no secrecy and is accepted
- * only so that an unconfigured AP and an unconfigured NAS match; every NAS still inheriting it is
- * counted in the run summary (`fleetDefaultSecret`) and must be given a per-NAS secret before real
- * use. Any other value under 16 characters, including this one with any change, is still refused.
+ * The fleet default RADIUS secret: a PUBLIC constant by owner decision (2026-10-14, reinstated by
+ * D-071 on 2026-10-16), served unauthenticated by the EzeSwitch controller as the hotspot default
+ * of release `FLEET_DEFAULT_CONTROLLER_RELEASE`. It is 12 characters and passes `SECRET_RE` like
+ * any other value since D-071 lowered the floor to 12 (the D-051 exact-match carve-out is gone).
+ * It provides no secrecy; every NAS still inheriting it is counted in the run summary
+ * (`fleetDefaultSecret`) so an operator can see which clients share the public value.
  */
-export const FLEET_DEFAULT_RADIUS_SECRET = 'ezeradsecret'; // check-no-secrets: allow (public fleet constant, D-051)
+export const FLEET_DEFAULT_RADIUS_SECRET = 'ezeradsecret'; // check-no-secrets: allow (public fleet constant, D-071)
 export const FLEET_DEFAULT_CONTROLLER_RELEASE = 'hsdefaults-20261014T102455Z';
-
-/** `SECRET_RE`, plus the single exact-match exception of D-051. */
-export function isAcceptableSecret(secret: string): boolean {
-  return SECRET_RE.test(secret) || secret === FLEET_DEFAULT_RADIUS_SECRET;
-}
 
 export const RENDERED_HEADER =
   '# EZECLOUD rendered FreeRADIUS clients (apps/api radius-clients). DO NOT EDIT: regenerated\n' +
@@ -129,7 +124,7 @@ export function renderClientsConf(
       skipped.push({ id: entry.id, reason: `nas_ip ${NAS_ADDRESS_RULE}` });
       continue;
     }
-    if (!isAcceptableSecret(entry.secret)) {
+    if (!SECRET_RE.test(entry.secret)) {
       skipped.push({ id: entry.id, reason: SECRET_RULE });
       continue;
     }

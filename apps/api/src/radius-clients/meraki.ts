@@ -32,7 +32,7 @@ import {
   type MerakiCloudRadiusSettings,
 } from '@ecloud/shared';
 import { SECRET_REF_PREFIX, openNasSecret } from '../crypto.js';
-import { SECRET_RE, SECRET_RULE, type SkippedNas } from './render.js';
+import { FLEET_DEFAULT_RADIUS_SECRET, SECRET_RE, SECRET_RULE, type SkippedNas } from './render.js';
 import type { LoadNasOptions } from './load.js';
 
 export const MERAKI_ADAPTER = 'meraki-splash';
@@ -138,11 +138,12 @@ export function renderMerakiListeners(
       continue;
     }
     seen.add(e.id);
-    // Deliberately the raw floor, NOT isAcceptableSecret: the D-051 fleet-default exception does
-    // not apply here. A Meraki cloud source address is shared by every Meraki customer
-    // (packages/shared/src/meraki-cloud-radius.ts), so the secret and the port are the only
-    // things identifying the NAS; a public secret on this path has no second control.
-    if (!SECRET_RE.test(e.secret)) {
+    // The floor (SECRET_RE) plus an explicit refusal of the public fleet default, which D-071's
+    // 12-character floor would otherwise let through. A Meraki cloud source address is shared by
+    // every Meraki customer (packages/shared/src/meraki-cloud-radius.ts), so the secret and the
+    // port are the only things identifying the NAS; a public secret on this path has no second
+    // control. Unchanged behaviour from D-051.
+    if (!SECRET_RE.test(e.secret) || e.secret === FLEET_DEFAULT_RADIUS_SECRET) {
       skipped.push({ id: e.id, reason: SECRET_RULE });
       continue;
     }

@@ -66,6 +66,9 @@ services:
   worker:
     environment:
       <<: *lan-origins
+      # D-066 (owner, 2026-10-16): CoA/Disconnect dispatch ON for the pilot. The D-065 device
+      # test still waits; until dynamic-auth is enabled on the AP a Disconnect records a timeout.
+      ECLOUD_COA_ENABLED: "true"
 
   freeradius:
     # LAN-only RADIUS (D-042). Binding a specific host address requires bond1 to hold it when

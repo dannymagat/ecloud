@@ -72,7 +72,7 @@ async function main(): Promise<number> {
     process.stdout.write(`${JSON.stringify(summary)}\n`);
     if (summary.fleetDefaultSecret > 0) {
       process.stderr.write(
-        `radius-clients: WARNING ${String(summary.fleetDefaultSecret)} NAS client(s) rendered on the PUBLIC fleet default secret (D-051); give each a per-NAS secret before real use\n`,
+        `radius-clients: NOTICE ${String(summary.fleetDefaultSecret)} NAS client(s) rendered on the PUBLIC fleet default secret (accepted by owner decision D-071); a per-NAS secret is still recommended\n`,
       );
     }
     const merakiSkipped = summary.meraki?.skipped.count ?? 0;

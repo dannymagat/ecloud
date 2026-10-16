@@ -9,11 +9,11 @@ import { Envelope, NAS_SECRET_PURPOSE, sealNasSecret, sealSecretRef } from '../c
 import { resolveNasSecrets } from './load.js';
 import {
   FLEET_DEFAULT_RADIUS_SECRET,
+  SECRET_RE,
   INVALID_ID_MARKER,
   RENDERED_HEADER,
   RadiusClientsRenderError,
   fleetDefaultSecretCount,
-  isAcceptableSecret,
   renderClientsConf,
   type NasClientEntry,
 } from './render.js';
@@ -132,7 +132,7 @@ describe('renderClientsConf', () => {
     ['space', 'abcdefgh ijklmnopq'],
     ['NUL', `${SECRET}\u0000`],
     ['non-ASCII', `${SECRET}é`],
-    ['too short', 'short-secret'],
+    ['too short', 'elevenchars'],
     ['too long', 'a'.repeat(129)],
   ])('skips a secret with %s and never echoes it', (_label, secret) => {
     const out = renderClientsConf([
@@ -147,11 +147,11 @@ describe('renderClientsConf', () => {
     expect(out.content).not.toContain(SECRET);
   });
 
-  // D-051 (owner, 2026-10-15, option B): the 12-char fleet default is the ONE value below the
-  // 16-char floor the renderer accepts, by exact match only, and every client on it is counted.
-  it('accepts exactly the public fleet default secret and counts clients inheriting it', () => {
-    expect(FLEET_DEFAULT_RADIUS_SECRET).toHaveLength(12); // below the floor: the exception is real
-    expect(isAcceptableSecret(FLEET_DEFAULT_RADIUS_SECRET)).toBe(true);
+  // D-071 (owner, 2026-10-16): the floor is 12 characters, aligned with the 12-char fleet
+  // default; the public value passes like any other and every client on it is counted.
+  it('accepts a 12-character secret, including the public fleet default, and counts clients inheriting it', () => {
+    expect(FLEET_DEFAULT_RADIUS_SECRET).toHaveLength(12); // exactly the floor
+    expect(SECRET_RE.test(FLEET_DEFAULT_RADIUS_SECRET)).toBe(true);
     const out = renderClientsConf([
       entry({ id: ID_B, nasIp: '10.9.9.9', secret: OTHER_SECRET }),
       entry({ secret: FLEET_DEFAULT_RADIUS_SECRET }),
@@ -163,12 +163,11 @@ describe('renderClientsConf', () => {
   });
 
   it.each([
-    ['one extra character', `${FLEET_DEFAULT_RADIUS_SECRET}1`],
-    ['one character changed', 'ezeradsecreT'],
+    ['eleven characters', 'ezeradsecre'],
     ['leading space', ` ${FLEET_DEFAULT_RADIUS_SECRET}`],
-    ['the 2026 variant truncated', 'ezeradsecret20'],
-  ])('still refuses a short secret that is not exactly the fleet default (%s)', (_l, secret) => {
-    expect(isAcceptableSecret(secret)).toBe(false);
+    ['empty', ''],
+  ])('still refuses a secret below the 12-character floor or outside the alphabet (%s)', (_l, secret) => {
+    expect(SECRET_RE.test(secret)).toBe(false);
     const out = renderClientsConf([
       entry({ id: ID_B, nasIp: '10.9.9.9', secret: OTHER_SECRET }),
       entry({ secret }),

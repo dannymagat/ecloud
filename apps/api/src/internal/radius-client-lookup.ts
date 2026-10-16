@@ -28,7 +28,7 @@ import { isIP } from 'node:net';
 import type { Request, RequestHandler, Response } from 'express';
 import type { AppDeps } from '../context.js';
 import { openNasSecret } from '../crypto.js';
-import { isAcceptableSecret } from '../radius-clients/render.js';
+import { SECRET_RE } from '../radius-clients/render.js';
 
 /** `rlm_rest` JSON: one attribute per key, `control:` targets the control list. */
 export interface DynamicClientReply {
@@ -92,10 +92,10 @@ export async function lookupNasByAddress(
     // NAS exactly as the renderer does.
     return null;
   }
-  // Same rule as the rendered file, including the D-051 fleet-default exception: a secret that
-  // cannot be expressed safely is not served. (The Meraki cloud path deliberately does NOT share
-  // this exception; see radius-clients/meraki.ts.)
-  if (!isAcceptableSecret(secret)) return null;
+  // Same rule as the rendered file (SECRET_RE, floor 12 per D-071): a secret that cannot be
+  // expressed safely is not served. (The Meraki cloud path additionally refuses the public fleet
+  // default; see radius-clients/meraki.ts.)
+  if (!SECRET_RE.test(secret)) return null;
 
   return {
     id: String(row.id),

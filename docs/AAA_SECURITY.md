@@ -45,7 +45,10 @@ Adversary goals:
   No public RADIUS listener        YES       FreeRADIUS bound to internal network only.
                                              NAS must reach via private LAN or VPN.
   Per-NAS shared secrets           YES       nas_clients.secret_ref, envelope-encrypted.
-                                             No default secret. New NAS registration required.
+                                             Floor 12 characters (D-071). The public fleet default
+                                             `ezeradsecret` / `ezeuamsecret` is ACCEPTED as an
+                                             owner risk (2026-10-14, reinstated 2026-10-16 D-071);
+                                             the renderer counts clients still on it.
   RADIUS replay protection         YES       SHA-256 retransmit key = hash(auth_vector +
                                              acct_session_id + acct_status_type).
                                              10 s TTL cache in Redis.
@@ -163,7 +166,10 @@ Adversary goals:
 
   S1  Never log User-Password, OTP codes, RADIUS shared secrets, private keys, or sealed tokens.
   S2  Never expose RADIUS/UDP port to the public internet.  Always require VPN or RadSec.
-  S3  Never use a default or empty RADIUS shared secret.  Minimum 32 random bytes.
+  S3  RADIUS and UAM shared secrets are at least 12 characters of [A-Za-z0-9._~+/=-]
+      (D-071, aligned with the EzeSwitch controller fleet default). The public fleet default is
+      an owner-accepted risk, not a violation; the renderer reports how many clients inherit it.
+      New per-NAS secrets are generated as 43-character random tokens.
   S4  All new NAS clients must be explicitly registered with confirmed capabilities.
   S5  CoA must never be sent to an unverified NAS port (check coa_supported capability flag).
   S6  All production secrets (NAS secrets, MFA keys, HMAC keys) must use the envelope

@@ -43,7 +43,7 @@ function m(overrides: Partial<MerakiNasEntry> = {}): MerakiNasEntry {
 }
 
 describe('renderMerakiListeners', () => {
-  it('still refuses the public fleet default secret on the Meraki cloud path (D-051 does not apply)', () => {
+  it('still refuses the public fleet default secret on the Meraki cloud path (D-071 floor lets it through elsewhere)', () => {
     const out = renderMerakiListeners([m({ secret: FLEET_DEFAULT_RADIUS_SECRET })], ON);
     expect(out.rendered).toEqual([]);
     expect(out.skipped).toEqual([{ id: ID_M, reason: SECRET_RULE }]);
