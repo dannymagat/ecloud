@@ -212,12 +212,17 @@ export function operationGate(input: {
     a.mode !== 'lab' &&
     showDeviceEnforced(a.evidence?.device_enforced, a.evidence?.status, a.evidence?.evidence_level);
   if (!validated) {
+    // D-075 (owner, 2026-10-16): lab mode is offered in the console too, so the device test of
+    // an adapter can be run from the Sessions page; the reason says it is not device-enforced.
+    if (a.mode === 'lab') {
+      return {
+        enabled: true,
+        reason: `Lab mode: ${reason} Sent for testing; the effect is not reported as device-enforced until the adapter is lab-validated (V12).`,
+      };
+    }
     return {
       enabled: false,
-      reason:
-        a.mode === 'lab'
-          ? `${reason} Lab mode accepts this request through the API, but the admin console offers ${label.toLowerCase()} only for lab-validated adapters.`
-          : `${label} is not lab-validated for this NAS adapter (${a.evidence?.status ?? 'unknown status'}, ${a.evidence?.evidence_level ?? 'no evidence level'}).`,
+      reason: `${label} is not lab-validated for this NAS adapter (${a.evidence?.status ?? 'unknown status'}, ${a.evidence?.evidence_level ?? 'no evidence level'}).`,
     };
   }
   return { enabled: true, reason };

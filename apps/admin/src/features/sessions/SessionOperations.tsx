@@ -1,7 +1,8 @@
 /**
- * Disconnect / Re-authorize buttons (D-006, V12). Always visible; disabled with the registry
- * reason (from the API's per-session `operations` evidence) unless the operation is available
- * AND the adapter capability is lab-validated. A sent request is reported as "queued" with its
+ * Disconnect / Re-authorize buttons (D-006, V12, D-075). Always visible; disabled with the
+ * registry reason (from the API's per-session `operations` evidence) unless the operation is
+ * available; in lab mode (adapter not yet lab-validated, ECLOUD_COA_ENABLED=true) it is offered
+ * with the lab reason as the tooltip. A sent request is reported as "queued" with its
  * session-action id, never as applied on the device. Idempotency key per confirmation dialog.
  */
 import { useMutation, useQueryClient } from '@tanstack/react-query';

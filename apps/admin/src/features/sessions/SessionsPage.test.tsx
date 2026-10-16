@@ -325,13 +325,11 @@ describe('SessionDetailPage', () => {
     await waitFor(() =>
       expect(disconnect.closest('[data-operation]')).toHaveAttribute('title', REASON),
     );
-    // lab mode: the API would accept it, the console still does not offer it
+    // lab mode (D-075): the console offers it, with the lab reason as the tooltip
     const reauth = screen.getByRole('button', { name: 'Re-authorize' });
-    expect(reauth).toBeDisabled();
-    expect(reauth.closest('[data-operation]')?.getAttribute('title')).toMatch(
-      /only for lab-validated adapters/,
-    );
-    expect(document.querySelector('[data-enabled="true"]')).toBeNull();
+    expect(reauth).toBeEnabled();
+    expect(reauth.closest('[data-operation]')?.getAttribute('title')).toMatch(/^Lab mode: /);
+    expect(reauth.closest('[data-operation]')).toHaveAttribute('data-enabled', 'true');
   });
 
   it('gates on the permission of the operation', async () => {

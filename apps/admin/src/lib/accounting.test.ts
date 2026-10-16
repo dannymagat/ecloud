@@ -78,11 +78,12 @@ describe('operationGate (D-006, V12)', () => {
     );
   });
 
-  it('never enables in lab mode (available but not lab-validated)', () => {
+  it('enables in lab mode (available but not lab-validated) with the lab reason (D-075)', () => {
     const lab = { ...VALIDATED, mode: 'lab' as const, device_enforced: false };
     const g = gate({ ...lab, evidence: REFUSED.evidence });
-    expect(g.enabled).toBe(false);
-    expect(g.reason).toMatch(/only for lab-validated adapters/);
+    expect(g.enabled).toBe(true);
+    expect(g.reason).toMatch(/^Lab mode: /);
+    expect(g.reason).toMatch(/not reported as device-enforced/);
   });
 
   it('never enables on a contradictory payload (device_enforced with source evidence)', () => {
