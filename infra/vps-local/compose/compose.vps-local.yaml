@@ -51,6 +51,9 @@ services:
       <<: *lan-origins
       # Cycle F: the RADIUS address the setup-guide gallery shows (ports default 1812/1813).
       RADIUS_ADVERTISED_ADDRESS: ${ECLOUD_LAN_IP:?ECLOUD_LAN_IP is required}
+      # D-066: the api gates the Sessions page Disconnect / Re-authorize buttons on the same
+      # flag the worker dispatches on (accounting-views operationAvailability); both must agree.
+      ECLOUD_COA_ENABLED: "true"
     # Only reachable through `edge` on the Compose network.
     ports: !reset []
     volumes:
