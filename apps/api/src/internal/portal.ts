@@ -225,10 +225,25 @@ function clientIpOf(value: unknown): string | null {
   return typeof value === 'string' && isIP(value) !== 0 ? value : null;
 }
 
-function uamServerUrl(deps: AppDeps, flavour: UamFlavour, config: Record<string, unknown>) {
+/**
+ * The UAM server URL the NAS was configured with: it is the string the `md` signature covers,
+ * so it must be the one the device actually redirected to. A configured `uam_server_url` wins;
+ * otherwise the entry path the portal received (canonical or legacy, D-076), else the canonical.
+ */
+function uamServerUrl(
+  deps: AppDeps,
+  flavour: UamFlavour,
+  config: Record<string, unknown>,
+  entryPath?: string,
+) {
   const configured = config.uam_server_url;
   if (typeof configured === 'string' && /^https?:\/\/[^?#\s]+$/.test(configured)) return configured;
-  return `${deps.config.base.origins.portal.replace(/\/+$/, '')}${UAM_FLAVOURS[flavour].path}`;
+  const spec = UAM_FLAVOURS[flavour];
+  const path =
+    entryPath !== undefined && ([spec.path, ...spec.legacyPaths] as readonly string[]).includes(entryPath)
+      ? entryPath
+      : spec.path;
+  return `${deps.config.base.origins.portal.replace(/\/+$/, '')}${path}`;
 }
 
 /**
@@ -687,6 +702,8 @@ export async function resolvePortal(
   flavour: PortalFlavour,
   identity: { nasid: string | undefined; apMac: string | null },
   logger: Logger,
+  /** UAM entry path the portal served (`/uam/ezeap/`, `/uam/uspot/`, …); see `uamServerUrl`. */
+  entryPath?: string,
 ): Promise<PortalResolution> {
   const found = await findNasByIdentity(deps, {
     nasid: identity.nasid ?? null,
@@ -737,7 +754,9 @@ export async function resolvePortal(
         controllerId: n.controller_id,
         deploymentMode,
         uamServerUrl:
-          flavour === 'meraki' ? null : uamServerUrl(deps, flavour, portal.adapter_config),
+          flavour === 'meraki'
+            ? null
+            : uamServerUrl(deps, flavour, portal.adapter_config, entryPath),
         uamSecret: openUamSecret(deps, portal.uam_secret_ref, {
           organizationId: portal.organization_id,
           portalId: portal.id,
@@ -967,6 +986,11 @@ const RedirectBody = z.object({
   flavour: z.enum(['uspot', 'chilli', 'mikrotik', 'meraki']),
   raw_query: z.string().max(8192),
   client_ip: z.string().max(64).optional(),
+  /** UAM: the entry path the portal served, with its trailing slash (`/uam/ezeap/`). */
+  entry_path: z
+    .string()
+    .regex(/^\/[A-Za-z0-9._/-]{1,64}\/$/)
+    .optional(),
   /** Meraki only: the `/meraki/<nasid>/` path segment (= the NAS-Identifier registered in EZECLOUD). */
   nasid: z
     .string()
@@ -1129,7 +1153,13 @@ export function portalInternalRouter(deps: AppDeps): Router {
                 apMac: canonicalUnicastMac(split.params.called),
               };
             })();
-      const resolution = await resolvePortal(deps, flavour, identity, req.log);
+      const resolution = await resolvePortal(
+        deps,
+        flavour,
+        identity,
+        req.log,
+        parsedBody.data.entry_path,
+      );
       const adapter = getVendorAdapter(
         (resolution.ok ? resolution.portal.nas.adapterKey : null) ??
           UAM_FLAVOURS[flavour].adapterKeys[0],

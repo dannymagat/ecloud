@@ -387,7 +387,8 @@ export function createServer(options: ServerOptions = {}): Express {
       // Raw query exactly as the device built it: `md` covers the bytes, not a re-encoding.
       const q = req.originalUrl.indexOf('?');
       const rawQuery = q < 0 ? '' : req.originalUrl.slice(q + 1);
-      const outcome = await api.redirect({ flavour, rawQuery, clientIp: req.ip ?? null });
+      const entryPath = req.path.endsWith('/') ? req.path : `${req.path}/`;
+      const outcome = await api.redirect({ flavour, rawQuery, clientIp: req.ip ?? null, entryPath });
       switch (outcome.kind) {
         case 'flow': {
           nonceFor(req, res);

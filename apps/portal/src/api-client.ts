@@ -134,6 +134,8 @@ export interface PortalApi {
     flavour: 'uspot' | 'chilli' | 'mikrotik' | 'meraki';
     rawQuery: string;
     clientIp: string | null;
+    /** UAM entry path served (with trailing slash); the api verifies `md` against it (D-076). */
+    entryPath?: string;
     /** Meraki only: the `/meraki/<nasid>/` path segment. */
     nasid?: string;
   }): Promise<RedirectOutcome>;
@@ -211,11 +213,14 @@ export class HttpPortalApi implements PortalApi {
     rawQuery: string;
     clientIp: string | null;
     nasid?: string;
+    /** UAM entry path served (with trailing slash); the api verifies `md` against it (D-076). */
+    entryPath?: string;
   }): Promise<RedirectOutcome> {
     const r = await this.call('POST', '/internal/portal/redirects', {
       flavour: input.flavour,
       raw_query: input.rawQuery,
       ...(input.clientIp === null ? {} : { client_ip: input.clientIp }),
+      ...(input.entryPath === undefined ? {} : { entry_path: input.entryPath }),
       ...(input.nasid === undefined ? {} : { nasid: input.nasid }),
     });
     if (r === null) return { kind: 'unavailable' };
