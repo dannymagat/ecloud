@@ -92,14 +92,14 @@ function step(
   return { id, title, setting, value, evidenceRefs: refs };
 }
 
-function uspotSetup(nasId: string): readonly SetupStep[] {
+function uspotSetup(nasId: string, uamPath = '/uam/uspot/'): readonly SetupStep[] {
   return [
     step('auth-mode', 'Captive portal mode', 'captive.auth-mode', 'uam'),
     step(
       'uam-server',
       'Portal URL (no query string)',
       'captive.uam-server',
-      `${PORTAL_ORIGIN}/uam/uspot/`,
+      `${PORTAL_ORIGIN}${uamPath}`,
     ),
     step('uam-port', 'UAM port', 'captive.uam-port', '3990'),
     step(
@@ -264,10 +264,10 @@ const SPECS: readonly FirstPartySpec[] = [
   {
     key: 'openwifi-uspot-uam',
     vendorKey: 'ezelink',
-    uam: { path: '/uam/uspot/', requireSecret: true },
+    uam: { path: '/uam/ezeap/', requireSecret: true },
     defaultDeployment: 'native',
     radius: true,
-    setup: (site) => uspotSetup(site.nasId),
+    setup: (site) => uspotSetup(site.nasId, '/uam/ezeap/'),
   },
   {
     key: 'uspot-upstream-uam',

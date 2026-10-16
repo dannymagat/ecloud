@@ -315,11 +315,11 @@ function serializePortal(row: Row): Row {
   };
 }
 
-/** UAM paths served by the portal per portal type (`UAM_FLAVOURS`, P6-A). */
-const UAM_PATH_BY_TYPE: Readonly<Record<string, string>> = Object.freeze({
-  uspot: UAM_FLAVOURS.uspot.path,
-  coovachilli: UAM_FLAVOURS.chilli.path,
-  mikrotik: UAM_FLAVOURS.mikrotik.path,
+/** UAM paths served by the portal per portal type (`UAM_FLAVOURS`, P6-A): canonical first, then legacy. */
+const UAM_PATHS_BY_TYPE: Readonly<Record<string, readonly string[]>> = Object.freeze({
+  uspot: [UAM_FLAVOURS.uspot.path, ...UAM_FLAVOURS.uspot.legacyPaths],
+  coovachilli: [UAM_FLAVOURS.chilli.path, ...UAM_FLAVOURS.chilli.legacyPaths],
+  mikrotik: [UAM_FLAVOURS.mikrotik.path, ...UAM_FLAVOURS.mikrotik.legacyPaths],
 });
 
 /**
@@ -361,12 +361,12 @@ export async function portalAdapterConfig(
     if (url.username !== '' || url.password !== '' || url.search !== '' || url.hash !== '') {
       throw uamUrlError('uam_server_url must not carry credentials, a query or a fragment');
     }
-    const expected = UAM_PATH_BY_TYPE[portalType];
-    if (expected === undefined || url.pathname !== expected) {
+    const expected = UAM_PATHS_BY_TYPE[portalType];
+    if (expected === undefined || !expected.includes(url.pathname)) {
       throw uamUrlError(
         expected === undefined
           ? `portal type ${portalType} has no UAM endpoint on the portal`
-          : `uam_server_url path must be ${expected} for portal type ${portalType}`,
+          : `uam_server_url path must be ${expected.join(' or ')} for portal type ${portalType}`,
       );
     }
     next.uam_server_url = url.toString();

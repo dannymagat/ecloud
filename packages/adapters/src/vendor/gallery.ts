@@ -147,8 +147,8 @@ function postback(
 export const GALLERY_ENTRIES: readonly GalleryEntry[] = Object.freeze([
   {
     vendorKey: 'ezeap-openwifi',
-    displayName: 'EZEAP / OpenWiFi',
-    productLine: 'EzeLink EZEAP access points (TIP OpenWiFi, uspot captive portal)',
+    displayName: 'EZEAP',
+    productLine: 'EzeLink EZEAP access points',
     adapterKey: 'openwifi-uspot-uam',
     profile: null,
     family: 'uam',
@@ -705,6 +705,7 @@ function rawSteps(entry: GalleryEntry, origin: string): readonly SetupStep[] {
 function portalUrlOf(entry: GalleryEntry, origin: string): string | null {
   switch (entry.adapterKey) {
     case 'openwifi-uspot-uam':
+      return `${origin}/uam/ezeap/`;
     case 'uspot-upstream-uam':
       return `${origin}/uam/uspot/`;
     case 'coovachilli-uam':

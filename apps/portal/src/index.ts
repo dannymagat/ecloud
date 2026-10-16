@@ -4,7 +4,7 @@
  * never sees a UAM secret or a subscriber password at rest).
  *
  * Public routes (API_ARCHITECTURE.md "Portal public"):
- *   GET  /uam/uspot/ | /uam/chilli/   UAM entry + `res=` callbacks → 303 /f/{token} or a page
+ *   GET  /uam/ezeap/ | /uam/uspot/ | /uam/chilli/   UAM entry + `res=` callbacks → 303 /f/{token} or a page
  *   GET  /hotspot/mikrotik/            MikroTik RouterOS login.html entry (Cycle B) → 303 /f/{token}
  *   GET  /pb/{profile}[/{nasid}]/      Cycle C post-back entry (Cambium, Aruba, Cisco, …) → 303
  *                                      /f/{token}; the hand-off is an auto-submitted form to the
@@ -376,7 +376,8 @@ export function createServer(options: ServerOptions = {}): Express {
 
   // --------------------------------------------------------------------------- UAM entry
   const ENTRY_PATHS = [
-    ['uspot', ['/uam/uspot', '/uam/uspot/']],
+    // /uam/ezeap/ is the canonical EZEAP entry (owner, 2026-10-16); /uam/uspot/ stays served.
+    ['uspot', ['/uam/ezeap', '/uam/ezeap/', '/uam/uspot', '/uam/uspot/']],
     ['chilli', ['/uam/chilli', '/uam/chilli/']],
     // Cycle B: the EZECLOUD-generated RouterOS login.html sends the browser here.
     ['mikrotik', ['/hotspot/mikrotik', '/hotspot/mikrotik/']],

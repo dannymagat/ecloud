@@ -469,7 +469,7 @@ function PortalSettings({
             label="UAM server URL"
             value={uamUrl}
             disabled={!canEdit}
-            placeholder="Default: portal origin + /uam/uspot/ or /uam/chilli/"
+            placeholder="Default: portal origin + /uam/ezeap/ (EZEAP), /uam/uspot/ or /uam/chilli/"
             hint="Must be on the portal origin with the UAM path of the hotspot type (https)."
             onChange={(e) => setUamUrl(e.target.value)}
           />

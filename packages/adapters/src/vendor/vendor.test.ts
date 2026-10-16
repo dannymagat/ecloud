@@ -466,7 +466,8 @@ describe('setup guide, health', () => {
       }
     }
     const steps = uspot.buildSetupGuide({ siteId: 'site-a', nasId: 'nas-1' });
-    expect(steps.find((s) => s.id === 'uam-server')?.value).toBe(USPOT_SERVER);
+    // EZEAP's canonical entry is /uam/ezeap/ (owner, 2026-10-16); /uam/uspot/ stays served.
+    expect(steps.find((s) => s.id === 'uam-server')?.value).toBe(USPOT_SERVER.replace('/uam/uspot/', '/uam/ezeap/'));
     expect(steps.find((s) => s.id === 'nasid')?.value).toBe('nas-1');
   });
 

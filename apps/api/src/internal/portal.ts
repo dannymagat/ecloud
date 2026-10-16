@@ -138,19 +138,31 @@ const PORTAL_ACCESS = Object.freeze({ reason: 'portal', audit: false });
  */
 export const PLATFORM_DEFAULT_PORTAL_NAME = 'Platform default (unconfigured site)';
 
-/** Path-based adapter selection (`/uam/uspot/`, `/uam/chilli/`; API_ARCHITECTURE portal table). */
+/**
+ * Path-based adapter selection (`/uam/ezeap/`, `/uam/chilli/`; API_ARCHITECTURE portal table).
+ * `path` is the canonical entry the api hands out; `legacyPaths` are still served and accepted
+ * (owner, 2026-10-16: the EZEAP entry is `/uam/ezeap/`, `/uam/uspot/` stays for APs already
+ * configured with it).
+ */
 export const UAM_FLAVOURS = Object.freeze({
   uspot: {
     adapterKeys: ['openwifi-uspot-uam', 'uspot-upstream-uam'],
     portalType: 'uspot',
-    path: '/uam/uspot/',
+    path: '/uam/ezeap/',
+    legacyPaths: ['/uam/uspot/'],
   },
-  chilli: { adapterKeys: ['coovachilli-uam'], portalType: 'coovachilli', path: '/uam/chilli/' },
+  chilli: {
+    adapterKeys: ['coovachilli-uam'],
+    portalType: 'coovachilli',
+    path: '/uam/chilli/',
+    legacyPaths: [],
+  },
   // Cycle B (D-044): RouterOS Hotspot, EZECLOUD-generated login.html (vendor/mikrotik.ts).
   mikrotik: {
     adapterKeys: ['mikrotik-hotspot'],
     portalType: 'mikrotik',
     path: MIKROTIK_PORTAL_PATH,
+    legacyPaths: [],
   },
 } as const);
 export type UamFlavour = keyof typeof UAM_FLAVOURS;
