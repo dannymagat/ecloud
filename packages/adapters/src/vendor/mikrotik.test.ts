@@ -513,7 +513,7 @@ describe('generated artefacts and setup guides', () => {
     expect(t?.engine).toBe(getAdapter('coovachilli-uam'));
     const guide = t?.buildSetupGuide({ siteId: 's', nasId: 'nas-1' }) ?? [];
     const text = guide.map((s) => `${s.title} ${s.value}`).join('\n');
-    expect(text).toContain('/uam/chilli/');
+    expect(text).toContain('/uam/ezecloud/');
     expect(text).toContain('3990');
     expect(text).toContain('<UAM_SECRET>');
     expect(text).toContain('REQUIRES_CLARIFICATION');

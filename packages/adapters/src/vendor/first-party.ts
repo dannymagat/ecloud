@@ -280,11 +280,11 @@ const SPECS: readonly FirstPartySpec[] = [
   {
     key: 'coovachilli-uam',
     vendorKey: 'coova',
-    uam: { path: '/uam/chilli/', requireSecret: true },
+    uam: { path: '/uam/ezecloud/', requireSecret: true },
     defaultDeployment: 'gateway',
     radius: true,
     setup: (site) => [
-      step('uamserver', 'Portal URL', 'uamserver', `${PORTAL_ORIGIN}/uam/chilli/`),
+      step('uamserver', 'Portal URL', 'uamserver', `${PORTAL_ORIGIN}/uam/ezecloud/`),
       step('uamsecret', 'UAM secret', 'uamsecret', '<UAM_SECRET>'),
       step('radiusnasid', 'NAS identifier = EZECLOUD NAS id', 'radiusnasid', site.nasId),
       step('nasmac', 'NAS MAC', 'nasmac', '<GATEWAY_MAC>'),

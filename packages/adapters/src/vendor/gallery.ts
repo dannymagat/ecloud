@@ -164,7 +164,7 @@ export const GALLERY_ENTRIES: readonly GalleryEntry[] = Object.freeze([
   {
     vendorKey: 'coovachilli',
     displayName: 'EZEGW EZECLOUD',
-    productLine: 'EzeLink EZEGW gateways (CoovaChilli based, OpenWrt or Linux, EZEGATE)',
+    productLine: 'EzeLink EZEGW gateways (EZEGATE)',
     adapterKey: 'coovachilli-uam',
     profile: null,
     family: 'uam',
@@ -693,7 +693,7 @@ function portalUrlOf(entry: GalleryEntry, origin: string): string | null {
     case 'uspot-upstream-uam':
       return `${origin}/uam/uspot/`;
     case 'coovachilli-uam':
-      return `${origin}/uam/chilli/`;
+      return `${origin}/uam/ezecloud/`;
     case 'mikrotik-hotspot':
       return `${origin}/hotspot/mikrotik/`;
     case 'meraki-splash':

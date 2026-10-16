@@ -47,7 +47,7 @@ export function teltonikaSetupGuide(
       'landing-page',
       `External landing page = the EZECLOUD CoovaChilli portal entry (${RC})`,
       'Hotspot landing page: external URL (uamserver)',
-      `${portalOrigin}/uam/chilli/`,
+      `${portalOrigin}/uam/ezecloud/`,
     ),
     step('uam-port', 'UAM port (research: default 3990)', 'UAM port', '3990'),
     step(

@@ -139,10 +139,10 @@ const PORTAL_ACCESS = Object.freeze({ reason: 'portal', audit: false });
 export const PLATFORM_DEFAULT_PORTAL_NAME = 'Platform default (unconfigured site)';
 
 /**
- * Path-based adapter selection (`/uam/ezeap/`, `/uam/chilli/`; API_ARCHITECTURE portal table).
+ * Path-based adapter selection (`/uam/ezeap/`, `/uam/ezecloud/`; API_ARCHITECTURE portal table).
  * `path` is the canonical entry the api hands out; `legacyPaths` are still served and accepted
  * (owner, 2026-10-16: the EZEAP entry is `/uam/ezeap/`, `/uam/uspot/` stays for APs already
- * configured with it).
+ * configured with it; the EZEGW entry is `/uam/ezecloud/`, `/uam/chilli/` stays likewise).
  */
 export const UAM_FLAVOURS = Object.freeze({
   uspot: {
@@ -154,8 +154,8 @@ export const UAM_FLAVOURS = Object.freeze({
   chilli: {
     adapterKeys: ['coovachilli-uam'],
     portalType: 'coovachilli',
-    path: '/uam/chilli/',
-    legacyPaths: [],
+    path: '/uam/ezecloud/',
+    legacyPaths: ['/uam/chilli/'],
   },
   // Cycle B (D-044): RouterOS Hotspot, EZECLOUD-generated login.html (vendor/mikrotik.ts).
   mikrotik: {
