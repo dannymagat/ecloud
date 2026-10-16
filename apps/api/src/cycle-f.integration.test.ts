@@ -37,7 +37,7 @@ const RADIUS_ADDRESS = '192.0.2.53';
 /** Every vendor / product line the gallery must cover (Cycle F scope item 3). */
 const REQUIRED: readonly [string, string, string | null][] = [
   ['ezeap-openwifi', 'openwifi-uspot-uam', null],
-  ['openwrt-uspot', 'uspot-upstream-uam', null],
+  // 'openwrt-uspot' (plain OpenWrt) left the gallery by owner request 2026-10-16.
   ['coovachilli', 'coovachilli-uam', null],
   ['teltonika', 'coovachilli-uam', null],
   ['mikrotik', 'mikrotik-hotspot', null],

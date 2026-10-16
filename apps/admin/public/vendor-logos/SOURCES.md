@@ -27,6 +27,7 @@ Retrieved 2026-10-10.
 | teltonika | Teltonika | official site | https://teltonika-networks.com/ (inline SVG header logo in the homepage HTML) | Navy full colour; extracted from the page as is, then sanitized only |
 | engenius | EnGenius | official site | https://www.engeniustech.com/apac/wp-content/uploads/2023/07/Group-1096.svg (schema.org logo of https://www.engeniustech.com/) | Dark grey wordmark; sanitized only |
 | openwrt | OpenWrt | Wikimedia Commons | https://commons.wikimedia.org/wiki/File:OpenWrt_Logo.svg | Full colour with "Wireless Freedom" tagline. openwrt.org served a bot challenge page; sanitized only |
+| ezelink | EZELINK / EZEAP | owner-supplied master | `docs/ezelink-logo.svg` (Illustrator export supplied by the owner, 2026-10-16) | Own brand, full colour (blue #27aae1 mark, grey #616565 wordmark). Sanitized only: XML declaration, generator comment, editor id and `<defs><style>` removed; the two CSS classes became `fill` attributes; paths unchanged |
 
 ## Fallbacks (no file; the UI renders a text wordmark tile)
 
@@ -36,4 +37,3 @@ Retrieved 2026-10-10.
 | openmesh | Open Mesh | The brand is discontinued: openmesh.com does not resolve and Wikimedia Commons has no Open Mesh logo |
 | grandstream | Grandstream | The official site offers a PNG only (logo-grandstream-low-web.png), there is no public press kit SVG, and Wikimedia Commons has no file |
 | tanaza | Tanaza | The official site and media kit offer PNG only, and Wikimedia Commons has no file |
-| ezelink | EZELINK / EZEAP | ezelink.com offers a PNG only (wp-content/uploads/2026/02/IMG_3335.png) and ezelink.ai returned no content. An SVG master is REQUIRES_CLARIFICATION from the owner |

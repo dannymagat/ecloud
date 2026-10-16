@@ -24,7 +24,13 @@ import { POSTBACK_PROFILES, PostbackProfileEditor } from './PostbackProfileEdito
 import { setupGuidesHref, type VendorGuide } from '../setup-guides/types';
 import { MERAKI_ADAPTER_KEY, MerakiCloudRadiusNotice, SetupGuideButton } from './MerakiCloudRadius';
 
-const ADAPTER_OPTIONS = ADAPTER_KEYS.map((k) => ({
+/**
+ * Adapters hidden from the "add NAS" picker (owner request 2026-10-16: plain OpenWrt is not
+ * offered). The engine adapter and its label stay, so existing rows still render and edit.
+ */
+const HIDDEN_ADAPTERS: ReadonlySet<string> = new Set(['uspot-upstream-uam']);
+
+const ADAPTER_OPTIONS = ADAPTER_KEYS.filter((k) => !HIDDEN_ADAPTERS.has(k)).map((k) => ({
   value: k,
   label: `${ADAPTER_LABELS[k]} (${k})`,
 }));

@@ -18,6 +18,7 @@ export const AVAILABLE_LOGOS: ReadonlySet<string> = new Set<string>([
   'cisco-meraki',
   'draytek',
   'engenius',
+  'ezelink',
   'extreme',
   'fortinet',
   'huawei',
@@ -35,7 +36,7 @@ export const AVAILABLE_LOGOS: ReadonlySet<string> = new Set<string>([
 /** Setup-guide gallery vendor key → logo file key (several gallery entries share a brand). */
 export const LOGO_FOR_VENDOR: Readonly<Record<string, string>> = {
   'ezeap-openwifi': 'ezelink',
-  'openwrt-uspot': 'openwrt',
+  coovachilli: 'ezelink',
   teltonika: 'teltonika',
   mikrotik: 'mikrotik',
   cambium: 'cambium',

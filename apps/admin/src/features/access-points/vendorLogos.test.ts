@@ -78,7 +78,9 @@ describe('vendor logo SVG sanitization', () => {
     expect(vendorLogoSrc('tplink-omada-api')).toBe('/vendor-logos/tplink-omada.svg');
     // no separate Catalyst logo: the Cisco logo
     expect(vendorLogoSrc('cisco-wlc')).toBe('/vendor-logos/cisco.svg');
-    expect(vendorLogoSrc('coovachilli')).toBeNull();
+    expect(vendorLogoSrc('coovachilli')).toBe('/vendor-logos/ezelink.svg');
+    expect(vendorLogoSrc('ezeap-openwifi')).toBe('/vendor-logos/ezelink.svg');
+    expect(vendorLogoSrc('tanaza')).toBeNull();
     expect(vendorLogoSrc(null)).toBeNull();
     for (const src of Object.keys(LOGO_FOR_VENDOR).map(vendorLogoSrc)) {
       if (src !== null) expect(src).toMatch(/^\/vendor-logos\/[a-z0-9-]+\.svg$/);
