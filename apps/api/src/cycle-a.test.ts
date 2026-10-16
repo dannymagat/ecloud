@@ -7,7 +7,12 @@ import { EAP_ADAPTER_KEYS, isEapInner, macAuthKind } from './internal/aaa.js';
 import { createHash } from 'node:crypto';
 import { canonicalJson } from '@ecloud/policy-engine';
 import { requestFingerprint } from './http/idempotency.js';
-import { calledStationMac, decideNasIdentity, type NasidRow, type ResolvedNasRow } from './internal/nas-lookup.js';
+import {
+  calledStationMac,
+  decideNasIdentity,
+  type NasidRow,
+  type ResolvedNasRow,
+} from './internal/nas-lookup.js';
 import { isReplayed, legacyReplayKey, markReplayed, replayKey } from './internal/portal-store.js';
 import { MemoryKv } from './kv.js';
 import type { RadiusRequestBody } from './internal/radius.js';
@@ -177,7 +182,7 @@ describe('macAuthKind / isEapInner (AAA §2.3, §2.4)', () => {
   const STATION = 'AA-BB-CC-DD-EE-01';
   it('Call-Check is MAC auth on every adapter (unchanged behaviour)', () => {
     expect(
-      macAuthKind(body({ 'User-Name': 'x', 'Service-Type': 'Call-Check' }), 'coovachilli-uam'),
+      macAuthKind(body({ 'User-Name': 'x', 'Service-Type': 'Call-Check' }), 'ezecloud-uam'),
     ).toBe('call-check');
   });
   it('generic adapter: User-Name = station MAC, password absent or same MAC', () => {
@@ -219,7 +224,7 @@ describe('macAuthKind / isEapInner (AAA §2.3, §2.4)', () => {
   });
   it('MAC-as-username applies only to the generic adapter', () => {
     const b = body({ 'User-Name': 'aabbccddee01', 'Calling-Station-Id': STATION });
-    for (const key of ['openwifi-hostapd-radius', 'openwifi-uspot-uam', 'coovachilli-uam', null])
+    for (const key of ['openwifi-hostapd-radius', 'ezeap-uam', 'ezecloud-uam', null])
       expect(macAuthKind(b, key)).toBeNull();
   });
   it('an EAP inner identity is never MAC auth (not even with Call-Check)', () => {

@@ -167,8 +167,8 @@ suite(title, () => {
         name: 'sim-uspot',
         nas_identifier: f.nasIdentifier,
         nas_ip: containerIp,
-        adapter_type_key: 'openwifi-uspot-uam',
-        adapter_key: 'openwifi-uspot-uam',
+        adapter_type_key: 'ezeap-uam',
+        adapter_key: 'ezeap-uam',
         secret_ref: PLACEHOLDER_NAS_SECRET_REF,
       })
       .returning('id')

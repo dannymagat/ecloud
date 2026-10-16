@@ -79,7 +79,7 @@ async function main(): Promise<number> {
 
   const nasIdentifier = required(env, 'BOOTSTRAP_NAS_IDENTIFIER');
   const nasIp = required(env, 'BOOTSTRAP_NAS_IP');
-  const adapterKey = optional(env, 'BOOTSTRAP_ADAPTER_KEY', 'openwifi-uspot-uam');
+  const adapterKey = optional(env, 'BOOTSTRAP_ADAPTER_KEY', 'ezeap-uam');
   const username = optional(env, 'BOOTSTRAP_USERNAME', DEFAULTS.username);
 
   const db = createDb(databaseUrl);
@@ -98,7 +98,8 @@ async function main(): Promise<number> {
       uamSecret,
       // Recorded in the audit trail so a later reader knows a dictionary-word secret was a
       // decision and not an oversight. Set to `false` when seeding a tenant-specific value.
-      secretsArePlatformDefaults: optional(env, 'BOOTSTRAP_SECRETS_ARE_DEFAULTS', 'true') !== 'false',
+      secretsArePlatformDefaults:
+        optional(env, 'BOOTSTRAP_SECRETS_ARE_DEFAULTS', 'true') !== 'false',
       portalName: optional(env, 'BOOTSTRAP_PORTAL_NAME', DEFAULTS.portalName),
       portalSlug: optional(env, 'BOOTSTRAP_PORTAL_SLUG', DEFAULTS.portalSlug),
       networkRef: optional(env, 'BOOTSTRAP_NETWORK_REF', DEFAULTS.networkRef),
@@ -108,7 +109,9 @@ async function main(): Promise<number> {
       uploadKbps: Number(optional(env, 'BOOTSTRAP_UPLOAD_KBPS', String(DEFAULTS.uploadKbps))),
       username,
       passwordHash,
-      userValidDays: Number(optional(env, 'BOOTSTRAP_USER_VALID_DAYS', String(DEFAULTS.userValidDays))),
+      userValidDays: Number(
+        optional(env, 'BOOTSTRAP_USER_VALID_DAYS', String(DEFAULTS.userValidDays)),
+      ),
       dataEncryptionKey,
       now: new Date(),
     };

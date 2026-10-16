@@ -15,7 +15,7 @@ import { listCapabilities } from './registry.js';
  */
 const EXPECTED_VERIFIED: Record<AdapterKey, PolicyField[]> = {
   'openwifi-hostapd-radius': [],
-  'openwifi-uspot-uam': [
+  'ezeap-uam': [
     'download_rate_kbps',
     'upload_rate_kbps',
     'quota_daily_bytes',
@@ -35,7 +35,7 @@ const EXPECTED_VERIFIED: Record<AdapterKey, PolicyField[]> = {
     'session_timeout_s',
     'idle_timeout_s',
   ],
-  'coovachilli-uam': [
+  'ezecloud-uam': [
     'download_rate_kbps',
     'upload_rate_kbps',
     'quota_daily_bytes',
@@ -74,7 +74,7 @@ const EXPECTED_STATUS: Record<AdapterKey, Partial<Record<PolicyField, AdapterFie
     schedule_id: 'ECLOUD_SIDE_ONLY',
     vlan_id: 'REQUIRES_DEVICE_TEST',
   },
-  'openwifi-uspot-uam': {
+  'ezeap-uam': {
     burst_upload_kbps: 'UNSUPPORTED',
     vlan_id: 'UNSUPPORTED',
     max_concurrent_sessions: 'ECLOUD_SIDE_ONLY',
@@ -85,7 +85,7 @@ const EXPECTED_STATUS: Record<AdapterKey, Partial<Record<PolicyField, AdapterFie
     vlan_id: 'UNSUPPORTED',
     valid_until: 'ECLOUD_SIDE_ONLY',
   },
-  'coovachilli-uam': {
+  'ezecloud-uam': {
     vlan_id: 'REQUIRES_DEVICE_TEST',
     burst_download_kbps: 'UNSUPPORTED',
     valid_from: 'ECLOUD_SIDE_ONLY',
@@ -192,9 +192,9 @@ describe('adapter capability declarations (D-028)', () => {
     expect(all.map((a) => a.key)).toEqual([...ADAPTER_KEYS]);
     expect(ADAPTER_KEYS).toEqual([
       'openwifi-hostapd-radius',
-      'openwifi-uspot-uam',
+      'ezeap-uam',
       'uspot-upstream-uam',
-      'coovachilli-uam',
+      'ezecloud-uam',
       'openwifi-config',
       'generic-radius-8021x',
       'mikrotik-hotspot',
@@ -297,32 +297,28 @@ describe('adapter capability declarations (D-028)', () => {
     >;
     expect(by['openwifi-hostapd-radius'].rateFamilies).toEqual([]);
     expect(by['openwifi-hostapd-radius'].octetWidth).toBeNull();
-    expect(
-      by['openwifi-uspot-uam'].rateFamilies.map((f) => [f.family, f.unit, f.down, f.up]),
-    ).toEqual([
+    expect(by['ezeap-uam'].rateFamilies.map((f) => [f.family, f.unit, f.down, f.up])).toEqual([
       ['wispr', 'bps', 'WISPr-Bandwidth-Max-Down', 'WISPr-Bandwidth-Max-Up'],
       ['chillispot', 'kbps', 'ChilliSpot-Bandwidth-Max-Down', 'ChilliSpot-Bandwidth-Max-Up'],
     ]);
-    expect(by['openwifi-uspot-uam'].octetWidth).toBe(32);
-    expect(by['openwifi-uspot-uam'].quotaAttributes).toEqual({
+    expect(by['ezeap-uam'].octetWidth).toBe(32);
+    expect(by['ezeap-uam'].quotaAttributes).toEqual({
       total: 'ChilliSpot-Max-Total-Octets',
     });
-    expect(by['openwifi-uspot-uam'].attributes['ChilliSpot-Max-Input-Octets']?.status).toBe(
-      'UNSUPPORTED',
-    );
+    expect(by['ezeap-uam'].attributes['ChilliSpot-Max-Input-Octets']?.status).toBe('UNSUPPORTED');
     expect(by['uspot-upstream-uam'].octetWidth).toBe(64);
     expect(by['uspot-upstream-uam'].quotaAttributes.totalGigawords).toBe(
       'ChilliSpot-Max-Total-Gigawords',
     );
-    expect(by['coovachilli-uam'].rateFamilies[1]?.down).toBe('CoovaChilli-Bandwidth-Max-Down');
-    expect(by['coovachilli-uam'].quotaAttributes.totalGigawords).toBe(
+    expect(by['ezecloud-uam'].rateFamilies[1]?.down).toBe('CoovaChilli-Bandwidth-Max-Down');
+    expect(by['ezecloud-uam'].quotaAttributes.totalGigawords).toBe(
       'CoovaChilli-Max-Total-Gigawords',
     );
-    expect(by['coovachilli-uam'].octetWidth).toBe(64);
+    expect(by['ezecloud-uam'].octetWidth).toBe(64);
     expect(by['openwifi-config'].granularity).toBe('per-ssid');
     expect(by['openwifi-config'].rateUnit).toBe('mbps-int');
     expect(Object.keys(by['openwifi-config'].attributes)).toEqual([]);
-    expect(by['openwifi-uspot-uam'].coaChange.status).toBe('UNSUPPORTED');
+    expect(by['ezeap-uam'].coaChange.status).toBe('UNSUPPORTED');
     // D-006: no adapter may claim verified dynamic policy modification before device tests
     for (const [key, caps] of Object.entries(by)) {
       expect(caps.coaChange.status, `${key}.coaChange`).not.toBe('VERIFIED_SUPPORTED');
@@ -333,6 +329,6 @@ describe('adapter capability declarations (D-028)', () => {
       'Idle-Timeout',
       'Acct-Interim-Interval',
     ]);
-    expect(by['openwifi-uspot-uam'].disconnect.acctStopEmitted).toBe(false);
+    expect(by['ezeap-uam'].disconnect.acctStopEmitted).toBe(false);
   });
 });

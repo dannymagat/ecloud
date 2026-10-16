@@ -29,7 +29,7 @@ function action(overrides: Partial<ActionContext> = {}): ActionContext {
     nas_identifier: 'nas-1',
     coa_port: null,
     secret_ref: 'env:TEST_NAS_SECRET',
-    adapter_key: 'coovachilli-uam',
+    adapter_key: 'ezecloud-uam',
     ...overrides,
   };
 }
@@ -90,7 +90,7 @@ describe('performDispatch', () => {
 
   it('ACK on TIP uspot (no Acct-Stop after kick) closes the EZECLOUD session', async () => {
     const d = await performDispatch(
-      action({ adapter_key: 'openwifi-uspot-uam', coa_port: 3800 }),
+      action({ adapter_key: 'ezeap-uam', coa_port: 3800 }),
       deps(reply('Received Disconnect-ACK Id 2')),
       { attempt: 1, maxAttempts: 3 },
       NOW,
@@ -163,7 +163,7 @@ describe('performDispatch', () => {
   it('CoA: sends only changeable attributes from the plan', async () => {
     const runner = reply('Received CoA-ACK Id 4');
     const plan = {
-      adapter: 'coovachilli-uam',
+      adapter: 'ezecloud-uam',
       radiusReplyAttributes: [
         { name: 'Session-Timeout', value: 900 },
         { name: 'Class', value: 'ai:x' },

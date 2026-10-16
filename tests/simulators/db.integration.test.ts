@@ -78,13 +78,13 @@ await describeIntegration('L4 simulators: DB-backed scenarios (SIM-05/06/12/17/1
   // org A: one NAS per adapter + a second CoovaChilli at the same site (roaming);
   // org B: one NAS per adapter (cross-tenant).
   const A: Record<string, SimNas> = {
-    'coovachilli-uam': nas(orgA.id, siteA.id, 'coovachilli-uam', 'a-coova'),
-    'openwifi-uspot-uam': nas(orgA.id, siteA.id, 'openwifi-uspot-uam', 'a-tip'),
-    roam: nas(orgA.id, siteA.id, 'coovachilli-uam', 'a-coova-2'),
+    'ezecloud-uam': nas(orgA.id, siteA.id, 'ezecloud-uam', 'a-coova'),
+    'ezeap-uam': nas(orgA.id, siteA.id, 'ezeap-uam', 'a-tip'),
+    roam: nas(orgA.id, siteA.id, 'ezecloud-uam', 'a-coova-2'),
   };
   const B: Record<string, SimNas> = {
-    'coovachilli-uam': nas(orgB.id, siteB.id, 'coovachilli-uam', 'b-coova'),
-    'openwifi-uspot-uam': nas(orgB.id, siteB.id, 'openwifi-uspot-uam', 'b-tip'),
+    'ezecloud-uam': nas(orgB.id, siteB.id, 'ezecloud-uam', 'b-coova'),
+    'ezeap-uam': nas(orgB.id, siteB.id, 'ezeap-uam', 'b-tip'),
   };
   const allNas = [...Object.values(A), ...Object.values(B)];
   const nasOf = (group: Record<string, SimNas>, key: string): SimNas => {
@@ -418,11 +418,11 @@ await describeIntegration('L4 simulators: DB-backed scenarios (SIM-05/06/12/17/1
   describe('accounting through the real drainer / reaper', () => {
     for (const t of TARGETS) {
       const tag = `[${t.adapterKey}]`;
-      const width = t.adapterKey === 'coovachilli-uam' ? 64 : 32;
+      const width = t.adapterKey === 'ezecloud-uam' ? 64 : 32;
 
       it(`SIM-12 ${tag} missing Stop: reaper closes as lost_interim; late Stop not double-counted`, async () => {
         const n = nasOf(A, t.adapterKey);
-        const offset = t.adapterKey === 'coovachilli-uam' ? 0 : 3600;
+        const offset = t.adapterKey === 'ezecloud-uam' ? 0 : 3600;
         const t0 = new Date(Date.UTC(2020, 0, 1, 0, 0, 0) + offset * 1000);
         const at = (min: number): Date => new Date(t0.getTime() + min * 60_000);
         const s = acctSession(n, width);
@@ -479,11 +479,11 @@ await describeIntegration('L4 simulators: DB-backed scenarios (SIM-05/06/12/17/1
       });
     }
 
-    it("SIM-17 [coovachilli-uam] [openwifi-uspot-uam] Accounting-On/Off: that NAS's open sessions marked stale, others untouched, no double count", async () => {
+    it("SIM-17 [ezecloud-uam] [ezeap-uam] Accounting-On/Off: that NAS's open sessions marked stale, others untouched, no double count", async () => {
       const t0 = new Date(Date.UTC(2021, 0, 1, 0, 0, 0));
       const at = (min: number): Date => new Date(t0.getTime() + min * 60_000);
-      const coova = nasOf(A, 'coovachilli-uam');
-      const tip = nasOf(A, 'openwifi-uspot-uam');
+      const coova = nasOf(A, 'ezecloud-uam');
+      const tip = nasOf(A, 'ezeap-uam');
       const s1 = acctSession(coova, 64, { mac: 'AA-BB-CC-00-17-01' });
       const s2 = acctSession(coova, 64, { mac: 'AA-BB-CC-00-17-02' });
       const s3 = acctSession(tip, 32, { mac: 'AA-BB-CC-00-17-03' });
@@ -549,12 +549,12 @@ await describeIntegration('L4 simulators: DB-backed scenarios (SIM-05/06/12/17/1
       expect(Number(after?.session_count) - Number(before?.session_count ?? 0)).toBe(4);
     });
 
-    it('SIM-18 [coovachilli-uam] [openwifi-uspot-uam] roaming across two NAS of one site: two sessions, usage = sum of deltas', async () => {
+    it('SIM-18 [ezecloud-uam] [ezeap-uam] roaming across two NAS of one site: two sessions, usage = sum of deltas', async () => {
       const t0 = new Date(Date.UTC(2022, 0, 1, 0, 0, 0));
       const at = (min: number): Date => new Date(t0.getTime() + min * 60_000);
-      const n1 = nasOf(A, 'coovachilli-uam');
+      const n1 = nasOf(A, 'ezecloud-uam');
       const n2 = nasOf(A, 'roam');
-      const n3 = nasOf(A, 'openwifi-uspot-uam');
+      const n3 = nasOf(A, 'ezeap-uam');
       const mac = 'AA-BB-CC-00-18-01';
       // Same Acct-Session-Id on both NAS (devices may reuse ids): sessions must still be distinct.
       const sameId = randomBytes(8).toString('hex');
@@ -640,13 +640,13 @@ await describeIntegration('L4 simulators: DB-backed scenarios (SIM-05/06/12/17/1
       expect(Number(after?.session_count) - Number(before?.session_count ?? 0)).toBe(3);
     });
 
-    it("SIM-18 [coovachilli-uam] [openwifi-uspot-uam] same MAC / user / Acct-Session-Id on another tenant's NAS: separate sessions", async () => {
+    it("SIM-18 [ezecloud-uam] [ezeap-uam] same MAC / user / Acct-Session-Id on another tenant's NAS: separate sessions", async () => {
       const t0 = new Date(Date.UTC(2022, 0, 2, 0, 0, 0));
       const at = (min: number): Date => new Date(t0.getTime() + min * 60_000);
       const mac = 'AA-BB-CC-00-18-02';
       const sameId = randomBytes(8).toString('hex');
-      const a = acctSession(nasOf(A, 'coovachilli-uam'), 64, { mac, acctSessionId: sameId });
-      const b = acctSession(nasOf(B, 'coovachilli-uam'), 64, { mac, acctSessionId: sameId });
+      const a = acctSession(nasOf(A, 'ezecloud-uam'), 64, { mac, acctSessionId: sameId });
+      const b = acctSession(nasOf(B, 'ezecloud-uam'), 64, { mac, acctSessionId: sameId });
       const beforeA = await totalUsage(userA.id);
       const beforeB = await totalUsage(userB.id);
       await play([
@@ -683,7 +683,7 @@ await describeIntegration('L4 simulators: DB-backed scenarios (SIM-05/06/12/17/1
     // lookups are bound to the authenticated organization AND NAS; a collision is recorded for
     // the reporting organization without a session and audited
     // (`accounting:acct_unique_id_collision`).
-    it("SIM-18 [coovachilli-uam] [openwifi-uspot-uam] colliding Acct-Unique-Session-Id from another tenant's NAS is never merged into the first tenant's session", async () => {
+    it("SIM-18 [ezecloud-uam] [ezeap-uam] colliding Acct-Unique-Session-Id from another tenant's NAS is never merged into the first tenant's session", async () => {
       // acctuniqueid = md5(Class, Acct-Session-Id) (infra/freeradius README contract §3 rule 5) or
       // the stock hash of NAS-supplied attributes: both are chosen by the NAS. An org-B NAS that
       // echoes org A's Class and Acct-Session-Id produces the same acctuniqueid.
@@ -693,12 +693,12 @@ await describeIntegration('L4 simulators: DB-backed scenarios (SIM-05/06/12/17/1
       const cls = simClassFor(sessionUuid);
       const unique = `sim-${RUN}-collide`;
       const acctId = randomBytes(8).toString('hex');
-      const a = acctSession(nasOf(A, 'coovachilli-uam'), 64, {
+      const a = acctSession(nasOf(A, 'ezecloud-uam'), 64, {
         unique,
         acctSessionId: acctId,
         class: cls,
       });
-      const b = acctSession(nasOf(B, 'coovachilli-uam'), 64, {
+      const b = acctSession(nasOf(B, 'ezecloud-uam'), 64, {
         unique,
         acctSessionId: acctId,
         class: cls,
@@ -737,7 +737,7 @@ await describeIntegration('L4 simulators: DB-backed scenarios (SIM-05/06/12/17/1
       expect(sa1).toMatchObject({
         id: sa0?.id,
         organization_id: orgA.id,
-        nas_client_id: nasOf(A, 'coovachilli-uam').id,
+        nas_client_id: nasOf(A, 'ezecloud-uam').id,
         status: sa0?.status,
         input_octets: 1_000,
         output_octets: 2_000,

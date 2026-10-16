@@ -114,7 +114,7 @@ await describeIntegration('@ecloud/api P8-A sessions & accounting against ecloud
       site_id: siteId2,
       name: 'nas-b',
       nas_ip: randomIp(),
-      adapter_key: 'coovachilli-uam',
+      adapter_key: 'ezecloud-uam',
     });
     expect(nas2.status).toBe(201);
     const policy = await agent.post(`/api/v1/orgs/${orgId}/policies`).set(BROWSER).send({

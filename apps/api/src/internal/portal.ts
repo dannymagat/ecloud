@@ -146,13 +146,13 @@ export const PLATFORM_DEFAULT_PORTAL_NAME = 'Platform default (unconfigured site
  */
 export const UAM_FLAVOURS = Object.freeze({
   uspot: {
-    adapterKeys: ['openwifi-uspot-uam', 'uspot-upstream-uam'],
+    adapterKeys: ['ezeap-uam', 'uspot-upstream-uam'],
     portalType: 'uspot',
     path: '/uam/ezeap/',
     legacyPaths: ['/uam/uspot/'],
   },
   chilli: {
-    adapterKeys: ['coovachilli-uam'],
+    adapterKeys: ['ezecloud-uam'],
     portalType: 'coovachilli',
     path: '/uam/ezecloud/',
     legacyPaths: ['/uam/chilli/'],
@@ -220,7 +220,6 @@ interface ResolvedPortal {
   readonly captivePortalId: string;
 }
 
-
 function clientIpOf(value: unknown): string | null {
   return typeof value === 'string' && isIP(value) !== 0 ? value : null;
 }
@@ -240,7 +239,8 @@ function uamServerUrl(
   if (typeof configured === 'string' && /^https?:\/\/[^?#\s]+$/.test(configured)) return configured;
   const spec = UAM_FLAVOURS[flavour];
   const path =
-    entryPath !== undefined && ([spec.path, ...spec.legacyPaths] as readonly string[]).includes(entryPath)
+    entryPath !== undefined &&
+    ([spec.path, ...spec.legacyPaths] as readonly string[]).includes(entryPath)
       ? entryPath
       : spec.path;
   return `${deps.config.base.origins.portal.replace(/\/+$/, '')}${path}`;
@@ -527,7 +527,7 @@ export async function ensurePlatformDefaultPortal(
     .where('published_version_id', 'is', null)
     .returning([...PORTAL_COLUMNS])
     .executeTakeFirst();
-  return (published ?? { ...created, published_version_id: versionId });
+  return published ?? { ...created, published_version_id: versionId };
 }
 
 /**
@@ -644,9 +644,7 @@ async function resolvePortalRow(opts: {
  * defect this replaces was in the wiring, and a test against a reimplementation would have missed
  * it.
  */
-export function resolveExternalPortalId(
-  _deps: AppDeps,
-): (
+export function resolveExternalPortalId(_deps: AppDeps): (
   trx: DbTransaction,
   nas: { id: string; organization_id: string; site_id: string },
   rows: PortalRow[],
@@ -719,7 +717,7 @@ export async function resolvePortal(
     const spec = flavourSpec(flavour);
     if (!spec.adapterKeys.includes(n.adapter_key ?? '')) {
       // Named, not silent: on 2026-10-14 a NAS recreated with `uspot-upstream-uam` instead of
-      // `openwifi-uspot-uam` reported `unknown_nas`, and the row was present and correct.
+      // `ezeap-uam` reported `unknown_nas`, and the row was present and correct.
       return { ok: false, reason: 'adapter_mismatch' };
     }
     const portals = await trx
@@ -744,27 +742,27 @@ export async function resolvePortal(
     return {
       ok: true,
       portal: {
-      captivePortalId: portal.id,
-      nas: {
-        id: n.id,
-        organizationId: n.organization_id,
-        siteId: n.site_id,
-        identifier: n.nas_identifier,
-        adapterKey: n.adapter_key,
-        controllerId: n.controller_id,
-        deploymentMode,
-        uamServerUrl:
-          flavour === 'meraki'
-            ? null
-            : uamServerUrl(deps, flavour, portal.adapter_config, entryPath),
-        uamSecret: openUamSecret(deps, portal.uam_secret_ref, {
-          organizationId: portal.organization_id,
-          portalId: portal.id,
-          secretVersion: portal.uam_secret_version,
-        }),
-        hotspotAddress: n.hotspot_address ?? null,
-        hotspotPort: n.hotspot_port ?? null,
-      },
+        captivePortalId: portal.id,
+        nas: {
+          id: n.id,
+          organizationId: n.organization_id,
+          siteId: n.site_id,
+          identifier: n.nas_identifier,
+          adapterKey: n.adapter_key,
+          controllerId: n.controller_id,
+          deploymentMode,
+          uamServerUrl:
+            flavour === 'meraki'
+              ? null
+              : uamServerUrl(deps, flavour, portal.adapter_config, entryPath),
+          uamSecret: openUamSecret(deps, portal.uam_secret_ref, {
+            organizationId: portal.organization_id,
+            portalId: portal.id,
+            secretVersion: portal.uam_secret_version,
+          }),
+          hotspotAddress: n.hotspot_address ?? null,
+          hotspotPort: n.hotspot_port ?? null,
+        },
       },
     };
   });
@@ -1624,10 +1622,10 @@ export function portalInternalRouter(deps: AppDeps): Router {
           ok: true,
           identity,
           uamSecret: openUamSecret(deps, portal.uam_secret_ref, {
-          organizationId: portal.organization_id,
-          portalId: portal.id,
-          secretVersion: portal.uam_secret_version,
-        }),
+            organizationId: portal.organization_id,
+            portalId: portal.id,
+            secretVersion: portal.uam_secret_version,
+          }),
           // Migration 041: recorded on the credential so AAA and the session know the guest was
           // admitted by a fallback portal rather than one somebody configured.
           platformDefaultPortal: portal.is_platform_default,

@@ -149,7 +149,7 @@ export const GALLERY_ENTRIES: readonly GalleryEntry[] = Object.freeze([
     vendorKey: 'ezeap-openwifi',
     displayName: 'EZEAP',
     productLine: 'EzeLink EZEAP access points',
-    adapterKey: 'openwifi-uspot-uam',
+    adapterKey: 'ezeap-uam',
     profile: null,
     family: 'uam',
     registryVendorKey: 'ezelink',
@@ -165,7 +165,7 @@ export const GALLERY_ENTRIES: readonly GalleryEntry[] = Object.freeze([
     vendorKey: 'coovachilli',
     displayName: 'EZEGW EZECLOUD',
     productLine: 'EzeLink EZEGW gateways (EZEGATE)',
-    adapterKey: 'coovachilli-uam',
+    adapterKey: 'ezecloud-uam',
     profile: null,
     family: 'uam',
     registryVendorKey: 'coova',
@@ -181,7 +181,7 @@ export const GALLERY_ENTRIES: readonly GalleryEntry[] = Object.freeze([
     vendorKey: 'teltonika',
     displayName: 'Teltonika',
     productLine: 'Teltonika RutOS routers (Hotspot, CoovaChilli based)',
-    adapterKey: 'coovachilli-uam',
+    adapterKey: 'ezecloud-uam',
     profile: null,
     family: 'uam',
     registryVendorKey: 'teltonika',
@@ -688,11 +688,11 @@ function rawSteps(entry: GalleryEntry, origin: string): readonly SetupStep[] {
 
 function portalUrlOf(entry: GalleryEntry, origin: string): string | null {
   switch (entry.adapterKey) {
-    case 'openwifi-uspot-uam':
+    case 'ezeap-uam':
       return `${origin}/uam/ezeap/`;
     case 'uspot-upstream-uam':
       return `${origin}/uam/uspot/`;
-    case 'coovachilli-uam':
+    case 'ezecloud-uam':
       return `${origin}/uam/ezecloud/`;
     case 'mikrotik-hotspot':
       return `${origin}/hotspot/mikrotik/`;

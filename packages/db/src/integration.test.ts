@@ -94,8 +94,8 @@ await describeIntegration('@ecloud/db schema', () => {
             [site, legacyOrg],
           );
           for (const [name, ip, key] of [
-            ['chilli', '10.250.0.1', 'coovachilli-uam'],
-            ['uspot', '10.250.0.2', 'openwifi-uspot-uam'],
+            ['chilli', '10.250.0.1', 'ezecloud-uam'],
+            ['uspot', '10.250.0.2', 'ezeap-uam'],
           ] as const) {
             await client.query(
               `INSERT INTO nas_clients (organization_id, site_id, name, nas_ip, adapter_type_key, adapter_key, secret_ref)
@@ -658,8 +658,8 @@ await describeIntegration('@ecloud/db schema', () => {
           .insertInto('nas_clients')
           .values(
             makeNasClient(orgA.id, siteA.id, {
-              adapter_type_key: 'openwifi-uspot-uam',
-              adapter_key: 'coovachilli-uam',
+              adapter_type_key: 'ezeap-uam',
+              adapter_key: 'ezecloud-uam',
             }),
           )
           .execute(),
@@ -668,7 +668,7 @@ await describeIntegration('@ecloud/db schema', () => {
     // the reconciled catalogue holds exactly the engine keys on a fresh database (+ 028..032 adapters)
     const keys = await platform.selectFrom('adapter_types').select('key').orderBy('key').execute();
     expect(keys.map((k) => k.key)).toEqual([
-      'coovachilli-uam',
+      'ezecloud-uam',
       'external-portal-postback',
       'generic-radius-8021x',
       'meraki-splash', // 032
@@ -677,7 +677,7 @@ await describeIntegration('@ecloud/db schema', () => {
       'omada-api', // 031
       'openwifi-config',
       'openwifi-hostapd-radius',
-      'openwifi-uspot-uam',
+      'ezeap-uam',
       'unifi-external-portal', // 031
       'uspot-upstream-uam',
     ]);
@@ -745,7 +745,7 @@ await describeIntegration('@ecloud/db schema', () => {
       // A key another branch's migration (e.g. 030) added, with uppercase and underscore.
       await client.query(`ALTER TABLE nas_clients DROP CONSTRAINT ck_nas_clients_adapter_key`);
       await client.query(
-        `ALTER TABLE nas_clients ADD CONSTRAINT ck_nas_clients_adapter_key CHECK (adapter_key IS NULL OR adapter_key IN ('coovachilli-uam', 'Future_Key-030'))`,
+        `ALTER TABLE nas_clients ADD CONSTRAINT ck_nas_clients_adapter_key CHECK (adapter_key IS NULL OR adapter_key IN ('ezecloud-uam', 'Future_Key-030'))`,
       );
       await client.query(
         `ALTER TABLE captive_portals DROP CONSTRAINT ck_captive_portals_portal_type`,
@@ -756,7 +756,7 @@ await describeIntegration('@ecloud/db schema', () => {
       await client.query(migration029);
       await client.query(migration029); // idempotent
       const adapterDef = await def('nas_clients', 'ck_nas_clients_adapter_key');
-      for (const key of ['coovachilli-uam', 'Future_Key-030', 'mikrotik-hotspot'])
+      for (const key of ['ezecloud-uam', 'Future_Key-030', 'mikrotik-hotspot'])
         expect(adapterDef).toContain(`'${key}'`);
       expect(adapterDef.match(/'mikrotik-hotspot'/g)).toHaveLength(1);
       const portalDef = await def('captive_portals', 'ck_captive_portals_portal_type');
@@ -1097,11 +1097,11 @@ await describeIntegration('@ecloud/db schema', () => {
       try {
         await client.query('ALTER TABLE nas_clients DROP CONSTRAINT ck_nas_clients_adapter_key');
         await client.query(`ALTER TABLE nas_clients ADD CONSTRAINT ck_nas_clients_adapter_key CHECK (
-          adapter_key IS NULL OR adapter_key IN ('coovachilli-uam', 'zz-future_adapter-9'))`);
+          adapter_key IS NULL OR adapter_key IN ('ezecloud-uam', 'zz-future_adapter-9'))`);
         await client.query(sqlText);
         const first = await adapterCheck();
         expect(first).toContain("'zz-future_adapter-9'");
-        expect(first).toContain("'coovachilli-uam'");
+        expect(first).toContain("'ezecloud-uam'");
         expect(first).toContain("'meraki-splash'");
         await client.query(sqlText);
         expect(await adapterCheck()).toBe(first);

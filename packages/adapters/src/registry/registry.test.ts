@@ -36,15 +36,15 @@ describe('compatibility registry data', () => {
         r.lifecycle,
       ]),
     ).toEqual([
-      ['ezelink-eze-ap1832-r32912-tip-uspot', 'openwifi-uspot-uam', 'implemented'],
+      ['ezelink-eze-ap1832-r32912-tip-uspot', 'ezeap-uam', 'implemented'],
       ['ezelink-eze-ap1832-r32912-hostapd-radius', 'openwifi-hostapd-radius', 'implemented'],
       ['ezelink-eze-ap1832-r32912-ucentral-config', 'openwifi-config', 'implemented'],
       ['openwrt-uspot-upstream', 'uspot-upstream-uam', 'implemented'],
-      ['coova-chilli-1.2.9-ezegate', 'coovachilli-uam', 'implemented'],
-      ['coova-chilli-master', 'coovachilli-uam', 'implemented'],
+      ['coova-chilli-1.2.9-ezegate', 'ezecloud-uam', 'implemented'],
+      ['coova-chilli-master', 'ezecloud-uam', 'implemented'],
       ['generic-radius-8021x', 'generic-radius-8021x', 'implemented'],
       ['mikrotik-routeros-hotspot', 'mikrotik-hotspot', 'implemented'],
-      ['teltonika-rutos-hotspot', 'coovachilli-uam', 'implemented'],
+      ['teltonika-rutos-hotspot', 'ezecloud-uam', 'implemented'],
       ['external-portal-postback', 'external-portal-postback', 'implemented'],
       // Cycle E (D-044): Cisco Meraki MR splash sign-on, build/test only (flag default OFF).
       ['cisco-meraki-mr-splash-signon', 'meraki-splash', 'implemented'],
@@ -105,7 +105,7 @@ describe('compatibility registry data', () => {
     const master = presentCells(row('coova-chilli-master').capabilities);
     expect(master.filter((c) => c.status === 'VERIFIED_SUPPORTED')).toHaveLength(9);
     // Engine declaration untouched by the override.
-    expect(getAdapter('coovachilli-uam').capabilities().fields.download_rate_kbps.status).toBe(
+    expect(getAdapter('ezecloud-uam').capabilities().fields.download_rate_kbps.status).toBe(
       'VERIFIED_SUPPORTED',
     );
   });

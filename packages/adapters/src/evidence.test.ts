@@ -35,7 +35,7 @@ const all = listCapabilities().flatMap((c) =>
  * would test the device twice with the same packet.
  */
 const BACKFILL: Readonly<Record<string, Readonly<Record<string, readonly string[]>>>> = {
-  'openwifi-uspot-uam': {
+  'ezeap-uam': {
     'fields.download_rate_kbps': ['V-052', 'V-053'],
     'fields.upload_rate_kbps': ['V-052', 'V-053'],
     'fields.quota_daily_bytes': ['V-054'],
@@ -80,7 +80,7 @@ const BACKFILL: Readonly<Record<string, Readonly<Record<string, readonly string[
     'attributes.Acct-Interim-Interval': ['V-146'],
     'attributes.Class': ['V-056'],
   },
-  'coovachilli-uam': {
+  'ezecloud-uam': {
     'fields.download_rate_kbps': ['V-073'],
     'fields.upload_rate_kbps': ['V-073'],
     'fields.quota_daily_bytes': ['V-073'],
@@ -182,7 +182,7 @@ describe('evidence levels (plan §4.2)', () => {
 
   it('coova-chilli source evidence is scoped to upstream master (EZEGATE runs 1.2.9)', () => {
     for (const { key, f } of all)
-      if (key === 'coovachilli-uam' && f.evidenceLevel === 'VERIFIED_FROM_SOURCE')
+      if (key === 'ezecloud-uam' && f.evidenceLevel === 'VERIFIED_FROM_SOURCE')
         for (const r of f.evidenceRefs ?? []) expect(r.appliesTo).toBe('coova-chilli master');
   });
 

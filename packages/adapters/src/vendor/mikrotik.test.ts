@@ -259,7 +259,7 @@ describe('mikrotik-hotspot redirect parsing and validation', () => {
       reason: 'unknown_nas',
     });
     expect(
-      await mt.validateContext(parsed, lookup({}, { ...NAS, adapterKey: 'coovachilli-uam' })),
+      await mt.validateContext(parsed, lookup({}, { ...NAS, adapterKey: 'ezecloud-uam' })),
     ).toMatchObject({ reason: 'unknown_nas' });
     expect(
       await mt.validateContext(
@@ -416,8 +416,8 @@ describe('mikrotik-hotspot engine adapter (attribute rendering)', () => {
       quota_reset_s: null,
       remaining_octets: 6_000_000_000n,
       remaining_period: 'total',
-    remaining_time_s: null,
-    remaining_time_period: null,
+      remaining_time_s: null,
+      remaining_time_period: null,
       drain_time_s: null,
       min_session_s: 300,
     },
@@ -506,11 +506,11 @@ describe('generated artefacts and setup guides', () => {
     for (const s of steps) expect(s.evidenceRefs.length).toBeGreaterThan(0);
   });
 
-  it('Teltonika profile rides on coovachilli-uam with its own guide and the V11-overridden row', () => {
+  it('Teltonika profile rides on ezecloud-uam with its own guide and the V11-overridden row', () => {
     const t = getVendorProfile('teltonika');
-    expect(t?.key).toBe('coovachilli-uam');
+    expect(t?.key).toBe('ezecloud-uam');
     expect(t?.vendorKey).toBe('teltonika');
-    expect(t?.engine).toBe(getAdapter('coovachilli-uam'));
+    expect(t?.engine).toBe(getAdapter('ezecloud-uam'));
     const guide = t?.buildSetupGuide({ siteId: 's', nasId: 'nas-1' }) ?? [];
     const text = guide.map((s) => `${s.title} ${s.value}`).join('\n');
     expect(text).toContain('/uam/ezecloud/');

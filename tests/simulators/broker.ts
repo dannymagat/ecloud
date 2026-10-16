@@ -117,7 +117,7 @@ export function dbNasLookup(
         identifier: n.nas_identifier,
         adapterKey: n.adapter_key,
         controllerId: null,
-        deploymentMode: n.adapter_key === 'coovachilli-uam' ? 'gateway' : 'native',
+        deploymentMode: n.adapter_key === 'ezecloud-uam' ? 'gateway' : 'native',
         uamServerUrl: uam?.uamServerUrl ?? null,
         uamSecret: uam?.uamSecret ?? null,
       };

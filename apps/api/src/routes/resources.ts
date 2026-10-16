@@ -7,6 +7,7 @@ import {
   getGalleryEntry,
   parsePostbackNasConfig,
   serializePostbackNasConfig,
+  normalizeAdapterKey,
 } from '@ecloud/adapters';
 import { hashPassword, withPlatform } from '@ecloud/db';
 import { ScheduleRuleSchema, isValidTimeZone } from '@ecloud/policy-engine';
@@ -123,7 +124,10 @@ const NasCreate = z.strictObject({
    * too (AP MAC identity, tenant, site) but are never RADIUS engine adapters (no reply
    * attributes, no CoA; `nasAdapter()` returns null for them).
    */
-  adapter_key: z.enum([...NAS_ADAPTER_KEYS, ...VENDOR_API_ADAPTER_KEYS]),
+  adapter_key: z.preprocess(
+    (v) => (typeof v === 'string' ? normalizeAdapterKey(v) : v),
+    z.enum([...NAS_ADAPTER_KEYS, ...VENDOR_API_ADAPTER_KEYS]),
+  ),
   network_device_id: z.uuid().nullable().optional(),
   coa_port: z.number().int().min(1).max(65535).nullable().optional(),
   coa_supported: z.boolean().nullable().optional(),
@@ -305,7 +309,6 @@ const ScheduleCreate = z.strictObject({
 });
 const ScheduleUpdate = ScheduleCreate.partial();
 
-
 // --- migration 040: reusable speed presets and the commercial plan wrapper -------------------
 
 const rateKbps = z.number().int().min(1).max(4_294_967);
@@ -369,7 +372,10 @@ const planShape = {
     .nullable()
     .optional(),
   display_order: z.number().int().min(0).max(10_000).optional(),
-  eligible_auth_methods: z.array(z.enum(PLAN_AUTH_METHODS)).max(PLAN_AUTH_METHODS.length).optional(),
+  eligible_auth_methods: z
+    .array(z.enum(PLAN_AUTH_METHODS))
+    .max(PLAN_AUTH_METHODS.length)
+    .optional(),
   validity_duration_s: z.number().int().min(1).nullable().optional(),
   activation_trigger: z.enum(['creation', 'purchase', 'first_login']).optional(),
 };
@@ -926,9 +932,7 @@ export function resourceRoutes(deps: AppDeps): AnyRouteSpec[] {
           'nas:read',
         );
         if (before.status !== 'blocked') {
-          throw new ValidationError([
-            { path: 'params.id', message: 'this NAS is not blocked' },
-          ]);
+          throw new ValidationError([{ path: 'params.id', message: 'this NAS is not blocked' }]);
         }
         const updated = await loose(trx)
           .updateTable('nas_clients')

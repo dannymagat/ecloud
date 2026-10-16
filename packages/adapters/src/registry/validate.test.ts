@@ -67,7 +67,7 @@ describe('registry validator (V1–V12)', () => {
 
   it('V1: VERIFIED_SUPPORTED with DOCUMENTED evidence fails', () => {
     const input = baseInput();
-    const f = adapterOf(input, 'coovachilli-uam').fields.download_rate_kbps;
+    const f = adapterOf(input, 'ezecloud-uam').fields.download_rate_kbps;
     f.evidenceLevel = 'DOCUMENTED';
     expect(rules(input)).toEqual(['V1']);
   });
@@ -104,8 +104,7 @@ describe('registry validator (V1–V12)', () => {
     expect(rules(otherFw)).toContain('V3');
 
     const adapter = baseInput();
-    adapterOf(adapter, 'openwifi-uspot-uam').fields.session_timeout_s.evidenceLevel =
-      'LAB_VALIDATED';
+    adapterOf(adapter, 'ezeap-uam').fields.session_timeout_s.evidenceLevel = 'LAB_VALIDATED';
     expect(rules(adapter)).toEqual(['V3']);
   });
 
@@ -161,7 +160,7 @@ describe('registry validator (V1–V12)', () => {
 
   it('V5: Disconnect / CoA VERIFIED_SUPPORTED without LAB_VALIDATED fails (D-006)', () => {
     const input = baseInput();
-    const d = adapterOf(input, 'coovachilli-uam').disconnect;
+    const d = adapterOf(input, 'ezecloud-uam').disconnect;
     d.status = 'VERIFIED_SUPPORTED';
     d.evidenceLevel = 'VERIFIED_FROM_SOURCE';
     d.evidenceRefs = [{ kind: 'source', ref: 'V-074', appliesTo: 'coova-chilli master' }];
@@ -170,7 +169,7 @@ describe('registry validator (V1–V12)', () => {
 
   it('V6: a researched row with an adapter, a verified cell or a URL-less fact fails', () => {
     const adapter = baseInput();
-    rowOf(adapter, CAMBIUM).adapterKey = 'coovachilli-uam';
+    rowOf(adapter, CAMBIUM).adapterKey = 'ezecloud-uam';
     expect(rules(adapter)).toContain('V6');
 
     const verified = baseInput();
@@ -221,7 +220,7 @@ describe('registry validator (V1–V12)', () => {
 
   it('V10: VERIFIED_FROM_SOURCE with only a doc-section reference fails', () => {
     const input = baseInput();
-    const f = adapterOf(input, 'openwifi-uspot-uam').fields.idle_timeout_s;
+    const f = adapterOf(input, 'ezeap-uam').fields.idle_timeout_s;
     f.evidenceRefs = [{ kind: 'doc-section', ref: 'CAPTIVE_PORTAL_ARCHITECTURE.md §3.4' }];
     expect(rules(input)).toEqual(['V10']);
   });

@@ -4692,6 +4692,16 @@
               "schema": {
                 "additionalProperties": false,
                 "properties": {
+                  "bandwidth_profile_id": {
+                    "anyOf": [
+                      {
+                        "format": "uuid",
+                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                        "type": "string"
+                      },
+                      { "type": "null" }
+                    ]
+                  },
                   "burst_download_kbps": {
                     "anyOf": [
                       { "exclusiveMinimum": 0, "maximum": 9007199254740991, "type": "integer" },
@@ -4737,6 +4747,30 @@
                     ]
                   },
                   "name": { "maxLength": 200, "minLength": 1, "type": "string" },
+                  "online_time_daily_s": {
+                    "anyOf": [
+                      { "exclusiveMinimum": 0, "maximum": 9007199254740991, "type": "integer" },
+                      { "type": "null" }
+                    ]
+                  },
+                  "online_time_monthly_s": {
+                    "anyOf": [
+                      { "exclusiveMinimum": 0, "maximum": 9007199254740991, "type": "integer" },
+                      { "type": "null" }
+                    ]
+                  },
+                  "online_time_total_s": {
+                    "anyOf": [
+                      { "exclusiveMinimum": 0, "maximum": 9007199254740991, "type": "integer" },
+                      { "type": "null" }
+                    ]
+                  },
+                  "online_time_weekly_s": {
+                    "anyOf": [
+                      { "exclusiveMinimum": 0, "maximum": 9007199254740991, "type": "integer" },
+                      { "type": "null" }
+                    ]
+                  },
                   "priority": { "maximum": 10000, "minimum": 0, "type": "integer" },
                   "quota_daily_bytes": {
                     "anyOf": [
@@ -4746,6 +4780,18 @@
                           { "pattern": "^[1-9][0-9]*$", "type": "string" }
                         ]
                       },
+                      { "type": "null" }
+                    ]
+                  },
+                  "quota_direction": {
+                    "anyOf": [
+                      { "enum": ["combined", "upload", "download"], "type": "string" },
+                      { "type": "null" }
+                    ]
+                  },
+                  "quota_exhaustion_action": {
+                    "anyOf": [
+                      { "enum": ["deny", "reduce_speed", "require_renewal"], "type": "string" },
                       { "type": "null" }
                     ]
                   },
@@ -4768,6 +4814,35 @@
                           { "pattern": "^[1-9][0-9]*$", "type": "string" }
                         ]
                       },
+                      { "type": "null" }
+                    ]
+                  },
+                  "quota_weekly_bytes": {
+                    "anyOf": [
+                      {
+                        "anyOf": [
+                          { "exclusiveMinimum": 0, "maximum": 9007199254740991, "type": "integer" },
+                          { "pattern": "^[1-9][0-9]*$", "type": "string" }
+                        ]
+                      },
+                      { "type": "null" }
+                    ]
+                  },
+                  "reconnect_cooldown_s": {
+                    "anyOf": [
+                      { "exclusiveMinimum": 0, "maximum": 9007199254740991, "type": "integer" },
+                      { "type": "null" }
+                    ]
+                  },
+                  "reduced_download_rate_kbps": {
+                    "anyOf": [
+                      { "exclusiveMinimum": 0, "maximum": 9007199254740991, "type": "integer" },
+                      { "type": "null" }
+                    ]
+                  },
+                  "reduced_upload_rate_kbps": {
+                    "anyOf": [
+                      { "exclusiveMinimum": 0, "maximum": 9007199254740991, "type": "integer" },
                       { "type": "null" }
                     ]
                   },
@@ -4802,6 +4877,33 @@
                     ]
                   },
                   "status": { "enum": ["draft", "active", "retired"], "type": "string" },
+                  "unlimited_fields": {
+                    "items": {
+                      "enum": [
+                        "download_rate_kbps",
+                        "upload_rate_kbps",
+                        "burst_download_kbps",
+                        "burst_upload_kbps",
+                        "burst_duration_s",
+                        "quota_daily_bytes",
+                        "quota_weekly_bytes",
+                        "quota_monthly_bytes",
+                        "quota_total_bytes",
+                        "online_time_daily_s",
+                        "online_time_weekly_s",
+                        "online_time_monthly_s",
+                        "online_time_total_s",
+                        "session_timeout_s",
+                        "idle_timeout_s",
+                        "max_concurrent_sessions",
+                        "max_devices",
+                        "valid_until",
+                        "schedule_id"
+                      ],
+                      "type": "string"
+                    },
+                    "type": "array"
+                  },
                   "upload_rate_kbps": {
                     "anyOf": [
                       { "exclusiveMinimum": 0, "maximum": 9007199254740991, "type": "integer" },
@@ -4942,9 +5044,9 @@
             "schema": {
               "enum": [
                 "openwifi-hostapd-radius",
-                "openwifi-uspot-uam",
+                "ezeap-uam",
                 "uspot-upstream-uam",
-                "coovachilli-uam",
+                "ezecloud-uam",
                 "openwifi-config",
                 "generic-radius-8021x",
                 "mikrotik-hotspot",
@@ -5147,6 +5249,16 @@
               "schema": {
                 "additionalProperties": false,
                 "properties": {
+                  "bandwidth_profile_id": {
+                    "anyOf": [
+                      {
+                        "format": "uuid",
+                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                        "type": "string"
+                      },
+                      { "type": "null" }
+                    ]
+                  },
                   "burst_download_kbps": {
                     "anyOf": [
                       { "exclusiveMinimum": 0, "maximum": 9007199254740991, "type": "integer" },
@@ -5192,6 +5304,30 @@
                     ]
                   },
                   "name": { "maxLength": 200, "minLength": 1, "type": "string" },
+                  "online_time_daily_s": {
+                    "anyOf": [
+                      { "exclusiveMinimum": 0, "maximum": 9007199254740991, "type": "integer" },
+                      { "type": "null" }
+                    ]
+                  },
+                  "online_time_monthly_s": {
+                    "anyOf": [
+                      { "exclusiveMinimum": 0, "maximum": 9007199254740991, "type": "integer" },
+                      { "type": "null" }
+                    ]
+                  },
+                  "online_time_total_s": {
+                    "anyOf": [
+                      { "exclusiveMinimum": 0, "maximum": 9007199254740991, "type": "integer" },
+                      { "type": "null" }
+                    ]
+                  },
+                  "online_time_weekly_s": {
+                    "anyOf": [
+                      { "exclusiveMinimum": 0, "maximum": 9007199254740991, "type": "integer" },
+                      { "type": "null" }
+                    ]
+                  },
                   "priority": { "maximum": 10000, "minimum": 0, "type": "integer" },
                   "quota_daily_bytes": {
                     "anyOf": [
@@ -5201,6 +5337,18 @@
                           { "pattern": "^[1-9][0-9]*$", "type": "string" }
                         ]
                       },
+                      { "type": "null" }
+                    ]
+                  },
+                  "quota_direction": {
+                    "anyOf": [
+                      { "enum": ["combined", "upload", "download"], "type": "string" },
+                      { "type": "null" }
+                    ]
+                  },
+                  "quota_exhaustion_action": {
+                    "anyOf": [
+                      { "enum": ["deny", "reduce_speed", "require_renewal"], "type": "string" },
                       { "type": "null" }
                     ]
                   },
@@ -5223,6 +5371,35 @@
                           { "pattern": "^[1-9][0-9]*$", "type": "string" }
                         ]
                       },
+                      { "type": "null" }
+                    ]
+                  },
+                  "quota_weekly_bytes": {
+                    "anyOf": [
+                      {
+                        "anyOf": [
+                          { "exclusiveMinimum": 0, "maximum": 9007199254740991, "type": "integer" },
+                          { "pattern": "^[1-9][0-9]*$", "type": "string" }
+                        ]
+                      },
+                      { "type": "null" }
+                    ]
+                  },
+                  "reconnect_cooldown_s": {
+                    "anyOf": [
+                      { "exclusiveMinimum": 0, "maximum": 9007199254740991, "type": "integer" },
+                      { "type": "null" }
+                    ]
+                  },
+                  "reduced_download_rate_kbps": {
+                    "anyOf": [
+                      { "exclusiveMinimum": 0, "maximum": 9007199254740991, "type": "integer" },
+                      { "type": "null" }
+                    ]
+                  },
+                  "reduced_upload_rate_kbps": {
+                    "anyOf": [
+                      { "exclusiveMinimum": 0, "maximum": 9007199254740991, "type": "integer" },
                       { "type": "null" }
                     ]
                   },
@@ -5257,6 +5434,33 @@
                     ]
                   },
                   "status": { "enum": ["draft", "active", "retired"], "type": "string" },
+                  "unlimited_fields": {
+                    "items": {
+                      "enum": [
+                        "download_rate_kbps",
+                        "upload_rate_kbps",
+                        "burst_download_kbps",
+                        "burst_upload_kbps",
+                        "burst_duration_s",
+                        "quota_daily_bytes",
+                        "quota_weekly_bytes",
+                        "quota_monthly_bytes",
+                        "quota_total_bytes",
+                        "online_time_daily_s",
+                        "online_time_weekly_s",
+                        "online_time_monthly_s",
+                        "online_time_total_s",
+                        "session_timeout_s",
+                        "idle_timeout_s",
+                        "max_concurrent_sessions",
+                        "max_devices",
+                        "valid_until",
+                        "schedule_id"
+                      ],
+                      "type": "string"
+                    },
+                    "type": "array"
+                  },
                   "upload_rate_kbps": {
                     "anyOf": [
                       { "exclusiveMinimum": 0, "maximum": 9007199254740991, "type": "integer" },
@@ -5376,6 +5580,16 @@
               "schema": {
                 "additionalProperties": false,
                 "properties": {
+                  "bandwidth_profile_id": {
+                    "anyOf": [
+                      {
+                        "format": "uuid",
+                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                        "type": "string"
+                      },
+                      { "type": "null" }
+                    ]
+                  },
                   "burst_download_kbps": {
                     "anyOf": [
                       { "exclusiveMinimum": 0, "maximum": 9007199254740991, "type": "integer" },
@@ -5422,6 +5636,30 @@
                     ]
                   },
                   "name": { "maxLength": 200, "minLength": 1, "type": "string" },
+                  "online_time_daily_s": {
+                    "anyOf": [
+                      { "exclusiveMinimum": 0, "maximum": 9007199254740991, "type": "integer" },
+                      { "type": "null" }
+                    ]
+                  },
+                  "online_time_monthly_s": {
+                    "anyOf": [
+                      { "exclusiveMinimum": 0, "maximum": 9007199254740991, "type": "integer" },
+                      { "type": "null" }
+                    ]
+                  },
+                  "online_time_total_s": {
+                    "anyOf": [
+                      { "exclusiveMinimum": 0, "maximum": 9007199254740991, "type": "integer" },
+                      { "type": "null" }
+                    ]
+                  },
+                  "online_time_weekly_s": {
+                    "anyOf": [
+                      { "exclusiveMinimum": 0, "maximum": 9007199254740991, "type": "integer" },
+                      { "type": "null" }
+                    ]
+                  },
                   "priority": { "maximum": 10000, "minimum": 0, "type": "integer" },
                   "quota_daily_bytes": {
                     "anyOf": [
@@ -5431,6 +5669,18 @@
                           { "pattern": "^[1-9][0-9]*$", "type": "string" }
                         ]
                       },
+                      { "type": "null" }
+                    ]
+                  },
+                  "quota_direction": {
+                    "anyOf": [
+                      { "enum": ["combined", "upload", "download"], "type": "string" },
+                      { "type": "null" }
+                    ]
+                  },
+                  "quota_exhaustion_action": {
+                    "anyOf": [
+                      { "enum": ["deny", "reduce_speed", "require_renewal"], "type": "string" },
                       { "type": "null" }
                     ]
                   },
@@ -5453,6 +5703,35 @@
                           { "pattern": "^[1-9][0-9]*$", "type": "string" }
                         ]
                       },
+                      { "type": "null" }
+                    ]
+                  },
+                  "quota_weekly_bytes": {
+                    "anyOf": [
+                      {
+                        "anyOf": [
+                          { "exclusiveMinimum": 0, "maximum": 9007199254740991, "type": "integer" },
+                          { "pattern": "^[1-9][0-9]*$", "type": "string" }
+                        ]
+                      },
+                      { "type": "null" }
+                    ]
+                  },
+                  "reconnect_cooldown_s": {
+                    "anyOf": [
+                      { "exclusiveMinimum": 0, "maximum": 9007199254740991, "type": "integer" },
+                      { "type": "null" }
+                    ]
+                  },
+                  "reduced_download_rate_kbps": {
+                    "anyOf": [
+                      { "exclusiveMinimum": 0, "maximum": 9007199254740991, "type": "integer" },
+                      { "type": "null" }
+                    ]
+                  },
+                  "reduced_upload_rate_kbps": {
+                    "anyOf": [
+                      { "exclusiveMinimum": 0, "maximum": 9007199254740991, "type": "integer" },
                       { "type": "null" }
                     ]
                   },
@@ -5487,6 +5766,33 @@
                     ]
                   },
                   "status": { "enum": ["draft", "active", "retired"], "type": "string" },
+                  "unlimited_fields": {
+                    "items": {
+                      "enum": [
+                        "download_rate_kbps",
+                        "upload_rate_kbps",
+                        "burst_download_kbps",
+                        "burst_upload_kbps",
+                        "burst_duration_s",
+                        "quota_daily_bytes",
+                        "quota_weekly_bytes",
+                        "quota_monthly_bytes",
+                        "quota_total_bytes",
+                        "online_time_daily_s",
+                        "online_time_weekly_s",
+                        "online_time_monthly_s",
+                        "online_time_total_s",
+                        "session_timeout_s",
+                        "idle_timeout_s",
+                        "max_concurrent_sessions",
+                        "max_devices",
+                        "valid_until",
+                        "schedule_id"
+                      ],
+                      "type": "string"
+                    },
+                    "type": "array"
+                  },
                   "upload_rate_kbps": {
                     "anyOf": [
                       { "exclusiveMinimum": 0, "maximum": 9007199254740991, "type": "integer" },
@@ -6254,13 +6560,57 @@
                             "type": "string"
                           },
                           "adapter_key": { "type": ["string", "null"] },
+                          "advisories": {
+                            "items": {
+                              "enum": ["ON_PLATFORM_DEFAULT_POLICY", "ON_PLATFORM_DEFAULT_PORTAL"],
+                              "type": "string"
+                            },
+                            "type": "array"
+                          },
+                          "block_reason": { "type": ["string", "null"] },
                           "has_secret": { "type": "boolean" },
                           "id": { "type": "string" },
+                          "is_adopted": { "type": "boolean" },
                           "last_activity_at": { "type": ["string", "null"] },
                           "name": { "type": "string" },
                           "nas_ip": { "type": ["string", "null"] },
+                          "pending_reasons": {
+                            "items": {
+                              "enum": [
+                                "NOT_ADOPTED",
+                                "IDENTITY_CONFLICT",
+                                "OWNERSHIP_UNRESOLVED",
+                                "POLICY_UNAVAILABLE",
+                                "POLICY_DISABLED",
+                                "NO_POLICY"
+                              ],
+                              "type": "string"
+                            },
+                            "type": "array"
+                          },
+                          "policy_evaluated": { "type": "boolean" },
+                          "primary_reason": {
+                            "anyOf": [
+                              {
+                                "enum": [
+                                  "NOT_ADOPTED",
+                                  "IDENTITY_CONFLICT",
+                                  "OWNERSHIP_UNRESOLVED",
+                                  "POLICY_UNAVAILABLE",
+                                  "POLICY_DISABLED",
+                                  "NO_POLICY"
+                                ],
+                                "type": "string"
+                              },
+                              { "type": "null" }
+                            ]
+                          },
                           "site_id": { "type": "string" },
                           "site_name": { "type": "string" },
+                          "state": {
+                            "enum": ["blocked", "disabled", "pending", "active"],
+                            "type": "string"
+                          },
                           "status": { "type": "string" },
                           "vendor_key": { "type": ["string", "null"] },
                           "vendor_name": { "type": ["string", "null"] }
@@ -6278,7 +6628,14 @@
                           "has_secret",
                           "activity",
                           "last_activity_at",
-                          "access_points"
+                          "access_points",
+                          "state",
+                          "pending_reasons",
+                          "primary_reason",
+                          "advisories",
+                          "policy_evaluated",
+                          "is_adopted",
+                          "block_reason"
                         ],
                         "type": "object"
                       },
@@ -6577,6 +6934,183 @@
         },
         "summary": "Download the EZECLOUD login.html of a MikroTik NAS HotSpot (Cycle B generator)",
         "tags": ["nas"]
+      }
+    },
+    "/api/v1/orgs/{orgId}/nas/{id}/adopt": {
+      "post": {
+        "description": "Permission: `nas:adopt`",
+        "operationId": "post_api_v1_orgs_orgId_nas_id_adopt",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "orgId",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "expect_site_id": {
+                    "format": "uuid",
+                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                    "type": "string"
+                  },
+                  "policy_id": {
+                    "format": "uuid",
+                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                    "type": "string"
+                  }
+                },
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "advisories": {
+                      "items": {
+                        "enum": ["ON_PLATFORM_DEFAULT_POLICY", "ON_PLATFORM_DEFAULT_PORTAL"],
+                        "type": "string"
+                      },
+                      "type": "array"
+                    },
+                    "assigned_site_id": {
+                      "anyOf": [
+                        {
+                          "format": "uuid",
+                          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                          "type": "string"
+                        },
+                        { "type": "null" }
+                      ]
+                    },
+                    "id": {
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                      "type": "string"
+                    },
+                    "is_adopted": { "type": "boolean" },
+                    "pending_reasons": {
+                      "items": {
+                        "enum": [
+                          "NOT_ADOPTED",
+                          "IDENTITY_CONFLICT",
+                          "OWNERSHIP_UNRESOLVED",
+                          "POLICY_UNAVAILABLE",
+                          "POLICY_DISABLED",
+                          "NO_POLICY"
+                        ],
+                        "type": "string"
+                      },
+                      "type": "array"
+                    },
+                    "policy_source": {
+                      "enum": ["assigned", "platform_default", "missing"],
+                      "type": "string"
+                    },
+                    "primary_reason": {
+                      "anyOf": [
+                        {
+                          "enum": [
+                            "NOT_ADOPTED",
+                            "IDENTITY_CONFLICT",
+                            "OWNERSHIP_UNRESOLVED",
+                            "POLICY_UNAVAILABLE",
+                            "POLICY_DISABLED",
+                            "NO_POLICY"
+                          ],
+                          "type": "string"
+                        },
+                        { "type": "null" }
+                      ]
+                    },
+                    "state": {
+                      "enum": ["blocked", "disabled", "pending", "active"],
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "is_adopted",
+                    "state",
+                    "pending_reasons",
+                    "primary_reason",
+                    "advisories",
+                    "policy_source",
+                    "assigned_site_id"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Adopted; `state` is the derived eligibility, not an assertion of success"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Validation failed (application/problem+json)"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Authentication required"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Permission denied"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Not found (also returned for objects of other tenants)"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "The NAS is blocked; adoption is prohibited (§5)"
+          }
+        },
+        "summary": "Adopt a NAS and confirm a policy resolves for it (§7)",
+        "tags": ["access-points"]
       }
     },
     "/api/v1/orgs/{orgId}/sites": {
@@ -7463,7 +7997,7 @@
           {
             "in": "query",
             "name": "status",
-            "schema": { "enum": ["active", "disabled"], "type": "string" }
+            "schema": { "enum": ["active", "disabled", "blocked"], "type": "string" }
           },
           {
             "in": "query",
@@ -7561,9 +8095,9 @@
                   "adapter_key": {
                     "enum": [
                       "openwifi-hostapd-radius",
-                      "openwifi-uspot-uam",
+                      "ezeap-uam",
                       "uspot-upstream-uam",
-                      "coovachilli-uam",
+                      "ezecloud-uam",
                       "generic-radius-8021x",
                       "mikrotik-hotspot",
                       "external-portal-postback",
@@ -7876,9 +8410,9 @@
                   "adapter_key": {
                     "enum": [
                       "openwifi-hostapd-radius",
-                      "openwifi-uspot-uam",
+                      "ezeap-uam",
                       "uspot-upstream-uam",
-                      "coovachilli-uam",
+                      "ezecloud-uam",
                       "generic-radius-8021x",
                       "mikrotik-hotspot",
                       "external-portal-postback",
@@ -8111,6 +8645,173 @@
           }
         },
         "summary": "Rotate the RADIUS shared secret of a NAS (returned once)",
+        "tags": ["nas"]
+      }
+    },
+    "/api/v1/orgs/{orgId}/nas/{id}/block": {
+      "post": {
+        "description": "Permission: `nas:block`",
+        "operationId": "post_api_v1_orgs_orgId_nas_id_block",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "orgId",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": { "reason": { "maxLength": 500, "minLength": 1, "type": "string" } },
+                "required": ["reason"],
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {},
+                  "properties": { "id": { "type": "string" } },
+                  "required": ["id"],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Blocked"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Validation failed (application/problem+json)"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Authentication required"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Permission denied"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Not found (also returned for objects of other tenants)"
+          }
+        },
+        "summary": "Prohibit a NAS: denied for authorization and for automatic adoption (§5)",
+        "tags": ["nas"]
+      }
+    },
+    "/api/v1/orgs/{orgId}/nas/{id}/unblock": {
+      "post": {
+        "description": "Permission: `nas:block`",
+        "operationId": "post_api_v1_orgs_orgId_nas_id_unblock",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "orgId",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {},
+                  "properties": { "id": { "type": "string" } },
+                  "required": ["id"],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Unblocked"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Validation failed (application/problem+json)"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Authentication required"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Permission denied"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Not found (also returned for objects of other tenants)"
+          }
+        },
+        "summary": "Lift a block, leaving the NAS disabled rather than active (§11)",
         "tags": ["nas"]
       }
     },
@@ -9841,6 +10542,921 @@
           }
         },
         "summary": "Update a schedule (If-Match supported)",
+        "tags": ["policies"]
+      }
+    },
+    "/api/v1/orgs/{orgId}/bandwidth-profiles": {
+      "get": {
+        "description": "Permission: `policy:read`",
+        "operationId": "get_api_v1_orgs_orgId_bandwidth_profiles",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "orgId",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "schema": { "default": 50, "maximum": 200, "minimum": 1, "type": "integer" }
+          },
+          { "in": "query", "name": "cursor", "schema": { "maxLength": 200, "type": "string" } }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "data": {
+                      "items": { "additionalProperties": {}, "properties": {}, "type": "object" },
+                      "type": "array"
+                    },
+                    "next_cursor": { "type": ["string", "null"] }
+                  },
+                  "required": ["data", "next_cursor"],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "bandwidth profile page"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Validation failed (application/problem+json)"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Authentication required"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Permission denied"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Not found (also returned for objects of other tenants)"
+          }
+        },
+        "summary": "List bandwidth profiles",
+        "tags": ["policies"]
+      },
+      "post": {
+        "description": "Permission: `policy:create`",
+        "operationId": "post_api_v1_orgs_orgId_bandwidth_profiles",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "orgId",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "burst_download_kbps": {
+                    "anyOf": [
+                      { "maximum": 4294967, "minimum": 1, "type": "integer" },
+                      { "type": "null" }
+                    ]
+                  },
+                  "burst_duration_s": {
+                    "anyOf": [
+                      { "maximum": 9007199254740991, "minimum": 1, "type": "integer" },
+                      { "type": "null" }
+                    ]
+                  },
+                  "burst_upload_kbps": {
+                    "anyOf": [
+                      { "maximum": 4294967, "minimum": 1, "type": "integer" },
+                      { "type": "null" }
+                    ]
+                  },
+                  "description": { "maxLength": 2000, "type": "string" },
+                  "download_rate_kbps": {
+                    "anyOf": [
+                      { "maximum": 4294967, "minimum": 1, "type": "integer" },
+                      { "type": "null" }
+                    ]
+                  },
+                  "name": { "maxLength": 200, "minLength": 1, "type": "string" },
+                  "upload_rate_kbps": {
+                    "anyOf": [
+                      { "maximum": 4294967, "minimum": 1, "type": "integer" },
+                      { "type": "null" }
+                    ]
+                  }
+                },
+                "required": ["name"],
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {},
+                  "properties": { "id": { "type": "string" } },
+                  "required": ["id"],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Created"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Validation failed (application/problem+json)"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Authentication required"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Permission denied"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Not found (also returned for objects of other tenants)"
+          }
+        },
+        "summary": "Create a bandwidth profile",
+        "tags": ["policies"]
+      }
+    },
+    "/api/v1/orgs/{orgId}/bandwidth-profiles/{id}": {
+      "delete": {
+        "description": "Permission: `policy:delete`",
+        "operationId": "delete_api_v1_orgs_orgId_bandwidth_profiles_id",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "orgId",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": { "description": "Deleted" },
+          "400": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Validation failed (application/problem+json)"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Authentication required"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Permission denied"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Not found (also returned for objects of other tenants)"
+          }
+        },
+        "summary": "Delete a bandwidth profile",
+        "tags": ["policies"]
+      },
+      "get": {
+        "description": "Permission: `policy:read`",
+        "operationId": "get_api_v1_orgs_orgId_bandwidth_profiles_id",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "orgId",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {},
+                  "properties": { "id": { "type": "string" } },
+                  "required": ["id"],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "bandwidth profile"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Validation failed (application/problem+json)"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Authentication required"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Permission denied"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Not found (also returned for objects of other tenants)"
+          }
+        },
+        "summary": "Get a bandwidth profile",
+        "tags": ["policies"]
+      },
+      "patch": {
+        "description": "Permission: `policy:update`",
+        "operationId": "patch_api_v1_orgs_orgId_bandwidth_profiles_id",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "orgId",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "burst_download_kbps": {
+                    "anyOf": [
+                      { "maximum": 4294967, "minimum": 1, "type": "integer" },
+                      { "type": "null" }
+                    ]
+                  },
+                  "burst_duration_s": {
+                    "anyOf": [
+                      { "maximum": 9007199254740991, "minimum": 1, "type": "integer" },
+                      { "type": "null" }
+                    ]
+                  },
+                  "burst_upload_kbps": {
+                    "anyOf": [
+                      { "maximum": 4294967, "minimum": 1, "type": "integer" },
+                      { "type": "null" }
+                    ]
+                  },
+                  "description": { "maxLength": 2000, "type": "string" },
+                  "download_rate_kbps": {
+                    "anyOf": [
+                      { "maximum": 4294967, "minimum": 1, "type": "integer" },
+                      { "type": "null" }
+                    ]
+                  },
+                  "name": { "maxLength": 200, "minLength": 1, "type": "string" },
+                  "upload_rate_kbps": {
+                    "anyOf": [
+                      { "maximum": 4294967, "minimum": 1, "type": "integer" },
+                      { "type": "null" }
+                    ]
+                  }
+                },
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {},
+                  "properties": { "id": { "type": "string" } },
+                  "required": ["id"],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Updated"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Validation failed (application/problem+json)"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Authentication required"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Permission denied"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Not found (also returned for objects of other tenants)"
+          },
+          "412": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "If-Match mismatch"
+          }
+        },
+        "summary": "Update a bandwidth profile (If-Match supported)",
+        "tags": ["policies"]
+      }
+    },
+    "/api/v1/orgs/{orgId}/access-plans": {
+      "get": {
+        "description": "Permission: `policy:read`",
+        "operationId": "get_api_v1_orgs_orgId_access_plans",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "orgId",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "schema": { "default": 50, "maximum": 200, "minimum": 1, "type": "integer" }
+          },
+          { "in": "query", "name": "cursor", "schema": { "maxLength": 200, "type": "string" } },
+          {
+            "in": "query",
+            "name": "site_id",
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "data": {
+                      "items": { "additionalProperties": {}, "properties": {}, "type": "object" },
+                      "type": "array"
+                    },
+                    "next_cursor": { "type": ["string", "null"] }
+                  },
+                  "required": ["data", "next_cursor"],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "access plan page"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Validation failed (application/problem+json)"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Authentication required"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Permission denied"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Not found (also returned for objects of other tenants)"
+          }
+        },
+        "summary": "List access plans",
+        "tags": ["policies"]
+      },
+      "post": {
+        "description": "Permission: `policy:create`",
+        "operationId": "post_api_v1_orgs_orgId_access_plans",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "orgId",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "activation_trigger": {
+                    "enum": ["creation", "purchase", "first_login"],
+                    "type": "string"
+                  },
+                  "code": {
+                    "anyOf": [
+                      { "pattern": "^[A-Za-z0-9_-]{1,32}$", "type": "string" },
+                      { "type": "null" }
+                    ]
+                  },
+                  "currency": {
+                    "anyOf": [{ "pattern": "^[A-Z]{3}$", "type": "string" }, { "type": "null" }]
+                  },
+                  "description": { "maxLength": 2000, "type": "string" },
+                  "display_order": { "maximum": 10000, "minimum": 0, "type": "integer" },
+                  "eligible_auth_methods": {
+                    "items": {
+                      "enum": [
+                        "password",
+                        "voucher",
+                        "click_through",
+                        "email_otp",
+                        "sms_otp",
+                        "idp",
+                        "mac"
+                      ],
+                      "type": "string"
+                    },
+                    "maxItems": 7,
+                    "type": "array"
+                  },
+                  "enabled": { "type": "boolean" },
+                  "is_default": { "type": "boolean" },
+                  "name": { "maxLength": 200, "minLength": 1, "type": "string" },
+                  "plan_type": { "enum": ["free", "paid"], "type": "string" },
+                  "policy_id": {
+                    "format": "uuid",
+                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                    "type": "string"
+                  },
+                  "price_minor": {
+                    "anyOf": [
+                      { "maximum": 9007199254740991, "minimum": 1, "type": "integer" },
+                      { "type": "null" }
+                    ]
+                  },
+                  "site_id": {
+                    "anyOf": [
+                      {
+                        "format": "uuid",
+                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                        "type": "string"
+                      },
+                      { "type": "null" }
+                    ]
+                  },
+                  "validity_duration_s": {
+                    "anyOf": [
+                      { "maximum": 9007199254740991, "minimum": 1, "type": "integer" },
+                      { "type": "null" }
+                    ]
+                  }
+                },
+                "required": ["name", "policy_id"],
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {},
+                  "properties": { "id": { "type": "string" } },
+                  "required": ["id"],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Created"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Validation failed (application/problem+json)"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Authentication required"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Permission denied"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Not found (also returned for objects of other tenants)"
+          }
+        },
+        "summary": "Create a access plan",
+        "tags": ["policies"]
+      }
+    },
+    "/api/v1/orgs/{orgId}/access-plans/{id}": {
+      "delete": {
+        "description": "Permission: `policy:delete`",
+        "operationId": "delete_api_v1_orgs_orgId_access_plans_id",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "orgId",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": { "description": "Deleted" },
+          "400": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Validation failed (application/problem+json)"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Authentication required"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Permission denied"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Not found (also returned for objects of other tenants)"
+          }
+        },
+        "summary": "Delete a access plan",
+        "tags": ["policies"]
+      },
+      "get": {
+        "description": "Permission: `policy:read`",
+        "operationId": "get_api_v1_orgs_orgId_access_plans_id",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "orgId",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {},
+                  "properties": { "id": { "type": "string" } },
+                  "required": ["id"],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "access plan"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Validation failed (application/problem+json)"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Authentication required"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Permission denied"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Not found (also returned for objects of other tenants)"
+          }
+        },
+        "summary": "Get a access plan",
+        "tags": ["policies"]
+      },
+      "patch": {
+        "description": "Permission: `policy:update`",
+        "operationId": "patch_api_v1_orgs_orgId_access_plans_id",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "orgId",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "activation_trigger": {
+                    "enum": ["creation", "purchase", "first_login"],
+                    "type": "string"
+                  },
+                  "code": {
+                    "anyOf": [
+                      { "pattern": "^[A-Za-z0-9_-]{1,32}$", "type": "string" },
+                      { "type": "null" }
+                    ]
+                  },
+                  "currency": {
+                    "anyOf": [{ "pattern": "^[A-Z]{3}$", "type": "string" }, { "type": "null" }]
+                  },
+                  "description": { "maxLength": 2000, "type": "string" },
+                  "display_order": { "maximum": 10000, "minimum": 0, "type": "integer" },
+                  "eligible_auth_methods": {
+                    "items": {
+                      "enum": [
+                        "password",
+                        "voucher",
+                        "click_through",
+                        "email_otp",
+                        "sms_otp",
+                        "idp",
+                        "mac"
+                      ],
+                      "type": "string"
+                    },
+                    "maxItems": 7,
+                    "type": "array"
+                  },
+                  "enabled": { "type": "boolean" },
+                  "is_default": { "type": "boolean" },
+                  "name": { "maxLength": 200, "minLength": 1, "type": "string" },
+                  "plan_type": { "enum": ["free", "paid"], "type": "string" },
+                  "policy_id": {
+                    "format": "uuid",
+                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                    "type": "string"
+                  },
+                  "price_minor": {
+                    "anyOf": [
+                      { "maximum": 9007199254740991, "minimum": 1, "type": "integer" },
+                      { "type": "null" }
+                    ]
+                  },
+                  "site_id": {
+                    "anyOf": [
+                      {
+                        "format": "uuid",
+                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                        "type": "string"
+                      },
+                      { "type": "null" }
+                    ]
+                  },
+                  "validity_duration_s": {
+                    "anyOf": [
+                      { "maximum": 9007199254740991, "minimum": 1, "type": "integer" },
+                      { "type": "null" }
+                    ]
+                  }
+                },
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {},
+                  "properties": { "id": { "type": "string" } },
+                  "required": ["id"],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Updated"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Validation failed (application/problem+json)"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Authentication required"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Permission denied"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Not found (also returned for objects of other tenants)"
+          },
+          "412": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "If-Match mismatch"
+          }
+        },
+        "summary": "Update a access plan (If-Match supported)",
         "tags": ["policies"]
       }
     },
@@ -13150,6 +14766,11 @@
           },
           {
             "in": "query",
+            "name": "is_platform_default",
+            "schema": { "enum": ["true", "false"], "type": "string" }
+          },
+          {
+            "in": "query",
             "name": "site_id",
             "schema": {
               "format": "uuid",
@@ -13237,9 +14858,52 @@
                 "additionalProperties": false,
                 "properties": {
                   "auth_methods": {
-                    "items": { "enum": ["password", "voucher", "click_through"], "type": "string" },
+                    "items": {
+                      "enum": [
+                        "click_through",
+                        "password",
+                        "voucher",
+                        "email_otp",
+                        "sms_otp",
+                        "registration",
+                        "social",
+                        "sso",
+                        "sponsor",
+                        "hotel",
+                        "paid",
+                        "mac",
+                        "idp"
+                      ],
+                      "type": "string"
+                    },
+                    "maxItems": 13,
+                    "type": "array"
+                  },
+                  "locales": {
+                    "items": { "pattern": "^[a-z]{2,3}(-[A-Za-z0-9]{2,8})*$", "type": "string" },
                     "maxItems": 10,
-                    "minItems": 1,
+                    "type": "array"
+                  },
+                  "method_order": {
+                    "items": {
+                      "enum": [
+                        "click_through",
+                        "password",
+                        "voucher",
+                        "email_otp",
+                        "sms_otp",
+                        "registration",
+                        "social",
+                        "sso",
+                        "sponsor",
+                        "hotel",
+                        "paid",
+                        "mac",
+                        "idp"
+                      ],
+                      "type": "string"
+                    },
+                    "maxItems": 13,
                     "type": "array"
                   },
                   "name": { "maxLength": 200, "minLength": 1, "type": "string" },
@@ -13273,12 +14937,53 @@
                       { "type": "null" }
                     ]
                   },
+                  "registration_fields": {
+                    "items": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "key": { "pattern": "^[a-z][a-z0-9_]{0,31}$", "type": "string" },
+                        "label": { "maxLength": 200, "minLength": 1, "type": "string" },
+                        "marketing": { "type": "boolean" },
+                        "options": {
+                          "items": { "maxLength": 200, "minLength": 1, "type": "string" },
+                          "maxItems": 50,
+                          "minItems": 1,
+                          "type": "array"
+                        },
+                        "required": { "default": false, "type": "boolean" },
+                        "type": {
+                          "enum": ["text", "email", "phone", "select", "consent"],
+                          "type": "string"
+                        }
+                      },
+                      "required": ["key", "type", "label"],
+                      "type": "object"
+                    },
+                    "maxItems": 12,
+                    "type": "array"
+                  },
                   "site_id": {
                     "format": "uuid",
                     "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
                     "type": "string"
                   },
+                  "ssids": {
+                    "items": { "maxLength": 32, "minLength": 1, "type": "string" },
+                    "maxItems": 32,
+                    "type": "array"
+                  },
                   "status": { "enum": ["active", "disabled"], "type": "string" },
+                  "template_key": {
+                    "enum": [
+                      "quick_connect",
+                      "verified_guest",
+                      "account_access",
+                      "voucher_paid",
+                      "hotel_resident",
+                      "branded_multi_login"
+                    ],
+                    "type": "string"
+                  },
                   "theme_id": {
                     "anyOf": [
                       {
@@ -13509,9 +15214,52 @@
                 "additionalProperties": false,
                 "properties": {
                   "auth_methods": {
-                    "items": { "enum": ["password", "voucher", "click_through"], "type": "string" },
+                    "items": {
+                      "enum": [
+                        "click_through",
+                        "password",
+                        "voucher",
+                        "email_otp",
+                        "sms_otp",
+                        "registration",
+                        "social",
+                        "sso",
+                        "sponsor",
+                        "hotel",
+                        "paid",
+                        "mac",
+                        "idp"
+                      ],
+                      "type": "string"
+                    },
+                    "maxItems": 13,
+                    "type": "array"
+                  },
+                  "locales": {
+                    "items": { "pattern": "^[a-z]{2,3}(-[A-Za-z0-9]{2,8})*$", "type": "string" },
                     "maxItems": 10,
-                    "minItems": 1,
+                    "type": "array"
+                  },
+                  "method_order": {
+                    "items": {
+                      "enum": [
+                        "click_through",
+                        "password",
+                        "voucher",
+                        "email_otp",
+                        "sms_otp",
+                        "registration",
+                        "social",
+                        "sso",
+                        "sponsor",
+                        "hotel",
+                        "paid",
+                        "mac",
+                        "idp"
+                      ],
+                      "type": "string"
+                    },
+                    "maxItems": 13,
                     "type": "array"
                   },
                   "name": { "maxLength": 200, "minLength": 1, "type": "string" },
@@ -13545,7 +15293,48 @@
                       { "type": "null" }
                     ]
                   },
+                  "registration_fields": {
+                    "items": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "key": { "pattern": "^[a-z][a-z0-9_]{0,31}$", "type": "string" },
+                        "label": { "maxLength": 200, "minLength": 1, "type": "string" },
+                        "marketing": { "type": "boolean" },
+                        "options": {
+                          "items": { "maxLength": 200, "minLength": 1, "type": "string" },
+                          "maxItems": 50,
+                          "minItems": 1,
+                          "type": "array"
+                        },
+                        "required": { "default": false, "type": "boolean" },
+                        "type": {
+                          "enum": ["text", "email", "phone", "select", "consent"],
+                          "type": "string"
+                        }
+                      },
+                      "required": ["key", "type", "label"],
+                      "type": "object"
+                    },
+                    "maxItems": 12,
+                    "type": "array"
+                  },
+                  "ssids": {
+                    "items": { "maxLength": 32, "minLength": 1, "type": "string" },
+                    "maxItems": 32,
+                    "type": "array"
+                  },
                   "status": { "enum": ["active", "disabled"], "type": "string" },
+                  "template_key": {
+                    "enum": [
+                      "quick_connect",
+                      "verified_guest",
+                      "account_access",
+                      "voucher_paid",
+                      "hotel_resident",
+                      "branded_multi_login"
+                    ],
+                    "type": "string"
+                  },
                   "theme_id": {
                     "anyOf": [
                       {
@@ -13954,6 +15743,398 @@
           }
         },
         "summary": "Publish a new terms version (immutable; becomes the current version)",
+        "tags": ["captive-portal"]
+      }
+    },
+    "/api/v1/orgs/{orgId}/captive-portals/{id}/versions": {
+      "get": {
+        "description": "Permission: `captive_portal:read`",
+        "operationId": "get_api_v1_orgs_orgId_captive_portals_id_versions",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "orgId",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "data": {
+                      "items": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "captive_portal_id": {
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                            "type": "string"
+                          },
+                          "current": { "type": "boolean" },
+                          "id": {
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                            "type": "string"
+                          },
+                          "published_at": { "type": "string" },
+                          "published_by": {
+                            "anyOf": [
+                              {
+                                "format": "uuid",
+                                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                                "type": "string"
+                              },
+                              { "type": "null" }
+                            ]
+                          },
+                          "version": {
+                            "maximum": 9007199254740991,
+                            "minimum": -9007199254740991,
+                            "type": "integer"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "captive_portal_id",
+                          "version",
+                          "published_by",
+                          "published_at",
+                          "current"
+                        ],
+                        "type": "object"
+                      },
+                      "type": "array"
+                    },
+                    "draft_problems": {
+                      "items": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "message": { "type": "string" },
+                          "path": { "type": "string" }
+                        },
+                        "required": ["path", "message"],
+                        "type": "object"
+                      },
+                      "type": "array"
+                    },
+                    "draft_publishable": { "type": "boolean" },
+                    "published_version_id": {
+                      "anyOf": [
+                        {
+                          "format": "uuid",
+                          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                          "type": "string"
+                        },
+                        { "type": "null" }
+                      ]
+                    },
+                    "unavailable_methods": {
+                      "items": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "method": { "type": "string" },
+                          "missing": { "items": { "type": "string" }, "type": "array" },
+                          "reasons": { "items": { "type": "string" }, "type": "array" }
+                        },
+                        "required": ["method", "missing", "reasons"],
+                        "type": "object"
+                      },
+                      "type": "array"
+                    }
+                  },
+                  "required": [
+                    "published_version_id",
+                    "draft_publishable",
+                    "draft_problems",
+                    "unavailable_methods",
+                    "data"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Versions newest first, plus whether the current draft could be published"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Validation failed (application/problem+json)"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Authentication required"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Permission denied"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Not found (also returned for objects of other tenants)"
+          }
+        },
+        "summary": "List the published versions of a captive portal, and the draft publish check",
+        "tags": ["captive-portal"]
+      }
+    },
+    "/api/v1/orgs/{orgId}/captive-portals/{id}/publish": {
+      "post": {
+        "description": "Permission: `captive_portal:update`",
+        "operationId": "post_api_v1_orgs_orgId_captive_portals_id_publish",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "orgId",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "captive_portal_id": {
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                      "type": "string"
+                    },
+                    "current": { "type": "boolean" },
+                    "id": {
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                      "type": "string"
+                    },
+                    "published_at": { "type": "string" },
+                    "published_by": {
+                      "anyOf": [
+                        {
+                          "format": "uuid",
+                          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                          "type": "string"
+                        },
+                        { "type": "null" }
+                      ]
+                    },
+                    "version": {
+                      "maximum": 9007199254740991,
+                      "minimum": -9007199254740991,
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "captive_portal_id",
+                    "version",
+                    "published_by",
+                    "published_at",
+                    "current"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Published"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Validation failed (application/problem+json)"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Authentication required"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Permission denied"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Not found (also returned for objects of other tenants)"
+          }
+        },
+        "summary": "Publish the current draft as a new immutable version and serve it to guests",
+        "tags": ["captive-portal"]
+      }
+    },
+    "/api/v1/orgs/{orgId}/captive-portals/{id}/versions/{versionId}/restore": {
+      "post": {
+        "description": "Permission: `captive_portal:update`",
+        "operationId": "post_api_v1_orgs_orgId_captive_portals_id_versions_versionId_restore",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "orgId",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "versionId",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "captive_portal_id": {
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                      "type": "string"
+                    },
+                    "current": { "type": "boolean" },
+                    "id": {
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                      "type": "string"
+                    },
+                    "published_at": { "type": "string" },
+                    "published_by": {
+                      "anyOf": [
+                        {
+                          "format": "uuid",
+                          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                          "type": "string"
+                        },
+                        { "type": "null" }
+                      ]
+                    },
+                    "version": {
+                      "maximum": 9007199254740991,
+                      "minimum": -9007199254740991,
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "captive_portal_id",
+                    "version",
+                    "published_by",
+                    "published_at",
+                    "current"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Restored"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Validation failed (application/problem+json)"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Authentication required"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Permission denied"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } }
+            },
+            "description": "Not found (also returned for objects of other tenants)"
+          }
+        },
+        "summary": "Roll back to an earlier published version (drafts and history are kept)",
         "tags": ["captive-portal"]
       }
     },
@@ -14954,7 +17135,9 @@
                       "success",
                       "error",
                       "expired",
-                      "status"
+                      "status",
+                      "logout",
+                      "connected"
                     ],
                     "type": "string"
                   },

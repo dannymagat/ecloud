@@ -51,7 +51,7 @@ const ROW: SessionRow = {
   site_name: 'Lobby',
   nas_client_id: 'nas-1',
   nas_name: 'AP-1',
-  adapter_key: 'openwifi-uspot-uam',
+  adapter_key: 'ezeap-uam',
   username_raw: 'alice',
   mac: 'aa:bb:cc:dd:ee:ff',
   framed_ip: '10.0.0.5',
@@ -87,7 +87,7 @@ const DETAIL: SessionDetail = {
     id: 'nas-1',
     name: 'AP-1',
     nas_ip: '100.64.0.2',
-    adapter_key: 'openwifi-uspot-uam',
+    adapter_key: 'ezeap-uam',
     coa_supported: null,
   },
   freshness: {

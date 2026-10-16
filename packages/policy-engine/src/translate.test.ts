@@ -63,7 +63,7 @@ function effectiveOf(
     winner: null,
     concurrency_mode: null,
     critical_fields: [],
-  unlimited: [],
+    unlimited: [],
     ...extra,
   };
 }
@@ -161,7 +161,7 @@ describe('translate — attribute gating (D-028)', () => {
       field: 'class',
       status: 'UNSUPPORTED',
       reason: 'attribute_not_declared',
-      detail: 'Class is not declared by openwifi-uspot-uam',
+      detail: 'Class is not declared by ezeap-uam',
     });
   });
 

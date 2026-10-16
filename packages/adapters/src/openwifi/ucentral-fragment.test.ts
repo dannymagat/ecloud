@@ -141,7 +141,7 @@ describe('exportRateLimitFragment (openwifi-config, export/preview only)', () =>
   });
 
   it('refuses foreign plans and an SSID mismatch', () => {
-    const foreign = { ...plan({ down: 20_000 }), adapter: 'coovachilli-uam' } as EnforcementPlan;
+    const foreign = { ...plan({ down: 20_000 }), adapter: 'ezecloud-uam' } as EnforcementPlan;
     expect(exportRateLimitFragment(foreign, 'lab-uam')).toMatchObject({ unsupported: true });
     expect(exportRateLimitFragment(plan({ down: 20_000 }), 'other-ssid')).toMatchObject({
       unsupported: true,

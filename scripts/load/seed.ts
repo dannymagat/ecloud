@@ -55,8 +55,8 @@ try {
       name: 'load-uspot',
       nas_identifier: NAS_IDENTIFIER,
       nas_ip: NAS_IP,
-      adapter_type_key: 'openwifi-uspot-uam',
-      adapter_key: 'openwifi-uspot-uam',
+      adapter_type_key: 'ezeap-uam',
+      adapter_key: 'ezeap-uam',
       secret_ref: 'enc:placeholder',
     })
     .execute();

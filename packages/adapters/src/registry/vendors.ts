@@ -153,11 +153,11 @@ export const PROMOTED_VENDOR_ENTRIES: readonly VendorEntry[] = [
     docLinks: [
       {
         kind: 'doc-section',
-        ref: 'docs/VENDOR_INTEGRATION_RESEARCH.md §3.2 (Teltonika on coovachilli-uam)',
+        ref: 'docs/VENDOR_INTEGRATION_RESEARCH.md §3.2 (Teltonika on ezecloud-uam)',
       },
     ],
     notes:
-      'Cycle B: RutOS Hotspot profile on the existing `coovachilli-uam` adapter. UAM parameter set, `md`, password encoding and CoA REQUIRES_DEVICE_TEST / REQUIRES_CLARIFICATION (vendor wiki not fetchable, HTTP 403).',
+      'Cycle B: RutOS Hotspot profile on the existing `ezecloud-uam` adapter. UAM parameter set, `md`, password encoding and CoA REQUIRES_DEVICE_TEST / REQUIRES_CLARIFICATION (vendor wiki not fetchable, HTTP 403).',
   },
 ];
 

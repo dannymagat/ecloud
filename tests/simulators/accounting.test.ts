@@ -63,7 +63,7 @@ const sum = (ds: readonly SessionCounters[], k: keyof SessionCounters): number =
 
 for (const t of TARGETS) {
   const tag = `[${t.adapterKey}]`;
-  const width = t.adapterKey === 'coovachilli-uam' ? 64 : 32;
+  const width = t.adapterKey === 'ezecloud-uam' ? 64 : 32;
 
   describe(`accounting ${tag}`, () => {
     it(`SIM-10 ${tag} identical Interim retransmitted → counterDelta 0, single increment`, () => {
@@ -134,15 +134,15 @@ for (const t of TARGETS) {
   });
 }
 
-const coova = TARGETS.find((t) => t.adapterKey === 'coovachilli-uam');
-const tip = TARGETS.find((t) => t.adapterKey === 'openwifi-uspot-uam');
+const coova = TARGETS.find((t) => t.adapterKey === 'ezecloud-uam');
+const tip = TARGETS.find((t) => t.adapterKey === 'ezeap-uam');
 if (!coova || !tip) throw new Error('simulator targets missing');
 
 describe('counter width', () => {
   const before = TWO_POW_32 - 100;
   const after = TWO_POW_32 + 500;
 
-  it('SIM-13 [coovachilli-uam] Gigawords rollover yields the correct 64-bit total', () => {
+  it('SIM-13 [ezecloud-uam] Gigawords rollover yields the correct 64-bit total', () => {
     // Wire view: Octets wraps to 500 while Gigawords goes 0 → 1 (CoovaChilli, V-073).
     expect(wireCounter(before, 64)).toEqual({ octets: TWO_POW_32 - 100, gigawords: 0 });
     expect(wireCounter(after, 64)).toEqual({ octets: 500, gigawords: 1 });
@@ -178,7 +178,7 @@ describe('counter width', () => {
     expect(Number.isSafeInteger(stored.outputOctets)).toBe(true);
   });
 
-  it('SIM-14 [openwifi-uspot-uam] 32-bit wrap without Gigawords → no negative or huge delta', () => {
+  it('SIM-14 [ezeap-uam] 32-bit wrap without Gigawords → no negative or huge delta', () => {
     expect(wireCounter(after, 32)).toEqual({ octets: 500, gigawords: null });
     const sim = session(tip, 32);
     const { deltas, stored } = drain(tip, sim, [
@@ -210,7 +210,7 @@ describe('counter width', () => {
     expect(deltas[2]?.sessionTimeS).toBe(300);
   });
 
-  it('SIM-14 [openwifi-uspot-uam] 32-bit wrap is flagged as an anomaly by the vendor quirks hook', () => {
+  it('SIM-14 [ezeap-uam] 32-bit wrap is flagged as an anomaly by the vendor quirks hook', () => {
     // Plan §8.3 SIM-14: the hook only reports; normalisation and the drainer counter rule are
     // unchanged (asserted above: wrapped packet delta 0, store keeps the pre-wrap maximum).
     const quirks = tip.adapter.accountingQuirks;

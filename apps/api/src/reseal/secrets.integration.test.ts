@@ -76,8 +76,8 @@ await describeIntegration('@ecloud/api secret re-seal', () => {
           name: unique('NAS'),
           nas_identifier: unique('nas'),
           nas_ip: ip,
-          adapter_type_key: 'coovachilli-uam',
-          adapter_key: 'coovachilli-uam',
+          adapter_type_key: 'ezecloud-uam',
+          adapter_key: 'ezecloud-uam',
           secret_ref: sealSecretRef(legacy, NAS_SECRET),
           status: 'active',
         })
@@ -123,8 +123,17 @@ await describeIntegration('@ecloud/api secret re-seal', () => {
     const before = await readNas(t.nasId);
     const beforePortal = await readPortal(t.portalId);
 
-    const { counts, dump } = await withPlatform(db(), REASON, (trx) => planReseal(trx, { organizationIds: [t.orgId] }));
-    expect(counts).toMatchObject({ nas_rows: 1, nas_v1: 1, nas_v2: 0, portal_rows: 1, portal_v1: 1, portal_v2: 0 });
+    const { counts, dump } = await withPlatform(db(), REASON, (trx) =>
+      planReseal(trx, { organizationIds: [t.orgId] }),
+    );
+    expect(counts).toMatchObject({
+      nas_rows: 1,
+      nas_v1: 1,
+      nas_v2: 0,
+      portal_rows: 1,
+      portal_v1: 1,
+      portal_v2: 0,
+    });
     // The dump carries only what a run would change, and it is the rollback.
     expect(dump.nas.some((r) => r.id === t.nasId)).toBe(true);
     expect(dump.captive_portals.some((r) => r.id === t.portalId)).toBe(true);
@@ -143,7 +152,9 @@ await describeIntegration('@ecloud/api secret re-seal', () => {
     const before = await readNas(t.nasId);
     expect(before.secret_ref).toMatch(/^enc:v1\./);
 
-    const result = await withPlatform(db(), REASON, (trx) => applyReseal(trx, key(), { organizationIds: [t.orgId] }));
+    const result = await withPlatform(db(), REASON, (trx) =>
+      applyReseal(trx, key(), { organizationIds: [t.orgId] }),
+    );
     expect(result.nas_updated).toBe(1);
     expect(result.portals_updated).toBe(1);
 
@@ -183,8 +194,12 @@ await describeIntegration('@ecloud/api secret re-seal', () => {
 
   it('is idempotent: a second run has nothing left to do for the rows it sealed', async () => {
     const t = await legacyTenant();
-    await withPlatform(db(), REASON, (trx) => applyReseal(trx, key(), { organizationIds: [t.orgId] }));
-    const second = await withPlatform(db(), REASON, (trx) => planReseal(trx, { organizationIds: [t.orgId] }));
+    await withPlatform(db(), REASON, (trx) =>
+      applyReseal(trx, key(), { organizationIds: [t.orgId] }),
+    );
+    const second = await withPlatform(db(), REASON, (trx) =>
+      planReseal(trx, { organizationIds: [t.orgId] }),
+    );
 
     // SCOPED TO THIS TENANT'S ROWS, not to the global counts, and the reason is the direction of
     // the error. `planReseal` deliberately has no tenant filter — it is a fleet-wide migration —
@@ -205,7 +220,9 @@ await describeIntegration('@ecloud/api secret re-seal', () => {
     const before = await readNas(t.nasId);
     const beforePortal = await readPortal(t.portalId);
 
-    const { dump } = await withPlatform(db(), REASON, (trx) => applyReseal(trx, key(), { organizationIds: [t.orgId] }));
+    const { dump } = await withPlatform(db(), REASON, (trx) =>
+      applyReseal(trx, key(), { organizationIds: [t.orgId] }),
+    );
     expect((await readNas(t.nasId)).secret_ref).toMatch(/^enc:v2\./);
 
     await withPlatform(db(), REASON, (trx) => restoreReseal(trx, dump));

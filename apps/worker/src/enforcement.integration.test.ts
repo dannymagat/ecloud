@@ -132,8 +132,8 @@ await describeIntegration('@ecloud/worker P7-A enforcement loop against PostgreS
           site_id: site.id,
           name: `uspot ${RUN}`,
           nas_ip: USPOT_IP,
-          adapter_type_key: 'openwifi-uspot-uam',
-          adapter_key: 'openwifi-uspot-uam',
+          adapter_type_key: 'ezeap-uam',
+          adapter_key: 'ezeap-uam',
           secret_ref: 'env:ECLOUD_WORKER_IT_NAS_SECRET',
         },
         {
@@ -142,8 +142,8 @@ await describeIntegration('@ecloud/worker P7-A enforcement loop against PostgreS
           site_id: site.id,
           name: `chilli ${RUN}`,
           nas_ip: CHILLI_IP,
-          adapter_type_key: 'coovachilli-uam',
-          adapter_key: 'coovachilli-uam',
+          adapter_type_key: 'ezecloud-uam',
+          adapter_key: 'ezecloud-uam',
           secret_ref: 'env:ECLOUD_WORKER_IT_NAS_SECRET',
         },
       ])
@@ -187,7 +187,7 @@ await describeIntegration('@ecloud/worker P7-A enforcement loop against PostgreS
       observed: 500,
       estimated_lost_bytes: 600,
       applied: true,
-      adapter_key: 'openwifi-uspot-uam',
+      adapter_key: 'ezeap-uam',
     });
     // Usage counters got the corrected delta: 10 + 10 in, (2^32 − 100) + 600 out.
     const usage = await db
@@ -303,7 +303,7 @@ await describeIntegration('@ecloud/worker P7-A enforcement loop against PostgreS
           organization_id: org.id,
           policy_id: opts.policyId ?? null,
           policy_version: 1,
-          adapter_type_key: 'coovachilli-uam',
+          adapter_type_key: 'ezecloud-uam',
           nas_client_id: chilliNas,
           session_id: id,
           trigger: 'authorize',
@@ -505,7 +505,7 @@ await describeIntegration('@ecloud/worker P7-A enforcement loop against PostgreS
         siteId: site.id,
         sessionId: x,
         startedAt: now,
-        adapterKey: 'coovachilli-uam',
+        adapterKey: 'ezecloud-uam',
         trigger: 'quota_breach',
         breach: 'quota_total: 2000 >= 1000 bytes',
         policyId: null,
@@ -556,7 +556,7 @@ await describeIntegration('@ecloud/worker P7-A enforcement loop against PostgreS
             siteId: site.id,
             sessionId: x,
             startedAt: now,
-            adapterKey: 'coovachilli-uam',
+            adapterKey: 'ezecloud-uam',
             trigger: triggers[i % 3] as (typeof triggers)[number],
             breach: `race ${String(i)}`,
             policyId: null,

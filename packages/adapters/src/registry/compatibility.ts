@@ -188,7 +188,7 @@ const tipUspotRow: CompatibilityRow = {
   lifecycle: 'implemented',
   deploymentModes: ['native'],
   enforcementPoint: 'ap',
-  adapterKey: 'openwifi-uspot-uam',
+  adapterKey: 'ezeap-uam',
   sourceVersionMatchesDevice: true,
   identity: [
     ...AP1832_IDENTITY,
@@ -256,7 +256,7 @@ const tipUspotRow: CompatibilityRow = {
       [SRC.V050_T],
     ),
   },
-  capabilities: deriveCells(getAdapter('openwifi-uspot-uam').capabilities(), {
+  capabilities: deriveCells(getAdapter('ezeap-uam').capabilities(), {
     rowKey: TIP_ROW_ID,
     sourceVersionMatchesDevice: true,
     deviceFirmware: AP1832_FIRMWARE,
@@ -514,7 +514,7 @@ const ezegateRow: CompatibilityRow = {
   lifecycle: 'implemented',
   deploymentModes: ['gateway'],
   enforcementPoint: 'gateway',
-  adapterKey: 'coovachilli-uam',
+  adapterKey: 'ezecloud-uam',
   sourceVersionMatchesDevice: false,
   identity: [
     fact(
@@ -537,7 +537,7 @@ const ezegateRow: CompatibilityRow = {
   profile: coovaProfile(
     unknown([doc('PHASE2_VALIDATION.md V-072 (master verified; 1.2.9 unknown → DT-15)')]),
   ),
-  capabilities: deriveCells(getAdapter('coovachilli-uam').capabilities(), {
+  capabilities: deriveCells(getAdapter('ezecloud-uam').capabilities(), {
     rowKey: EZEGATE_ROW_ID,
     sourceVersionMatchesDevice: false,
     deviceFirmware: EZEGATE_FIRMWARE,
@@ -571,7 +571,7 @@ const coovaMasterRow: CompatibilityRow = {
   lifecycle: 'implemented',
   deploymentModes: ['gateway'],
   enforcementPoint: 'gateway',
-  adapterKey: 'coovachilli-uam',
+  adapterKey: 'ezecloud-uam',
   sourceVersionMatchesDevice: null,
   identity: [
     fact(
@@ -593,7 +593,7 @@ const coovaMasterRow: CompatibilityRow = {
       ],
     ),
   ),
-  capabilities: deriveCells(getAdapter('coovachilli-uam').capabilities(), {
+  capabilities: deriveCells(getAdapter('ezecloud-uam').capabilities(), {
     rowKey: COOVA_MASTER_ROW_ID,
     sourceVersionMatchesDevice: null,
     deviceFirmware: 'coova-chilli master',
@@ -872,7 +872,7 @@ const generic8021xRow: CompatibilityRow = {
 };
 
 // ------------------------------------------------------------------------------------------
-// Cycle B (D-044) — MikroTik RouterOS Hotspot; Teltonika RutOS on coovachilli-uam
+// Cycle B (D-044) — MikroTik RouterOS Hotspot; Teltonika RutOS on ezecloud-uam
 // ------------------------------------------------------------------------------------------
 
 const MT_RADIUS: EvidenceRef = {
@@ -987,7 +987,7 @@ const teltonikaRow: CompatibilityRow = {
   lifecycle: 'implemented',
   deploymentModes: ['gateway'],
   enforcementPoint: 'gateway',
-  adapterKey: 'coovachilli-uam',
+  adapterKey: 'ezecloud-uam',
   // V11: the RutOS CoovaChilli build is unknown, so source-verified cells present as
   // REQUIRES_DEVICE_TEST (research §3.2).
   sourceVersionMatchesDevice: false,
@@ -1005,7 +1005,7 @@ const teltonikaRow: CompatibilityRow = {
       [TELTONIKA_DOC],
     ),
   },
-  capabilities: deriveCells(getAdapter('coovachilli-uam').capabilities(), {
+  capabilities: deriveCells(getAdapter('ezecloud-uam').capabilities(), {
     rowKey: TELTONIKA_ROW_ID,
     sourceVersionMatchesDevice: false,
     deviceFirmware: 'UNKNOWN',

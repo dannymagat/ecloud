@@ -38,7 +38,7 @@ describe('dynamic-authorization evidence (P7-A strategy input)', () => {
   });
 
   it('field evidence is never device-enforced without a lab-validated DT', () => {
-    const e = fieldEvidence('coovachilli-uam', 'download_rate_kbps', 'VERIFIED_SUPPORTED');
+    const e = fieldEvidence('ezecloud-uam', 'download_rate_kbps', 'VERIFIED_SUPPORTED');
     expect(e.deviceEnforced).toBe(false);
     expect(e.evidenceLevel).not.toBe('LAB_VALIDATED');
   });

@@ -6,9 +6,9 @@ amount of shared code (`base.ts`). Nothing here sends packets; AAA does.
 | Key                       | Portal type                 | Granularity | VERIFIED_SUPPORTED fields                                                                                        |
 | ------------------------- | --------------------------- | ----------- | ---------------------------------------------------------------------------------------------------------------- |
 | `openwifi-hostapd-radius` | none (802.1X / MAC-auth)    | per-client  | none — every RADIUS attribute is `REQUIRES_DEVICE_TEST` (NETWORK_INTEGRATION.md §2)                              |
-| `openwifi-uspot-uam`      | `uam-chillispot` (TIP fork) | per-client  | rates, quotas (32-bit `ChilliSpot-Max-Total-Octets`), `session_timeout_s`, `idle_timeout_s`                      |
+| `ezeap-uam`      | `uam-chillispot` (TIP fork) | per-client  | rates, quotas (32-bit `ChilliSpot-Max-Total-Octets`), `session_timeout_s`, `idle_timeout_s`                      |
 | `uspot-upstream-uam`      | `uam-chillispot+capport`    | per-client  | rates, quotas (Octets + Gigawords), `session_timeout_s`, `idle_timeout_s`                                        |
-| `coovachilli-uam`         | `uam-chillispot+wispr+json` | per-client  | rates, quotas (`CoovaChilli-Max-*-Octets/Gigawords`), `session_timeout_s`, `idle_timeout_s`                     |
+| `ezecloud-uam`         | `uam-chillispot+wispr+json` | per-client  | rates, quotas (`CoovaChilli-Max-*-Octets/Gigawords`), `session_timeout_s`, `idle_timeout_s`                     |
 | `openwifi-config`         | config-only                 | per-SSID    | rates (`rate-limit` Mbit/s), `session_timeout_s` (`captive.session-timeout`), `idle_timeout_s` (`max-inactivity`) — site-scoped intent only |
 
 Every declaration carries an `evidence` string citing the document section it rests on

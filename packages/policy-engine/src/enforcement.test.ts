@@ -45,7 +45,7 @@ describe('chooseEnforcementStrategy (P7-A, D-006, D-028 V12)', () => {
   it('source-verified or device-test-pending mechanisms never drive a live change → next_reauth', () => {
     for (const dispatcherEnabled of [false, true]) {
       const d = chooseEnforcementStrategy({
-        adapterKey: 'coovachilli-uam',
+        adapterKey: 'ezecloud-uam',
         coaChange: verifiedSource,
         disconnect: rdt,
         dispatcherEnabled,
@@ -56,7 +56,7 @@ describe('chooseEnforcementStrategy (P7-A, D-006, D-028 V12)', () => {
   });
 
   it('lab-validated mechanisms are used only when the dispatcher is enabled', () => {
-    const base = { adapterKey: 'coovachilli-uam', coaChange: verifiedLab, disconnect: verifiedLab };
+    const base = { adapterKey: 'ezecloud-uam', coaChange: verifiedLab, disconnect: verifiedLab };
     expect(chooseEnforcementStrategy({ ...base, dispatcherEnabled: false })).toMatchObject({
       strategy: 'next_reauth',
     });
@@ -111,8 +111,8 @@ describe('translate: Q44 Session-Timeout cap (policy_change_cap)', () => {
     quota_reset_s: null,
     remaining_octets: null,
     remaining_period: null,
-  remaining_time_s: null,
-  remaining_time_period: null,
+    remaining_time_s: null,
+    remaining_time_period: null,
     drain_time_s: null,
     min_session_s: 300,
   };
@@ -127,7 +127,7 @@ describe('translate: Q44 Session-Timeout cap (policy_change_cap)', () => {
     winner: null,
     concurrency_mode: null,
     critical_fields: [],
-  unlimited: [],
+    unlimited: [],
   };
 
   it('caps a longer policy timeout and bounds an unbounded session', () => {
@@ -191,7 +191,7 @@ describe('sessionTimeoutCapFor (pilot observation 2026-10-15)', () => {
   it('does not cap uspot, because there the cap is a logout rather than a re-auth', () => {
     // Observed on the pilot AP1832: login 08:16:15Z, portal again 08:46:15Z, exactly 1800 s, on a
     // policy promising one day. uspot has no silent re-auth, so Session-Timeout ends the session.
-    for (const adapterKey of ['openwifi-uspot-uam', 'uspot-upstream-uam']) {
+    for (const adapterKey of ['ezeap-uam', 'uspot-upstream-uam']) {
       expect(
         sessionTimeoutCapFor({ adapterKey, strategy: 'next_reauth', configuredCapS: cap }),
         adapterKey,
@@ -212,7 +212,7 @@ describe('sessionTimeoutCapFor (pilot observation 2026-10-15)', () => {
         strategy,
       ).toBeNull();
       expect(
-        sessionTimeoutCapFor({ adapterKey: 'openwifi-uspot-uam', strategy, configuredCapS: cap }),
+        sessionTimeoutCapFor({ adapterKey: 'ezeap-uam', strategy, configuredCapS: cap }),
         `uspot/${strategy}`,
       ).toBeNull();
     }
@@ -227,12 +227,9 @@ describe('sessionTimeoutCapFor (pilot observation 2026-10-15)', () => {
   });
 
   it('lists only adapters whose logout has actually been observed', () => {
-    // coovachilli-uam is the same shape but exposes a CoA path and nobody has observed the logout
+    // ezecloud-uam is the same shape but exposes a CoA path and nobody has observed the logout
     // on it. Adding an adapter here on reasoning alone turns a capability claim into fiction,
     // which is what the evidence registry exists to prevent.
-    expect([...NO_SILENT_REAUTH_ADAPTERS].sort()).toEqual([
-      'openwifi-uspot-uam',
-      'uspot-upstream-uam',
-    ]);
+    expect([...NO_SILENT_REAUTH_ADAPTERS].sort()).toEqual(['ezeap-uam', 'uspot-upstream-uam']);
   });
 });

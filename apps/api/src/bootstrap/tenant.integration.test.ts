@@ -41,7 +41,7 @@ await describeIntegration('tenant bootstrap', () => {
   let ipCounter = Math.floor(Math.random() * 60_000);
   function uniqueIp(): string {
     ipCounter += 1;
-    return `10.${String(200 + (ipCounter >> 16) % 50)}.${String((ipCounter >> 8) & 255)}.${String(ipCounter & 255)}/32`;
+    return `10.${String(200 + ((ipCounter >> 16) % 50))}.${String((ipCounter >> 8) & 255)}.${String(ipCounter & 255)}/32`;
   }
 
   function input(organizationId: string, nasIdentifier: string, nasIp: string): BootstrapInput {
@@ -54,7 +54,7 @@ await describeIntegration('tenant bootstrap', () => {
       nasName: `NAS ${n}`,
       nasIdentifier,
       nasIp,
-      adapterKey: 'openwifi-uspot-uam',
+      adapterKey: 'ezeap-uam',
       radiusSecret: 'fixture-radius-secret',
       uamSecret: 'fixture-uam-secret',
       secretsArePlatformDefaults: false,
@@ -80,10 +80,20 @@ await describeIntegration('tenant bootstrap', () => {
     const siteId = newId();
     await db
       .insertInto('sites')
-      .values({ id: siteId, organization_id: org.id, slug: unique('site'), name: 'Seed', timezone: 'UTC', status: 'active', settings: {} })
+      .values({
+        id: siteId,
+        organization_id: org.id,
+        slug: unique('site'),
+        name: 'Seed',
+        timezone: 'UTC',
+        status: 'active',
+        settings: {},
+      })
       .execute();
 
-    const ident = `aa${unique('id').replace(/[^a-z0-9]/g, '').slice(0, 10)}`;
+    const ident = `aa${unique('id')
+      .replace(/[^a-z0-9]/g, '')
+      .slice(0, 10)}`;
     const ip = uniqueIp();
     const liveId = newId();
     const deletedId = newId();
@@ -91,21 +101,39 @@ await describeIntegration('tenant bootstrap', () => {
     await db
       .insertInto('nas_clients')
       .values({
-        id: liveId, organization_id: org.id, site_id: siteId, name: 'live', nas_identifier: ident, nas_ip: ip,
-        adapter_type_key: 'openwifi-uspot-uam', adapter_key: 'openwifi-uspot-uam', secret_ref: PLACEHOLDER_NAS_SECRET_REF, status: 'active',
+        id: liveId,
+        organization_id: org.id,
+        site_id: siteId,
+        name: 'live',
+        nas_identifier: ident,
+        nas_ip: ip,
+        adapter_type_key: 'ezeap-uam',
+        adapter_key: 'ezeap-uam',
+        secret_ref: PLACEHOLDER_NAS_SECRET_REF,
+        status: 'active',
       })
       .execute();
     // Newer row: same identifier, soft-deleted, on a different address.
     await db
       .insertInto('nas_clients')
       .values({
-        id: deletedId, organization_id: org.id, site_id: siteId, name: 'deleted', nas_identifier: ident, nas_ip: uniqueIp(),
-        adapter_type_key: 'uspot-upstream-uam', adapter_key: 'uspot-upstream-uam', secret_ref: PLACEHOLDER_NAS_SECRET_REF, status: 'active',
+        id: deletedId,
+        organization_id: org.id,
+        site_id: siteId,
+        name: 'deleted',
+        nas_identifier: ident,
+        nas_ip: uniqueIp(),
+        adapter_type_key: 'uspot-upstream-uam',
+        adapter_key: 'uspot-upstream-uam',
+        secret_ref: PLACEHOLDER_NAS_SECRET_REF,
+        status: 'active',
         deleted_at: new Date(),
       })
       .execute();
 
-    const steps = await db.transaction().execute((trx) => bootstrapTenant(trx, input(org.id, ident, ip)));
+    const steps = await db
+      .transaction()
+      .execute((trx) => bootstrapTenant(trx, input(org.id, ident, ip)));
 
     const nasStep = steps.find((s) => s.entity === 'nas_client');
     expect(nasStep).toMatchObject({ id: liveId, created: false });
@@ -145,14 +173,33 @@ await describeIntegration('tenant bootstrap', () => {
     const deletedId = newId();
     await db
       .insertInto('sites')
-      .values({ id: liveId, organization_id: org.id, slug: unique('live'), name, timezone: 'UTC', status: 'active', settings: {} })
+      .values({
+        id: liveId,
+        organization_id: org.id,
+        slug: unique('live'),
+        name,
+        timezone: 'UTC',
+        status: 'active',
+        settings: {},
+      })
       .execute();
     await db
       .insertInto('sites')
-      .values({ id: deletedId, organization_id: org.id, slug: unique('dead'), name, timezone: 'UTC', status: 'active', settings: {}, deleted_at: new Date() })
+      .values({
+        id: deletedId,
+        organization_id: org.id,
+        slug: unique('dead'),
+        name,
+        timezone: 'UTC',
+        status: 'active',
+        settings: {},
+        deleted_at: new Date(),
+      })
       .execute();
 
-    const ident = `bb${unique('id').replace(/[^a-z0-9]/g, '').slice(0, 10)}`;
+    const ident = `bb${unique('id')
+      .replace(/[^a-z0-9]/g, '')
+      .slice(0, 10)}`;
     const base = input(org.id, ident, uniqueIp());
     const steps = await db
       .transaction()
@@ -175,20 +222,51 @@ await describeIntegration('tenant bootstrap', () => {
     const siteId = newId();
     await db
       .insertInto('sites')
-      .values({ id: siteId, organization_id: org.id, slug: unique('site'), name: 'Seed', timezone: 'UTC', status: 'active', settings: {} })
+      .values({
+        id: siteId,
+        organization_id: org.id,
+        slug: unique('site'),
+        name: 'Seed',
+        timezone: 'UTC',
+        status: 'active',
+        settings: {},
+      })
       .execute();
-    const username = unique('user').toLowerCase().replace(/[^a-z0-9-]/g, '');
+    const username = unique('user')
+      .toLowerCase()
+      .replace(/[^a-z0-9-]/g, '');
     const liveId = newId();
     await db
       .insertInto('users')
-      .values({ id: liveId, organization_id: org.id, site_id: siteId, username, password_hash: 'x', auth_methods: ['password'], status: 'active', origin: 'admin' })
+      .values({
+        id: liveId,
+        organization_id: org.id,
+        site_id: siteId,
+        username,
+        password_hash: 'x',
+        auth_methods: ['password'],
+        status: 'active',
+        origin: 'admin',
+      })
       .execute();
     await db
       .insertInto('users')
-      .values({ id: newId(), organization_id: org.id, site_id: siteId, username, password_hash: 'x', auth_methods: ['password'], status: 'active', origin: 'admin', deleted_at: new Date() })
+      .values({
+        id: newId(),
+        organization_id: org.id,
+        site_id: siteId,
+        username,
+        password_hash: 'x',
+        auth_methods: ['password'],
+        status: 'active',
+        origin: 'admin',
+        deleted_at: new Date(),
+      })
       .execute();
 
-    const ident = `cc${unique('id').replace(/[^a-z0-9]/g, '').slice(0, 10)}`;
+    const ident = `cc${unique('id')
+      .replace(/[^a-z0-9]/g, '')
+      .slice(0, 10)}`;
     const base = input(org.id, ident, uniqueIp());
     const steps = await db
       .transaction()
@@ -209,7 +287,9 @@ await describeIntegration('tenant bootstrap', () => {
     const db = deps.dbPlatform;
     const org = makeOrganization({ slug: unique('org'), name: unique('Org') });
     await db.insertInto('organizations').values(org).execute();
-    const ident = `bb${unique('id').replace(/[^a-z0-9]/g, '').slice(0, 10)}`;
+    const ident = `bb${unique('id')
+      .replace(/[^a-z0-9]/g, '')
+      .slice(0, 10)}`;
     const inp = input(org.id, ident, uniqueIp());
 
     const first = await db.transaction().execute((trx) => bootstrapTenant(trx, inp));

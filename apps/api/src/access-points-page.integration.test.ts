@@ -489,7 +489,7 @@ await describeIntegration('@ecloud/api Access Points page (D-045)', () => {
     expect(empty.body.support_email).toBe(SUPPORT);
     expect(empty.body.access_points).toEqual([]);
 
-    const nas = await createNas(a.agent, a.orgId, a.siteId, 'coovachilli-uam', {
+    const nas = await createNas(a.agent, a.orgId, a.siteId, 'ezecloud-uam', {
       vendor_key: 'teltonika',
     });
     let res = await a.agent.get(url);
@@ -580,7 +580,7 @@ await describeIntegration('@ecloud/api Access Points page (D-045)', () => {
       vendor_key: 'no-such-vendor',
     });
     expect(unknown.status).toBe(400);
-    const nas = await createNas(a.agent, a.orgId, a.siteId, 'coovachilli-uam', {
+    const nas = await createNas(a.agent, a.orgId, a.siteId, 'ezecloud-uam', {
       vendor_key: 'teltonika',
     });
     const patch = await a.agent

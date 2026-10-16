@@ -104,7 +104,7 @@ describe('four-state enforceability badges (D-028) × evidence level (plan §4.4
   it('matrix shows device-enforced only for lab-validated cells; source-verified cells as expected', () => {
     const adapters = toAdapterColumns([
       {
-        adapter: 'coovachilli-uam',
+        adapter: 'ezecloud-uam',
         field_table: [
           {
             field: 'download_rate_kbps',
@@ -128,7 +128,7 @@ describe('four-state enforceability badges (D-028) × evidence level (plan §4.4
         ],
       },
       {
-        key: 'openwifi-uspot-uam',
+        key: 'ezeap-uam',
         fields: [
           {
             field: 'download_rate_kbps',
@@ -189,7 +189,7 @@ describe('four-state enforceability badges (D-028) × evidence level (plan §4.4
 });
 
 describe('session Disconnect gating', () => {
-  const base = { adapterKey: 'openwifi-uspot-uam', hasPermission: true, endpointAvailable: true };
+  const base = { adapterKey: 'ezeap-uam', hasPermission: true, endpointAvailable: true };
   const LAB = { status: 'VERIFIED_SUPPORTED', evidenceLevel: 'LAB_VALIDATED', dtRefs: ['DT-07'] };
   it('is disabled unless the adapter disconnect is VERIFIED_SUPPORTED with lab evidence (V5, V12)', () => {
     for (const status of [

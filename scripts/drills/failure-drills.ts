@@ -275,8 +275,8 @@ async function seed(): Promise<void> {
       name: 'drill-uspot',
       nas_identifier: f.nasIdentifier,
       nas_ip: f.nasIp,
-      adapter_type_key: 'openwifi-uspot-uam',
-      adapter_key: 'openwifi-uspot-uam',
+      adapter_type_key: 'ezeap-uam',
+      adapter_key: 'ezeap-uam',
       secret_ref: 'enc:placeholder',
     })
     .returning('id')

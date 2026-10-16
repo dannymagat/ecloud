@@ -276,7 +276,7 @@ export async function seedTenantGraph(
     db,
     `INSERT INTO nas_clients (organization_id, site_id, name, nas_ip, adapter_type_key, adapter_key, secret_ref,
                               deployment_mode, controller_id)
-     VALUES ($1, $2, $3, $4, 'coovachilli-uam', 'coovachilli-uam', $5, 'gateway', $6) RETURNING id`,
+     VALUES ($1, $2, $3, $4, 'ezecloud-uam', 'ezecloud-uam', $5, 'gateway', $6) RETURNING id`,
     [organizationId, siteId, `NAS ${slug}`, nasIp, `secret://test/${slug}`, controllerId],
   );
   ref('nas_clients', nasClientId);
@@ -380,7 +380,13 @@ export async function seedTenantGraph(
     db,
     `INSERT INTO access_plans (organization_id, site_id, policy_id, name, code)
      VALUES ($1, $2, $3, $4, $5) RETURNING id`,
-    [organizationId, siteId, policyId, `plan ${slug}`, `PLAN${slug.replace(/[^A-Za-z0-9]/g, '').slice(0, 20)}`],
+    [
+      organizationId,
+      siteId,
+      policyId,
+      `plan ${slug}`,
+      `PLAN${slug.replace(/[^A-Za-z0-9]/g, '').slice(0, 20)}`,
+    ],
   );
   ref('access_plans', accessPlanId);
 
@@ -430,7 +436,7 @@ export async function seedTenantGraph(
   const translationId = await insertReturning<number>(
     db,
     `INSERT INTO policy_translations (organization_id, policy_id, policy_version, adapter_type_key, trigger)
-     VALUES ($1, $2, 1, 'coovachilli-uam', 'preview') RETURNING id`,
+     VALUES ($1, $2, 1, 'ezecloud-uam', 'preview') RETURNING id`,
     [organizationId, policyId],
   );
   ref('policy_translations', translationId);
@@ -552,7 +558,7 @@ export async function seedTenantGraph(
     `INSERT INTO accounting_anomalies (organization_id, session_id, nas_client_id, adapter_key, kind,
                                        counter, previous, observed, estimated_lost_bytes, applied,
                                        reason, radacct_id)
-     VALUES ($1, $2, $3, 'openwifi-uspot-uam', 'counter_wrap_32bit', 'outputOctets', 10, 5, 4294967291,
+     VALUES ($1, $2, $3, 'ezeap-uam', 'counter_wrap_32bit', 'outputOctets', 10, 5, 4294967291,
              false, 'fixture', (floor(random() * 1000000000))::bigint) RETURNING id`,
     [organizationId, sessionId, nasClientId],
   );

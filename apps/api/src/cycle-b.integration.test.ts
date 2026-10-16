@@ -511,7 +511,7 @@ await describeIntegration('@ecloud/api multi-vendor Cycle B (MikroTik / Teltonik
       site_id: siteId,
       name: 'teltonika',
       nas_ip: randomIp(),
-      adapter_key: 'coovachilli-uam',
+      adapter_key: 'ezecloud-uam',
     });
     expect(coova.status).toBe(201);
     expect(coova.body.coa_port).toBeNull();

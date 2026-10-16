@@ -37,8 +37,8 @@ describe('registry mirror helpers (plan §8.2)', () => {
   });
 
   it('deployment modes come from the registry rows of each engine adapter', () => {
-    expect(deploymentModesForAdapter('coovachilli-uam')).toEqual(['gateway']);
-    expect(deploymentModesForAdapter('openwifi-uspot-uam')).toEqual(['native']);
+    expect(deploymentModesForAdapter('ezecloud-uam')).toEqual(['gateway']);
+    expect(deploymentModesForAdapter('ezeap-uam')).toEqual(['native']);
     expect(deploymentModesForAdapter('no-such-adapter')).toEqual([]);
   });
 
@@ -52,6 +52,6 @@ describe('registry mirror helpers (plan §8.2)', () => {
         expect(e?.deviceEnforced).toBe(false);
       }
     }
-    expect(adapterCellEvidence('openwifi-uspot-uam', 'no-such-capability')).toBeUndefined();
+    expect(adapterCellEvidence('ezeap-uam', 'no-such-capability')).toBeUndefined();
   });
 });

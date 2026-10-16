@@ -53,7 +53,7 @@ describe('setup progress', () => {
 describe('nasVendor', () => {
   it('prefers the vendor chosen in the wizard', () => {
     expect(
-      nasVendor({ vendor_key: 'teltonika', adapter_key: 'coovachilli-uam', adapter_config: {} }),
+      nasVendor({ vendor_key: 'teltonika', adapter_key: 'ezecloud-uam', adapter_config: {} }),
     ).toEqual({ vendor_key: 'teltonika', vendor_name: 'Teltonika' });
   });
   it('derives the vendor from the adapter and post-back profile', () => {

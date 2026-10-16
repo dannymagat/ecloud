@@ -22,8 +22,7 @@ await describeIntegration('migration 048 secret-version triggers', () => {
   let pool: Pool;
 
   /** 198.51.100.0/24 is the RFC 5737 documentation range, so no real address can collide. */
-  const randomTestIp = (): string =>
-    `198.51.100.${String(1 + Math.floor(Math.random() * 253))}`;
+  const randomTestIp = (): string => `198.51.100.${String(1 + Math.floor(Math.random() * 253))}`;
 
   beforeAll(() => {
     pool = createPool(getTestDatabaseUrl() ?? '', { max: 1 });
@@ -38,7 +37,10 @@ await describeIntegration('migration 048 secret-version triggers', () => {
    * The ids come from the database so the test does not depend on an id generator.
    */
   async function withScratch(
-    fn: (q: (sql: string, params?: unknown[]) => Promise<void>, ids: { nas: string; portal: string }) => Promise<void>,
+    fn: (
+      q: (sql: string, params?: unknown[]) => Promise<void>,
+      ids: { nas: string; portal: string },
+    ) => Promise<void>,
   ): Promise<void> {
     const client = await pool.connect();
     try {
@@ -59,7 +61,7 @@ await describeIntegration('migration 048 secret-version triggers', () => {
         // ck_nas_clients_nas_ip_by_adapter (D-044): every non-Meraki adapter requires an address,
         // and uq_nas_clients_ip requires it to be distinct, hence the random host octets.
         `INSERT INTO nas_clients (organization_id, site_id, name, nas_identifier, nas_ip, adapter_type_key, adapter_key, secret_ref, status)
-         VALUES ($1, $2, $3, $4, $5, 'coovachilli-uam', 'coovachilli-uam', 'enc:v1.trigger-test', 'active')
+         VALUES ($1, $2, $3, $4, $5, 'ezecloud-uam', 'ezecloud-uam', 'enc:v1.trigger-test', 'active')
          RETURNING id`,
         [orgId, siteId, `NAS ${suffix}`, `nas-${suffix}`, randomTestIp()],
       );

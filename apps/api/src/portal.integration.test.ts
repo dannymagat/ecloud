@@ -71,7 +71,7 @@ await describeIntegration('@ecloud/api captive portal broker (P6-A)', () => {
   const wireMac = () =>
     Array.from(randomBytes(6), (b) => b.toString(16).padStart(2, '0').toUpperCase()).join('-');
 
-  type AdapterKey = 'openwifi-uspot-uam' | 'uspot-upstream-uam' | 'coovachilli-uam';
+  type AdapterKey = 'ezeap-uam' | 'uspot-upstream-uam' | 'ezecloud-uam';
 
   interface Fixture {
     orgId: string;
@@ -103,7 +103,7 @@ await describeIntegration('@ecloud/api captive portal broker (P6-A)', () => {
         nas_ip: nasIp,
         adapter_type_key: adapterKey,
         adapter_key: adapterKey,
-        deployment_mode: adapterKey === 'coovachilli-uam' ? 'gateway' : 'native',
+        deployment_mode: adapterKey === 'ezecloud-uam' ? 'gateway' : 'native',
         secret_ref: PLACEHOLDER_NAS_SECRET_REF,
       })
       .returning('id')
@@ -112,7 +112,7 @@ await describeIntegration('@ecloud/api captive portal broker (P6-A)', () => {
   }
 
   async function fixture(
-    adapterKey: AdapterKey = 'openwifi-uspot-uam',
+    adapterKey: AdapterKey = 'ezeap-uam',
     methods: string[] = ['password', 'voucher', 'click_through'],
   ): Promise<Fixture> {
     const { orgId, siteId } = await createTenant(deps.dbPlatform);
@@ -127,7 +127,7 @@ await describeIntegration('@ecloud/api captive portal broker (P6-A)', () => {
           .toLowerCase()
           .replace(/[^a-z0-9-]/g, '')
           .slice(0, 60),
-        portal_type: adapterKey === 'coovachilli-uam' ? 'coovachilli' : 'uspot',
+        portal_type: adapterKey === 'ezecloud-uam' ? 'coovachilli' : 'uspot',
         network_ref: 'guest',
         auth_methods: methods,
         uam_secret_ref: sealSecretRef(
@@ -210,12 +210,12 @@ await describeIntegration('@ecloud/api captive portal broker (P6-A)', () => {
   }
 
   const flavourOf = (k: AdapterKey): UamFlavour =>
-    k === 'coovachilli-uam'
+    k === 'ezecloud-uam'
       ? 'coovachilli'
       : k === 'uspot-upstream-uam'
         ? 'uspot-upstream'
         : 'uspot-tip';
-  const pathOf = (k: AdapterKey) => (k === 'coovachilli-uam' ? 'chilli' : 'uspot');
+  const pathOf = (k: AdapterKey) => (k === 'ezecloud-uam' ? 'chilli' : 'uspot');
   const uamServer = (k: AdapterKey) => `${deps.config.base.origins.portal}/uam/${pathOf(k)}/`;
 
   interface Device {
@@ -278,8 +278,7 @@ await describeIntegration('@ecloud/api captive portal broker (P6-A)', () => {
   /** What the NAS does with the hand-off: decode username + PAP password. */
   function deviceLogon(f: Fixture, device: Device, url: string) {
     const logon = parseDeviceLogon(url);
-    const decode =
-      f.adapterKey === 'openwifi-uspot-uam' ? deviceDecodePapTip : deviceDecodePapUpstream;
+    const decode = f.adapterKey === 'ezeap-uam' ? deviceDecodePapTip : deviceDecodePapUpstream;
     return {
       logon,
       username: logon.username ?? '',
@@ -348,7 +347,7 @@ await describeIntegration('@ecloud/api captive portal broker (P6-A)', () => {
 
   // ------------------------------------------------------------------------------ happy path
 
-  it.each(['openwifi-uspot-uam', 'uspot-upstream-uam', 'coovachilli-uam'] as const)(
+  it.each(['ezeap-uam', 'uspot-upstream-uam', 'ezecloud-uam'] as const)(
     '%s: redirect → login → single-use credential → AAA Access-Accept with policy attributes',
     async (adapterKey) => {
       const f = await fixture(adapterKey);
@@ -491,7 +490,7 @@ await describeIntegration('@ecloud/api captive portal broker (P6-A)', () => {
   });
 
   it('revoked voucher and disabled methods are refused at the portal', async () => {
-    const f = await fixture('openwifi-uspot-uam', ['password']);
+    const f = await fixture('ezeap-uam', ['password']);
     const flow = await startFlow(f);
     const v = await identify(flow.flowId, { method: 'voucher', code: f.voucherCode });
     expect(v.status).toBe(403);
@@ -586,7 +585,7 @@ await describeIntegration('@ecloud/api captive portal broker (P6-A)', () => {
   it('wrong MAC, wrong session, wrong NAS (same tenant), other tenant NAS, bad password: rejected, credential survives', async () => {
     const f = await fixture();
     const cred = await passwordCredential(f);
-    const other = await addNas(f.orgId, f.siteId, 'openwifi-uspot-uam');
+    const other = await addNas(f.orgId, f.siteId, 'ezeap-uam');
     const foreign = await fixture();
     const cases: [Record<string, string>, string][] = [
       [{ 'Calling-Station-Id': wireMac() }, 'portal_credential_mac_mismatch'],

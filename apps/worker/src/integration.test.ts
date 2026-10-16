@@ -107,8 +107,8 @@ await describeIntegration('@ecloud/worker against PostgreSQL', () => {
         name: `NAS ${RUN}`,
         nas_identifier: `nas-${RUN}`,
         nas_ip: NAS_IP,
-        adapter_type_key: 'coovachilli-uam',
-        adapter_key: 'coovachilli-uam',
+        adapter_type_key: 'ezecloud-uam',
+        adapter_key: 'ezecloud-uam',
         secret_ref: 'env:ECLOUD_WORKER_IT_NAS_SECRET',
       })
       .execute();

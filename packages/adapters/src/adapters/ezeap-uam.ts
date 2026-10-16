@@ -1,5 +1,5 @@
 /**
- * `openwifi-uspot-uam`: TIP-fork uspot on EZEAP (CAPTIVE_PORTAL_ARCHITECTURE.md §3 "(T)").
+ * `ezeap-uam`: TIP-fork uspot on EZEAP (CAPTIVE_PORTAL_ARCHITECTURE.md §3 "(T)").
  * Assumed EZEAP adapter until the shipped uspot code base is confirmed (A4 §0 item 1).
  *
  * DEVICE LIMITATION (LAB, 2026-10-14): uspot's RADIUS client, radcli 1.3.0, adds
@@ -47,7 +47,7 @@ const INTERIM_VERIFIED =
 const CLASS_VERIFIED =
   'CAPTIVE_PORTAL_ARCHITECTURE.md §3.4 reply table row Class (T: copied to accounting); AAA_ARCHITECTURE.md §4.3 row Correlation';
 const VLAN_UNSUPPORTED =
-  "CAPTIVE_PORTAL_ARCHITECTURE.md §3.4 reply table row 'WISPr-Redirection-URL, Filter-Id, VLAN attrs' (T: no); POLICY_ENGINE.md §3.1 row vlan (openwifi-uspot-uam): UNSUPPORTED";
+  "CAPTIVE_PORTAL_ARCHITECTURE.md §3.4 reply table row 'WISPr-Redirection-URL, Filter-Id, VLAN attrs' (T: no); POLICY_ENGINE.md §3.1 row vlan (ezeap-uam): UNSUPPORTED";
 const IO_OCTETS_UNSUPPORTED =
   "CAPTIVE_PORTAL_ARCHITECTURE.md §3.4 reply table row 'ChilliSpot-Max-Input/Output-Octets(+Gigawords)' (T: no)";
 const DISCONNECT_RDT =
@@ -64,7 +64,7 @@ const VLAN_UNSUP_SRC = sourced(VLAN_UNSUPPORTED, [SRC.V055_T]);
 const IO_OCTETS_UNSUP_SRC = sourced(IO_OCTETS_UNSUPPORTED, [SRC.V054_T]);
 
 export const capabilities: AdapterCapabilities = {
-  key: 'openwifi-uspot-uam',
+  key: 'ezeap-uam',
   version: '0.1.0',
   portalType: 'uam-chillispot',
   granularity: 'per-client',
@@ -107,7 +107,7 @@ export const capabilities: AdapterCapabilities = {
     evidenceLevel: 'VERIFIED_FROM_SOURCE',
     evidenceRefs: [SRC.V059],
     evidence:
-      'CAPTIVE_PORTAL_ARCHITECTURE.md §7.4 uspot-uam CoA: attribute changes are not applied by T → re-authentication is the only way to change a live rate; POLICY_ENGINE.md §3.1 row coa_change (openwifi-uspot-uam): UNSUPPORTED',
+      'CAPTIVE_PORTAL_ARCHITECTURE.md §7.4 uspot-uam CoA: attribute changes are not applied by T → re-authentication is the only way to change a live rate; POLICY_ENGINE.md §3.1 row coa_change (ezeap-uam): UNSUPPORTED',
   },
   macAuth: {
     status: 'VERIFIED_SUPPORTED',
@@ -124,13 +124,7 @@ export const capabilities: AdapterCapabilities = {
     decl('burst_upload_kbps', 'UNSUPPORTED', 'VERIFIED_FROM_SOURCE', EV_SOURCED.burstAbsent),
     decl('burst_duration_s', 'UNSUPPORTED', 'VERIFIED_FROM_SOURCE', EV_SOURCED.burstAbsent),
     decl('quota_daily_bytes', 'VERIFIED_SUPPORTED', 'VERIFIED_FROM_SOURCE', QUOTA_SRC, QUOTA_NOTE),
-    decl(
-      'quota_weekly_bytes',
-      'VERIFIED_SUPPORTED',
-      'VERIFIED_FROM_SOURCE',
-      QUOTA_SRC,
-      QUOTA_NOTE,
-    ),
+    decl('quota_weekly_bytes', 'VERIFIED_SUPPORTED', 'VERIFIED_FROM_SOURCE', QUOTA_SRC, QUOTA_NOTE),
     decl(
       'quota_monthly_bytes',
       'VERIFIED_SUPPORTED',

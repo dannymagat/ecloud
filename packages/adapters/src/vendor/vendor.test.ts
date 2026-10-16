@@ -46,7 +46,7 @@ const NAS_USPOT: RegisteredNas = {
   organizationId: 'org-a',
   siteId: 'site-a',
   identifier: 'nas-uspot-1',
-  adapterKey: 'openwifi-uspot-uam',
+  adapterKey: 'ezeap-uam',
   controllerId: null,
   deploymentMode: 'native',
   uamServerUrl: USPOT_SERVER,
@@ -63,8 +63,8 @@ function lookup(nas: RegisteredNas | null, extra: Partial<NasLookup> = {}): NasL
   };
 }
 
-const uspot = getVendorAdapter('openwifi-uspot-uam');
-const chilli = getVendorAdapter('coovachilli-uam');
+const uspot = getVendorAdapter('ezeap-uam');
+const chilli = getVendorAdapter('ezecloud-uam');
 
 function parse(query: string, adapter = uspot): ParsedRedirect {
   const p = adapter.parseRedirect({ url: `${USPOT_SERVER}?${query}`, method: 'GET' });
@@ -91,9 +91,9 @@ describe('first-party VendorAdapter wrappers (AC1, AC2)', () => {
     const all = listVendorAdapters();
     expect(all.map((v) => v.key)).toEqual([
       'openwifi-hostapd-radius',
-      'openwifi-uspot-uam',
+      'ezeap-uam',
       'uspot-upstream-uam',
-      'coovachilli-uam',
+      'ezecloud-uam',
       'openwifi-config',
       'generic-radius-8021x',
       'mikrotik-hotspot',
@@ -183,7 +183,7 @@ describe('first-party VendorAdapter wrappers (AC1, AC2)', () => {
       interimIntervalS: 300,
       nasAcctIntervalUnset: true,
     };
-    const engine = getAdapter('openwifi-uspot-uam');
+    const engine = getAdapter('ezeap-uam');
     const translateSpy = vi.spyOn(engine, 'translate');
     const replySpy = vi.spyOn(engine, 'buildReplyAttributes');
     try {
@@ -209,7 +209,7 @@ describe('first-party VendorAdapter wrappers (AC1, AC2)', () => {
       nasIdentifier: 'nas-uspot-1',
     };
     const req = uspot.revokeSession(session);
-    expect(req).toEqual(getAdapter('openwifi-uspot-uam').buildDisconnect(session));
+    expect(req).toEqual(getAdapter('ezeap-uam').buildDisconnect(session));
     expect(req).toMatchObject({ kind: 'disconnect', status: 'REQUIRES_DEVICE_TEST' });
     expect(chilli.revokeSession({ sessionId: 's' })).toMatchObject({ unsupported: true });
   });
@@ -288,7 +288,7 @@ describe('UAM redirect parsing and validation (AC3)', () => {
       siteId: 'site-a',
       vendorKey: 'ezelink',
       controllerId: null,
-      nas: { id: 'nas-uspot-1', identifier: 'nas-uspot-1', adapterKey: 'openwifi-uspot-uam' },
+      nas: { id: 'nas-uspot-1', identifier: 'nas-uspot-1', adapterKey: 'ezeap-uam' },
       apMac: '00:11:22:33:44:55',
       clientMac: 'aa:bb:cc:dd:ee:02',
       ssid: 'Guest',
@@ -311,7 +311,7 @@ describe('UAM redirect parsing and validation (AC3)', () => {
       reason: 'bad_signature',
     });
     expect(await v(good, lookup(null))).toMatchObject({ ok: false, reason: 'unknown_nas' });
-    expect(await v(good, lookup({ ...NAS_USPOT, adapterKey: 'coovachilli-uam' }))).toMatchObject({
+    expect(await v(good, lookup({ ...NAS_USPOT, adapterKey: 'ezecloud-uam' }))).toMatchObject({
       ok: false,
       reason: 'unknown_nas',
     });
@@ -467,7 +467,9 @@ describe('setup guide, health', () => {
     }
     const steps = uspot.buildSetupGuide({ siteId: 'site-a', nasId: 'nas-1' });
     // EZEAP's canonical entry is /uam/ezeap/ (owner, 2026-10-16); /uam/uspot/ stays served.
-    expect(steps.find((s) => s.id === 'uam-server')?.value).toBe(USPOT_SERVER.replace('/uam/uspot/', '/uam/ezeap/'));
+    expect(steps.find((s) => s.id === 'uam-server')?.value).toBe(
+      USPOT_SERVER.replace('/uam/uspot/', '/uam/ezeap/'),
+    );
     expect(steps.find((s) => s.id === 'nasid')?.value).toBe('nas-1');
   });
 

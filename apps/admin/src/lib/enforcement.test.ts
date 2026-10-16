@@ -75,7 +75,7 @@ describe('amber flags and V12 guard', () => {
   it('amberFlags lists changed fields per adapter, limited to the given adapters', () => {
     const columns = [
       {
-        adapter: 'openwifi-uspot-uam',
+        adapter: 'ezeap-uam',
         fields: [
           { field: 'download_rate_kbps', status: 'REQUIRES_DEVICE_TEST' },
           { field: 'quota_daily_bytes', status: 'ECLOUD_SIDE_ONLY' },
@@ -83,17 +83,17 @@ describe('amber flags and V12 guard', () => {
         ],
       },
       {
-        adapter: 'coovachilli-uam',
+        adapter: 'ezecloud-uam',
         fields: [{ field: 'download_rate_kbps', status: 'REQUIRES_DEVICE_TEST' }],
       },
     ];
     const fields = ['download_rate_kbps', 'quota_daily_bytes', 'idle_timeout_s'];
     expect(amberFlags(columns, fields).map((f) => `${f.adapter}:${f.field}:${f.status}`)).toEqual([
-      'openwifi-uspot-uam:download_rate_kbps:REQUIRES_DEVICE_TEST',
-      'openwifi-uspot-uam:quota_daily_bytes:ECLOUD_SIDE_ONLY',
-      'coovachilli-uam:download_rate_kbps:REQUIRES_DEVICE_TEST',
+      'ezeap-uam:download_rate_kbps:REQUIRES_DEVICE_TEST',
+      'ezeap-uam:quota_daily_bytes:ECLOUD_SIDE_ONLY',
+      'ezecloud-uam:download_rate_kbps:REQUIRES_DEVICE_TEST',
     ]);
-    expect(amberFlags(columns, fields, ['coovachilli-uam'])).toHaveLength(1);
+    expect(amberFlags(columns, fields, ['ezecloud-uam'])).toHaveLength(1);
   });
 
   it('labels and bounds', () => {

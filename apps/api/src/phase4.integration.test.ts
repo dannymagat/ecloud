@@ -4,7 +4,11 @@
  * Skipped with a message when ECLOUD_TEST_DATABASE_URL is unset / unreachable. Every test builds
  * its own organizations and uses its own in-memory rate-limit store.
  */
-import { describeIntegration, migrateTestDatabase, PLACEHOLDER_NAS_SECRET_REF } from '@ecloud/testing';
+import {
+  describeIntegration,
+  migrateTestDatabase,
+  PLACEHOLDER_NAS_SECRET_REF,
+} from '@ecloud/testing';
 import { newId } from '@ecloud/shared';
 import { generate } from 'otplib';
 import request from 'supertest';
@@ -99,7 +103,7 @@ await describeIntegration('@ecloud/api Phase 4 against ecloud_test', () => {
       .send(body as object);
   }
 
-  async function orgFixture(apps: Apps, adapterKey = 'coovachilli-uam') {
+  async function orgFixture(apps: Apps, adapterKey = 'ezecloud-uam') {
     const { orgId, siteId, siteId2 } = await createTenant(deps.dbPlatform);
     const admin = await createAdmin(deps.dbPlatform, [
       { template: 'org_admin', scope: 'organization', orgId },
@@ -132,7 +136,7 @@ await describeIntegration('@ecloud/api Phase 4 against ecloud_test', () => {
 
   it('D-035: NAS create requires an engine adapter_key; authorize resolves the adapter from it', async () => {
     const apps = freshApps();
-    const f = await orgFixture(apps, 'openwifi-uspot-uam');
+    const f = await orgFixture(apps, 'ezeap-uam');
     const missing = await f.agent
       .post(`/api/v1/orgs/${f.orgId}/nas`)
       .set(BROWSER)
@@ -155,8 +159,8 @@ await describeIntegration('@ecloud/api Phase 4 against ecloud_test', () => {
       .where('id', '=', f.nasId)
       .executeTakeFirstOrThrow();
     expect(row).toEqual({
-      adapter_key: 'openwifi-uspot-uam',
-      adapter_type_key: 'openwifi-uspot-uam',
+      adapter_key: 'ezeap-uam',
+      adapter_type_key: 'ezeap-uam',
     });
 
     const patched = await f.agent

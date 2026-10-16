@@ -861,6 +861,26 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/api/v1/orgs/{orgId}/nas/{id}/adopt': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Adopt a NAS and confirm a policy resolves for it (§7)
+     * @description Permission: `nas:adopt`
+     */
+    post: operations['post_api_v1_orgs_orgId_nas_id_adopt'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/api/v1/orgs/{orgId}/sites': {
     parameters: {
       query?: never;
@@ -1031,6 +1051,46 @@ export interface paths {
      * @description Permission: `nas:secret:rotate`
      */
     post: operations['post_api_v1_orgs_orgId_nas_id_rotate_secret'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/orgs/{orgId}/nas/{id}/block': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Prohibit a NAS: denied for authorization and for automatic adoption (§5)
+     * @description Permission: `nas:block`
+     */
+    post: operations['post_api_v1_orgs_orgId_nas_id_block'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/orgs/{orgId}/nas/{id}/unblock': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Lift a block, leaving the NAS disabled rather than active (§11)
+     * @description Permission: `nas:block`
+     */
+    post: operations['post_api_v1_orgs_orgId_nas_id_unblock'];
     delete?: never;
     options?: never;
     head?: never;
@@ -1243,6 +1303,110 @@ export interface paths {
      * @description Permission: `policy:update`
      */
     patch: operations['patch_api_v1_orgs_orgId_schedules_id'];
+    trace?: never;
+  };
+  '/api/v1/orgs/{orgId}/bandwidth-profiles': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * List bandwidth profiles
+     * @description Permission: `policy:read`
+     */
+    get: operations['get_api_v1_orgs_orgId_bandwidth_profiles'];
+    put?: never;
+    /**
+     * Create a bandwidth profile
+     * @description Permission: `policy:create`
+     */
+    post: operations['post_api_v1_orgs_orgId_bandwidth_profiles'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/orgs/{orgId}/bandwidth-profiles/{id}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Get a bandwidth profile
+     * @description Permission: `policy:read`
+     */
+    get: operations['get_api_v1_orgs_orgId_bandwidth_profiles_id'];
+    put?: never;
+    post?: never;
+    /**
+     * Delete a bandwidth profile
+     * @description Permission: `policy:delete`
+     */
+    delete: operations['delete_api_v1_orgs_orgId_bandwidth_profiles_id'];
+    options?: never;
+    head?: never;
+    /**
+     * Update a bandwidth profile (If-Match supported)
+     * @description Permission: `policy:update`
+     */
+    patch: operations['patch_api_v1_orgs_orgId_bandwidth_profiles_id'];
+    trace?: never;
+  };
+  '/api/v1/orgs/{orgId}/access-plans': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * List access plans
+     * @description Permission: `policy:read`
+     */
+    get: operations['get_api_v1_orgs_orgId_access_plans'];
+    put?: never;
+    /**
+     * Create a access plan
+     * @description Permission: `policy:create`
+     */
+    post: operations['post_api_v1_orgs_orgId_access_plans'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/orgs/{orgId}/access-plans/{id}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Get a access plan
+     * @description Permission: `policy:read`
+     */
+    get: operations['get_api_v1_orgs_orgId_access_plans_id'];
+    put?: never;
+    post?: never;
+    /**
+     * Delete a access plan
+     * @description Permission: `policy:delete`
+     */
+    delete: operations['delete_api_v1_orgs_orgId_access_plans_id'];
+    options?: never;
+    head?: never;
+    /**
+     * Update a access plan (If-Match supported)
+     * @description Permission: `policy:update`
+     */
+    patch: operations['patch_api_v1_orgs_orgId_access_plans_id'];
     trace?: never;
   };
   '/api/v1/orgs/{orgId}/access-points': {
@@ -1991,6 +2155,66 @@ export interface paths {
      * @description Permission: `captive_portal:update`
      */
     post: operations['post_api_v1_orgs_orgId_captive_portals_id_terms'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/orgs/{orgId}/captive-portals/{id}/versions': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * List the published versions of a captive portal, and the draft publish check
+     * @description Permission: `captive_portal:read`
+     */
+    get: operations['get_api_v1_orgs_orgId_captive_portals_id_versions'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/orgs/{orgId}/captive-portals/{id}/publish': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Publish the current draft as a new immutable version and serve it to guests
+     * @description Permission: `captive_portal:update`
+     */
+    post: operations['post_api_v1_orgs_orgId_captive_portals_id_publish'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/orgs/{orgId}/captive-portals/{id}/versions/{versionId}/restore': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Roll back to an earlier published version (drafts and history are kept)
+     * @description Permission: `captive_portal:update`
+     */
+    post: operations['post_api_v1_orgs_orgId_captive_portals_id_versions_versionId_restore'];
     delete?: never;
     options?: never;
     head?: never;
@@ -5952,6 +6176,7 @@ export interface operations {
     requestBody?: {
       content: {
         'application/json': {
+          bandwidth_profile_id?: string | null;
           burst_download_kbps?: number | null;
           burst_duration_s?: number | null;
           burst_upload_kbps?: number | null;
@@ -5962,10 +6187,20 @@ export interface operations {
           max_concurrent_sessions?: number | null;
           max_devices?: number | null;
           name: string;
+          online_time_daily_s?: number | null;
+          online_time_monthly_s?: number | null;
+          online_time_total_s?: number | null;
+          online_time_weekly_s?: number | null;
           priority?: number;
           quota_daily_bytes?: (number | string) | null;
+          quota_direction?: ('combined' | 'upload' | 'download') | null;
+          quota_exhaustion_action?: ('deny' | 'reduce_speed' | 'require_renewal') | null;
           quota_monthly_bytes?: (number | string) | null;
           quota_total_bytes?: (number | string) | null;
+          quota_weekly_bytes?: (number | string) | null;
+          reconnect_cooldown_s?: number | null;
+          reduced_download_rate_kbps?: number | null;
+          reduced_upload_rate_kbps?: number | null;
           schedule_id?: string | null;
           /** @enum {string} */
           scope_type: 'user' | 'group' | 'site' | 'temporary';
@@ -5973,6 +6208,27 @@ export interface operations {
           site_id?: string | null;
           /** @enum {string} */
           status?: 'draft' | 'active' | 'retired';
+          unlimited_fields?: (
+            | 'download_rate_kbps'
+            | 'upload_rate_kbps'
+            | 'burst_download_kbps'
+            | 'burst_upload_kbps'
+            | 'burst_duration_s'
+            | 'quota_daily_bytes'
+            | 'quota_weekly_bytes'
+            | 'quota_monthly_bytes'
+            | 'quota_total_bytes'
+            | 'online_time_daily_s'
+            | 'online_time_weekly_s'
+            | 'online_time_monthly_s'
+            | 'online_time_total_s'
+            | 'session_timeout_s'
+            | 'idle_timeout_s'
+            | 'max_concurrent_sessions'
+            | 'max_devices'
+            | 'valid_until'
+            | 'schedule_id'
+          )[];
           upload_rate_kbps?: number | null;
           valid_from?: string | null;
           valid_until?: string | null;
@@ -6042,9 +6298,9 @@ export interface operations {
         at?: string;
         adapter?:
           | 'openwifi-hostapd-radius'
-          | 'openwifi-uspot-uam'
+          | 'ezeap-uam'
           | 'uspot-upstream-uam'
-          | 'coovachilli-uam'
+          | 'ezecloud-uam'
           | 'openwifi-config'
           | 'generic-radius-8021x'
           | 'mikrotik-hotspot'
@@ -6241,6 +6497,7 @@ export interface operations {
     requestBody?: {
       content: {
         'application/json': {
+          bandwidth_profile_id?: string | null;
           burst_download_kbps?: number | null;
           burst_duration_s?: number | null;
           burst_upload_kbps?: number | null;
@@ -6251,10 +6508,20 @@ export interface operations {
           max_concurrent_sessions?: number | null;
           max_devices?: number | null;
           name?: string;
+          online_time_daily_s?: number | null;
+          online_time_monthly_s?: number | null;
+          online_time_total_s?: number | null;
+          online_time_weekly_s?: number | null;
           priority?: number;
           quota_daily_bytes?: (number | string) | null;
+          quota_direction?: ('combined' | 'upload' | 'download') | null;
+          quota_exhaustion_action?: ('deny' | 'reduce_speed' | 'require_renewal') | null;
           quota_monthly_bytes?: (number | string) | null;
           quota_total_bytes?: (number | string) | null;
+          quota_weekly_bytes?: (number | string) | null;
+          reconnect_cooldown_s?: number | null;
+          reduced_download_rate_kbps?: number | null;
+          reduced_upload_rate_kbps?: number | null;
           schedule_id?: string | null;
           /** @enum {string} */
           scope_type?: 'user' | 'group' | 'site' | 'temporary';
@@ -6262,6 +6529,27 @@ export interface operations {
           site_id?: string | null;
           /** @enum {string} */
           status?: 'draft' | 'active' | 'retired';
+          unlimited_fields?: (
+            | 'download_rate_kbps'
+            | 'upload_rate_kbps'
+            | 'burst_download_kbps'
+            | 'burst_upload_kbps'
+            | 'burst_duration_s'
+            | 'quota_daily_bytes'
+            | 'quota_weekly_bytes'
+            | 'quota_monthly_bytes'
+            | 'quota_total_bytes'
+            | 'online_time_daily_s'
+            | 'online_time_weekly_s'
+            | 'online_time_monthly_s'
+            | 'online_time_total_s'
+            | 'session_timeout_s'
+            | 'idle_timeout_s'
+            | 'max_concurrent_sessions'
+            | 'max_devices'
+            | 'valid_until'
+            | 'schedule_id'
+          )[];
           upload_rate_kbps?: number | null;
           valid_from?: string | null;
           valid_until?: string | null;
@@ -6343,6 +6631,7 @@ export interface operations {
     requestBody?: {
       content: {
         'application/json': {
+          bandwidth_profile_id?: string | null;
           burst_download_kbps?: number | null;
           burst_duration_s?: number | null;
           burst_upload_kbps?: number | null;
@@ -6354,10 +6643,20 @@ export interface operations {
           max_concurrent_sessions?: number | null;
           max_devices?: number | null;
           name?: string;
+          online_time_daily_s?: number | null;
+          online_time_monthly_s?: number | null;
+          online_time_total_s?: number | null;
+          online_time_weekly_s?: number | null;
           priority?: number;
           quota_daily_bytes?: (number | string) | null;
+          quota_direction?: ('combined' | 'upload' | 'download') | null;
+          quota_exhaustion_action?: ('deny' | 'reduce_speed' | 'require_renewal') | null;
           quota_monthly_bytes?: (number | string) | null;
           quota_total_bytes?: (number | string) | null;
+          quota_weekly_bytes?: (number | string) | null;
+          reconnect_cooldown_s?: number | null;
+          reduced_download_rate_kbps?: number | null;
+          reduced_upload_rate_kbps?: number | null;
           schedule_id?: string | null;
           /** @enum {string} */
           scope_type?: 'user' | 'group' | 'site' | 'temporary';
@@ -6365,6 +6664,27 @@ export interface operations {
           site_id?: string | null;
           /** @enum {string} */
           status?: 'draft' | 'active' | 'retired';
+          unlimited_fields?: (
+            | 'download_rate_kbps'
+            | 'upload_rate_kbps'
+            | 'burst_download_kbps'
+            | 'burst_upload_kbps'
+            | 'burst_duration_s'
+            | 'quota_daily_bytes'
+            | 'quota_weekly_bytes'
+            | 'quota_monthly_bytes'
+            | 'quota_total_bytes'
+            | 'online_time_daily_s'
+            | 'online_time_weekly_s'
+            | 'online_time_monthly_s'
+            | 'online_time_total_s'
+            | 'session_timeout_s'
+            | 'idle_timeout_s'
+            | 'max_concurrent_sessions'
+            | 'max_devices'
+            | 'valid_until'
+            | 'schedule_id'
+          )[];
           upload_rate_kbps?: number | null;
           valid_from?: string | null;
           valid_until?: string | null;
@@ -6881,13 +7201,37 @@ export interface operations {
               /** @enum {string} */
               activity: 'active' | 'quiet' | 'silent' | 'never';
               adapter_key: string | null;
+              advisories: ('ON_PLATFORM_DEFAULT_POLICY' | 'ON_PLATFORM_DEFAULT_PORTAL')[];
+              block_reason: string | null;
               has_secret: boolean;
               id: string;
+              is_adopted: boolean;
               last_activity_at: string | null;
               name: string;
               nas_ip: string | null;
+              pending_reasons: (
+                | 'NOT_ADOPTED'
+                | 'IDENTITY_CONFLICT'
+                | 'OWNERSHIP_UNRESOLVED'
+                | 'POLICY_UNAVAILABLE'
+                | 'POLICY_DISABLED'
+                | 'NO_POLICY'
+              )[];
+              policy_evaluated: boolean;
+              primary_reason:
+                | (
+                    | 'NOT_ADOPTED'
+                    | 'IDENTITY_CONFLICT'
+                    | 'OWNERSHIP_UNRESOLVED'
+                    | 'POLICY_UNAVAILABLE'
+                    | 'POLICY_DISABLED'
+                    | 'NO_POLICY'
+                  )
+                | null;
               site_id: string;
               site_name: string;
+              /** @enum {string} */
+              state: 'blocked' | 'disabled' | 'pending' | 'active';
               status: string;
               vendor_key: string | null;
               vendor_name: string | null;
@@ -7149,6 +7493,113 @@ export interface operations {
       };
       /** @description Not a mikrotik-hotspot NAS (application/problem+json) */
       422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+    };
+  };
+  post_api_v1_orgs_orgId_nas_id_adopt: {
+    parameters: {
+      query?: never;
+      header?: {
+        'Idempotency-Key'?: string;
+      };
+      path: {
+        orgId: string;
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: {
+      content: {
+        'application/json': {
+          /** Format: uuid */
+          expect_site_id?: string;
+          /** Format: uuid */
+          policy_id?: string;
+        };
+      };
+    };
+    responses: {
+      /** @description Adopted; `state` is the derived eligibility, not an assertion of success */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            advisories: ('ON_PLATFORM_DEFAULT_POLICY' | 'ON_PLATFORM_DEFAULT_PORTAL')[];
+            assigned_site_id: string | null;
+            /** Format: uuid */
+            id: string;
+            is_adopted: boolean;
+            pending_reasons: (
+              | 'NOT_ADOPTED'
+              | 'IDENTITY_CONFLICT'
+              | 'OWNERSHIP_UNRESOLVED'
+              | 'POLICY_UNAVAILABLE'
+              | 'POLICY_DISABLED'
+              | 'NO_POLICY'
+            )[];
+            /** @enum {string} */
+            policy_source: 'assigned' | 'platform_default' | 'missing';
+            primary_reason:
+              | (
+                  | 'NOT_ADOPTED'
+                  | 'IDENTITY_CONFLICT'
+                  | 'OWNERSHIP_UNRESOLVED'
+                  | 'POLICY_UNAVAILABLE'
+                  | 'POLICY_DISABLED'
+                  | 'NO_POLICY'
+                )
+              | null;
+            /** @enum {string} */
+            state: 'blocked' | 'disabled' | 'pending' | 'active';
+          };
+        };
+      };
+      /** @description Validation failed (application/problem+json) */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Authentication required */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Permission denied */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Not found (also returned for objects of other tenants) */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description The NAS is blocked; adoption is prohibited (§5) */
+      409: {
         headers: {
           [name: string]: unknown;
         };
@@ -7869,7 +8320,7 @@ export interface operations {
       query?: {
         limit?: number;
         cursor?: string;
-        status?: 'active' | 'disabled';
+        status?: 'active' | 'disabled' | 'blocked';
         site_id?: string;
       };
       header?: never;
@@ -7952,9 +8403,9 @@ export interface operations {
           /** @enum {string} */
           adapter_key:
             | 'openwifi-hostapd-radius'
-            | 'openwifi-uspot-uam'
+            | 'ezeap-uam'
             | 'uspot-upstream-uam'
-            | 'coovachilli-uam'
+            | 'ezecloud-uam'
             | 'generic-radius-8021x'
             | 'mikrotik-hotspot'
             | 'external-portal-postback'
@@ -8173,9 +8624,9 @@ export interface operations {
           /** @enum {string} */
           adapter_key?:
             | 'openwifi-hostapd-radius'
-            | 'openwifi-uspot-uam'
+            | 'ezeap-uam'
             | 'uspot-upstream-uam'
-            | 'coovachilli-uam'
+            | 'ezecloud-uam'
             | 'generic-radius-8021x'
             | 'mikrotik-hotspot'
             | 'external-portal-postback'
@@ -8281,6 +8732,142 @@ export interface operations {
     requestBody?: never;
     responses: {
       /** @description New secret */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            id: string;
+          } & {
+            [key: string]: unknown;
+          };
+        };
+      };
+      /** @description Validation failed (application/problem+json) */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Authentication required */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Permission denied */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Not found (also returned for objects of other tenants) */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+    };
+  };
+  post_api_v1_orgs_orgId_nas_id_block: {
+    parameters: {
+      query?: never;
+      header?: {
+        'Idempotency-Key'?: string;
+      };
+      path: {
+        orgId: string;
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: {
+      content: {
+        'application/json': {
+          reason: string;
+        };
+      };
+    };
+    responses: {
+      /** @description Blocked */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            id: string;
+          } & {
+            [key: string]: unknown;
+          };
+        };
+      };
+      /** @description Validation failed (application/problem+json) */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Authentication required */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Permission denied */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Not found (also returned for objects of other tenants) */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+    };
+  };
+  post_api_v1_orgs_orgId_nas_id_unblock: {
+    parameters: {
+      query?: never;
+      header?: {
+        'Idempotency-Key'?: string;
+      };
+      path: {
+        orgId: string;
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Unblocked */
       200: {
         headers: {
           [name: string]: unknown;
@@ -9659,6 +10246,723 @@ export interface operations {
             start: string;
           }[];
           timezone?: string;
+        };
+      };
+    };
+    responses: {
+      /** @description Updated */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            id: string;
+          } & {
+            [key: string]: unknown;
+          };
+        };
+      };
+      /** @description Validation failed (application/problem+json) */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Authentication required */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Permission denied */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Not found (also returned for objects of other tenants) */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description If-Match mismatch */
+      412: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+    };
+  };
+  get_api_v1_orgs_orgId_bandwidth_profiles: {
+    parameters: {
+      query?: {
+        limit?: number;
+        cursor?: string;
+      };
+      header?: never;
+      path: {
+        orgId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description bandwidth profile page */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            data: {
+              [key: string]: unknown;
+            }[];
+            next_cursor: string | null;
+          };
+        };
+      };
+      /** @description Validation failed (application/problem+json) */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Authentication required */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Permission denied */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Not found (also returned for objects of other tenants) */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+    };
+  };
+  post_api_v1_orgs_orgId_bandwidth_profiles: {
+    parameters: {
+      query?: never;
+      header?: {
+        'Idempotency-Key'?: string;
+      };
+      path: {
+        orgId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: {
+      content: {
+        'application/json': {
+          burst_download_kbps?: number | null;
+          burst_duration_s?: number | null;
+          burst_upload_kbps?: number | null;
+          description?: string;
+          download_rate_kbps?: number | null;
+          name: string;
+          upload_rate_kbps?: number | null;
+        };
+      };
+    };
+    responses: {
+      /** @description Created */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            id: string;
+          } & {
+            [key: string]: unknown;
+          };
+        };
+      };
+      /** @description Validation failed (application/problem+json) */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Authentication required */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Permission denied */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Not found (also returned for objects of other tenants) */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+    };
+  };
+  get_api_v1_orgs_orgId_bandwidth_profiles_id: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        orgId: string;
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description bandwidth profile */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            id: string;
+          } & {
+            [key: string]: unknown;
+          };
+        };
+      };
+      /** @description Validation failed (application/problem+json) */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Authentication required */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Permission denied */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Not found (also returned for objects of other tenants) */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+    };
+  };
+  delete_api_v1_orgs_orgId_bandwidth_profiles_id: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        orgId: string;
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Deleted */
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Validation failed (application/problem+json) */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Authentication required */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Permission denied */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Not found (also returned for objects of other tenants) */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+    };
+  };
+  patch_api_v1_orgs_orgId_bandwidth_profiles_id: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        orgId: string;
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: {
+      content: {
+        'application/json': {
+          burst_download_kbps?: number | null;
+          burst_duration_s?: number | null;
+          burst_upload_kbps?: number | null;
+          description?: string;
+          download_rate_kbps?: number | null;
+          name?: string;
+          upload_rate_kbps?: number | null;
+        };
+      };
+    };
+    responses: {
+      /** @description Updated */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            id: string;
+          } & {
+            [key: string]: unknown;
+          };
+        };
+      };
+      /** @description Validation failed (application/problem+json) */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Authentication required */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Permission denied */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Not found (also returned for objects of other tenants) */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description If-Match mismatch */
+      412: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+    };
+  };
+  get_api_v1_orgs_orgId_access_plans: {
+    parameters: {
+      query?: {
+        limit?: number;
+        cursor?: string;
+        site_id?: string;
+      };
+      header?: never;
+      path: {
+        orgId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description access plan page */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            data: {
+              [key: string]: unknown;
+            }[];
+            next_cursor: string | null;
+          };
+        };
+      };
+      /** @description Validation failed (application/problem+json) */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Authentication required */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Permission denied */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Not found (also returned for objects of other tenants) */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+    };
+  };
+  post_api_v1_orgs_orgId_access_plans: {
+    parameters: {
+      query?: never;
+      header?: {
+        'Idempotency-Key'?: string;
+      };
+      path: {
+        orgId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: {
+      content: {
+        'application/json': {
+          /** @enum {string} */
+          activation_trigger?: 'creation' | 'purchase' | 'first_login';
+          code?: string | null;
+          currency?: string | null;
+          description?: string;
+          display_order?: number;
+          eligible_auth_methods?: (
+            'password' | 'voucher' | 'click_through' | 'email_otp' | 'sms_otp' | 'idp' | 'mac'
+          )[];
+          enabled?: boolean;
+          is_default?: boolean;
+          name: string;
+          /** @enum {string} */
+          plan_type?: 'free' | 'paid';
+          /** Format: uuid */
+          policy_id: string;
+          price_minor?: number | null;
+          site_id?: string | null;
+          validity_duration_s?: number | null;
+        };
+      };
+    };
+    responses: {
+      /** @description Created */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            id: string;
+          } & {
+            [key: string]: unknown;
+          };
+        };
+      };
+      /** @description Validation failed (application/problem+json) */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Authentication required */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Permission denied */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Not found (also returned for objects of other tenants) */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+    };
+  };
+  get_api_v1_orgs_orgId_access_plans_id: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        orgId: string;
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description access plan */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            id: string;
+          } & {
+            [key: string]: unknown;
+          };
+        };
+      };
+      /** @description Validation failed (application/problem+json) */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Authentication required */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Permission denied */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Not found (also returned for objects of other tenants) */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+    };
+  };
+  delete_api_v1_orgs_orgId_access_plans_id: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        orgId: string;
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Deleted */
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Validation failed (application/problem+json) */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Authentication required */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Permission denied */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Not found (also returned for objects of other tenants) */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+    };
+  };
+  patch_api_v1_orgs_orgId_access_plans_id: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        orgId: string;
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: {
+      content: {
+        'application/json': {
+          /** @enum {string} */
+          activation_trigger?: 'creation' | 'purchase' | 'first_login';
+          code?: string | null;
+          currency?: string | null;
+          description?: string;
+          display_order?: number;
+          eligible_auth_methods?: (
+            'password' | 'voucher' | 'click_through' | 'email_otp' | 'sms_otp' | 'idp' | 'mac'
+          )[];
+          enabled?: boolean;
+          is_default?: boolean;
+          name?: string;
+          /** @enum {string} */
+          plan_type?: 'free' | 'paid';
+          /** Format: uuid */
+          policy_id?: string;
+          price_minor?: number | null;
+          site_id?: string | null;
+          validity_duration_s?: number | null;
         };
       };
     };
@@ -12467,6 +13771,7 @@ export interface operations {
         limit?: number;
         cursor?: string;
         status?: 'active' | 'disabled';
+        is_platform_default?: 'true' | 'false';
         site_id?: string;
       };
       header?: never;
@@ -12543,7 +13848,37 @@ export interface operations {
     requestBody?: {
       content: {
         'application/json': {
-          auth_methods?: ('password' | 'voucher' | 'click_through')[];
+          auth_methods?: (
+            | 'click_through'
+            | 'password'
+            | 'voucher'
+            | 'email_otp'
+            | 'sms_otp'
+            | 'registration'
+            | 'social'
+            | 'sso'
+            | 'sponsor'
+            | 'hotel'
+            | 'paid'
+            | 'mac'
+            | 'idp'
+          )[];
+          locales?: string[];
+          method_order?: (
+            | 'click_through'
+            | 'password'
+            | 'voucher'
+            | 'email_otp'
+            | 'sms_otp'
+            | 'registration'
+            | 'social'
+            | 'sso'
+            | 'sponsor'
+            | 'hotel'
+            | 'paid'
+            | 'mac'
+            | 'idp'
+          )[];
           name: string;
           nas_client_id?: string | null;
           network_ref: string;
@@ -12551,10 +13886,29 @@ export interface operations {
           portal_type: 'uspot' | 'coovachilli' | 'external' | 'mikrotik';
           public_slug: string;
           redirect_url?: string | null;
+          registration_fields?: {
+            key: string;
+            label: string;
+            marketing?: boolean;
+            options?: string[];
+            /** @default false */
+            required?: boolean;
+            /** @enum {string} */
+            type: 'text' | 'email' | 'phone' | 'select' | 'consent';
+          }[];
           /** Format: uuid */
           site_id: string;
+          ssids?: string[];
           /** @enum {string} */
           status?: 'active' | 'disabled';
+          /** @enum {string} */
+          template_key?:
+            | 'quick_connect'
+            | 'verified_guest'
+            | 'account_access'
+            | 'voucher_paid'
+            | 'hotel_resident'
+            | 'branded_multi_login';
           theme_id?: string | null;
           uam_server_url?: string | null;
           walled_garden?: string[];
@@ -12746,7 +14100,37 @@ export interface operations {
     requestBody?: {
       content: {
         'application/json': {
-          auth_methods?: ('password' | 'voucher' | 'click_through')[];
+          auth_methods?: (
+            | 'click_through'
+            | 'password'
+            | 'voucher'
+            | 'email_otp'
+            | 'sms_otp'
+            | 'registration'
+            | 'social'
+            | 'sso'
+            | 'sponsor'
+            | 'hotel'
+            | 'paid'
+            | 'mac'
+            | 'idp'
+          )[];
+          locales?: string[];
+          method_order?: (
+            | 'click_through'
+            | 'password'
+            | 'voucher'
+            | 'email_otp'
+            | 'sms_otp'
+            | 'registration'
+            | 'social'
+            | 'sso'
+            | 'sponsor'
+            | 'hotel'
+            | 'paid'
+            | 'mac'
+            | 'idp'
+          )[];
           name?: string;
           nas_client_id?: string | null;
           network_ref?: string;
@@ -12754,8 +14138,27 @@ export interface operations {
           portal_type?: 'uspot' | 'coovachilli' | 'external' | 'mikrotik';
           public_slug?: string;
           redirect_url?: string | null;
+          registration_fields?: {
+            key: string;
+            label: string;
+            marketing?: boolean;
+            options?: string[];
+            /** @default false */
+            required?: boolean;
+            /** @enum {string} */
+            type: 'text' | 'email' | 'phone' | 'select' | 'consent';
+          }[];
+          ssids?: string[];
           /** @enum {string} */
           status?: 'active' | 'disabled';
+          /** @enum {string} */
+          template_key?:
+            | 'quick_connect'
+            | 'verified_guest'
+            | 'account_access'
+            | 'voucher_paid'
+            | 'hotel_resident'
+            | 'branded_multi_login';
           theme_id?: string | null;
           uam_server_url?: string | null;
           walled_garden?: string[];
@@ -13001,6 +14404,228 @@ export interface operations {
               version: number;
             }[];
             version: string;
+          };
+        };
+      };
+      /** @description Validation failed (application/problem+json) */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Authentication required */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Permission denied */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Not found (also returned for objects of other tenants) */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+    };
+  };
+  get_api_v1_orgs_orgId_captive_portals_id_versions: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        orgId: string;
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Versions newest first, plus whether the current draft could be published */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            data: {
+              /** Format: uuid */
+              captive_portal_id: string;
+              current: boolean;
+              /** Format: uuid */
+              id: string;
+              published_at: string;
+              published_by: string | null;
+              version: number;
+            }[];
+            draft_problems: {
+              message: string;
+              path: string;
+            }[];
+            draft_publishable: boolean;
+            published_version_id: string | null;
+            unavailable_methods: {
+              method: string;
+              missing: string[];
+              reasons: string[];
+            }[];
+          };
+        };
+      };
+      /** @description Validation failed (application/problem+json) */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Authentication required */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Permission denied */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Not found (also returned for objects of other tenants) */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+    };
+  };
+  post_api_v1_orgs_orgId_captive_portals_id_publish: {
+    parameters: {
+      query?: never;
+      header?: {
+        'Idempotency-Key'?: string;
+      };
+      path: {
+        orgId: string;
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Published */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            /** Format: uuid */
+            captive_portal_id: string;
+            current: boolean;
+            /** Format: uuid */
+            id: string;
+            published_at: string;
+            published_by: string | null;
+            version: number;
+          };
+        };
+      };
+      /** @description Validation failed (application/problem+json) */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Authentication required */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Permission denied */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+      /** @description Not found (also returned for objects of other tenants) */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['Problem'];
+        };
+      };
+    };
+  };
+  post_api_v1_orgs_orgId_captive_portals_id_versions_versionId_restore: {
+    parameters: {
+      query?: never;
+      header?: {
+        'Idempotency-Key'?: string;
+      };
+      path: {
+        orgId: string;
+        id: string;
+        versionId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Restored */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            /** Format: uuid */
+            captive_portal_id: string;
+            current: boolean;
+            /** Format: uuid */
+            id: string;
+            published_at: string;
+            published_by: string | null;
+            version: number;
           };
         };
       };
@@ -13839,7 +15464,16 @@ export interface operations {
           locale?: string;
           /** @enum {string} */
           page:
-            'landing' | 'login' | 'voucher' | 'terms' | 'success' | 'error' | 'expired' | 'status';
+            | 'landing'
+            | 'login'
+            | 'voucher'
+            | 'terms'
+            | 'success'
+            | 'error'
+            | 'expired'
+            | 'status'
+            | 'logout'
+            | 'connected';
           /** Format: uuid */
           theme_id?: string;
         };

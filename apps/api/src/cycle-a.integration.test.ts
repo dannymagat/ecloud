@@ -973,7 +973,7 @@ await describeIntegration('@ecloud/api multi-vendor Cycle A', () => {
     expect(macInner.status).toBe(401);
 
     // a captive-portal NAS never accepts EAP inner identities
-    const uspot = await aaaFixture(apps, 'openwifi-uspot-uam');
+    const uspot = await aaaFixture(apps, 'ezeap-uam');
     const userB = `eap-${newId().slice(-12)}`;
     await uspot.agent
       .post(`/api/v1/orgs/${uspot.orgId}/users`)
@@ -1016,7 +1016,12 @@ await describeIntegration('@ecloud/api multi-vendor Cycle A', () => {
     const res = await a.agent
       .post(`/api/v1/orgs/${a.orgId}/nas`)
       .set(BROWSER)
-      .send({ site_id: a.siteId, name: `nas ${ip}`, nas_ip: ip, adapter_key: 'generic-radius-8021x' });
+      .send({
+        site_id: a.siteId,
+        name: `nas ${ip}`,
+        nas_ip: ip,
+        adapter_key: 'generic-radius-8021x',
+      });
     expect(res.status, JSON.stringify(res.body)).toBe(201);
     expect(typeof res.body.secret).toBe('string');
     expect((res.body.secret as string).length).toBeGreaterThan(20);

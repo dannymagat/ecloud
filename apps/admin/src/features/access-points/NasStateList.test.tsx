@@ -19,7 +19,7 @@ const base: OverviewNas = {
   name: 'Lobby NAS',
   site_id: 's1',
   site_name: 'Head office',
-  adapter_key: 'openwifi-uspot-uam',
+  adapter_key: 'ezeap-uam',
   vendor_key: 'ezelink',
   vendor_name: 'EZELINK',
   nas_ip: '10.0.0.2',
@@ -66,14 +66,19 @@ describe('NasStateList', () => {
   });
 
   it('shows the primary reason for a Pending NAS', () => {
-    render(<NasStateList orgId={ORG} rows={[row({ state: 'pending', primary_reason: 'NO_POLICY' })]} />);
+    render(
+      <NasStateList orgId={ORG} rows={[row({ state: 'pending', primary_reason: 'NO_POLICY' })]} />,
+    );
     expect(screen.getByText('Pending')).toBeInTheDocument();
     expect(screen.getByText(/No applicable policy/)).toBeInTheDocument();
   });
 
   it('prefers the operator block reason over the generic label', () => {
     render(
-      <NasStateList orgId={ORG} rows={[row({ state: 'blocked', block_reason: 'replaced by AP1832' })]} />,
+      <NasStateList
+        orgId={ORG}
+        rows={[row({ state: 'blocked', block_reason: 'replaced by AP1832' })]}
+      />,
     );
     expect(screen.getByText('Blocked')).toBeInTheDocument();
     expect(screen.getByText(/replaced by AP1832/)).toBeInTheDocument();
@@ -81,7 +86,9 @@ describe('NasStateList', () => {
 
   it('shows the platform-default advisory on an ACTIVE row', () => {
     // The whole reason this list shows every NAS rather than only the Pending ones.
-    render(<NasStateList orgId={ORG} rows={[row({ advisories: ['ON_PLATFORM_DEFAULT_PORTAL'] })]} />);
+    render(
+      <NasStateList orgId={ORG} rows={[row({ advisories: ['ON_PLATFORM_DEFAULT_PORTAL'] })]} />,
+    );
     expect(screen.getByText('Active')).toBeInTheDocument();
     expect(screen.getByText('Default portal')).toBeInTheDocument();
   });

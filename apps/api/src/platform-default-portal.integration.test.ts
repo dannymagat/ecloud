@@ -6,8 +6,8 @@
  * three refusals that each stop the fallback from admitting guests where it must not. Driving a
  * vendor redirect would exercise the adapter, not these rules.
  *
- * Note which gateway families the fallback can actually serve: `openwifi-uspot-uam`,
- * `uspot-upstream-uam` and `coovachilli-uam` declare `requireSecret: true`, so an unsigned
+ * Note which gateway families the fallback can actually serve: `ezeap-uam`,
+ * `uspot-upstream-uam` and `ezecloud-uam` declare `requireSecret: true`, so an unsigned
  * redirect is refused (SECURITY §5.2) and a fallback portal — which has no UAM secret, because
  * the device's secret is not knowable from here — cannot complete their hand-off. MikroTik,
  * Meraki and the post-back families do not require one.
@@ -15,7 +15,11 @@
 import { randomInt } from 'node:crypto';
 import { newId } from '@ecloud/shared';
 import { withTenant } from '@ecloud/db';
-import { describeIntegration, migrateTestDatabase, PLACEHOLDER_NAS_SECRET_REF } from '@ecloud/testing';
+import {
+  describeIntegration,
+  migrateTestDatabase,
+  PLACEHOLDER_NAS_SECRET_REF,
+} from '@ecloud/testing';
 import { afterAll, beforeAll, expect, it } from 'vitest';
 import type { AppDeps } from './context.js';
 import { createLogger } from '@ecloud/shared';
@@ -121,7 +125,10 @@ await describeIntegration('@ecloud/api platform-default portal (migration 041)',
         organization_id: orgId,
         site_id: siteId,
         name: 'Guest Wi-Fi',
-        public_slug: unique('p').toLowerCase().replace(/[^a-z0-9-]/g, '').slice(0, 60),
+        public_slug: unique('p')
+          .toLowerCase()
+          .replace(/[^a-z0-9-]/g, '')
+          .slice(0, 60),
         portal_type: 'mikrotik',
         network_ref: 'hotspot1',
         auth_methods: ['password'],
@@ -151,7 +158,10 @@ await describeIntegration('@ecloud/api platform-default portal (migration 041)',
         organization_id: orgId,
         site_id: siteId,
         name: 'Guest Wi-Fi',
-        public_slug: unique('p').toLowerCase().replace(/[^a-z0-9-]/g, '').slice(0, 60),
+        public_slug: unique('p')
+          .toLowerCase()
+          .replace(/[^a-z0-9-]/g, '')
+          .slice(0, 60),
         portal_type: 'mikrotik',
         network_ref: 'hotspot1',
         auth_methods: ['password'],
@@ -164,11 +174,7 @@ await describeIntegration('@ecloud/api platform-default portal (migration 041)',
     const { orgId, siteId } = await tenant();
     const mikrotik = await ensure(orgId, siteId);
     const external = await withTenant(deps.db, orgId, (trx) =>
-      ensurePlatformDefaultPortal(
-        trx,
-        { organization_id: orgId, site_id: siteId },
-        'external',
-      ),
+      ensurePlatformDefaultPortal(trx, { organization_id: orgId, site_id: siteId }, 'external'),
     );
     expect(external?.id).not.toBe(mikrotik?.id);
     // `network_ref` is unique per site, so the portal type has to be part of it.
@@ -233,7 +239,10 @@ await describeIntegration('@ecloud/api platform-default portal (migration 041)',
         organization_id: orgId,
         site_id: siteId,
         name: 'Guest Wi-Fi',
-        public_slug: unique('p').toLowerCase().replace(/[^a-z0-9-]/g, '').slice(0, 60),
+        public_slug: unique('p')
+          .toLowerCase()
+          .replace(/[^a-z0-9-]/g, '')
+          .slice(0, 60),
         portal_type: 'mikrotik',
         network_ref: 'hotspot1',
         auth_methods: ['click_through'],
@@ -313,7 +322,7 @@ await describeIntegration('@ecloud/api platform-default portal (migration 041)',
     // sibling adapter the flavour's key list does not include.
     await deps.dbPlatform
       .updateTable('nas_clients')
-      .set({ adapter_key: 'openwifi-uspot-uam', adapter_type_key: 'openwifi-uspot-uam' })
+      .set({ adapter_key: 'ezeap-uam', adapter_type_key: 'ezeap-uam' })
       .where('nas_identifier', '=', identifier)
       .where('deleted_at', 'is', null)
       .execute();
@@ -330,7 +339,10 @@ await describeIntegration('@ecloud/api platform-default portal (migration 041)',
         organization_id: orgId,
         site_id: siteId,
         name: 'Second',
-        public_slug: unique('p2').toLowerCase().replace(/[^a-z0-9-]/g, '').slice(0, 60),
+        public_slug: unique('p2')
+          .toLowerCase()
+          .replace(/[^a-z0-9-]/g, '')
+          .slice(0, 60),
         portal_type: 'mikrotik',
         network_ref: 'hotspot2',
         auth_methods: ['click_through'],
@@ -363,9 +375,7 @@ await describeIntegration('@ecloud/api platform-default portal (migration 041)',
     nasRow: { id: string; organization_id: string; site_id: string },
     rows: PortalRow[],
   ) =>
-    withTenant(deps.db, orgId, (trx) =>
-      resolveExternalPortalId(deps)(trx, nasRow, rows, logger),
-    );
+    withTenant(deps.db, orgId, (trx) => resolveExternalPortalId(deps)(trx, nasRow, rows, logger));
 
   async function externalRows(orgId: string, siteId: string) {
     const rows = await deps.dbPlatform
@@ -397,7 +407,10 @@ await describeIntegration('@ecloud/api platform-default portal (migration 041)',
         organization_id: orgId,
         site_id: siteId,
         name: 'Controller portal',
-        public_slug: unique('x').toLowerCase().replace(/[^a-z0-9-]/g, '').slice(0, 60),
+        public_slug: unique('x')
+          .toLowerCase()
+          .replace(/[^a-z0-9-]/g, '')
+          .slice(0, 60),
         portal_type: 'external',
         network_ref: networkRef,
         auth_methods: ['click_through'],

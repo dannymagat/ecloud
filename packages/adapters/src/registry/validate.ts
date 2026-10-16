@@ -29,7 +29,7 @@ export type RuleId =
 
 export interface Violation {
   readonly rule: RuleId;
-  /** e.g. `adapter:coovachilli-uam/fields.vlan_id` or `row:cambium-…/disconnect.coaChange`. */
+  /** e.g. `adapter:ezecloud-uam/fields.vlan_id` or `row:cambium-…/disconnect.coaChange`. */
   readonly subject: string;
   readonly message: string;
 }

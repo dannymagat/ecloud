@@ -390,12 +390,7 @@ function translateBurst(b: PlanBuilder, eff: EffectivePolicy): void {
 /** Returns true when a verified octet limit was emitted (then the drain-time bound is not needed). */
 function translateQuota(b: PlanBuilder, eff: EffectivePolicy): boolean {
   const quotaFields = (
-    [
-      'quota_daily_bytes',
-      'quota_weekly_bytes',
-      'quota_monthly_bytes',
-      'quota_total_bytes',
-    ] as const
+    ['quota_daily_bytes', 'quota_weekly_bytes', 'quota_monthly_bytes', 'quota_total_bytes'] as const
   ).filter((f) => eff.fields[f] !== null);
   if (quotaFields.length === 0) return false;
   const remaining = b.ctx.clip.remaining_octets;
@@ -441,7 +436,8 @@ function translateQuota(b: PlanBuilder, eff: EffectivePolicy): boolean {
         reason,
         direction !== 'combined' && !quotaAttr && adapter.quotaAttributes.total
           ? `${direction}-only quota: this NAS has a total octet limit but no ${direction} one, so the allowance is enforced EZECLOUD-side (deny at next Access-Request, Disconnect where supported)`
-          : (d.note ?? 'no octet attribute; bounded by Session-Timeout drain time + accounting watcher'),
+          : (d.note ??
+              'no octet attribute; bounded by Session-Timeout drain time + accounting watcher'),
       );
     }
     return false;
@@ -603,7 +599,7 @@ function translateInterim(b: PlanBuilder): void {
     emitted &&
     decl?.note &&
     b.ctx.nasAcctIntervalUnset !== true &&
-    (adapter.key === 'openwifi-uspot-uam' || adapter.key === 'uspot-upstream-uam')
+    (adapter.key === 'ezeap-uam' || adapter.key === 'uspot-upstream-uam')
   ) {
     b.flag(
       'interim_interval',

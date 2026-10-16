@@ -13,13 +13,13 @@ describe('simulate', () => {
     expect(s.resolution.decision).toBe('accept');
     expect(s.resolution.trigger).toBe('preview');
     expect(s.capabilitiesUsed).toEqual([
-      'openwifi-uspot-uam@fixture',
+      'ezeap-uam@fixture',
       'uspot-upstream-uam@fixture',
       'openwifi-hostapd-radius@fixture',
       'openwifi-config@fixture',
     ]);
     expect(s.perAdapter.map((a) => a.adapter)).toEqual([
-      'openwifi-uspot-uam',
+      'ezeap-uam',
       'uspot-upstream-uam',
       'openwifi-hostapd-radius',
       'openwifi-config',
@@ -28,7 +28,7 @@ describe('simulate', () => {
       s.perAdapter
         .find((a) => a.adapter === key)
         ?.fieldTable.find((f) => f.field === 'download_rate_kbps');
-    expect(rate('openwifi-uspot-uam')?.deviceEnforced).toBe(true);
+    expect(rate('ezeap-uam')?.deviceEnforced).toBe(true);
     expect(rate('openwifi-hostapd-radius')).toMatchObject({
       deviceEnforced: false,
       status: 'REQUIRES_DEVICE_TEST',

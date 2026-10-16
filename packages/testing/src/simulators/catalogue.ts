@@ -17,7 +17,7 @@ export const SIMULATOR_SCOPE_STATEMENT =
   'Simulator evidence: EZECLOUD code behaviour against a simulated NAS (fixtures derived from documented parameter lists). It is NOT hardware compatibility evidence, never LAB_VALIDATED, and never applies to an enforcement capability or to Disconnect/CoA (D-006).';
 
 /** The two first-party UAM adapters the simulator covers (plan §8.3 AC2). */
-export const SIM_ADAPTERS = ['openwifi-uspot-uam', 'coovachilli-uam'] as const;
+export const SIM_ADAPTERS = ['ezeap-uam', 'ezecloud-uam'] as const;
 export type SimAdapterKey = (typeof SIM_ADAPTERS)[number];
 
 export type ScenarioId =
@@ -107,13 +107,13 @@ export const SIMULATOR_SCENARIOS: readonly ScenarioSpec[] = [
     id: 'SIM-13',
     title: 'Gigawords rollover (64-bit total)',
     group: 'pure',
-    adapters: ['coovachilli-uam'],
+    adapters: ['ezecloud-uam'],
   },
   {
     id: 'SIM-14',
     title: '32-bit wrap without Gigawords (uspot TIP)',
     group: 'pure',
-    adapters: ['openwifi-uspot-uam'],
+    adapters: ['ezeap-uam'],
   },
   {
     id: 'SIM-15',

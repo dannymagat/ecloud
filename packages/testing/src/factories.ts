@@ -134,8 +134,8 @@ export function makeNasClient(
     site_id: siteId,
     name: `NAS ${String(n)}`,
     nas_ip: `192.0.2.${String(1 + (n % 250))}`,
-    adapter_type_key: 'coovachilli-uam',
-    adapter_key: 'coovachilli-uam',
+    adapter_type_key: 'ezecloud-uam',
+    adapter_key: 'ezecloud-uam',
     secret_ref: `secret://test/nas-${String(n)}`,
     ...overrides,
   };

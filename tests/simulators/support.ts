@@ -57,7 +57,7 @@ function target(adapterKey: SimAdapterKey, flavour: UamFlavour, path: string): S
       identifier: `sim-nas-${adapterKey}`,
       adapterKey,
       controllerId: null,
-      deploymentMode: adapterKey === 'coovachilli-uam' ? 'gateway' : 'native',
+      deploymentMode: adapterKey === 'ezecloud-uam' ? 'gateway' : 'native',
       uamServerUrl: uamServer,
       uamSecret: SIM_UAM_SECRET,
     },
@@ -65,8 +65,8 @@ function target(adapterKey: SimAdapterKey, flavour: UamFlavour, path: string): S
 }
 
 export const TARGETS: readonly SimTarget[] = [
-  target('openwifi-uspot-uam', 'uspot-tip', '/uam/uspot/'),
-  target('coovachilli-uam', 'coovachilli', '/uam/chilli/'),
+  target('ezeap-uam', 'uspot-tip', '/uam/uspot/'),
+  target('ezecloud-uam', 'coovachilli', '/uam/chilli/'),
 ];
 
 export const CHALLENGE = '0123456789abcdef0123456789abcdef';

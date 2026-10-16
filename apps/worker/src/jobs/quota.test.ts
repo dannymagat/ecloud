@@ -23,9 +23,9 @@ describe('evaluateQuota', () => {
       total: { bytesIn: 1e12, bytesOut: 0 },
     };
     expect(evaluateQuota(limits, usage).map((b) => b.period)).toEqual(['daily', 'monthly']);
-    expect(
-      evaluateQuota({ daily: 0, weekly: null, monthly: null, total: null }, usage),
-    ).toEqual([]);
+    expect(evaluateQuota({ daily: 0, weekly: null, monthly: null, total: null }, usage)).toEqual(
+      [],
+    );
   });
   it('treats a missing counter row as zero usage', () => {
     expect(evaluateQuota({ daily: 1, weekly: null, monthly: null, total: null }, {})).toEqual([]);
@@ -43,8 +43,9 @@ describe('evaluateOnlineTime (migration 036)', () => {
   });
 
   it('does not breach below the allowance', () => {
-    expect(evaluateOnlineTime(limits, { daily: { bytesIn: 0, bytesOut: 0, sessionTimeS: 7199 } }))
-      .toEqual([]);
+    expect(
+      evaluateOnlineTime(limits, { daily: { bytesIn: 0, bytesOut: 0, sessionTimeS: 7199 } }),
+    ).toEqual([]);
   });
 
   it('treats a counter row without session time as zero, not as a breach', () => {
@@ -61,11 +62,11 @@ describe('evaluateOnlineTime (migration 036)', () => {
 });
 
 describe('decideEnforcement (D-006)', () => {
-  const chilli = describeAdapterDisconnect('coovachilli-uam');
+  const chilli = describeAdapterDisconnect('ezecloud-uam');
   it('never disconnects while ECLOUD_COA_ENABLED is false', () => {
     for (const key of [
-      'coovachilli-uam',
-      'openwifi-uspot-uam',
+      'ezecloud-uam',
+      'ezeap-uam',
       'openwifi-hostapd-radius',
       'uspot-upstream-uam',
     ]) {
@@ -120,7 +121,7 @@ describe('decideEnforcement (D-006)', () => {
 
 describe('NAS adapter_key (D-035, no aliases)', () => {
   it('resolves engine keys only; legacy keys, openwifi-config and NULL have no Disconnect', () => {
-    expect(describeAdapterDisconnect('coovachilli-uam')?.target).toBe('coaport');
+    expect(describeAdapterDisconnect('ezecloud-uam')?.target).toBe('coaport');
     expect(describeAdapterDisconnect('openwifi-hostapd-radius')?.target).toBe('hostapd-das');
     expect(describeAdapterDisconnect('coovachilli')).toBeNull();
     expect(describeAdapterDisconnect('openwifi_ucentral')).toBeNull();

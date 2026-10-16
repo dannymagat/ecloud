@@ -667,7 +667,7 @@ await describeIntegration('@ecloud/api portal administration (P6-B) against eclo
         await t.agent
           .post(`/api/v1/orgs/${t.orgId}/nas`)
           .set(BROWSER)
-          .send({ site_id: siteId, name: 'ap', nas_ip: ip(), adapter_key: 'openwifi-uspot-uam' })
+          .send({ site_id: siteId, name: 'ap', nas_ip: ip(), adapter_key: 'ezeap-uam' })
       ).body as { id: string };
     const nasA = await nas(a, a.siteId);
     const nasOtherSite = await nas(a, a.siteId2);
@@ -821,9 +821,7 @@ await describeIntegration('@ecloud/api portal administration (P6-B) against eclo
       .set({ terms_version: '99' })
       .where('id', '=', portal.id)
       .execute();
-    const dangling = await agent.get(
-      `/api/v1/orgs/${orgId}/captive-portals/${portal.id}/versions`,
-    );
+    const dangling = await agent.get(`/api/v1/orgs/${orgId}/captive-portals/${portal.id}/versions`);
     expect(dangling.body.draft_publishable).toBe(false);
     expect((dangling.body.draft_problems as { path: string }[]).map((p) => p.path)).toContain(
       'terms_version',
@@ -847,7 +845,9 @@ await describeIntegration('@ecloud/api portal administration (P6-B) against eclo
       .send({});
     expect(v1.status, JSON.stringify(v1.body)).toBe(201);
     expect(v1.body).toMatchObject({ version: 1, current: true });
-    expect(await countAudit(deps.dbPlatform, 'captive_portal:update', portal.id)).toBeGreaterThan(0);
+    expect(await countAudit(deps.dbPlatform, 'captive_portal:update', portal.id)).toBeGreaterThan(
+      0,
+    );
 
     // The snapshot froze the methods that were enabled at publish time.
     const stored = await deps.dbPlatform
@@ -931,7 +931,7 @@ await describeIntegration('@ecloud/api portal administration (P6-B) against eclo
     expect(JSON.stringify(refused.body)).toContain('no way to connect');
   });
 
-  it('refuses a restore of another portal\'s version', async () => {
+  it("refuses a restore of another portal's version", async () => {
     const apps = freshApps();
     const { orgId, siteId, agent } = await tenantWithAdmin(apps);
     const one = await portalFixture(agent, orgId, siteId, slug());

@@ -8,9 +8,9 @@ import { getAdapter, isAdapterKey, type NasAdapter } from '@ecloud/adapters';
 
 export const NAS_ADAPTER_KEYS: readonly string[] = Object.freeze([
   'openwifi-hostapd-radius',
-  'openwifi-uspot-uam',
+  'ezeap-uam',
   'uspot-upstream-uam',
-  'coovachilli-uam',
+  'ezecloud-uam',
   // Cycle A (D-044, migration 028): vendor-neutral 802.1X / MAC-auth NAS.
   'generic-radius-8021x',
   // Cycle B (D-044, migration 029): MikroTik RouterOS Hotspot.

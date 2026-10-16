@@ -80,10 +80,9 @@ describe('Meraki Disconnect (Cycle E)', () => {
     });
     // other adapters keep nas_ip:coa_port
     expect(
-      dispatchTarget(
-        action({ adapter_key: 'coovachilli-uam', nas_ip: '10.1.1.1', coa_port: 3800 }),
-        { defaultCoaPort: 3799 },
-      ),
+      dispatchTarget(action({ adapter_key: 'ezecloud-uam', nas_ip: '10.1.1.1', coa_port: 3800 }), {
+        defaultCoaPort: 3799,
+      }),
     ).toEqual({ host: '10.1.1.1', port: 3800 });
   });
 

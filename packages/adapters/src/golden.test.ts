@@ -106,8 +106,8 @@ describe('§4.3 worked example', () => {
     expect(r.controls.map((c) => c.kind)).toEqual(['schedule_end', 'quota_watcher', 'concurrency']);
   });
 
-  it('(a) openwifi-uspot-uam (TIP fork)', () => {
-    const plan = getAdapter('openwifi-uspot-uam').translate(r.effective, ctx(r));
+  it('(a) ezeap-uam (TIP fork)', () => {
+    const plan = getAdapter('ezeap-uam').translate(r.effective, ctx(r));
     expect(sorted(plan)).toEqual([
       ['Acct-Interim-Interval', 300],
       ['ChilliSpot-Max-Total-Octets', 700_000_000],
@@ -136,7 +136,7 @@ describe('§4.3 worked example', () => {
   });
 
   it('(a′) ChilliSpot family alternative is emitted instead of (never together with) WISPr', () => {
-    const plan = getAdapter('openwifi-uspot-uam').translate(
+    const plan = getAdapter('ezeap-uam').translate(
       r.effective,
       ctx(r, { preferredRateAttrFamily: 'chillispot' }),
     );
@@ -147,7 +147,7 @@ describe('§4.3 worked example', () => {
   });
 
   it('(a″) Acct-Interim-Interval is flagged when the NAS acct-interval may be set', () => {
-    const plan = getAdapter('openwifi-uspot-uam').translate(
+    const plan = getAdapter('ezeap-uam').translate(
       r.effective,
       ctx(r, { nasAcctIntervalUnset: undefined }),
     );
@@ -172,8 +172,8 @@ describe('§4.3 worked example', () => {
     expect(plan.unenforceable).toEqual([]);
   });
 
-  it('(c) coovachilli-uam uses the CoovaChilli octet names', () => {
-    const plan = getAdapter('coovachilli-uam').translate(r.effective, ctx(r));
+  it('(c) ezecloud-uam uses the CoovaChilli octet names', () => {
+    const plan = getAdapter('ezecloud-uam').translate(r.effective, ctx(r));
     expect(sorted(plan)).toEqual([
       ['Acct-Interim-Interval', 300],
       ['Class', `ecloud:${SESSION}`],
@@ -301,8 +301,8 @@ describe('§4.3 worked example', () => {
   });
 
   it('translate is deterministic across adapters and the plan carries the adapter version', () => {
-    const a = translate(r.effective, getAdapter('coovachilli-uam').capabilities(), ctx(r));
-    const b = getAdapter('coovachilli-uam').translate(r.effective, ctx(r));
+    const a = translate(r.effective, getAdapter('ezecloud-uam').capabilities(), ctx(r));
+    const b = getAdapter('ezecloud-uam').translate(r.effective, ctx(r));
     expect(JSON.stringify(a, (_k, v: unknown) => (typeof v === 'bigint' ? v.toString() : v))).toBe(
       JSON.stringify(b, (_k, v: unknown) => (typeof v === 'bigint' ? v.toString() : v)),
     );

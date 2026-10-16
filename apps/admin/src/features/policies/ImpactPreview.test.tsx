@@ -30,14 +30,14 @@ function api(withEndpoint: boolean, body: unknown): MockRoute[] {
 
 const COLUMNS = [
   {
-    adapter: 'openwifi-uspot-uam',
+    adapter: 'ezeap-uam',
     fields: [
       { field: 'download_rate_kbps', status: 'REQUIRES_DEVICE_TEST' },
       { field: 'quota_daily_bytes', status: 'ECLOUD_SIDE_ONLY' },
     ],
   },
   {
-    adapter: 'coovachilli-uam',
+    adapter: 'ezecloud-uam',
     fields: [{ field: 'download_rate_kbps', status: 'REQUIRES_DEVICE_TEST' }],
   },
 ];
@@ -61,7 +61,7 @@ describe('ImpactPreview', () => {
             session_id: 's1',
             site_id: null,
             nas_client_id: 'n1',
-            adapter_key: 'openwifi-uspot-uam',
+            adapter_key: 'ezeap-uam',
             strategy: 'next_reauth',
             state: 'pending',
             reason: 'x',

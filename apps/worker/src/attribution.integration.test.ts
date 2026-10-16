@@ -79,8 +79,8 @@ await describeIntegration('@ecloud/worker accounting attribution (SIM-18 regress
           site_id: site,
           name: `NAS ${RUN}`,
           nas_ip: ip,
-          adapter_type_key: 'coovachilli-uam',
-          adapter_key: 'coovachilli-uam',
+          adapter_type_key: 'ezecloud-uam',
+          adapter_key: 'ezecloud-uam',
           secret_ref: 'env:ECLOUD_WORKER_IT_NAS_SECRET',
         })
         .execute();

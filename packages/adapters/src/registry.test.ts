@@ -37,9 +37,9 @@ describe('registry', () => {
   it('lists the five adapters in §3.1 order (+ generic-radius-8021x) and resolves by key', () => {
     expect(listAdapters().map((a) => a.key)).toEqual([
       'openwifi-hostapd-radius',
-      'openwifi-uspot-uam',
+      'ezeap-uam',
       'uspot-upstream-uam',
-      'coovachilli-uam',
+      'ezecloud-uam',
       'openwifi-config',
       'generic-radius-8021x',
       'mikrotik-hotspot',
@@ -57,8 +57,8 @@ describe('registry', () => {
       '0.1.0',
       '0.1.0',
     ]);
-    expect(getAdapter('coovachilli-uam').version).toBe('0.1.0');
-    expect(getAdapter('coovachilli-uam').capabilities().key).toBe('coovachilli-uam');
+    expect(getAdapter('ezecloud-uam').version).toBe('0.1.0');
+    expect(getAdapter('ezecloud-uam').capabilities().key).toBe('ezecloud-uam');
     expect(isAdapterKey('generic_radius')).toBe(false);
     expect(() => getAdapter('generic_radius')).toThrow('unknown adapter type: generic_radius');
   });
@@ -66,7 +66,7 @@ describe('registry', () => {
 
 describe('describeDisconnect / buildDisconnect', () => {
   it('CoovaChilli needs User-Name (mandatory) and optionally Acct-Session-Id, status REQUIRES_DEVICE_TEST', () => {
-    const d = getAdapter('coovachilli-uam').describeDisconnect();
+    const d = getAdapter('ezecloud-uam').describeDisconnect();
     expect(d).toMatchObject({
       target: 'coaport',
       status: 'REQUIRES_DEVICE_TEST',
@@ -75,7 +75,7 @@ describe('describeDisconnect / buildDisconnect', () => {
       acctStopEmitted: true,
     });
     expect(d.evidence).toContain('CAPTIVE_PORTAL_ARCHITECTURE.md §4');
-    const req = getAdapter('coovachilli-uam').buildDisconnect(session);
+    const req = getAdapter('ezecloud-uam').buildDisconnect(session);
     expect(req).toMatchObject({
       kind: 'disconnect',
       target: 'coaport',
@@ -85,7 +85,7 @@ describe('describeDisconnect / buildDisconnect', () => {
       { name: 'User-Name', value: 'alice' },
       { name: 'Acct-Session-Id', value: '0123456789abcdef' },
     ]);
-    expect(getAdapter('coovachilli-uam').buildDisconnect({ ...session, userName: null })).toEqual({
+    expect(getAdapter('ezecloud-uam').buildDisconnect({ ...session, userName: null })).toEqual({
       unsupported: true,
       reason: 'missing mandatory identification attribute(s): User-Name',
     });
@@ -105,7 +105,7 @@ describe('describeDisconnect / buildDisconnect', () => {
       'User-Name',
       'Acct-Session-Id',
     ]);
-    const u = getAdapter('openwifi-uspot-uam').describeDisconnect();
+    const u = getAdapter('ezeap-uam').describeDisconnect();
     expect(u).toMatchObject({
       target: 'hostapd-das',
       status: 'REQUIRES_DEVICE_TEST',
@@ -114,13 +114,13 @@ describe('describeDisconnect / buildDisconnect', () => {
       acctStopEmitted: false,
     });
     expect(u.note).toContain('no Acct-Stop');
-    const req = getAdapter('openwifi-uspot-uam').buildDisconnect(session);
+    const req = getAdapter('ezeap-uam').buildDisconnect(session);
     // uspot's session kick rides on hostapd's CoA handler (ubus `coa`), never on Disconnect.
     expect('packet' in req ? req.packet : undefined).toBe('coa');
     expect('attributes' in req ? req.attributes : []).toEqual([
       { name: 'Calling-Station-Id', value: 'AA-BB-CC-DD-EE-01' },
     ]);
-    expect(getAdapter('openwifi-uspot-uam').buildDisconnect({ sessionId: 'x' })).toMatchObject({
+    expect(getAdapter('ezeap-uam').buildDisconnect({ sessionId: 'x' })).toMatchObject({
       unsupported: true,
     });
   });
@@ -147,7 +147,7 @@ describe('describeDisconnect / buildDisconnect', () => {
 });
 
 describe('buildCoa', () => {
-  const coovaPlan = plan('coovachilli-uam', [
+  const coovaPlan = plan('ezecloud-uam', [
     {
       name: 'WISPr-Bandwidth-Max-Down',
       value: 2_000_000,
@@ -182,7 +182,7 @@ describe('buildCoa', () => {
   ]);
 
   it('CoovaChilli: identity + changeable attributes, experimental ones excluded', () => {
-    const coa = getAdapter('coovachilli-uam').buildCoa(session, coovaPlan);
+    const coa = getAdapter('ezecloud-uam').buildCoa(session, coovaPlan);
     // D-006: CoA stays REQUIRES_DEVICE_TEST until DT-15 passes on a real gateway
     expect(coa).toMatchObject({ kind: 'coa', status: 'REQUIRES_DEVICE_TEST' });
     expect('attributes' in coa ? coa.attributes : []).toEqual([
@@ -191,19 +191,19 @@ describe('buildCoa', () => {
       { name: 'WISPr-Bandwidth-Max-Down', value: 2_000_000, vendor: 'WISPr' },
       { name: 'Session-Timeout', value: 600 },
     ]);
-    expect(getAdapter('coovachilli-uam').buildCoa({ sessionId: 'x' }, coovaPlan)).toMatchObject({
+    expect(getAdapter('ezecloud-uam').buildCoa({ sessionId: 'x' }, coovaPlan)).toMatchObject({
       unsupported: true,
     });
-    expect(getAdapter('coovachilli-uam').buildCoa(session, plan('coovachilli-uam', []))).toEqual({
+    expect(getAdapter('ezecloud-uam').buildCoa(session, plan('ezecloud-uam', []))).toEqual({
       unsupported: true,
       reason: 'plan carries no attribute the NAS can change via CoA',
     });
   });
 
   it('TIP uspot: unsupported; upstream uspot: timeouts/interim only (REQUIRES_DEVICE_TEST)', () => {
-    expect(
-      getAdapter('openwifi-uspot-uam').buildCoa(session, plan('openwifi-uspot-uam', [])),
-    ).toMatchObject({ unsupported: true });
+    expect(getAdapter('ezeap-uam').buildCoa(session, plan('ezeap-uam', []))).toMatchObject({
+      unsupported: true,
+    });
     const upPlan = plan('uspot-upstream-uam', [
       {
         name: 'WISPr-Bandwidth-Max-Down',
@@ -235,18 +235,16 @@ describe('buildCoa', () => {
   });
 
   it('plans for another adapter are refused', () => {
-    expect(() =>
-      getAdapter('coovachilli-uam').buildCoa(session, plan('openwifi-uspot-uam', [])),
-    ).toThrow('plan for openwifi-uspot-uam given to coovachilli-uam');
-    expect(() =>
-      getAdapter('coovachilli-uam').buildReplyAttributes(plan('openwifi-uspot-uam', [])),
-    ).toThrow();
+    expect(() => getAdapter('ezecloud-uam').buildCoa(session, plan('ezeap-uam', []))).toThrow(
+      'plan for ezeap-uam given to ezecloud-uam',
+    );
+    expect(() => getAdapter('ezecloud-uam').buildReplyAttributes(plan('ezeap-uam', []))).toThrow();
   });
 });
 
 describe('buildReplyAttributes / renderConfig', () => {
   it('returns dictionary-named attributes with vendor, dropping experimental and undeclared ones', () => {
-    const p = plan('openwifi-uspot-uam', [
+    const p = plan('ezeap-uam', [
       {
         name: 'WISPr-Bandwidth-Max-Up',
         value: 5_000_000,
@@ -278,25 +276,25 @@ describe('buildReplyAttributes / renderConfig', () => {
         evidence: 'x',
       },
     ]);
-    expect(getAdapter('openwifi-uspot-uam').buildReplyAttributes(p)).toEqual([
+    expect(getAdapter('ezeap-uam').buildReplyAttributes(p)).toEqual([
       { name: 'WISPr-Bandwidth-Max-Up', value: 5_000_000, vendor: 'WISPr' },
       { name: 'Session-Timeout', value: 60 },
     ]);
     expect(
-      getAdapter('openwifi-uspot-uam').buildReplyAttributes(p, { includeExperimental: true }),
+      getAdapter('ezeap-uam').buildReplyAttributes(p, { includeExperimental: true }),
     ).toHaveLength(2); // Tunnel-Type not declared by uspot
   });
 
   it('renderConfig only exists on openwifi-config and refuses foreign/empty plans', () => {
-    expect('renderConfig' in getAdapter('coovachilli-uam')).toBe(false);
+    expect('renderConfig' in getAdapter('ezecloud-uam')).toBe(false);
     const cfg = getAdapter('openwifi-config');
     expect(cfg.renderConfig?.(plan('openwifi-config', []))).toEqual({
       unsupported: true,
       reason: 'no site-scoped field translates to an SSID config change',
     });
-    expect(cfg.renderConfig?.(plan('coovachilli-uam', []))).toEqual({
+    expect(cfg.renderConfig?.(plan('ezecloud-uam', []))).toEqual({
       unsupported: true,
-      reason: 'plan for coovachilli-uam',
+      reason: 'plan for ezecloud-uam',
     });
   });
 

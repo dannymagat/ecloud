@@ -195,11 +195,11 @@ describe('accounting quirks hook (plan §8.3 SIM-14)', () => {
   const TWO_POW_32 = 4_294_967_296;
   const prev = { inputOctets: 10, outputOctets: TWO_POW_32 - 100, sessionTimeS: 300 };
 
-  it('only the 32-bit adapter (openwifi-uspot-uam) carries the hook', () => {
+  it('only the 32-bit adapter (ezeap-uam) carries the hook', () => {
     const withHook = listVendorAdapters()
       .filter((v) => v.accountingQuirks !== undefined)
       .map((v) => v.key);
-    expect(withHook).toEqual(['openwifi-uspot-uam']);
+    expect(withHook).toEqual(['ezeap-uam']);
     for (const v of listVendorAdapters())
       expect(v.accountingQuirks !== undefined).toBe(v.engine?.capabilities().octetWidth === 32);
   });
@@ -250,7 +250,7 @@ describe('accounting quirks hook (plan §8.3 SIM-14)', () => {
   });
 
   it('is report-only: normalisation output and counter rule are unchanged', () => {
-    const tip = getVendorAdapter('openwifi-uspot-uam');
+    const tip = getVendorAdapter('ezeap-uam');
     const row = raw({
       acctstatustype: 'Interim-Update',
       acctinputoctets: 20,

@@ -517,7 +517,7 @@ describe('validateContext and hand-off per profile', () => {
     // unknown NAS (e.g. unverified AP MAC → findNas null)
     expect(await run(base, lookup(null))).toMatchObject({ ok: false, reason: 'unknown_nas' });
     // NAS of another adapter or profile
-    expect(await run(base, lookup(nas(cfg, { adapterKey: 'coovachilli-uam' })))).toMatchObject({
+    expect(await run(base, lookup(nas(cfg, { adapterKey: 'ezecloud-uam' })))).toMatchObject({
       ok: false,
       reason: 'unknown_nas',
     });

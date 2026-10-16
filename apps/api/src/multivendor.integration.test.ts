@@ -286,7 +286,7 @@ await describeIntegration('@ecloud/api multi-vendor (controllers, registry)', ()
       site_id: a.siteId,
       name: 'n',
       nas_ip: randomIp(),
-      adapter_key: 'openwifi-uspot-uam',
+      adapter_key: 'ezeap-uam',
       controller_id: idB,
     });
     expect(nas.status).toBe(404);
@@ -406,7 +406,7 @@ await describeIntegration('@ecloud/api multi-vendor (controllers, registry)', ()
       site_id: siteId,
       name: 'chilli',
       nas_ip: randomIp(),
-      adapter_key: 'coovachilli-uam',
+      adapter_key: 'ezecloud-uam',
     });
     expect(chilli.status).toBe(201);
     expect(chilli.body.deployment_mode).toBe('gateway');
@@ -414,14 +414,14 @@ await describeIntegration('@ecloud/api multi-vendor (controllers, registry)', ()
       site_id: siteId,
       name: 'uspot',
       nas_ip: randomIp(),
-      adapter_key: 'openwifi-uspot-uam',
+      adapter_key: 'ezeap-uam',
     });
     expect(uspot.body.deployment_mode).toBe('native');
     const wrongMode = await agent.post(`/api/v1/orgs/${orgId}/nas`).set(BROWSER).send({
       site_id: siteId,
       name: 'bad',
       nas_ip: randomIp(),
-      adapter_key: 'openwifi-uspot-uam',
+      adapter_key: 'ezeap-uam',
       deployment_mode: 'gateway',
     });
     expect(wrongMode.status).toBe(400);
@@ -446,7 +446,7 @@ await describeIntegration('@ecloud/api multi-vendor (controllers, registry)', ()
       site_id: siteId2,
       name: 'other',
       nas_ip: randomIp(),
-      adapter_key: 'openwifi-uspot-uam',
+      adapter_key: 'ezeap-uam',
       controller_id: ctrlId,
     });
     expect(otherSite.status).toBe(400);
@@ -457,7 +457,7 @@ await describeIntegration('@ecloud/api multi-vendor (controllers, registry)', ()
     const switched = await agent
       .patch(`/api/v1/orgs/${orgId}/nas/${chilli.body.id as string}`)
       .set(BROWSER)
-      .send({ adapter_key: 'openwifi-uspot-uam' });
+      .send({ adapter_key: 'ezeap-uam' });
     expect(switched.status).toBe(200);
     expect(switched.body.deployment_mode).toBe('native');
 

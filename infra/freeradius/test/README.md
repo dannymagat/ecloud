@@ -40,7 +40,7 @@ the server runs `require_message_authenticator = yes`).
 | File | DT / T case | Notes |
 |---|---|---|
 | `access-request-uspot-uam-pap.txt` | DT-03, T-A1 | attribute set of CAPTIVE_PORTAL_ARCHITECTURE.md §3.4 (TIP uspot `Called-Station-Id = nasmac:ssid`) |
-| `access-request-coovachilli-uam-pap.txt` | DT-15, T-A2 | CoovaChilli adds `Service-Type`, `ChilliSpot-Version`, Message-Authenticator |
+| `access-request-ezecloud-uam-pap.txt` | DT-15, T-A2 | CoovaChilli adds `Service-Type`, `ChilliSpot-Version`, Message-Authenticator |
 | `access-request-hostapd-mac-auth.txt` | DT-09, T-A3 | hostapd `mac-filter`: username/password **format REQUIRES DEVICE TEST** |
 | `access-request-uspot-mac-auth.txt` | DT-09, T-A3 | uspot `mac-auth`: `Service-Type = Call-Check`, password = `mac_passwd` or MAC |
 | `acct-start.txt`, `acct-interim-update.txt`, `acct-stop.txt` | DT-16, T-A6 | interim/stop carry Gigawords (>4 GiB folding) |

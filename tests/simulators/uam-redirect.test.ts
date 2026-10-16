@@ -1,7 +1,7 @@
 /**
  * L4 simulator — UAM redirect parse / context validation (MULTI_VENDOR_INTEGRATION_PLAN.md §8.3
- * SIM-01…SIM-04, SIM-07, SIM-08) for `openwifi-uspot-uam` (uspot TIP redirect shape) and
- * `coovachilli-uam` (CoovaChilli `redir.c` shape). The simulated NAS is `@ecloud/testing`
+ * SIM-01…SIM-04, SIM-07, SIM-08) for `ezeap-uam` (uspot TIP redirect shape) and
+ * `ezecloud-uam` (CoovaChilli `redir.c` shape). The simulated NAS is `@ecloud/testing`
  * `buildUamRedirect`, written independently of `@ecloud/adapters`.
  *
  * Simulator evidence: EZECLOUD code behaviour only, NOT hardware compatibility.

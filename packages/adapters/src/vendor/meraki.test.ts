@@ -250,8 +250,7 @@ describe('meraki-splash VendorAdapter', () => {
     expect((await adapter.validateContext(parsed, lookup(NAS))).ok).toBe(false);
     expect((await adapter.validateContext(withNas, lookup(null))).ok).toBe(false);
     expect(
-      (await adapter.validateContext(withNas, lookup({ ...NAS, adapterKey: 'coovachilli-uam' })))
-        .ok,
+      (await adapter.validateContext(withNas, lookup({ ...NAS, adapterKey: 'ezecloud-uam' }))).ok,
     ).toBe(false);
     const replay = await adapter.validateContext(withNas, lookup(NAS, true));
     expect(replay.ok === false && replay.reason).toBe('replayed');

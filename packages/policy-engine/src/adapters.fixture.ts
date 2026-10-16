@@ -41,7 +41,7 @@ function attrs(
 
 /** Captive-portal-like adapter: verified rates / 32-bit quota / timers / Class; VLAN untested. */
 export const captive32: AdapterCapabilities = {
-  key: 'openwifi-uspot-uam',
+  key: 'ezeap-uam',
   version: 'fixture',
   portalType: 'uam-chillispot',
   granularity: 'per-client',

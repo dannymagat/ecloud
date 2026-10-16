@@ -1,5 +1,5 @@
 /**
- * `coovachilli-uam`: CoovaChilli routed gateway (EZE gateway precedent). All reply-attribute
+ * `ezecloud-uam`: CoovaChilli routed gateway (EZE gateway precedent). All reply-attribute
  * facts are VERIFIED FROM OFFICIAL DOCUMENTATION (CAPTIVE_PORTAL_ARCHITECTURE.md §4); the live
  * gateway test is still due (POLICY_ENGINE.md §9.3 item 10).
  */
@@ -10,21 +10,21 @@ import { SRC } from '../source-refs.js';
 import type { NasAdapter } from '../types.js';
 
 const RATE_VERIFIED =
-  "CAPTIVE_PORTAL_ARCHITECTURE.md §4 RADIUS bullet: honours WISPr-Bandwidth-Max-Up/Down (bit/s), CoovaChilli-Bandwidth-Max-Up/Down (kbit/s ×1000) (VERIFIED FROM OFFICIAL DOCUMENTATION); §6 row 'Rate attrs'; POLICY_ENGINE.md §3.1 row rate_limit (coovachilli-uam)";
+  "CAPTIVE_PORTAL_ARCHITECTURE.md §4 RADIUS bullet: honours WISPr-Bandwidth-Max-Up/Down (bit/s), CoovaChilli-Bandwidth-Max-Up/Down (kbit/s ×1000) (VERIFIED FROM OFFICIAL DOCUMENTATION); §6 row 'Rate attrs'; POLICY_ENGINE.md §3.1 row rate_limit (ezecloud-uam)";
 const QUOTA_VERIFIED =
-  "CAPTIVE_PORTAL_ARCHITECTURE.md §4 RADIUS bullet: CoovaChilli-Max-Input/Output/Total-Octets + -Gigawords (VERIFIED FROM OFFICIAL DOCUMENTATION); §6 row 'Quota attrs'; POLICY_ENGINE.md §3.1 row quota (coovachilli-uam)";
+  "CAPTIVE_PORTAL_ARCHITECTURE.md §4 RADIUS bullet: CoovaChilli-Max-Input/Output/Total-Octets + -Gigawords (VERIFIED FROM OFFICIAL DOCUMENTATION); §6 row 'Quota attrs'; POLICY_ENGINE.md §3.1 row quota (ezecloud-uam)";
 const QUOTA_NOTE =
   'period counter is EZECLOUD-side (usage_counters); remaining emitted as Octets + Gigawords; CoovaChilli-* share vendor id 14559 with ChilliSpot (AAA_ARCHITECTURE.md §4.3 alias dictionary, PROPOSED)';
 const TIMEOUT_VERIFIED =
-  "CAPTIVE_PORTAL_ARCHITECTURE.md §4 RADIUS bullet: Session-Timeout (also WISPr-Session-Terminate-Time); §6 row 'Timeouts'; POLICY_ENGINE.md §3.1 row session_timeout (coovachilli-uam)";
+  "CAPTIVE_PORTAL_ARCHITECTURE.md §4 RADIUS bullet: Session-Timeout (also WISPr-Session-Terminate-Time); §6 row 'Timeouts'; POLICY_ENGINE.md §3.1 row session_timeout (ezecloud-uam)";
 const IDLE_VERIFIED =
-  "CAPTIVE_PORTAL_ARCHITECTURE.md §4 RADIUS bullet: Idle-Timeout; §6 row 'Timeouts'; POLICY_ENGINE.md §3.1 row idle_timeout (coovachilli-uam)";
+  "CAPTIVE_PORTAL_ARCHITECTURE.md §4 RADIUS bullet: Idle-Timeout; §6 row 'Timeouts'; POLICY_ENGINE.md §3.1 row idle_timeout (ezecloud-uam)";
 const INTERIM_VERIFIED =
-  "CAPTIVE_PORTAL_ARCHITECTURE.md §4 RADIUS bullet: Acct-Interim-Interval (<60 → ignored); §6 row 'Acct'; POLICY_ENGINE.md §3.1 row interim_interval (coovachilli-uam): honoured if ≥ 60";
+  "CAPTIVE_PORTAL_ARCHITECTURE.md §4 RADIUS bullet: Acct-Interim-Interval (<60 → ignored); §6 row 'Acct'; POLICY_ENGINE.md §3.1 row interim_interval (ezecloud-uam): honoured if ≥ 60";
 const CLASS_VERIFIED =
   'CAPTIVE_PORTAL_ARCHITECTURE.md §4 RADIUS bullet: Class echo; AAA_ARCHITECTURE.md §4.3 row Correlation (chilli: Class echoed)';
 const VLAN_RDT =
-  'CAPTIVE_PORTAL_ARCHITECTURE.md §7.5 row VLAN: CoovaChilli-VLAN-Id → REQUIRES DEVICE TEST; POLICY_ENGINE.md §3.1 row vlan (coovachilli-uam)';
+  'CAPTIVE_PORTAL_ARCHITECTURE.md §7.5 row VLAN: CoovaChilli-VLAN-Id → REQUIRES DEVICE TEST; POLICY_ENGINE.md §3.1 row vlan (ezecloud-uam)';
 const DISCONNECT_RDT =
   'CAPTIVE_PORTAL_ARCHITECTURE.md §4 CoA/Disconnect bullet: coaport (default 0 = disabled), source must be a configured RADIUS server unless coanoipcheck, User-Name mandatory, Acct-Session-Id optional (VERIFIED FROM OFFICIAL DOCUMENTATION); gateway test still due (POLICY_ENGINE.md §9.3 item 10, D4) → REQUIRES DEVICE TEST; AAA_ARCHITECTURE.md §6 row CoovaChilli';
 
@@ -37,7 +37,7 @@ const INTERIM_SRC = sourced(INTERIM_VERIFIED, [SRC.V073]);
 const CLASS_SRC = sourced(CLASS_VERIFIED, [SRC.V073]);
 
 export const capabilities: AdapterCapabilities = {
-  key: 'coovachilli-uam',
+  key: 'ezecloud-uam',
   version: '0.1.0',
   portalType: 'uam-chillispot+wispr+json',
   granularity: 'per-client',
@@ -103,7 +103,7 @@ export const capabilities: AdapterCapabilities = {
       'CoovaChilli-Session-State',
     ],
     evidence:
-      'CAPTIVE_PORTAL_ARCHITECTURE.md §4 CoA/Disconnect bullet: CoA re-applies config_radius_session (timeouts/bandwidth/quota) and honours CoovaChilli-Session-State (VERIFIED FROM OFFICIAL DOCUMENTATION); POLICY_ENGINE.md §3.1 row coa_change (coovachilli-uam): VERIFIED DOCS',
+      'CAPTIVE_PORTAL_ARCHITECTURE.md §4 CoA/Disconnect bullet: CoA re-applies config_radius_session (timeouts/bandwidth/quota) and honours CoovaChilli-Session-State (VERIFIED FROM OFFICIAL DOCUMENTATION); POLICY_ENGINE.md §3.1 row coa_change (ezecloud-uam): VERIFIED DOCS',
     evidenceLevel: 'DOCUMENTED',
     note: 'live confirmation on the EZE gateway pending (POLICY_ENGINE.md §9.3 item 10); same coaport/source-IP preconditions as Disconnect',
   },
@@ -135,13 +135,7 @@ export const capabilities: AdapterCapabilities = {
     decl('burst_upload_kbps', 'UNSUPPORTED', 'DOCUMENTED', EV.burstRadius),
     decl('burst_duration_s', 'UNSUPPORTED', 'DOCUMENTED', EV.burstRadius),
     decl('quota_daily_bytes', 'VERIFIED_SUPPORTED', 'VERIFIED_FROM_SOURCE', QUOTA_SRC, QUOTA_NOTE),
-    decl(
-      'quota_weekly_bytes',
-      'VERIFIED_SUPPORTED',
-      'VERIFIED_FROM_SOURCE',
-      QUOTA_SRC,
-      QUOTA_NOTE,
-    ),
+    decl('quota_weekly_bytes', 'VERIFIED_SUPPORTED', 'VERIFIED_FROM_SOURCE', QUOTA_SRC, QUOTA_NOTE),
     decl(
       'quota_monthly_bytes',
       'VERIFIED_SUPPORTED',

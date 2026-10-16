@@ -22,9 +22,9 @@ const VALUES: GuideValues = {
 };
 
 const NAS_ADAPTER_KEYS = [
-  'openwifi-uspot-uam',
+  'ezeap-uam',
   'uspot-upstream-uam',
-  'coovachilli-uam',
+  'ezecloud-uam',
   'generic-radius-8021x',
   'mikrotik-hotspot',
   'external-portal-postback',

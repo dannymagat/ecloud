@@ -64,7 +64,7 @@ async function plan(
 
 /** Independent expectation for `gatewaySuggestion` (plan §6.2): a gateway row presenting every field VERIFIED. */
 function expectedSuggestion(t: SimTarget, fieldsUnenforceable: readonly string[]): string | null {
-  if (fieldsUnenforceable.length === 0 || t.adapterKey === 'coovachilli-uam') return null;
+  if (fieldsUnenforceable.length === 0 || t.adapterKey === 'ezecloud-uam') return null;
   const row = COMPATIBILITY_ROWS.find(
     (r) =>
       r.lifecycle !== 'planned' &&
@@ -233,7 +233,7 @@ for (const t of TARGETS) {
       expect(['LAB_VALIDATED', 'SIMULATOR_TESTED', 'PRODUCTION_VALIDATED']).not.toContain(
         disc.evidenceLevel,
       );
-      const mandatory = t.adapterKey === 'coovachilli-uam' ? 'User-Name' : 'Calling-Station-Id';
+      const mandatory = t.adapterKey === 'ezecloud-uam' ? 'User-Name' : 'Calling-Station-Id';
       const full = {
         sessionId: 's-sim',
         userName: 'pc-sim-0001',
@@ -242,7 +242,7 @@ for (const t of TARGETS) {
         nasIdentifier: t.nas.identifier,
       };
       const lacking =
-        t.adapterKey === 'coovachilli-uam'
+        t.adapterKey === 'ezecloud-uam'
           ? { ...full, userName: null }
           : { ...full, callingStationId: null };
       const r = t.adapter.revokeSession(lacking);

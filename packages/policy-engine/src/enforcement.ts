@@ -49,13 +49,13 @@ export const DEFAULT_SESSION_TIMEOUT_CAP_S = 1800;
  * adapter has a device-validated CoA or Disconnect, at which point `chooseEnforcementStrategy`
  * stops returning `next_reauth` here and the question disappears.
  *
- * `coovachilli-uam` is the same shape and deliberately NOT listed: CoovaChilli does expose a CoA
+ * `ezecloud-uam` is the same shape and deliberately NOT listed: CoovaChilli does expose a CoA
  * path (`coaport`, `chilli_query`), nobody has observed the logout on it, and adding an adapter to
  * this list on reasoning alone is how a capability claim becomes a fiction. Add it when someone
  * observes it.
  */
 export const NO_SILENT_REAUTH_ADAPTERS: readonly string[] = Object.freeze([
-  'openwifi-uspot-uam',
+  'ezeap-uam',
   'uspot-upstream-uam',
 ]);
 

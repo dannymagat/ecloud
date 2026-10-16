@@ -150,12 +150,12 @@ describe('registry promotion proposed by the results file', () => {
 
   it('SIMULATOR_TESTED on an enforcement capability fails V2; VERIFIED_SUPPORTED + SIMULATOR_TESTED fails V1', () => {
     const enforcement = promote(
-      [{ adapterKey: 'coovachilli-uam', capability: 'download_rate_kbps' as never }],
+      [{ adapterKey: 'ezecloud-uam', capability: 'download_rate_kbps' as never }],
       simCell(),
     );
     expect(violatedRules(validate(enforcement))).toContain('V2');
     const verified = promote(
-      [{ adapterKey: 'coovachilli-uam', capability: 'redirectParse' }],
+      [{ adapterKey: 'ezecloud-uam', capability: 'redirectParse' }],
       simCell('VERIFIED_SUPPORTED'),
     );
     expect(violatedRules(validate(verified))).toContain('V1');

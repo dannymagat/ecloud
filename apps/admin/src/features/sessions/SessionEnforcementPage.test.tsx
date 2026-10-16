@@ -19,7 +19,7 @@ const VIEW: SessionEnforcementView = {
   status: 'active',
   site_id: 'site-1',
   nas_client_id: 'nas-1',
-  adapter_key: 'openwifi-uspot-uam',
+  adapter_key: 'ezeap-uam',
   adapter_version: '0.1.0',
   snapshot: {
     policy_id: 'pol-1',

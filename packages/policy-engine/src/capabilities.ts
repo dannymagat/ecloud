@@ -13,9 +13,9 @@ import type {
 
 export const ADAPTER_KEYS = [
   'openwifi-hostapd-radius',
-  'openwifi-uspot-uam',
+  'ezeap-uam',
   'uspot-upstream-uam',
-  'coovachilli-uam',
+  'ezecloud-uam',
   'openwifi-config',
   /** Cycle A (D-044): vendor-neutral 802.1X / MAC-auth NAS (no portal). */
   'generic-radius-8021x',

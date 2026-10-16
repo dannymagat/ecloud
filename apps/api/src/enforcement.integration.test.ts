@@ -89,7 +89,7 @@ await describeIntegration('@ecloud/api P7-A enforcement orchestration against ec
     const nas = await agent
       .post(`/api/v1/orgs/${orgId}/nas`)
       .set(BROWSER)
-      .send({ site_id: siteId, name: 'nas', nas_ip: nasIp, adapter_key: 'coovachilli-uam' });
+      .send({ site_id: siteId, name: 'nas', nas_ip: nasIp, adapter_key: 'ezecloud-uam' });
     expect(nas.status).toBe(201);
     const created = await agent
       .post(`/api/v1/orgs/${orgId}/policies`)
@@ -252,7 +252,7 @@ await describeIntegration('@ecloud/api P7-A enforcement orchestration against ec
     expect(view.body).toMatchObject({
       session_id: sessionId,
       status: 'authorized',
-      adapter_key: 'coovachilli-uam',
+      adapter_key: 'ezecloud-uam',
       session_timeout: { value_s: 1800, sent: true },
       strategy_evidence: {
         dispatcher_enabled: false,

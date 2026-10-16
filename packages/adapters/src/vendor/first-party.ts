@@ -262,7 +262,7 @@ const SPECS: readonly FirstPartySpec[] = [
     ],
   },
   {
-    key: 'openwifi-uspot-uam',
+    key: 'ezeap-uam',
     vendorKey: 'ezelink',
     uam: { path: '/uam/ezeap/', requireSecret: true },
     defaultDeployment: 'native',
@@ -278,7 +278,7 @@ const SPECS: readonly FirstPartySpec[] = [
     setup: (site) => uspotSetup(site.nasId),
   },
   {
-    key: 'coovachilli-uam',
+    key: 'ezecloud-uam',
     vendorKey: 'coova',
     uam: { path: '/uam/ezecloud/', requireSecret: true },
     defaultDeployment: 'gateway',
@@ -355,7 +355,7 @@ function rowsFor(key: AdapterKey): CompatibilityRow[] {
 }
 
 function gatewaySuggestion(engine: NasAdapter, fields: readonly string[]): string | null {
-  if (fields.length === 0 || engine.key === 'coovachilli-uam') return null;
+  if (fields.length === 0 || engine.key === 'ezecloud-uam') return null;
   const candidate = COMPATIBILITY_ROWS.find(
     (r) =>
       r.lifecycle !== 'planned' &&
@@ -616,7 +616,7 @@ function createFirstPartyVendorAdapter(spec: FirstPartySpec): VendorAdapter {
     },
 
     // 32-bit octet counters without Gigawords (engine `capabilities().octetWidth`, PHASE2_VALIDATION V-054):
-    // today only openwifi-uspot-uam. Report-only; device wrap behaviour is REQUIRES_DEVICE_TEST.
+    // today only ezeap-uam. Report-only; device wrap behaviour is REQUIRES_DEVICE_TEST.
     ...(engine.capabilities().octetWidth === 32 ? { accountingQuirks: counterWrap32Quirks() } : {}),
 
     buildSetupGuide(site) {
@@ -688,11 +688,11 @@ export function listVendorAdapters(): VendorAdapter[] {
 }
 
 // ------------------------------------------------------------------------------------------
-// Vendor profiles on an existing engine adapter (Cycle B: Teltonika RutOS on coovachilli-uam)
+// Vendor profiles on an existing engine adapter (Cycle B: Teltonika RutOS on ezecloud-uam)
 // ------------------------------------------------------------------------------------------
 
 function teltonikaProfile(): VendorAdapter {
-  const base = VENDOR_ADAPTERS['coovachilli-uam'];
+  const base = VENDOR_ADAPTERS['ezecloud-uam'];
   const row = COMPATIBILITY_ROWS.find((r) => r.key === TELTONIKA_ROW_KEY);
   return {
     ...base,
@@ -720,7 +720,7 @@ const VENDOR_PROFILES: Readonly<Record<string, VendorAdapter>> = Object.freeze({
 
 /**
  * Vendor adapter for a registry vendor: a profile on a shared engine adapter (Teltonika →
- * coovachilli-uam), else the adapter whose own vendor key matches; null when none exists.
+ * ezecloud-uam), else the adapter whose own vendor key matches; null when none exists.
  */
 export function getVendorProfile(vendorKey: string): VendorAdapter | null {
   return (

@@ -57,9 +57,9 @@ describe('controller base_url (plan §8.2)', () => {
 
 describe('NAS deployment mode (registry-derived)', () => {
   it('defaults per adapter and refuses modes the registry does not list', () => {
-    expect(resolveDeploymentMode('coovachilli-uam', undefined)).toBe('gateway');
-    expect(resolveDeploymentMode('openwifi-uspot-uam', undefined)).toBe('native');
+    expect(resolveDeploymentMode('ezecloud-uam', undefined)).toBe('gateway');
+    expect(resolveDeploymentMode('ezeap-uam', undefined)).toBe('native');
     expect(resolveDeploymentMode('openwifi-hostapd-radius', 'native')).toBe('native');
-    expect(() => resolveDeploymentMode('openwifi-uspot-uam', 'gateway')).toThrow(ValidationError);
+    expect(() => resolveDeploymentMode('ezeap-uam', 'gateway')).toThrow(ValidationError);
   });
 });

@@ -1,9 +1,9 @@
 /**
- * Teltonika RutOS Hotspot profile on the existing `coovachilli-uam` adapter (Cycle B, D-044;
+ * Teltonika RutOS Hotspot profile on the existing `ezecloud-uam` adapter (Cycle B, D-044;
  * docs/VENDOR_INTEGRATION_RESEARCH.md §1 Teltonika row, §3.2). No new engine adapter: RutOS
  * Hotspot "uses CoovaChilli" (vendor wiki, search extract only), so the UAM redirect, `md`
  * signature, PAP-XOR `/logon` hand-off and the CoovaChilli RADIUS attribute families are the
- * coovachilli-uam ones.
+ * ezecloud-uam ones.
  *
  * What differs is the setup guide and the evidence: the Teltonika wiki pages returned HTTP 403 to
  * every fetcher on 2026-10-10, so RutOS UI field names are NOT quoted here unless the research
@@ -22,7 +22,7 @@ export const TELTONIKA_ROW_KEY = 'teltonika-rutos-hotspot';
 
 const R32: EvidenceRef = {
   kind: 'doc-section',
-  ref: 'docs/VENDOR_INTEGRATION_RESEARCH.md §1 (Teltonika row), §3.2 (coovachilli-uam for Teltonika)',
+  ref: 'docs/VENDOR_INTEGRATION_RESEARCH.md §1 (Teltonika row), §3.2 (ezecloud-uam for Teltonika)',
 };
 const WIKI: EvidenceRef = {
   kind: 'url',
@@ -94,9 +94,9 @@ export function teltonikaSetupGuide(
     ),
     step(
       'ecloud-nas',
-      'Register the router in EZECLOUD: adapter coovachilli-uam, NAS IP = RADIUS source address, NAS identifier as above; captive portal type coovachilli with the UAM secret',
+      'Register the router in EZECLOUD: adapter ezecloud-uam, NAS IP = RADIUS source address, NAS identifier as above; captive portal type coovachilli with the UAM secret',
       'EZECLOUD NAS {nas_ip, nas_identifier, adapter_key}',
-      `<REGISTERED_NAS_IP>, ${site.nasId}, coovachilli-uam`,
+      `<REGISTERED_NAS_IP>, ${site.nasId}, ezecloud-uam`,
     ),
   ];
 }

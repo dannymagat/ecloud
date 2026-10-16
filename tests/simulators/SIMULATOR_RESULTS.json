@@ -1,13 +1,13 @@
 {
   "format": "ecloud-simulator-results/v1",
   "scope": "Simulator evidence: EZECLOUD code behaviour against a simulated NAS (fixtures derived from documented parameter lists). It is NOT hardware compatibility evidence, never LAB_VALIDATED, and never applies to an enforcement capability or to Disconnect/CoA (D-006).",
-  "generatedAt": "2026-10-08T08:09:33.362Z",
+  "generatedAt": "2026-10-16T09:23:33.696Z",
   "run": {
-    "runId": "dafbef1e73f3be7aa4304183317ef009",
-    "outcomesHash": "9a2793a3b0f17aad4fa086b9fa14c62208bb9f9a28f1ad0b26730c937153ffbb",
+    "runId": "23c5be676ac6650eea649c330061cb1e",
+    "outcomesHash": "f5fa0ce3c5bdb555c2859e9251656fc529213d5fa3ca60eb39bc677d18728a08",
     "command": "vitest run --project tests tests/simulators --exclude **/results.test.ts --reporter=json",
     "integration": true,
-    "passed": 55,
+    "passed": 63,
     "failed": 0,
     "skipped": 0,
     "todo": 0
@@ -18,8 +18,8 @@
       "title": "valid UAM redirect res=notyet with correct md",
       "group": "pure",
       "results": {
-        "openwifi-uspot-uam": "PASS",
-        "coovachilli-uam": "PASS"
+        "ezeap-uam": "PASS",
+        "ezecloud-uam": "PASS"
       },
       "tests": 2,
       "findings": []
@@ -29,8 +29,8 @@
       "title": "forged redirect: md wrong / missing",
       "group": "pure",
       "results": {
-        "openwifi-uspot-uam": "PASS",
-        "coovachilli-uam": "PASS"
+        "ezeap-uam": "PASS",
+        "ezecloud-uam": "PASS"
       },
       "tests": 2,
       "findings": []
@@ -40,8 +40,8 @@
       "title": "tampered parameter after signing (mac, nasid, uamip)",
       "group": "pure",
       "results": {
-        "openwifi-uspot-uam": "PASS",
-        "coovachilli-uam": "PASS"
+        "ezeap-uam": "PASS",
+        "ezecloud-uam": "PASS"
       },
       "tests": 2,
       "findings": []
@@ -51,8 +51,8 @@
       "title": "unknown nasid / unregistered NAS",
       "group": "pure",
       "results": {
-        "openwifi-uspot-uam": "PASS",
-        "coovachilli-uam": "PASS"
+        "ezeap-uam": "PASS",
+        "ezecloud-uam": "PASS"
       },
       "tests": 2,
       "findings": []
@@ -62,8 +62,8 @@
       "title": "cross-tenant NAS / credential",
       "group": "db",
       "results": {
-        "openwifi-uspot-uam": "PASS",
-        "coovachilli-uam": "PASS"
+        "ezeap-uam": "PASS",
+        "ezecloud-uam": "PASS"
       },
       "tests": 6,
       "findings": []
@@ -73,8 +73,8 @@
       "title": "replay after consumption; credential reused after TTL",
       "group": "db",
       "results": {
-        "openwifi-uspot-uam": "PASS",
-        "coovachilli-uam": "PASS"
+        "ezeap-uam": "PASS",
+        "ezecloud-uam": "PASS"
       },
       "tests": 4,
       "findings": []
@@ -84,8 +84,8 @@
       "title": "public uamip; userurl open-redirect payloads",
       "group": "pure",
       "results": {
-        "openwifi-uspot-uam": "PASS",
-        "coovachilli-uam": "PASS"
+        "ezeap-uam": "PASS",
+        "ezecloud-uam": "PASS"
       },
       "tests": 4,
       "findings": []
@@ -95,8 +95,8 @@
       "title": "opaque value preservation (byte-for-byte raw query)",
       "group": "pure",
       "results": {
-        "openwifi-uspot-uam": "PASS",
-        "coovachilli-uam": "PASS"
+        "ezeap-uam": "PASS",
+        "ezecloud-uam": "PASS"
       },
       "tests": 4,
       "findings": []
@@ -106,8 +106,8 @@
       "title": "hand-off: PAP XOR encoding and CHAP reference vectors",
       "group": "pure",
       "results": {
-        "openwifi-uspot-uam": "PASS",
-        "coovachilli-uam": "PASS"
+        "ezeap-uam": "PASS",
+        "ezecloud-uam": "PASS"
       },
       "tests": 8,
       "findings": []
@@ -117,8 +117,8 @@
       "title": "accounting retransmit (identical Interim twice)",
       "group": "pure",
       "results": {
-        "openwifi-uspot-uam": "PASS",
-        "coovachilli-uam": "PASS"
+        "ezeap-uam": "PASS",
+        "ezecloud-uam": "PASS"
       },
       "tests": 2,
       "findings": []
@@ -128,8 +128,8 @@
       "title": "out-of-order Interim",
       "group": "pure",
       "results": {
-        "openwifi-uspot-uam": "PASS",
-        "coovachilli-uam": "PASS"
+        "ezeap-uam": "PASS",
+        "ezecloud-uam": "PASS"
       },
       "tests": 2,
       "findings": []
@@ -139,8 +139,8 @@
       "title": "missing Stop: reaper closes, no double count",
       "group": "db",
       "results": {
-        "openwifi-uspot-uam": "PASS",
-        "coovachilli-uam": "PASS"
+        "ezeap-uam": "PASS",
+        "ezecloud-uam": "PASS"
       },
       "tests": 2,
       "findings": []
@@ -150,7 +150,7 @@
       "title": "Gigawords rollover (64-bit total)",
       "group": "pure",
       "results": {
-        "coovachilli-uam": "PASS"
+        "ezecloud-uam": "PASS"
       },
       "tests": 1,
       "findings": []
@@ -160,7 +160,7 @@
       "title": "32-bit wrap without Gigawords (uspot TIP)",
       "group": "pure",
       "results": {
-        "openwifi-uspot-uam": "PASS"
+        "ezeap-uam": "PASS"
       },
       "tests": 2,
       "findings": []
@@ -170,8 +170,8 @@
       "title": "unsupported policy: VLAN, burst, quota > 4 GiB on TIP",
       "group": "pure",
       "results": {
-        "openwifi-uspot-uam": "PASS",
-        "coovachilli-uam": "PASS"
+        "ezeap-uam": "PASS",
+        "ezecloud-uam": "PASS"
       },
       "tests": 6,
       "findings": []
@@ -181,8 +181,8 @@
       "title": "Disconnect without mandatory identification attribute",
       "group": "pure",
       "results": {
-        "openwifi-uspot-uam": "PASS",
-        "coovachilli-uam": "PASS"
+        "ezeap-uam": "PASS",
+        "ezecloud-uam": "PASS"
       },
       "tests": 2,
       "findings": []
@@ -192,8 +192,8 @@
       "title": "NAS reboot: Accounting-On / Accounting-Off",
       "group": "db",
       "results": {
-        "openwifi-uspot-uam": "PASS",
-        "coovachilli-uam": "PASS"
+        "ezeap-uam": "PASS",
+        "ezecloud-uam": "PASS"
       },
       "tests": 1,
       "findings": []
@@ -203,8 +203,8 @@
       "title": "multi-NAS roaming; no double count; no cross-tenant merge",
       "group": "db",
       "results": {
-        "openwifi-uspot-uam": "PASS",
-        "coovachilli-uam": "PASS"
+        "ezeap-uam": "PASS",
+        "ezecloud-uam": "PASS"
       },
       "tests": 3,
       "findings": []
@@ -212,7 +212,7 @@
   ],
   "claims": [
     {
-      "adapterKey": "openwifi-uspot-uam",
+      "adapterKey": "ezeap-uam",
       "capability": "redirectParse",
       "evidenceLevel": "SIMULATOR_TESTED",
       "proposedStatus": "ECLOUD_SIDE_ONLY",
@@ -253,7 +253,7 @@
       ]
     },
     {
-      "adapterKey": "openwifi-uspot-uam",
+      "adapterKey": "ezeap-uam",
       "capability": "authorizationHandoff",
       "evidenceLevel": "SIMULATOR_TESTED",
       "proposedStatus": "ECLOUD_SIDE_ONLY",
@@ -286,7 +286,7 @@
       ]
     },
     {
-      "adapterKey": "openwifi-uspot-uam",
+      "adapterKey": "ezeap-uam",
       "capability": "accountingNormalize",
       "evidenceLevel": "SIMULATOR_TESTED",
       "proposedStatus": "ECLOUD_SIDE_ONLY",
@@ -319,7 +319,7 @@
       ]
     },
     {
-      "adapterKey": "coovachilli-uam",
+      "adapterKey": "ezecloud-uam",
       "capability": "redirectParse",
       "evidenceLevel": "SIMULATOR_TESTED",
       "proposedStatus": "ECLOUD_SIDE_ONLY",
@@ -360,7 +360,7 @@
       ]
     },
     {
-      "adapterKey": "coovachilli-uam",
+      "adapterKey": "ezecloud-uam",
       "capability": "authorizationHandoff",
       "evidenceLevel": "SIMULATOR_TESTED",
       "proposedStatus": "ECLOUD_SIDE_ONLY",
@@ -393,7 +393,7 @@
       ]
     },
     {
-      "adapterKey": "coovachilli-uam",
+      "adapterKey": "ezecloud-uam",
       "capability": "accountingNormalize",
       "evidenceLevel": "SIMULATOR_TESTED",
       "proposedStatus": "ECLOUD_SIDE_ONLY",
