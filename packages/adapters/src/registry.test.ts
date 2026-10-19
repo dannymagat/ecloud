@@ -110,7 +110,7 @@ describe('describeDisconnect / buildDisconnect', () => {
       target: 'hostapd-das',
       status: 'REQUIRES_DEVICE_TEST',
       mandatory: ['Calling-Station-Id'],
-      identifyBy: ['User-Name', 'Calling-Station-Id'],
+      identifyBy: ['Calling-Station-Id'],   // 2026-10-19 device test: User-Name never matches on an open captive BSS
       acctStopEmitted: false,
     });
     expect(u.note).toContain('no Acct-Stop');

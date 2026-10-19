@@ -95,10 +95,14 @@ export const capabilities: AdapterCapabilities = {
   disconnect: {
     status: 'REQUIRES_DEVICE_TEST',
     target: 'hostapd-das',
-    // Device test 2026-10-16 11:02Z (AP1832, D-078): Calling-Station-Id alone is answered with
-    // CoA-NAK Error-Cause=Missing-Attribute — hostapd's DAS wants a session identity before it
-    // matches a station. User-Name first (what hostapd saw at authentication), then the MAC.
-    identifyBy: ['User-Name', 'Calling-Station-Id'],
+    // Device test 2026-10-16 11:02Z (AP1832, D-078): Calling-Station-Id alone drew CoA-NAK
+    // Missing-Attribute — that was the missing T-C-Filtering VSA (disconnectExtraAttributes), not
+    // the identity. Device test 2026-10-19 11:57Z (AP1832, 542642d): with the VSA present,
+    // User-Name + Calling-Station-Id drew CoA-NAK Session-Context-Not-Found and hostapd logged
+    // "DAS: Session not found": hostapd_das_find_sta() filters a User-Name against the station's
+    // 802.1X identity, and a station on an open captive BSS has none, so every station is
+    // rejected. The MAC is the only identity hostapd can match here.
+    identifyBy: ['Calling-Station-Id'],
     acctStopEmitted: false,
     evidence: DISCONNECT_RDT,
     evidenceLevel: 'DOCUMENTED',
@@ -229,7 +233,8 @@ export const adapter: NasAdapter = createAdapter(capabilities, {
   // uspot answers by removing the captive session) from hostapd_das_coa only; its Disconnect
   // handler deauthenticates the station and leaves the uspot session authorized, so the client
   // re-associates straight back onto the internet. No NAS-Identifier: the captive BSS carries
-  // none. User-Name + Calling-Station-Id: the MAC alone drew Missing-Attribute on the device.
+  // none. Calling-Station-Id only: User-Name is filtered against the 802.1X identity, which an
+  // open captive BSS does not have (device test 2026-10-19, Session-Context-Not-Found).
   disconnectPacket: 'coa',
   // hostapd's CoA parser (radius_das.c, CONFIG_HS20) answers CoA-NAK Error-Cause=Missing-Attribute
   // ("No supported authorization change attribute") unless the request carries the WFA HS2.0
@@ -239,5 +244,5 @@ export const adapter: NasAdapter = createAdapter(capabilities, {
   // three NAKs without it (session_actions 01a14460…, 01a14461…).
   disconnectExtraAttributes: [{ name: 'Attr-26.40808.9', value: '0x00000000' }],
   disconnectNote:
-    'Send a CoA-Request (not Disconnect) to the hostapd DAS of the captive SSID (ssid.radius.dynamic-authorization) identified by User-Name and Calling-Station-Id; hostapd hands it to uspot over ubus (coa) which removes the session; expect CoA-ACK; EZECLOUD closes the session (no Acct-Stop). REQUIRES DEVICE TEST.',
+    'Send a CoA-Request (not Disconnect) to the hostapd DAS of the captive SSID (ssid.radius.dynamic-authorization) identified by Calling-Station-Id (User-Name cannot match on an open BSS); hostapd hands it to uspot over ubus (coa) which removes the session; expect CoA-ACK; EZECLOUD closes the session (no Acct-Stop). REQUIRES DEVICE TEST.',
 });
