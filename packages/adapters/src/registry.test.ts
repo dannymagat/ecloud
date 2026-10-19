@@ -117,9 +117,10 @@ describe('describeDisconnect / buildDisconnect', () => {
     const req = getAdapter('ezeap-uam').buildDisconnect(session);
     // uspot's session kick rides on hostapd's CoA handler (ubus `coa`), never on Disconnect.
     expect('packet' in req ? req.packet : undefined).toBe('coa');
-    // User-Name first: the MAC alone drew CoA-NAK Missing-Attribute from hostapd (device test 2026-10-16).
+    // Calling-Station-Id only: User-Name is filtered against the 802.1X identity, which an open captive
+    // BSS has none of (device test 2026-10-19, Session-Context-Not-Found); the 2026-10-16 Missing-Attribute
+    // was the absent T-C-Filtering VSA, not the identity.
     expect('attributes' in req ? req.attributes : []).toEqual([
-      { name: 'User-Name', value: 'alice' },
       { name: 'Calling-Station-Id', value: 'AA-BB-CC-DD-EE-01' },
       // WFA HS2.0 T-C-Filtering (vendor 40808 / 9): hostapd's CoA parser refuses the request without it.
       { name: 'Attr-26.40808.9', value: '0x00000000' },
