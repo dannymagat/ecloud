@@ -168,58 +168,8 @@ await describeIntegration('@ecloud/api Access Points page (D-045)', () => {
     }
   });
 
-  it('rotation raises secret_version, seals v2 against it, and retires the old ref (task 10)', async () => {
-    const a = await orgAdmin();
-    const nas = await createNas(a.agent, a.orgId, a.siteId);
-    const read = async () =>
-      deps.dbPlatform
-        .selectFrom('nas_clients')
-        .select(['secret_ref', 'secret_version'])
-        .where('id', '=', nas.id)
-        .executeTakeFirstOrThrow();
-
-    // Created sealed at version 1, bound to the row the insert actually wrote. If create had
-    // sealed against an id the row did not get, this open would throw rather than compare.
-    const before = await read();
-    expect(before.secret_ref).toMatch(/^enc:v2\./);
-    expect(Number(before.secret_version)).toBe(1);
-    expect(
-      openNasSecret(deps.config.dataEncryptionKey, String(before.secret_ref), {
-        organizationId: a.orgId,
-        nasId: nas.id,
-        secretVersion: 1,
-      }),
-    ).toBe(nas.secret);
-
-    const rotate = await a.agent
-      .post(`/api/v1/orgs/${a.orgId}/nas/${nas.id}/rotate-secret`)
-      .set(BROWSER)
-      .set('Idempotency-Key', newId());
-    expect(rotate.status, JSON.stringify(rotate.body)).toBe(200);
-    const rotated = rotate.body.secret as string;
-    expect(rotated).not.toBe(nas.secret);
-
-    const after = await read();
-    expect(Number(after.secret_version)).toBe(2);
-    expect(
-      openNasSecret(deps.config.dataEncryptionKey, String(after.secret_ref), {
-        organizationId: a.orgId,
-        nasId: nas.id,
-        secretVersion: 2,
-      }),
-    ).toBe(rotated);
-
-    // THE POINT OF THE VERSION COLUMN. The pre-rotation ciphertext is intact and belongs to this
-    // very row, so AAD over identity alone would still open it — replaying it would restore the
-    // retired secret. It is the version in the AAD that refuses.
-    expect(() =>
-      openNasSecret(deps.config.dataEncryptionKey, String(before.secret_ref), {
-        organizationId: a.orgId,
-        nasId: nas.id,
-        secretVersion: 2,
-      }),
-    ).toThrow();
-  });
+  // D-085 (2026-10-20): the rotate endpoint is gone; version-bound sealing is covered by reseal/secrets.test.ts
+  // and crypto.test.ts.
 
   function mikrotik(agent: Agent, orgId: string, siteId: string) {
     return createNas(agent, orgId, siteId, 'mikrotik-hotspot', {

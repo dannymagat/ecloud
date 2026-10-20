@@ -75,7 +75,10 @@ export const SECRET_RULE = 'shared secret must be 12-128 characters of [A-Za-z0-
  * It provides no secrecy; every NAS still inheriting it is counted in the run summary
  * (`fleetDefaultSecret`) so an operator can see which clients share the public value.
  */
-export const FLEET_DEFAULT_RADIUS_SECRET = 'ezeradsecret'; // check-no-secrets: allow (public fleet constant, D-071)
+// Owner decision 2026-10-20 12:05/12:25: ONE static fleet secret for every NAS (adopted and new); the
+// per-NAS rotate endpoint and UI control were removed the same day. Every row on vps-local was resealed
+// to this value and the FreeRADIUS clients file re-rendered (EZECLOUD/DECISIONS.md D-085).
+export const FLEET_DEFAULT_RADIUS_SECRET = 'EZE-radsecret-2026'; // check-no-secrets: allow (public fleet constant, D-071/D-085)
 export const FLEET_DEFAULT_CONTROLLER_RELEASE = 'hsdefaults-20261014T102455Z';
 
 export const RENDERED_HEADER =

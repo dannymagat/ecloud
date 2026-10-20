@@ -3,7 +3,7 @@
  * MFA code (only with ADMIN_MFA_MODE=required; D-046: otherwise one confirmation click), then shows the value, copies it to the clipboard and hides it again after 30 s.
  * The value lives in this component's state only (never in the TanStack cache: the reveal is a
  * mutation with gcTime 0 that is reset as soon as it succeeds). Several NAS → a NAS selector.
- * The existing rotate-secret action sits next to it.
+ * (The per-NAS rotate-secret action was removed on 2026-10-20, D-085: static fleet secret.)
  */
 import { useMutation } from '@tanstack/react-query';
 import { Eye, EyeOff, KeyRound } from 'lucide-react';
@@ -13,7 +13,6 @@ import { ProblemAlert } from '../../components/ProblemAlert';
 import { Button, Card, SelectField, TextField } from '../../components/ui';
 import { useAuth } from '../../lib/auth';
 import { can } from '../../lib/permissions';
-import { RotateSecret } from '../org/NasPage';
 import { revealSecret, type OverviewNas } from './data';
 
 export const REVEAL_SECONDS = 30;
@@ -146,7 +145,6 @@ export function RadiusSecretBox({ orgId, nas }: { orgId: string; nas: readonly O
   const target = { organizationId: orgId, siteId: current.site_id };
   const mfaOn = me?.kind !== 'admin' || me.mfa.mode !== 'off';
   const canReveal = can(me, 'nas:secret:reveal', target);
-  const canRotate = can(me, 'nas:secret:rotate', target);
   const impersonating = me?.kind === 'admin' && me.impersonation !== null;
   // Shown only for the NAS it was revealed for, and only until it expires.
   const secret =
@@ -236,9 +234,6 @@ export function RadiusSecretBox({ orgId, nas }: { orgId: string; nas: readonly O
               Revealing the secret needs the Organization Admin role{mfaOn ? ' and MFA' : ''}.
             </p>
           )}
-          {canRotate ? (
-            <RotateSecret row={{ id: current.id, name: current.name }} orgId={orgId} />
-          ) : null}
         </div>
       </div>
       {dialog ? (

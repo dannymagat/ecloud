@@ -149,8 +149,9 @@ describe('renderClientsConf', () => {
 
   // D-071 (owner, 2026-10-16): the floor is 12 characters, aligned with the 12-char fleet
   // default; the public value passes like any other and every client on it is counted.
-  it('accepts a 12-character secret, including the public fleet default, and counts clients inheriting it', () => {
-    expect(FLEET_DEFAULT_RADIUS_SECRET).toHaveLength(12); // exactly the floor
+  it('accepts a 12-character secret and the public fleet default, and counts clients inheriting it', () => {
+    expect(SECRET_RE.test('ezeradsecret')).toBe(true); // exactly the floor (the pre-D-085 default)
+    expect(FLEET_DEFAULT_RADIUS_SECRET.length).toBeGreaterThanOrEqual(12); // D-085 static fleet secret
     expect(SECRET_RE.test(FLEET_DEFAULT_RADIUS_SECRET)).toBe(true);
     const out = renderClientsConf([
       entry({ id: ID_B, nasIp: '10.9.9.9', secret: OTHER_SECRET }),

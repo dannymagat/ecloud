@@ -242,10 +242,9 @@ describe('Access Points page (D-045)', () => {
     expect(within(card).getByRole('link', { name: /Invite IT Staff/ })).toBeInTheDocument();
     expect(within(card).getByRole('button', { name: /Add Access Point/ })).toBeInTheDocument();
 
-    // RADIUS secret box: masked, reveal + rotate
+    // RADIUS secret box: masked, reveal (rotate removed, D-085)
     expect(screen.getByTestId('radius-secret-value')).toHaveTextContent('••••');
     expect(screen.getByRole('button', { name: /Reveal and copy/ })).toBeEnabled();
-    expect(screen.getByRole('button', { name: 'Rotate secret' })).toBeInTheDocument();
 
     // table
     const table = screen.getByRole('table', { name: 'Access points' });
@@ -299,7 +298,6 @@ describe('Access Points page (D-045)', () => {
     await screen.findByText('3 of 5');
     expect(screen.queryByRole('button', { name: 'Add' })).toBeNull();
     expect(screen.queryByRole('button', { name: /Reveal and copy/ })).toBeNull();
-    expect(screen.queryByRole('button', { name: 'Rotate secret' })).toBeNull();
     expect(screen.queryByRole('link', { name: /Invite IT Staff/ })).toBeNull();
     expect(screen.queryByRole('link', { name: 'Network Limits' })).toBeNull();
     // the guides stay readable with nas:read

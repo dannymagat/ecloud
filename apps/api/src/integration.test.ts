@@ -548,25 +548,8 @@ await describeIntegration('@ecloud/api against ecloud_test', () => {
       .set(BROWSER)
       .send({ administrator_id: support.id, role_id: readOnly, scope_type: 'organization' });
     expect(binding.body.type).toBe('urn:ecloud:problem:impersonation-forbidden');
-    const nas = await deps.dbPlatform
-      .insertInto('nas_clients')
-      .values({
-        id: newId(),
-        organization_id: a.orgId,
-        site_id: a.siteId,
-        name: 'n',
-        nas_ip: randomIp(),
-        adapter_type_key: 'ezecloud-uam',
-        adapter_key: 'ezecloud-uam',
-        secret_ref: PLACEHOLDER_NAS_SECRET_REF,
-      })
-      .returning('id')
-      .executeTakeFirstOrThrow();
-    const rotate = await agent
-      .post(`/api/v1/orgs/${a.orgId}/nas/${nas.id}/rotate-secret`)
-      .set(BROWSER)
-      .set('Idempotency-Key', newId());
-    expect(rotate.body.type).toBe('urn:ecloud:problem:impersonation-forbidden');
+    // D-085 (2026-10-20): the NAS rotate-secret endpoint no longer exists (static fleet secret); the
+    // impersonation refusal of tenant writes is asserted on the role binding above.
     // pinned to the impersonated organization; platform permissions are off
     expect((await agent.get(`/api/v1/orgs/${b.orgId}/sites`)).status).toBe(403);
     expect((await agent.get('/api/v1/platform/organizations')).status).toBe(403);

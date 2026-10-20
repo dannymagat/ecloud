@@ -25,7 +25,8 @@ import { z } from 'zod';
 import { writeAudit } from '../audit.js';
 import { requestIsImpersonating } from '../auth/middleware.js';
 import type { AppDeps } from '../context.js';
-import { randomToken, sealNasSecret } from '../crypto.js';
+import { sealNasSecret } from '../crypto.js';
+import { FLEET_DEFAULT_RADIUS_SECRET } from '../radius-clients/render.js';
 import { OrgIdParams, ResourceSchema, problemResponses } from '../http/common.js';
 import { ImpersonationForbiddenError } from '../http/errors.js';
 import { defineRoute, type AnyRouteSpec } from '../http/route.js';
@@ -685,8 +686,8 @@ export function resourceRoutes(deps: AppDeps): AnyRouteSpec[] {
       assertHotspotAddress(body.adapter_key, body.hotspot_address, body.hotspot_port);
       assertNasVendor(body.vendor_key, body.adapter_key);
       if (body.device_test_attributes === true) assertLabModePermission(hook);
-      // 32 random bytes → 43 base64url chars; RADIUS shared secrets ≤ 128 octets.
-      const secret = randomToken(32);
+      // D-085 (owner 2026-10-20): every NAS carries the one static fleet secret; no per-NAS value, no rotation.
+      const secret = FLEET_DEFAULT_RADIUS_SECRET;
       hook.scratch.secret = secret;
       // Task 10: the v2 envelope binds the ciphertext to its row, so the id has to exist BEFORE
       // the secret is sealed. Pre-generated here and handed to the insert through `scratch`,
@@ -955,69 +956,7 @@ export function resourceRoutes(deps: AppDeps): AnyRouteSpec[] {
     },
   });
 
-  const rotateNasSecret = defineRoute({
-    method: 'post',
-    path: '/api/v1/orgs/:orgId/nas/:id/rotate-secret',
-    summary: 'Rotate the RADIUS shared secret of a NAS (returned once)',
-    tags: ['nas'],
-    auth: 'principal',
-    permission: 'nas:secret:rotate',
-    scope: 'any-site',
-    params: OrgIdParams,
-    idempotency: 'required',
-    secretFields: ['secret'],
-    responses: { 200: { description: 'New secret', schema: ResourceSchema }, ...problemResponses },
-    handler: async ({ params, req, ctx }) => {
-      if (requestIsImpersonating(req)) throw new ImpersonationForbiddenError('nas:secret:rotate');
-      const secret = randomToken(32);
-      const row = await inTenant(deps, params.orgId, async (trx) => {
-        const before = await loose(trx)
-          .selectFrom('nas_clients')
-          .select(['id', 'organization_id', 'site_id', 'name', 'secret_version'])
-          .where('id', '=', params.id)
-          .where('deleted_at', 'is', null)
-          .forUpdate()
-          .executeTakeFirst();
-        if (before === undefined) throw new NotFoundError('nas_client', params.id);
-        requireOnSite(
-          ctx,
-          'nas:secret:rotate',
-          params.orgId,
-          before.site_id as string,
-          'nas_client',
-          'nas:read',
-        );
-        // The version rises in the SAME statement as the new ciphertext. Two statements, or a
-        // bump left to a later write, would leave the row holding a ciphertext sealed against a
-        // version the row does not carry — and a rotation that does not raise the version gives
-        // the rollback protection nothing to refuse.
-        const nextVersion = Number(before.secret_version) + 1;
-        await trx
-          .updateTable('nas_clients')
-          .set({
-            secret_ref: sealNasSecret(deps.config.dataEncryptionKey, secret, {
-              organizationId: before.organization_id as string,
-              nasId: params.id,
-              secretVersion: nextVersion,
-            }),
-            secret_version: nextVersion,
-          })
-          .where('id', '=', params.id)
-          .execute();
-        await writeAudit(trx, ctx, {
-          organizationId: params.orgId,
-          action: 'nas:secret:rotate',
-          targetType: 'nas_client',
-          targetId: params.id,
-          after: { rotated: true },
-        });
-        return before;
-      });
-      // Secret rotation changes the shared secret in clients.conf — reload FreeRADIUS.
-      await signalRadiusClientsReload(deps.kv, `nas:secret:rotate id=${row.id as string}`);
-      return { status: 200, body: { id: row.id, secret } };
-    },
-  });
+  // D-085 (owner 2026-10-20): POST /nas/:id/rotate-secret removed — the RADIUS secret is the static fleet value.
 
   const users = crudRoutes(deps, {
     table: 'users',
@@ -1200,7 +1139,6 @@ export function resourceRoutes(deps: AppDeps): AnyRouteSpec[] {
     ...sites,
     ...networkDevices,
     ...nas,
-    rotateNasSecret,
     blockNas,
     unblockNas,
     ...users,

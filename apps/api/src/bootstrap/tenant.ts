@@ -4,7 +4,7 @@
  * default value needed to allow sample user to access internet").
  *
  * WHY THIS EXISTS AS A SCRIPT RATHER THAN ADMIN CLICKS. Two of the values it writes cannot be
- * written through the API at all. `POST /nas/:id/rotate-secret` and the portal's
+ * written through the API at all. (The NAS rotate-secret route was removed 2026-10-20, D-085.) The portal's
  * rotate-uam-secret both GENERATE a random secret and show it once; neither accepts a value.
  * That is deliberate product behaviour — a human never chooses a shared secret — and it is
  * exactly what the owner's instruction requires us to bypass. Everything else here could be
