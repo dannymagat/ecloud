@@ -41,6 +41,7 @@ import {
   RADSEC_CLIENT_SHORTNAME,
   canonicalMacStrict,
   isUuid,
+  nasEligibility,
   newId,
   radsecCertificateAccepted,
 } from '@ecloud/shared';
@@ -105,6 +106,10 @@ interface NasRow {
   network_device_id: string | null;
   /** Migration 029: lab opt-in, also emit REQUIRES_DEVICE_TEST attributes (experimental). */
   device_test_attributes: boolean;
+  /** `nas_clients.status` verbatim, for the eligibility predicate (§8). */
+  status: string;
+  /** Migration 046: adoption, separate from administrative status (§5). */
+  is_adopted: boolean;
 }
 
 interface CachedDecision {
@@ -269,6 +274,8 @@ export async function resolveNas(deps: AppDeps, body: RadiusRequestBody): Promis
           'adapter_key',
           'network_device_id',
           'device_test_attributes',
+          'status',
+          'is_adopted',
         ])
         .where('status', '=', 'active')
         .where('deleted_at', 'is', null);
@@ -312,13 +319,15 @@ export async function resolveNas(deps: AppDeps, body: RadiusRequestBody): Promis
           'device_test_attributes',
           'status',
           'deleted_at',
+          'is_adopted',
         ])
         .where('id', '=', shortname)
         .executeTakeFirst();
       if (named === undefined || named.status !== 'active' || named.deleted_at !== null) {
         return null;
       }
-      const { status: _status, deleted_at: _deleted, ...row } = named;
+      // `status` stays on the row now: the eligibility predicate takes it verbatim (§8).
+      const { deleted_at: _deleted, ...row } = named;
       if (row.adapter_key === MERAKI_ADAPTER) return row;
     }
     if (srcIp !== undefined && srcIp !== '') {
@@ -756,6 +765,23 @@ async function decide(deps: AppDeps, body: RadiusRequestBody, now: Date): Promis
       facts: { ...baseFacts, reason: 'nas_identifier_mismatch' },
     };
   }
+  // P-07 / HERMES_AAA_AUDIT F-001: the guard above only fires when the row HAS an identifier, so
+  // a row with none accepted a request claiming any identifier at all — the check was skipped
+  // rather than passed. A request that names an identity the platform never registered is
+  // refused; it is a configuration gap on the NAS row, and failing closed is how every other
+  // unknown is handled here.
+  //
+  // Scoped so it changes nothing else: a request that sends NO identifier against a row with
+  // none is untouched and still accepted, because there is nothing to disagree about. Verified
+  // against the pilot before tightening — all four live NAS rows carry an identifier, so this
+  // branch is unreachable for them.
+  if (nas.nas_identifier === null && requestIdentifier !== undefined) {
+    return {
+      status: 401,
+      body: rejectBody('Access denied'),
+      facts: { ...baseFacts, reason: 'nas_identifier_unregistered' },
+    };
+  }
 
   // Review M1b: an authenticated packet of this NAS naming an AP MAC proves that AP (best effort,
   // never part of the decision; only rows of THIS NAS that are not yet verified are touched).
@@ -778,6 +804,43 @@ async function decide(deps: AppDeps, body: RadiusRequestBody, now: Date): Promis
   ).catch(() => false);
 
   try {
+    // P-04/P-08 (NAS_PENDING_ADOPTION_REQUIREMENTS §8): the ONE eligibility gate for new access,
+    // through the shared predicate so the authorize path and the admin overview cannot disagree
+    // about what "usable" means. §8 lists "adoption is complete" as a condition and nothing here
+    // read `is_adopted` before, so NOT_ADOPTED was advisory only.
+    //
+    // BEFORE precheckPassword deliberately: every fact comes from the `nas` row already in hand,
+    // so this costs no query, and an ineligible NAS is refused without spending an Argon2id
+    // verify — the same shape as the site check inside precheckPassword (:445).
+    //
+    // `policy: 'unevaluated'` keeps it cheap: resolution runs later and rejects with `no_policy`
+    // on its own, so asking the policy question here would be a second engine call for an answer
+    // we are about to compute. Unevaluated, the predicate decides on adoption and administrative
+    // status — exactly the dimensions this path did not check.
+    const eligibility = nasEligibility({
+      adoptionComplete: nas.is_adopted === true,
+      status: nas.status,
+      // The resolving query filters `deleted_at IS NULL`, so a soft-deleted NAS never gets here.
+      deleted: false,
+      // Ownership is enforced by the site/org check in precheckPassword and again in the decision
+      // transaction (`tenant_inactive`); this gate is not the one that decides it.
+      ownershipValid: true,
+      // Not evaluated per packet: cross-organization identifier uniqueness is enforced at
+      // create/patch time (`assertNasIdentifierAvailable`).
+      identifierConflict: false,
+      policy: 'unevaluated',
+      onPlatformDefaultPortal: false,
+    });
+    if (!eligibility.allowsNewAccess) {
+      // Derived from the predicate rather than hardcoded, so the code stays correct if the
+      // resolving query ever stops filtering on status: `nas_not_adopted`, `nas_blocked`,
+      // `nas_disabled`.
+      const reason =
+        eligibility.primaryReason === null
+          ? `nas_${eligibility.state}`
+          : `nas_${eligibility.primaryReason.toLowerCase()}`;
+      throw new Reject(reason, 'Access denied');
+    }
     // B-3: Argon2id first, with no connection held; the decision transaction re-checks.
     const passwordCheck = await precheckPassword(deps, body, nas);
     return await withTenant(deps.db, nas.organization_id, async (trx) => {

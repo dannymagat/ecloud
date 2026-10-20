@@ -299,6 +299,48 @@ await describeIntegration('@ecloud/api AAA password verify outside the transacti
     }
   }, 30_000);
 
+  it('unadopted NAS: rejected nas_not_adopted before any verify (P-04, requirements §8)', async () => {
+    // §8 lists "adoption is complete" among the conditions for new access. Nothing on this path
+    // read `is_adopted` before, so NOT_ADOPTED was advisory: the admin overview showed it while
+    // the NAS kept authenticating subscribers. No live row is affected (046 defaults it true).
+    const user = await newUser();
+    await sql`UPDATE nas_clients SET is_adopted = false WHERE nas_ip = ${nasIp}::inet AND deleted_at IS NULL`
+      .execute(deps.dbPlatform);
+    try {
+      const body = accessRequest(user.username, PASSWORD);
+      expect((await authorize(body)).status).toBe(401);
+      expect(await reasonOf(body)).toBe('nas_not_adopted');
+      // Denied before the credential is touched, like every other eligibility gate here.
+      expect(verifyCalls).toBe(0);
+      expect(await sessionsOf(user.id)).toBe(0);
+    } finally {
+      await sql`UPDATE nas_clients SET is_adopted = true WHERE nas_ip = ${nasIp}::inet AND deleted_at IS NULL`
+        .execute(deps.dbPlatform);
+    }
+  }, 30_000);
+
+  it('NAS row with no registered identifier: a request CLAIMING one is refused, sending none still works (P-07, F-001)', async () => {
+    // F-001: the mismatch guard only fires when the row HAS an identifier, so a row with none
+    // skipped the check rather than passing it and accepted any claimed identity.
+    const user = await newUser();
+    await sql`UPDATE nas_clients SET nas_identifier = NULL WHERE nas_ip = ${nasIp}::inet AND deleted_at IS NULL`
+      .execute(deps.dbPlatform);
+    try {
+      const claiming = accessRequest(user.username, PASSWORD);
+      claiming['NAS-Identifier'] = { type: 'string', value: ['some-other-ap'] };
+      expect((await authorize(claiming)).status).toBe(401);
+      expect(await reasonOf(claiming)).toBe('nas_identifier_unregistered');
+
+      // The scoping that keeps this from being a behaviour change: no identifier claimed and
+      // none registered means there is nothing to disagree about, so it still authenticates.
+      const silent = accessRequest(user.username, PASSWORD);
+      expect((await authorize(silent)).status).toBe(200);
+    } finally {
+      await sql`UPDATE nas_clients SET nas_identifier = ${`b3-restored-${randomBytes(3).toString('hex')}`} WHERE nas_ip = ${nasIp}::inet AND deleted_at IS NULL`
+        .execute(deps.dbPlatform);
+    }
+  }, 30_000);
+
   it('site reactivated between pre-read and decision: no verify ran → fail closed', async () => {
     // Pre-read sees the suspended site (no verify); the site is reactivated before the decision
     // transaction, which must not accept a password nobody verified.
