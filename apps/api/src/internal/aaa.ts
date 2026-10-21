@@ -44,6 +44,9 @@ import {
   nasEligibility,
   newId,
   radsecCertificateAccepted,
+  ANY_IP_ADAPTERS,
+  ANY_IP_SHORTNAME,
+  pickSharedIdentifierNas,
 } from '@ecloud/shared';
 import type { Request, RequestHandler, Response } from 'express';
 import type { AppDeps } from '../context.js';
@@ -340,6 +343,21 @@ export async function resolveNas(deps: AppDeps, body: RadiusRequestBody): Promis
     if (shortname !== undefined && isUuid(shortname)) {
       const byId = await base().where('id', '=', shortname).executeTakeFirst();
       if (byId !== undefined) return byId;
+    }
+    // D-086 "any NAS IP": the packet came through the dynamic client `anyip` (radius-client-lookup),
+    // so the source address identifies nothing; the NAS-Identifier picks among the any-IP rows.
+    // Rows sharing the identifier are one NAS when they are one site (oldest wins); rows of several
+    // sites or organizations refuse the request (§3.2: a reported identifier never picks a tenant).
+    const requestIdentifier = attr(body, 'NAS-Identifier');
+    if (shortname === ANY_IP_SHORTNAME && requestIdentifier !== undefined && requestIdentifier !== '') {
+      const rows = await base()
+        .where('nas_ip', 'is', null)
+        .where('adapter_key', 'in', [...ANY_IP_ADAPTERS])
+        .where('nas_identifier', '=', requestIdentifier)
+        .orderBy('created_at', 'asc')
+        .limit(20)
+        .execute();
+      return pickSharedIdentifierNas(rows);
     }
     return null;
   });

@@ -57,12 +57,16 @@ export function nasFields(
     },
   ];
   if (adapterKey !== MERAKI) {
+    // D-086: the EZELINK adapters may leave the address empty = any NAS IP (matched by NAS-Identifier).
+    const anyIp = adapterKey === 'ezeap-uam' || adapterKey === 'ezecloud-uam';
     fields.push({
       name: 'nas_ip',
       label: 'NAS IP',
       type: 'text',
-      required: true,
-      hint: 'Source IP address of the RADIUS packets from this device (controller, gateway or AP).',
+      ...(anyIp ? { nullable: true } : { required: true }),
+      hint: anyIp
+        ? 'Source IP of the RADIUS packets, or empty for any NAS IP (the NAS is matched by NAS-Identifier).'
+        : 'Source IP address of the RADIUS packets from this device (controller, gateway or AP).',
     });
   }
   if (adapterKey === MERAKI) {

@@ -29,6 +29,7 @@ import {
   merakiPortPairs,
   type MerakiCloudRadiusSettings,
   type MerakiCloudRadiusState,
+  isAnyIpAdapter,
 } from '@ecloud/shared';
 import { sql } from 'kysely';
 import { randomBytes } from 'node:crypto';
@@ -136,7 +137,8 @@ function checkNonMeraki(deps: AppDeps, body: Row): void {
 /** NAS create rules (resources.ts prepareCreate); returns the extra / overridden columns. */
 export async function prepareNasCreate(deps: AppDeps, body: Row, trx: DbTransaction): Promise<Row> {
   if (body.adapter_key !== MERAKI_ADAPTER) {
-    if (body.nas_ip === undefined || body.nas_ip === null) {
+    // D-086: an EZELINK NAS (ezeap-uam / ezecloud-uam) may have no address = any NAS IP.
+    if ((body.nas_ip === undefined || body.nas_ip === null) && !isAnyIpAdapter(body.adapter_key as string)) {
       throw unprocessable('nas_ip', 'nas_ip is required for this adapter.');
     }
     checkNonMeraki(deps, body);

@@ -191,7 +191,7 @@ export function NasPage() {
       label: 'NAS IP',
       type: 'text',
       nullable: true,
-      hint: 'Source IP of RADIUS packets. Required for every adapter except Cisco Meraki (meraki-splash), whose RADIUS comes from the Meraki Cloud: leave it empty there.',
+      hint: 'Source IP of RADIUS packets. Leave it empty for any NAS IP on the EZELINK adapters (ezeap-uam, ezecloud-uam): the NAS is then matched by NAS-Identifier. Empty is required for Cisco Meraki (meraki-splash).',
     },
     {
       name: 'nas_identifier',

@@ -31,6 +31,7 @@ import {
   type RadclientOutcome,
   type RadclientRunner,
 } from './radclient.js';
+import { sql } from 'kysely';
 
 export const DISPATCH_REASON = 'worker:coa.dispatch';
 export const SKIPPED_DISABLED = 'skipped_disabled';
@@ -330,7 +331,11 @@ export async function dispatchSessionAction(
       's.calling_station_id',
       's.framed_ip',
       'n.id as nas_client_id',
-      'n.nas_ip',
+      // D-086: an any-IP NAS (nas_ip NULL) is reached at the source address of its latest
+      // authorization for this station; auth_events.nas_ip is the packet source (aaa.ts).
+      sql<string | null>`coalesce(n.nas_ip, (select e.nas_ip from auth_events e where e.nas_client_id = n.id and e.calling_station_id = s.calling_station_id order by e.created_at desc limit 1))::text`.as(
+        'nas_ip',
+      ),
       'n.nas_identifier',
       'n.coa_port',
       'n.secret_ref',

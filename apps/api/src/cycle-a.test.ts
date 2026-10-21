@@ -53,6 +53,15 @@ function ap(nas: ResolvedNasRow, over: Record<string, unknown> = {}) {
 }
 
 describe('decideNasIdentity (fail closed)', () => {
+  it('D-086: live rows sharing a NAS-Identifier inside one site are one NAS, oldest first', () => {
+    const live = { adapter_key: 'ezeap-uam', deployment_mode: 'native', controller_id: null, hotspot_address: null, hotspot_port: null, nas_identifier: '971-004-02-0015-0001', site_status: 'active', site_deleted_at: null, org_status: 'active' };
+    const a = { ...live, id: 'a', organization_id: 'o1', site_id: 's1' };
+    const b = { ...live, id: 'b', organization_id: 'o1', site_id: 's1' };
+    const r = decideNasIdentity({ nasid: '971-004-02-0015-0001', apMac: null, byNasid: [a, b] as never, byApMac: null });
+    expect(r.ok && r.nas.id).toBe('a');
+    const other = { ...live, id: 'c', organization_id: 'o2', site_id: 's9' };
+    expect(decideNasIdentity({ nasid: '971-004-02-0015-0001', apMac: null, byNasid: [a, other] as never, byApMac: null })).toEqual({ ok: false, reason: 'ambiguous_nasid' });
+  });
   const MAC = 'aa:bb:cc:dd:ee:01';
   it('nothing to go on', () => {
     expect(decideNasIdentity({ nasid: null, apMac: null, byNasid: null, byApMac: null })).toEqual({

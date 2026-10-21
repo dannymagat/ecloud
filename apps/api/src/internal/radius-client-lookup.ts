@@ -28,7 +28,8 @@ import { isIP } from 'node:net';
 import type { Request, RequestHandler, Response } from 'express';
 import type { AppDeps } from '../context.js';
 import { openNasSecret } from '../crypto.js';
-import { SECRET_RE } from '../radius-clients/render.js';
+import { ANY_IP_ADAPTERS, ANY_IP_SHORTNAME } from '@ecloud/shared';
+import { FLEET_DEFAULT_RADIUS_SECRET, SECRET_RE } from '../radius-clients/render.js';
 
 /** `rlm_rest` JSON: one attribute per key, `control:` targets the control list. */
 export interface DynamicClientReply {
@@ -78,7 +79,7 @@ export async function lookupNasByAddress(
         .where('n.nas_ip', '=', ip)
         .executeTakeFirst(),
   );
-  if (row === undefined) return null;
+  if (row === undefined) return lookupAnyIpClient(dbPlatform, ip);
 
   let secret: string;
   try {
@@ -112,6 +113,39 @@ export async function lookupNasByAddress(
  * every other case (unknown, inactive, deleted, undecryptable, bad address), so the answer
  * leaks nothing about which addresses are registered.
  */
+/**
+ * D-086 "any NAS IP": an unknown source address is admitted when at least one live any-IP NAS
+ * exists (nas_ip NULL, EZELINK adapter). The client gets the static fleet secret (D-085) and the
+ * shortname `anyip`; the NAS row is chosen per request by NAS-Identifier (aaa.ts resolveNas).
+ * Message-Authenticator is required only when every any-IP row requires it: a fleet AP on a
+ * firmware older than the radcli fix sends none.
+ */
+async function lookupAnyIpClient(dbPlatform: Db, ip: string): Promise<NasSecretLookup | null> {
+  const rows = await withPlatform(
+    dbPlatform,
+    { reason: 'radius:clients:dynamic-lookup', actorType: 'system' },
+    (trx) =>
+      trx
+        .selectFrom('nas_clients as n')
+        .innerJoin('organizations as o', 'o.id', 'n.organization_id')
+        .select(['n.require_message_authenticator'])
+        .where('n.status', '=', 'active')
+        .where('n.deleted_at', 'is', null)
+        .where('o.deleted_at', 'is', null)
+        .where('n.nas_ip', 'is', null)
+        .where('n.adapter_key', 'in', [...ANY_IP_ADAPTERS])
+        .limit(50)
+        .execute(),
+  );
+  if (rows.length === 0) return null;
+  return {
+    id: ANY_IP_SHORTNAME,
+    nasIp: ip,
+    secret: FLEET_DEFAULT_RADIUS_SECRET,
+    requireMessageAuthenticator: rows.every((r) => r.require_message_authenticator !== false),
+  };
+}
+
 export interface DynamicClientOptions {
   /** Seam for tests: the database lookup, so the guards can be exercised without a database. */
   lookup?: (ip: string) => Promise<NasSecretLookup | null>;

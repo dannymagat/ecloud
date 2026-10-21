@@ -19,7 +19,7 @@
  * The reason is for the log only; the portal answers one generic error for every refusal.
  */
 import { withPlatform, withTenant, type DbTransaction } from '@ecloud/db';
-import { canonicalUnicastMac } from '@ecloud/shared';
+import { canonicalUnicastMac, pickSharedIdentifierNas } from '@ecloud/shared';
 import type { AppDeps } from '../context.js';
 
 const LOOKUP_ACCESS = Object.freeze({ reason: 'portal', audit: false });
@@ -112,9 +112,11 @@ async function byNasid(trx: DbTransaction, nasid: string): Promise<NasidRow[]> {
     .where('n.nas_identifier', '=', nasid)
     .where('n.status', '=', 'active')
     .where('n.deleted_at', 'is', null)
-    // Two live rows on live tenants is the ambiguity worth reporting; a row whose tenant is
+    // D-086: rows sharing an identifier inside one site are one NAS and the oldest wins.
+    .orderBy('n.created_at', 'asc')
+    // Two live rows on different tenants is the ambiguity worth reporting; a row whose tenant is
     // inactive must still be fetched to be explained, so the limit allows for both.
-    .limit(4)
+    .limit(20)
     .execute()) as NasidRow[];
 }
 
@@ -187,7 +189,10 @@ export function decideNasIdentity(input: {
     // live it wins, and rows on dead tenants neither win nor create an ambiguity. They are only
     // consulted when nothing is live, to say `tenant_inactive` instead of `unknown_nas`.
     const live = rows.filter(tenantLive);
-    if (live.length > 1) return { ok: false, reason: 'ambiguous_nasid' };
+    // D-086: several live rows sharing the identifier are one NAS when they are one site.
+    if (live.length > 1 && pickSharedIdentifierNas(live) === null) {
+      return { ok: false, reason: 'ambiguous_nasid' };
+    }
     const nas = live[0];
     if (nas === undefined) return { ok: false, reason: 'tenant_inactive' };
     const sameNas = apRows.some(

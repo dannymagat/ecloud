@@ -15,8 +15,11 @@ import {
 } from '@ecloud/adapters';
 import { withPlatform, type Db, type DbTransaction, type SessionStatus } from '@ecloud/db';
 import {
+  ANY_IP_ADAPTERS,
+  ANY_IP_SHORTNAME,
   RADSEC_CLIENT_SHORTNAME,
   newId,
+  pickSharedIdentifierNas,
   radsecCertificateAccepted,
   type Logger,
 } from '@ecloud/shared';
@@ -219,6 +222,43 @@ async function lookupNas(
     .executeTakeFirst();
   const value = nas ?? null;
   cache.set(nasIp, value);
+  return value;
+}
+
+/**
+ * D-086 "any NAS IP": a packet admitted through the dynamic client `anyip` carries no address
+ * that identifies a NAS; the NAS-Identifier picks among the any-IP rows (one site, oldest wins;
+ * several sites or organizations: refused, same rule as aaa.ts resolveNas).
+ */
+async function lookupAnyIpNas(
+  trx: DbTransaction,
+  nasIdentifier: string | null,
+  cache: Map<string, NasInfo | null>,
+): Promise<NasInfo | null> {
+  if (nasIdentifier === null || nasIdentifier === '') return null;
+  const key = `anyip:${nasIdentifier}`;
+  if (cache.has(key)) return cache.get(key) ?? null;
+  const rows = await trx
+    .selectFrom('nas_clients as n')
+    .innerJoin('sites as s', 's.id', 'n.site_id')
+    .select([
+      'n.id',
+      'n.organization_id',
+      'n.site_id',
+      'n.network_device_id',
+      's.timezone',
+      'n.adapter_key',
+    ])
+    .where('n.nas_ip', 'is', null)
+    .where('n.adapter_key', 'in', [...ANY_IP_ADAPTERS])
+    .where('n.nas_identifier', '=', nasIdentifier)
+    .where('n.deleted_at', 'is', null)
+    .where('n.status', '=', 'active')
+    .orderBy('n.created_at', 'asc')
+    .limit(20)
+    .execute();
+  const value = pickSharedIdentifierNas(rows);
+  cache.set(key, value);
   return value;
 }
 
@@ -717,7 +757,11 @@ export async function processRecord(
     meraki === 'refused'
       ? null
       : (meraki ??
-        (rec.packetSrcIp === null ? null : await lookupNas(trx, rec.packetSrcIp, nasCache)));
+        (rec.packetClientShortname === ANY_IP_SHORTNAME
+          ? await lookupAnyIpNas(trx, rec.nasIdentifier, nasCache)
+          : rec.packetSrcIp === null
+            ? null
+            : await lookupNas(trx, rec.packetSrcIp, nasCache)));
 
   const prior = await trx
     .selectFrom('accounting_records')
