@@ -147,9 +147,14 @@ export interface AppConfig {
     | { driver: 'local'; localPath: string }
     | { driver: 's3'; localPath: string; s3: S3StorageConfig };
   /** Outbound mail; null when SMTP_HOST is unset, which disables email OTP. */
-  mail:
-    | { host: string; port: number; user: string | undefined; password: string | undefined; from: string; implicitTls: boolean }
-    | null;
+  mail: {
+    host: string;
+    port: number;
+    user: string | undefined;
+    password: string | undefined;
+    from: string;
+    implicitTls: boolean;
+  } | null;
   radius: {
     bindIp: string | undefined;
     publicBindIp: string | undefined;

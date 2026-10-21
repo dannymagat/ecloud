@@ -99,7 +99,7 @@ function tenantLive(r: NasidRow): boolean {
 }
 
 async function byNasid(trx: DbTransaction, nasid: string): Promise<NasidRow[]> {
-  return (await trx
+  return await trx
     .selectFrom('nas_clients as n')
     .innerJoin('sites as s', 's.id', 'n.site_id')
     .innerJoin('organizations as o', 'o.id', 'n.organization_id')
@@ -115,7 +115,7 @@ async function byNasid(trx: DbTransaction, nasid: string): Promise<NasidRow[]> {
     // Two live rows on live tenants is the ambiguity worth reporting; a row whose tenant is
     // inactive must still be fetched to be explained, so the limit allows for both.
     .limit(4)
-    .execute()) as NasidRow[];
+    .execute();
 }
 
 interface ApRow extends ResolvedNasRow {

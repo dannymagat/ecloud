@@ -20,7 +20,11 @@
  * Skipped without the dev stack (ECLOUD_TEST_DATABASE_URL).
  */
 import { randomBytes } from 'node:crypto';
-import { describeIntegration, migrateTestDatabase, PLACEHOLDER_NAS_SECRET_REF } from '@ecloud/testing';
+import {
+  describeIntegration,
+  migrateTestDatabase,
+  PLACEHOLDER_NAS_SECRET_REF,
+} from '@ecloud/testing';
 import { afterAll, beforeAll, expect, it } from 'vitest';
 import type { AppDeps } from './context.js';
 import { resolveNas } from './internal/aaa.js';

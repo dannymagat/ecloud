@@ -36,7 +36,8 @@ export interface PublishPortalInput {
 }
 
 export function portalSnapshotFor(input: PublishPortalInput): Record<string, unknown> {
-  const locales = input.locales === undefined || input.locales.length === 0 ? ['en'] : [...input.locales];
+  const locales =
+    input.locales === undefined || input.locales.length === 0 ? ['en'] : [...input.locales];
   return {
     template_key: input.templateKey ?? 'branded_multi_login',
     name: input.name ?? 'Portal',

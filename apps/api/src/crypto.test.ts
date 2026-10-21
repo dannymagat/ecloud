@@ -42,9 +42,7 @@ describe('v2 bound envelope', () => {
   it('round trips under each of the two column bindings (§7.1)', () => {
     const nasRef = sealBoundSecretRef(nasEnvelope(), SECRET, nasAt(ROW_A));
     expect(nasRef).toMatch(/^enc:v2\./);
-    expect(openBoundSecretRef(nasEnvelope(), nasRef, nasAt(ROW_A))).toBe(
-      SECRET,
-    );
+    expect(openBoundSecretRef(nasEnvelope(), nasRef, nasAt(ROW_A))).toBe(SECRET);
 
     const uamBinding: SealBinding = {
       organizationId: ORG_A,
@@ -98,11 +96,13 @@ describe('v2 bound envelope', () => {
       column: UAM_SECRET_COLUMN,
       secretVersion: 1,
     });
-    expect(() => openNasSecret(KEY, uamRef, {
-      organizationId: ORG_A,
-      nasId: ROW_A,
-      secretVersion: 1,
-    })).toThrow();
+    expect(() =>
+      openNasSecret(KEY, uamRef, {
+        organizationId: ORG_A,
+        nasId: ROW_A,
+        secretVersion: 1,
+      }),
+    ).toThrow();
 
     // And the narrower half on its own: same key, same row, only the column changed.
     const sameKeyOtherColumn = sealBoundSecretRef(nasEnvelope(), SECRET, {
@@ -111,9 +111,7 @@ describe('v2 bound envelope', () => {
       column: UAM_SECRET_COLUMN,
       secretVersion: 1,
     });
-    expect(() =>
-      openBoundSecretRef(nasEnvelope(), sameKeyOtherColumn, nasAt(ROW_A)),
-    ).toThrow();
+    expect(() => openBoundSecretRef(nasEnvelope(), sameKeyOtherColumn, nasAt(ROW_A))).toThrow();
   });
 
   it('refuses a pre-rotation ciphertext replayed at the new version (§7.5)', () => {
@@ -152,9 +150,9 @@ describe('v2 bound envelope', () => {
     ).toThrow(/unsupported envelope format/);
     // The canonical forms still open, so this is a tightening and not a format change.
     expect(openBoundSecretRef(nasEnvelope(), v2, nasAt(ROW_A))).toBe(SECRET);
-    expect(
-      openNasSecret(KEY, v1, { organizationId: ORG_A, nasId: ROW_A, secretVersion: 1 }),
-    ).toBe(SECRET);
+    expect(openNasSecret(KEY, v1, { organizationId: ORG_A, nasId: ROW_A, secretVersion: 1 })).toBe(
+      SECRET,
+    );
   });
 
   it('keeps the NAS and UAM purpose labels distinct (§7.6)', () => {

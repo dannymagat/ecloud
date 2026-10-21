@@ -7,7 +7,12 @@
  * because the redirect said so.
  */
 import { describe, expect, it } from 'vitest';
-import { entitlementWindow, fulfilmentDecision, type OrderFacts, type PlanFacts } from './orders.js';
+import {
+  entitlementWindow,
+  fulfilmentDecision,
+  type OrderFacts,
+  type PlanFacts,
+} from './orders.js';
 
 const NOW = new Date('2026-10-14T10:00:00Z');
 

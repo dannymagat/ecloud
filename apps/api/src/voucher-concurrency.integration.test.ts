@@ -7,7 +7,11 @@
  * not wait for it.
  */
 import { newId } from '@ecloud/shared';
-import { describeIntegration, migrateTestDatabase, PLACEHOLDER_NAS_SECRET_REF } from '@ecloud/testing';
+import {
+  describeIntegration,
+  migrateTestDatabase,
+  PLACEHOLDER_NAS_SECRET_REF,
+} from '@ecloud/testing';
 import { sql } from 'kysely';
 import { randomBytes } from 'node:crypto';
 import request from 'supertest';

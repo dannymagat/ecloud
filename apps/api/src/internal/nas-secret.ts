@@ -107,7 +107,9 @@ export function nasSecretHandler(deps: AppDeps, options: NasSecretOptions = {}):
       res.status(503).end();
       return;
     }
-    const id = String(req.params['id'] ?? '').trim().toLowerCase();
+    const id = String(req.params['id'] ?? '')
+      .trim()
+      .toLowerCase();
     if (!UUID_RE.test(id)) {
       res.status(404).end();
       return;

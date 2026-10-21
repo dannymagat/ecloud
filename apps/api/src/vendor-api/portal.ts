@@ -153,7 +153,8 @@ export function vendorPortalInternalRouter(deps: AppDeps): Router {
         }
         if (parsed.adapterKey === 'mist-guest-portal') {
           const wlans = cred.settings.mist_wlan_ids ?? [];
-          if (!wlans.includes(parsed.fields.wlan_id ?? '')) return { ok: false, reason: 'wlan_not_registered' } as const;
+          if (!wlans.includes(parsed.fields.wlan_id ?? ''))
+            return { ok: false, reason: 'wlan_not_registered' } as const;
         }
         // One picker for every path (migration 041 fallout). This file used to carry its own
         // copy of the rule with its own row type that had no notion of a platform-default

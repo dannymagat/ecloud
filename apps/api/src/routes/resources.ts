@@ -328,7 +328,7 @@ const BandwidthProfileCreate = z
     burst_upload_kbps: rateKbps.nullable().optional(),
     burst_duration_s: z.number().int().min(1).nullable().optional(),
   })
-  .refine((v) => v.download_rate_kbps != null || v.upload_rate_kbps != null, {
+  .refine((v) => (v.download_rate_kbps ?? null) !== null || (v.upload_rate_kbps ?? null) !== null, {
     path: ['download_rate_kbps'],
     message: 'a profile must set at least one of download_rate_kbps or upload_rate_kbps',
   });
@@ -387,14 +387,14 @@ const planShape = {
  */
 function checkPlanPricing(v: Record<string, unknown>, ctx: z.RefinementCtx): void {
   const type = v.plan_type ?? 'free';
-  const priced = v.price_minor != null && v.currency != null;
+  const priced = (v.price_minor ?? null) !== null && (v.currency ?? null) !== null;
   if (type === 'paid' && !priced)
     ctx.addIssue({
       code: 'custom',
       path: ['price_minor'],
       message: 'a paid plan needs price_minor and currency',
     });
-  if (type === 'free' && (v.price_minor != null || v.currency != null))
+  if (type === 'free' && ((v.price_minor ?? null) !== null || (v.currency ?? null) !== null))
     ctx.addIssue({
       code: 'custom',
       path: ['price_minor'],
@@ -1164,8 +1164,8 @@ export function resourceRoutes(deps: AppDeps): AnyRouteSpec[] {
     },
     siteMode: 'none',
     softDelete: true,
-    createSchema: BandwidthProfileCreate as unknown as z.ZodType<Row>,
-    updateSchema: BandwidthProfileUpdate as unknown as z.ZodType<Row>,
+    createSchema: BandwidthProfileCreate,
+    updateSchema: BandwidthProfileUpdate,
   });
 
   const accessPlans = crudRoutes(deps, {
@@ -1181,8 +1181,8 @@ export function resourceRoutes(deps: AppDeps): AnyRouteSpec[] {
     },
     siteMode: 'column',
     softDelete: true,
-    createSchema: AccessPlanCreate as unknown as z.ZodType<Row>,
-    updateSchema: AccessPlanUpdate as unknown as z.ZodType<Row>,
+    createSchema: AccessPlanCreate,
+    updateSchema: AccessPlanUpdate,
     prepareCreate: async (body, { trx }) => {
       await assertRef(trx, 'policies', body.policy_id as string, 'policy');
       if (typeof body.site_id === 'string') await assertRef(trx, 'sites', body.site_id, 'site');

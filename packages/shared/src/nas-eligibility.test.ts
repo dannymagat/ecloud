@@ -151,10 +151,7 @@ describe('nasEligibility: platform defaults are visible without being denials', 
     const result = nasEligibility(
       facts({ policy: 'platform_default', onPlatformDefaultPortal: true }),
     );
-    expect(result.advisories).toEqual([
-      'ON_PLATFORM_DEFAULT_POLICY',
-      'ON_PLATFORM_DEFAULT_PORTAL',
-    ]);
+    expect(result.advisories).toEqual(['ON_PLATFORM_DEFAULT_POLICY', 'ON_PLATFORM_DEFAULT_PORTAL']);
   });
 
   it('never reports a platform default as a Pending reason', () => {
@@ -212,7 +209,13 @@ describe('an unevaluated policy says so instead of guessing', () => {
   });
 
   it('marks the policy evaluated for every other value', () => {
-    for (const policy of ['assigned', 'platform_default', 'missing', 'disabled', 'unavailable'] as const) {
+    for (const policy of [
+      'assigned',
+      'platform_default',
+      'missing',
+      'disabled',
+      'unavailable',
+    ] as const) {
       expect(nasEligibility(facts({ policy })).policyEvaluated, policy).toBe(true);
     }
   });

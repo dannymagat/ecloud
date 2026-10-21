@@ -82,9 +82,7 @@ describe('with a platform default supplied (paused: nothing supplies one today)'
       is_default: true,
       download_rate_kbps: 2000,
     });
-    const r = resolve(
-      unassigned({ default_policy: chosen, platform_default: fallback }),
-    );
+    const r = resolve(unassigned({ default_policy: chosen, platform_default: fallback }));
     expect(r.decision).toBe('accept');
     expect(r.effective.fields.download_rate_kbps).toBe(2000);
     expect(r.platform_default).toBe(false);
@@ -93,7 +91,9 @@ describe('with a platform default supplied (paused: nothing supplies one today)'
 
   it('appears in the trace as an included candidate, so a reader can see why access was granted', () => {
     const r = resolve(unassigned({ platform_default: fallback }));
-    const entry = r.trace.find((t) => t.step === 'candidate' && t.layer_name === 'platform_default');
+    const entry = r.trace.find(
+      (t) => t.step === 'candidate' && t.layer_name === 'platform_default',
+    );
     expect(entry).toBeDefined();
   });
 });

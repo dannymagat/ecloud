@@ -80,7 +80,7 @@ export type PortalMethod = PortalMethodKey;
  */
 const METHOD_LABEL_KEY: Readonly<Record<PortalMethodKey, MessageKey>> = {
   click_through: 'method.click_through',
-  password: 'method.password',
+  password: 'method.password', // label key, not a credential. check-no-secrets: allow
   voucher: 'method.voucher',
   email_otp: 'method.email_otp',
   sms_otp: 'method.sms_otp',

@@ -42,9 +42,7 @@ describe('the three states', () => {
   });
 
   it('a value on the specific layer still wins', () => {
-    const r = resolve(
-      twoLayers({ download_rate_kbps: 50_000 }, { download_rate_kbps: 10_000 }),
-    );
+    const r = resolve(twoLayers({ download_rate_kbps: 50_000 }, { download_rate_kbps: 10_000 }));
     expect(r.effective.fields.download_rate_kbps).toBe(50_000);
   });
 
@@ -118,10 +116,7 @@ describe('the three states', () => {
 describe('unlimited quotas and schedules', () => {
   it('an unlimited quota is not evaluated, so spent usage cannot reject', () => {
     const r = resolve(
-      twoLayers(
-        { unlimited_fields: ['quota_daily_bytes'] },
-        { quota_daily_bytes: '1000' },
-      ),
+      twoLayers({ unlimited_fields: ['quota_daily_bytes'] }, { quota_daily_bytes: '1000' }),
     );
     expect(r.decision).toBe('accept');
     expect(r.clip.remaining_octets).toBeNull();
@@ -184,15 +179,15 @@ describe('validation (rule 14)', () => {
   });
 
   it('refuses a field that is both declared unlimited and given a value', () => {
-    expect(
-      codes({ unlimited_fields: ['download_rate_kbps'], download_rate_kbps: 1000 }),
-    ).toContain('unlimited_and_set');
+    expect(codes({ unlimited_fields: ['download_rate_kbps'], download_rate_kbps: 1000 })).toContain(
+      'unlimited_and_set',
+    );
   });
 
   it('refuses a duplicate declaration', () => {
-    expect(
-      codes({ unlimited_fields: ['download_rate_kbps', 'download_rate_kbps'] }),
-    ).toContain('duplicate_unlimited');
+    expect(codes({ unlimited_fields: ['download_rate_kbps', 'download_rate_kbps'] })).toContain(
+      'duplicate_unlimited',
+    );
   });
 
   it('accepts a plain declaration', () => {

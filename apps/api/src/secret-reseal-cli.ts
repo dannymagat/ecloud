@@ -40,12 +40,7 @@
 import { createDb } from '@ecloud/db';
 import { resolveSecretFiles } from '@ecloud/shared';
 import { readFileSync, writeFileSync } from 'node:fs';
-import {
-  applyReseal,
-  planReseal,
-  restoreReseal,
-  type ResealDump,
-} from './reseal/secrets.js';
+import { applyReseal, planReseal, restoreReseal, type ResealDump } from './reseal/secrets.js';
 
 function required(env: NodeJS.ProcessEnv, name: string): string {
   const value = env[name];
@@ -76,7 +71,8 @@ function parseArgs(argv: readonly string[]): {
     if (dryRun || dump !== null) throw new Error('--restore cannot be combined with other modes');
     // A restore writes exactly the rows in the dump, so scoping it would silently skip some of
     // them — which is the opposite of what a rollback is for.
-    if (scopeIds !== undefined) throw new Error('--restore writes the whole dump; --org is not allowed');
+    if (scopeIds !== undefined)
+      throw new Error('--restore writes the whole dump; --org is not allowed');
     return { mode: 'restore', path: restore, organizationIds: undefined };
   }
   if (dryRun) {

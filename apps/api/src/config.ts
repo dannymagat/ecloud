@@ -272,8 +272,13 @@ export function loadApiConfig(
         if (base.isProduction && raw.INTERNAL_SECRET_TOKEN.length < 32) {
           problems.push('INTERNAL_SECRET_TOKEN: at least 32 characters in production');
         }
-        if (raw.INTERNAL_SECRET_TOKEN === base.internalApiToken || raw.INTERNAL_SECRET_TOKEN === raw.INTERNAL_API_TOKEN_PREVIOUS) {
-          problems.push('INTERNAL_SECRET_TOKEN: must differ from INTERNAL_API_TOKEN (D-061: separate credential)');
+        if (
+          raw.INTERNAL_SECRET_TOKEN === base.internalApiToken ||
+          raw.INTERNAL_SECRET_TOKEN === raw.INTERNAL_API_TOKEN_PREVIOUS
+        ) {
+          problems.push(
+            'INTERNAL_SECRET_TOKEN: must differ from INTERNAL_API_TOKEN (D-061: separate credential)',
+          );
         }
       }
       if (raw.INTERNAL_API_TOKEN_PREVIOUS === base.internalApiToken) {
@@ -318,8 +323,10 @@ export function loadApiConfig(
       'INTERNAL_TLS_CERT_FILE and INTERNAL_TLS_KEY_FILE must be set together (or both omitted)',
     );
   }
-  const internalTls = certFile !== undefined && keyFile !== undefined ? { certFile, keyFile } : null;
-  const internalCleartextAck = raw.INTERNAL_CLEARTEXT_ACK === '1' || raw.INTERNAL_CLEARTEXT_ACK === 'true';
+  const internalTls =
+    certFile !== undefined && keyFile !== undefined ? { certFile, keyFile } : null;
+  const internalCleartextAck =
+    raw.INTERNAL_CLEARTEXT_ACK === '1' || raw.INTERNAL_CLEARTEXT_ACK === 'true';
 
   return {
     base,

@@ -96,11 +96,7 @@ describe('pickPortal', () => {
 
   it('still refuses when configured portals are ambiguous and a fallback exists', () => {
     const picked = pickPortal(
-      [
-        row({ id: 'a' }),
-        row({ id: 'b' }),
-        row({ id: 'fallback', is_platform_default: true }),
-      ],
+      [row({ id: 'a' }), row({ id: 'b' }), row({ id: 'fallback', is_platform_default: true })],
       NAS,
     );
     expect(picked).toEqual({ kind: 'ambiguous', count: 2 });

@@ -171,8 +171,7 @@ export function readSnapshot(raw: unknown): PortalSnapshot | null {
   const text = (v: unknown): string | null => (typeof v === 'string' ? v : null);
   const theme = o.theme;
   return {
-    template_key:
-      typeof o.template_key === 'string' ? o.template_key : DEFAULT_PORTAL_TEMPLATE,
+    template_key: typeof o.template_key === 'string' ? o.template_key : DEFAULT_PORTAL_TEMPLATE,
     name: typeof o.name === 'string' ? o.name : '',
     methods: strings(o.methods),
     method_order: strings(o.method_order),
@@ -189,8 +188,7 @@ export function readSnapshot(raw: unknown): PortalSnapshot | null {
             custom_css: text(record(theme).custom_css),
           },
     locales: locales.length === 0 ? ['en'] : locales,
-    default_locale:
-      typeof o.default_locale === 'string' ? o.default_locale : (locales[0] ?? 'en'),
+    default_locale: typeof o.default_locale === 'string' ? o.default_locale : (locales[0] ?? 'en'),
     registration_fields: readRegistrationFields(o.registration_fields),
   };
 }
@@ -255,7 +253,10 @@ export function publishProblems(
               )
               .join('; ')}`
           : 'no enabled method has a guest page';
-    problems.push({ path: 'auth_methods', message: `${detail}; guests would have no way to connect` });
+    problems.push({
+      path: 'auth_methods',
+      message: `${detail}; guests would have no way to connect`,
+    });
   }
 
   // click_through with NO terms document is legitimate: §4.1 makes acceptance explicit only

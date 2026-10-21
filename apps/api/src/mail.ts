@@ -38,9 +38,7 @@ export function createMailer(config: ApiConfig): Mailer | null {
     port: mail.port,
     // Implicit TLS on 465; STARTTLS (upgraded after connect) everywhere else.
     secure: mail.implicitTls,
-    ...(mail.user === undefined
-      ? {}
-      : { auth: { user: mail.user, pass: mail.password ?? '' } }),
+    ...(mail.user === undefined ? {} : { auth: { user: mail.user, pass: mail.password ?? '' } }),
     pool: true,
     maxConnections: 3,
     // A guest is waiting on this; fail fast rather than holding the request open.

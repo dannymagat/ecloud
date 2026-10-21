@@ -179,7 +179,10 @@ export function evaluateAggregate(input: AggregateInput): AggregateEvaluation {
     };
   }
   // A session is always added, even for a member who is already online: this is a new one.
-  if (limits.max_active_sessions !== null && usage.active_sessions + 1 > limits.max_active_sessions) {
+  if (
+    limits.max_active_sessions !== null &&
+    usage.active_sessions + 1 > limits.max_active_sessions
+  ) {
     return {
       reject: 'aggregate_sessions',
       detail: `${input.level} ${input.id}: ${String(usage.active_sessions)} of ${String(limits.max_active_sessions)} sessions already active`,
@@ -199,9 +202,7 @@ export function evaluateAggregate(input: AggregateInput): AggregateEvaluation {
  * site should be told about the group, which is the one an operator can act on. The outcome is
  * the same either way, because any single breach refuses.
  */
-export function evaluateAggregates(
-  inputs: readonly AggregateInput[],
-): AggregateEvaluation[] {
+export function evaluateAggregates(inputs: readonly AggregateInput[]): AggregateEvaluation[] {
   return inputs.map(evaluateAggregate);
 }
 

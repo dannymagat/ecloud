@@ -23,12 +23,27 @@ function selfSigned(): { certFile: string; keyFile: string } {
   const dir = mkdtempSync(join(tmpdir(), 'ecloud-internal-tls-'));
   const certFile = join(dir, 'cert.pem');
   const keyFile = join(dir, 'key.pem');
-  execFileSync('openssl', [
-    'req', '-x509', '-newkey', 'rsa:2048', '-nodes',
-    '-keyout', keyFile, '-out', certFile,
-    '-days', '1', '-subj', '/CN=127.0.0.1',
-    '-addext', 'subjectAltName=IP:127.0.0.1',
-  ], { stdio: ['ignore', 'ignore', 'ignore'] });
+  execFileSync(
+    'openssl',
+    [
+      'req',
+      '-x509',
+      '-newkey',
+      'rsa:2048',
+      '-nodes',
+      '-keyout',
+      keyFile,
+      '-out',
+      certFile,
+      '-days',
+      '1',
+      '-subj',
+      '/CN=127.0.0.1',
+      '-addext',
+      'subjectAltName=IP:127.0.0.1',
+    ],
+    { stdio: ['ignore', 'ignore', 'ignore'] },
+  );
   return { certFile, keyFile };
 }
 

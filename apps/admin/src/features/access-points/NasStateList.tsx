@@ -47,13 +47,7 @@ function reasonText(reason: NasPendingReason | null, blockReason: string | null)
   return reason === null ? null : NAS_PENDING_REASON_LABEL[reason];
 }
 
-export function NasStateList({
-  orgId,
-  rows,
-}: {
-  orgId: string;
-  rows: readonly OverviewNas[];
-}) {
+export function NasStateList({ orgId, rows }: { orgId: string; rows: readonly OverviewNas[] }) {
   if (rows.length === 0) return null;
   const pending = rows.filter((n) => n.state !== 'active').length;
   // §6 wants "which of my access points are not serving" answerable by glancing. The count in the

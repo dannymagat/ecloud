@@ -48,9 +48,7 @@ describe('weekly period boundaries', () => {
 
   it('a Monday rolls to the following Monday, never to today', () => {
     const monday = new Date('2026-10-05T08:00:00Z');
-    expect(nextLocalWeekStart(monday, 'Asia/Dubai').toISOString()).toBe(
-      '2026-10-11T20:00:00.000Z',
-    );
+    expect(nextLocalWeekStart(monday, 'Asia/Dubai').toISOString()).toBe('2026-10-11T20:00:00.000Z');
   });
 });
 
@@ -140,11 +138,13 @@ describe('quota direction', () => {
         last_update_at: new Date(NOW.getTime() - 60_000),
       },
     ];
-    const combined = resolve(
-      withPolicy(base, { usage: {}, active_sessions: sessions }),
-    ).clip.remaining_octets;
+    const combined = resolve(withPolicy(base, { usage: {}, active_sessions: sessions })).clip
+      .remaining_octets;
     const download = resolve(
-      withPolicy({ ...base, quota_direction: 'download' }, { usage: {}, active_sessions: sessions }),
+      withPolicy(
+        { ...base, quota_direction: 'download' },
+        { usage: {}, active_sessions: sessions },
+      ),
     ).clip.remaining_octets;
     // 60 s at 11 Mbit/s vs 60 s at 10 Mbit/s: the directional reserve is strictly smaller.
     expect(combined).not.toBeNull();

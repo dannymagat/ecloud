@@ -13,7 +13,11 @@
  * secret gets no reply at all. The dev stack is never touched.
  */
 import { newId } from '@ecloud/shared';
-import { describeIntegration, migrateTestDatabase, PLACEHOLDER_NAS_SECRET_REF } from '@ecloud/testing';
+import {
+  describeIntegration,
+  migrateTestDatabase,
+  PLACEHOLDER_NAS_SECRET_REF,
+} from '@ecloud/testing';
 import { spawnSync } from 'node:child_process';
 import { randomBytes, randomInt } from 'node:crypto';
 import { chmod, mkdtemp, rm, stat } from 'node:fs/promises';
@@ -26,7 +30,11 @@ import { Envelope, NAS_SECRET_PURPOSE, randomToken, sealSecretRef } from './cryp
 import { MemoryKv } from './kv.js';
 import { loadNasClientRows, resolveNasSecrets } from './radius-clients/load.js';
 import { lookupNasByAddress } from './internal/radius-client-lookup.js';
-import { FLEET_DEFAULT_RADIUS_SECRET, renderClientsConf, type RenderOutput } from './radius-clients/render.js';
+import {
+  FLEET_DEFAULT_RADIUS_SECRET,
+  renderClientsConf,
+  type RenderOutput,
+} from './radius-clients/render.js';
 import { writeClientsFileAtomic } from './radius-clients/write.js';
 import {
   TEST_ORIGIN,
@@ -251,7 +259,11 @@ await describeIntegration('@ecloud/api FreeRADIUS clients renderer (F-P10-07)', 
       const found = await lookupNasByAddress(p, deps.config.dataEncryptionKey, ip);
       expect(found).toMatchObject({ id, nasIp: ip, secret: FLEET_DEFAULT_RADIUS_SECRET });
     } finally {
-      await p.updateTable('nas_clients').set({ deleted_at: new Date() }).where('id', '=', id).execute();
+      await p
+        .updateTable('nas_clients')
+        .set({ deleted_at: new Date() })
+        .where('id', '=', id)
+        .execute();
     }
   });
 

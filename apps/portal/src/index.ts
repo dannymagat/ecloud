@@ -389,7 +389,12 @@ export function createServer(options: ServerOptions = {}): Express {
       const q = req.originalUrl.indexOf('?');
       const rawQuery = q < 0 ? '' : req.originalUrl.slice(q + 1);
       const entryPath = req.path.endsWith('/') ? req.path : `${req.path}/`;
-      const outcome = await api.redirect({ flavour, rawQuery, clientIp: req.ip ?? null, entryPath });
+      const outcome = await api.redirect({
+        flavour,
+        rawQuery,
+        clientIp: req.ip ?? null,
+        entryPath,
+      });
       switch (outcome.kind) {
         case 'flow': {
           nonceFor(req, res);

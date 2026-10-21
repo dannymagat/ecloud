@@ -25,11 +25,11 @@ describe('RadSec certificate identity (migration 034)', () => {
   });
 
   it('refuses a NAS that is not enrolled, or enrolled without a recorded serial', () => {
-    expect(radsecCertificateAccepted({ radsec_enabled: false, radsec_cert_serial: 'ab' }, 'ab')).toBe(
-      false,
-    );
-    expect(radsecCertificateAccepted({ radsec_enabled: true, radsec_cert_serial: null }, 'ab')).toBe(
-      false,
-    );
+    expect(
+      radsecCertificateAccepted({ radsec_enabled: false, radsec_cert_serial: 'ab' }, 'ab'),
+    ).toBe(false);
+    expect(
+      radsecCertificateAccepted({ radsec_enabled: true, radsec_cert_serial: null }, 'ab'),
+    ).toBe(false);
   });
 });

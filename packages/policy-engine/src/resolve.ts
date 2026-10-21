@@ -168,10 +168,7 @@ export interface Provenance {
   readonly layer: number;
   readonly layer_name: LayerName | 'out_of_window_override';
   readonly target_type:
-    | AssignmentTargetType
-    | 'organization_default'
-    | 'out_of_window_override'
-    | 'platform_default';
+    AssignmentTargetType | 'organization_default' | 'out_of_window_override' | 'platform_default';
 }
 
 export type ProvenanceField = IntentColumn | 'schedule';

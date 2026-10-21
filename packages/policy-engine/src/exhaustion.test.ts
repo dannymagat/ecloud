@@ -155,9 +155,9 @@ describe('validation (rule 13)', () => {
   };
 
   it('refuses reduce_speed with no reduced rate: the guest would keep the full rate', () => {
-    expect(
-      codes({ quota_daily_bytes: '1000', quota_exhaustion_action: 'reduce_speed' }),
-    ).toContain('reduce_speed_without_rate');
+    expect(codes({ quota_daily_bytes: '1000', quota_exhaustion_action: 'reduce_speed' })).toContain(
+      'reduce_speed_without_rate',
+    );
   });
 
   it('refuses a reduced rate above the policy rate', () => {
@@ -186,8 +186,8 @@ describe('validation (rule 13)', () => {
   });
 
   it('accepts an online-time allowance as the thing the action acts on', () => {
-    expect(codes({ online_time_total_s: 3600, quota_exhaustion_action: 'require_renewal' })).toEqual(
-      [],
-    );
+    expect(
+      codes({ online_time_total_s: 3600, quota_exhaustion_action: 'require_renewal' }),
+    ).toEqual([]);
   });
 });

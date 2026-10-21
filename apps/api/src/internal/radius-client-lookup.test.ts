@@ -9,7 +9,6 @@
 import express, { type Express } from 'express';
 import request from 'supertest';
 import { afterAll, describe, expect, it, vi } from 'vitest';
-import type { AppDeps } from '../context.js';
 import { closeDeps, unitDeps } from '../test-support/deps.js';
 import { dynamicClientHandler, type NasSecretLookup } from './radius-client-lookup.js';
 
@@ -30,13 +29,16 @@ const NAS: NasSecretLookup = {
 /** An app with just this handler, plus the `req.log` the handler expects. */
 function appWith(
   lookup: (ip: string) => Promise<NasSecretLookup | null>,
-  overrides: Partial<{ isProduction: boolean; internalTls: { certFile: string; keyFile: string } | null }> = {},
+  overrides: Partial<{
+    isProduction: boolean;
+    internalTls: { certFile: string; keyFile: string } | null;
+  }> = {},
 ): Express {
   const config = {
     ...deps.config,
     base: { ...deps.config.base, isProduction: overrides.isProduction ?? false },
     internalTls: overrides.internalTls ?? null,
-  } as AppDeps['config'];
+  };
   const app = express();
   app.use((req, _res, next) => {
     (req as unknown as { log: unknown }).log = {
@@ -52,7 +54,7 @@ function appWith(
 
 describe('GET /internal/radius/client', () => {
   it('returns the control attributes for a registered NAS', async () => {
-    const app = appWith(async () => NAS);
+    const app = appWith(() => Promise.resolve(NAS));
     const res = await request(app).get('/internal/radius/client').query({ ip: NAS.nasIp });
     expect(res.status).toBe(200);
     expect(res.body).toEqual({
@@ -66,9 +68,11 @@ describe('GET /internal/radius/client', () => {
   });
 
   it('carries Require-MA = no when the NAS has it disabled', async () => {
-    const app = appWith(async () => ({ ...NAS, requireMessageAuthenticator: false }));
+    const app = appWith(() => Promise.resolve({ ...NAS, requireMessageAuthenticator: false }));
     const res = await request(app).get('/internal/radius/client').query({ ip: NAS.nasIp });
-    expect(res.body['control:FreeRADIUS-Client-Require-MA']).toBe('no');
+    expect((res.body as Record<string, unknown>)['control:FreeRADIUS-Client-Require-MA']).toBe(
+      'no',
+    );
   });
 
   it.each([
@@ -79,7 +83,7 @@ describe('GET /internal/radius/client', () => {
     ['an address with a port', '192.0.2.10:1812'],
     ['a CIDR', '192.0.2.0/24'],
   ])('answers 404 with no body for %s', async (_label, ip) => {
-    const lookup = vi.fn(async () => NAS);
+    const lookup = vi.fn(() => Promise.resolve(NAS));
     const app = appWith(lookup);
     const res = await request(app)
       .get('/internal/radius/client')
@@ -91,16 +95,14 @@ describe('GET /internal/radius/client', () => {
   });
 
   it('answers 404 with no body when no NAS is registered at that address', async () => {
-    const app = appWith(async () => null);
+    const app = appWith(() => Promise.resolve(null));
     const res = await request(app).get('/internal/radius/client').query({ ip: '192.0.2.99' });
     expect(res.status).toBe(404);
     expect(res.text).toBe('');
   });
 
   it('answers 503 and no secret when the lookup fails', async () => {
-    const app = appWith(async () => {
-      throw new Error('database unavailable');
-    });
+    const app = appWith(() => Promise.reject(new Error('database unavailable')));
     const res = await request(app).get('/internal/radius/client').query({ ip: NAS.nasIp });
     // Not 200: a database failure must never admit a client.
     expect(res.status).toBe(503);
@@ -110,7 +112,7 @@ describe('GET /internal/radius/client', () => {
   it('refuses to serve a secret over a cleartext internal leg in production', async () => {
     // HERMES_AAA_AUDIT.md F-002: User-Password over that leg is an acknowledged risk; every
     // NAS shared secret is not. Fail closed rather than inherit the acknowledgement.
-    const lookup = vi.fn(async () => NAS);
+    const lookup = vi.fn(() => Promise.resolve(NAS));
     const app = appWith(lookup, { isProduction: true, internalTls: null });
     const res = await request(app).get('/internal/radius/client').query({ ip: NAS.nasIp });
     expect(res.status).toBe(503);
@@ -119,17 +121,24 @@ describe('GET /internal/radius/client', () => {
   });
 
   it('serves in production once the internal listener is TLS', async () => {
-    const app = appWith(async () => NAS, {
+    const app = appWith(() => Promise.resolve(NAS), {
       isProduction: true,
-      internalTls: { certFile: '/etc/ecloud/tls/api-internal.crt', keyFile: '/etc/ecloud/tls/api-internal.key' },
+      internalTls: {
+        certFile: '/etc/ecloud/tls/api-internal.crt',
+        keyFile: '/etc/ecloud/tls/api-internal.key',
+      },
     });
     const res = await request(app).get('/internal/radius/client').query({ ip: NAS.nasIp });
     expect(res.status).toBe(200);
-    expect(res.body['control:FreeRADIUS-Client-Secret']).toBe(NAS.secret);
+    expect((res.body as Record<string, unknown>)['control:FreeRADIUS-Client-Secret']).toBe(
+      NAS.secret,
+    );
   });
 
   it('serves in development without TLS, so the dev stack is unchanged', async () => {
-    const app = appWith(async () => NAS, { isProduction: false, internalTls: null });
-    expect((await request(app).get('/internal/radius/client').query({ ip: NAS.nasIp })).status).toBe(200);
+    const app = appWith(() => Promise.resolve(NAS), { isProduction: false, internalTls: null });
+    expect(
+      (await request(app).get('/internal/radius/client').query({ ip: NAS.nasIp })).status,
+    ).toBe(200);
   });
 });

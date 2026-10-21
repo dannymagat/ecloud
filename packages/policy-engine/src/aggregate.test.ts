@@ -85,9 +85,7 @@ describe('the rate pool is observed, never enforced', () => {
 
 describe('shared data allowance (enforced)', () => {
   it('refuses when the group has spent the shared allowance', () => {
-    const r = evaluateAggregate(
-      input({ quota_daily_bytes: 1_000n }, { bytes: { daily: 1_000n } }),
-    );
+    const r = evaluateAggregate(input({ quota_daily_bytes: 1_000n }, { bytes: { daily: 1_000n } }));
     expect(r.reject).toBe('aggregate_quota_daily');
     expect(r.detail).toContain('grp-guest');
   });
@@ -100,9 +98,7 @@ describe('shared data allowance (enforced)', () => {
 
   it('is separate from any member quota: an unused member allowance does not rescue it', () => {
     // The group is spent; this member has used nothing of their own. §7's distinction.
-    const r = evaluateAggregate(
-      input({ quota_monthly_bytes: 10n }, { bytes: { monthly: 10n } }),
-    );
+    const r = evaluateAggregate(input({ quota_monthly_bytes: 10n }, { bytes: { monthly: 10n } }));
     expect(r.reject).toBe('aggregate_quota_monthly');
   });
 
@@ -136,7 +132,10 @@ describe('active member and session ceilings (enforced)', () => {
 
   it('separates the two semantics: members full, sessions free, still refused', () => {
     const r = evaluateAggregate(
-      input({ max_active_members: 2, max_active_sessions: 50 }, { active_members: 2, active_sessions: 4 }),
+      input(
+        { max_active_members: 2, max_active_sessions: 50 },
+        { active_members: 2, active_sessions: 4 },
+      ),
     );
     expect(r.reject).toBe('aggregate_members');
   });

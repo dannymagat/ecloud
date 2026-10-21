@@ -52,10 +52,7 @@ await describeIntegration('@ecloud/api policy availability', () => {
     });
   }
 
-  async function policy(
-    orgId: string,
-    over: Record<string, unknown> = {},
-  ): Promise<string> {
+  async function policy(orgId: string, over: Record<string, unknown> = {}): Promise<string> {
     return withPlatform(db(), REASON, async (trx) => {
       const row = await trx
         .insertInto('policies')

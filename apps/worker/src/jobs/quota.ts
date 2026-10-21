@@ -77,10 +77,7 @@ export function evaluateQuota(limits: QuotaLimits, usage: UsageByPeriod): QuotaB
  * shared allowance twice as fast, an allowance lowered mid-session, or a NAS that does not
  * honour Session-Timeout. Without it those sessions would run to the timeout and overshoot.
  */
-export function evaluateOnlineTime(
-  limits: OnlineTimeLimits,
-  usage: UsageByPeriod,
-): QuotaBreach[] {
+export function evaluateOnlineTime(limits: OnlineTimeLimits, usage: UsageByPeriod): QuotaBreach[] {
   const breaches: QuotaBreach[] = [];
   for (const period of PERIODS) {
     const limit = limits[period];

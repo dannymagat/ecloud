@@ -171,16 +171,7 @@ export const PortalCreate = z.strictObject({
   template_key: z.enum(PORTAL_TEMPLATE_KEYS).optional(),
   method_order: methodOrder.optional(),
   /** SSIDs this portal serves; empty = every SSID at the site (§8 resolution chain). */
-  ssids: z
-    .array(
-      z
-        .string()
-        .trim()
-        .min(1)
-        .max(32),
-    )
-    .max(32)
-    .optional(),
+  ssids: z.array(z.string().trim().min(1).max(32)).max(32).optional(),
   /** Registration form definition (§7); the published copy lives in the snapshot. */
   registration_fields: RegistrationFieldsInput.optional(),
   /** Selectable languages; the first entry is the default. Empty = English only (§12). */
@@ -1074,7 +1065,6 @@ export function portalAdminRoutes(deps: AppDeps): AnyRouteSpec[] {
     }),
   ];
 
-
   // -------------------------------------------------------------------------------------------
   // Publishing (§8): an immutable validated snapshot, an atomic pointer move, and a rollback
   // that leaves drafts alone. The runtime reads the snapshot, never the draft rows.
@@ -1131,8 +1121,8 @@ export function portalAdminRoutes(deps: AppDeps): AnyRouteSpec[] {
           theme === null
             ? null
             : {
-                colors: (theme.colors ?? {}),
-                strings: (theme.strings ?? {}),
+                colors: theme.colors ?? {},
+                strings: theme.strings ?? {},
                 logo_asset_ref: theme.logo_asset_ref,
                 custom_css: theme.custom_css,
               },

@@ -166,17 +166,20 @@ describe('renderClientsConf', () => {
     ['eleven characters', 'ezeradsecre'],
     ['leading space', ` ${FLEET_DEFAULT_RADIUS_SECRET}`],
     ['empty', ''],
-  ])('still refuses a secret below the 12-character floor or outside the alphabet (%s)', (_l, secret) => {
-    expect(SECRET_RE.test(secret)).toBe(false);
-    const out = renderClientsConf([
-      entry({ id: ID_B, nasIp: '10.9.9.9', secret: OTHER_SECRET }),
-      entry({ secret }),
-    ]);
-    expect(out.skipped).toEqual([
-      { id: ID_A, reason: expect.stringMatching(/^shared secret must be/) },
-    ]);
-    expect(fleetDefaultSecretCount(out.rendered)).toBe(0);
-  });
+  ])(
+    'still refuses a secret below the 12-character floor or outside the alphabet (%s)',
+    (_l, secret) => {
+      expect(SECRET_RE.test(secret)).toBe(false);
+      const out = renderClientsConf([
+        entry({ id: ID_B, nasIp: '10.9.9.9', secret: OTHER_SECRET }),
+        entry({ secret }),
+      ]);
+      expect(out.skipped).toEqual([
+        { id: ID_A, reason: expect.stringMatching(/^shared secret must be/) },
+      ]);
+      expect(fleetDefaultSecretCount(out.rendered)).toBe(0);
+    },
+  );
 
   it('skips a non-UUID id without echoing it', () => {
     const out = renderClientsConf([entry({ id: 'nas {' }), entry({ id: ID_B, nasIp: '10.9.9.9' })]);

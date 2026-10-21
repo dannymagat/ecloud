@@ -61,9 +61,7 @@ export async function policyAvailabilityForSites(
     .where('p.status', '=', 'active')
     .where('p.deleted_at', 'is', null)
     .where('a.effective_from', '<=', now)
-    .where((eb) =>
-      eb.or([eb('a.effective_until', 'is', null), eb('a.effective_until', '>', now)]),
-    )
+    .where((eb) => eb.or([eb('a.effective_until', 'is', null), eb('a.effective_until', '>', now)]))
     .execute();
 
   const defaults = await trx

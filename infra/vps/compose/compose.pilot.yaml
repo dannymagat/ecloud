@@ -453,7 +453,8 @@ secrets:
   voucher_pepper: { file: '${ECLOUD_SECRETS_DIR:-/opt/ecloud/secrets}/voucher_pepper' }
   otp_pepper: { file: '${ECLOUD_SECRETS_DIR:-/opt/ecloud/secrets}/otp_pepper' }
   smtp_password: { file: '${ECLOUD_SECRETS_DIR:-/opt/ecloud/secrets}/smtp_password' }
-  internal_secret_token: { file: '${ECLOUD_SECRETS_DIR:-/opt/ecloud/secrets}/internal_secret_token' }
+  internal_secret_token:
+    { file: '${ECLOUD_SECRETS_DIR:-/opt/ecloud/secrets}/internal_secret_token' }
   portal_state_secret: { file: '${ECLOUD_SECRETS_DIR:-/opt/ecloud/secrets}/portal_state_secret' }
   database_url: { file: '${ECLOUD_SECRETS_DIR:-/opt/ecloud/secrets}/database_url' }
   database_url_platform:

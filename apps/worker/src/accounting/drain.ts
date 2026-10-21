@@ -320,13 +320,7 @@ async function lookupRadsecNas(
   if (nas === null || nas === undefined) return 'refused';
   if (nas.status !== 'active' || nas.deleted_at !== null) return 'refused';
   if (!radsecCertificateAccepted(nas, rec.packetTlsClientSerial)) return 'refused';
-  const {
-    status: _s,
-    deleted_at: _d,
-    radsec_enabled: _r,
-    radsec_cert_serial: _c,
-    ...info
-  } = nas;
+  const { status: _s, deleted_at: _d, radsec_enabled: _r, radsec_cert_serial: _c, ...info } = nas;
   return info;
 }
 

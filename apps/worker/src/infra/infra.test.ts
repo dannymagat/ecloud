@@ -75,9 +75,15 @@ describe('createSecretResolver: enc: references (D-056)', () => {
   });
 
   it('is unresolvable (undefined) without an internal api, without a NAS id, or on 404', async () => {
-    const none = createSecretResolver({}, { internal: null, fetch: fetchWith(200, { secret: 'x' }).fetch });
+    const none = createSecretResolver(
+      {},
+      { internal: null, fetch: fetchWith(200, { secret: 'x' }).fetch },
+    );
     await expect(none('enc:v2.x', { nasId: NAS_ID })).resolves.toBeUndefined();
-    const noId = createSecretResolver({}, { internal, fetch: fetchWith(200, { secret: 'x' }).fetch });
+    const noId = createSecretResolver(
+      {},
+      { internal, fetch: fetchWith(200, { secret: 'x' }).fetch },
+    );
     await expect(noId('enc:v2.x')).resolves.toBeUndefined();
     await expect(noId('enc:v2.x', { nasId: 'not-a-uuid' })).resolves.toBeUndefined();
     const gone = createSecretResolver({}, { internal, fetch: fetchWith(404).fetch });
@@ -85,17 +91,23 @@ describe('createSecretResolver: enc: references (D-056)', () => {
   });
 
   it('throws SecretFetchError when the api is unreachable or answers 5xx (transient, retried)', async () => {
-    const down = createSecretResolver({}, {
-      internal,
-      fetch: () => Promise.reject(new Error('ECONNREFUSED')),
-    });
+    const down = createSecretResolver(
+      {},
+      {
+        internal,
+        fetch: () => Promise.reject(new Error('ECONNREFUSED')),
+      },
+    );
     await expect(down('enc:v2.x', { nasId: NAS_ID })).rejects.toBeInstanceOf(SecretFetchError);
     const refusing = createSecretResolver({}, { internal, fetch: fetchWith(503).fetch });
     await expect(refusing('enc:v2.x', { nasId: NAS_ID })).rejects.toBeInstanceOf(SecretFetchError);
   });
 
   it('still never resolves an unknown scheme', async () => {
-    const resolve = createSecretResolver({}, { internal, fetch: fetchWith(200, { secret: 'x' }).fetch });
+    const resolve = createSecretResolver(
+      {},
+      { internal, fetch: fetchWith(200, { secret: 'x' }).fetch },
+    );
     await expect(resolve('secret://test/x', { nasId: NAS_ID })).resolves.toBeUndefined();
   });
 });

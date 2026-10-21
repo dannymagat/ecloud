@@ -12,12 +12,22 @@
  * no Docker, no host access.
  */
 import { spawnSync } from 'node:child_process';
-import { chmodSync, copyFileSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import {
+  chmodSync,
+  copyFileSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 
-const WATCHER_SRC = resolve(import.meta.dirname, '../../infra/vps-local/scripts/radius-reload-watch.sh');
+const WATCHER_SRC = resolve(
+  import.meta.dirname,
+  '../../infra/vps-local/scripts/radius-reload-watch.sh',
+);
 const PENDING_KEY = 'radius:clients:reload_pending';
 const ATTEMPT_KEY = 'radius:clients:reload_attempts';
 

@@ -86,9 +86,14 @@ export interface SealBinding {
 
 function aad(purpose: string, b: SealBinding): Buffer {
   return Buffer.from(
-    [ENVELOPE_VERSION_V2, purpose, b.organizationId, b.rowId, b.column, String(b.secretVersion)].join(
-      '|',
-    ),
+    [
+      ENVELOPE_VERSION_V2,
+      purpose,
+      b.organizationId,
+      b.rowId,
+      b.column,
+      String(b.secretVersion),
+    ].join('|'),
     'utf8',
   );
 }
@@ -142,7 +147,13 @@ export class Envelope {
     // attacker who can append to the column already has write access), but it breaks any equality,
     // dedupe or "is this already v2?" check, which is precisely what the re-seal is built from.
     // Found by EZECLOUD1 reviewing the v1/v2 fallback, 2026-10-15.
-    if (parts.length !== 4 || version !== ENVELOPE_VERSION_V2 || !iv || ciphertext === undefined || !tag) {
+    if (
+      parts.length !== 4 ||
+      version !== ENVELOPE_VERSION_V2 ||
+      !iv ||
+      ciphertext === undefined ||
+      !tag
+    ) {
       throw new Error('unsupported envelope format');
     }
     const decipher = createDecipheriv('aes-256-gcm', this.key, Buffer.from(iv, 'base64url'));
@@ -160,7 +171,13 @@ export class Envelope {
     // Canonical length, as in decryptBound above. The v1 path matters MORE for the re-seal: it is
     // the format the migration reads, and `X` and `X.junk` holding one plaintext would make a
     // "every row is v2 now" check lie.
-    if (parts.length !== 4 || version !== ENVELOPE_VERSION || !iv || ciphertext === undefined || !tag) {
+    if (
+      parts.length !== 4 ||
+      version !== ENVELOPE_VERSION ||
+      !iv ||
+      ciphertext === undefined ||
+      !tag
+    ) {
       throw new Error('unsupported envelope format');
     }
     const decipher = createDecipheriv('aes-256-gcm', this.key, Buffer.from(iv, 'base64url'));
@@ -276,7 +293,10 @@ export function openNasSecret(
     // GCM authentication check, so a wrong guess costs one failed decrypt and reveals nothing.
     return openV1Ref(dataEncryptionKey, body, NAS_SECRET_PURPOSE);
   }
-  return new Envelope(dataEncryptionKey, NAS_SECRET_PURPOSE).decryptBound(body, nasBinding(binding));
+  return new Envelope(dataEncryptionKey, NAS_SECRET_PURPOSE).decryptBound(
+    body,
+    nasBinding(binding),
+  );
 }
 
 function nasBinding(b: NasSecretBinding): SealBinding {
@@ -327,7 +347,9 @@ export function openBoundSecretRef(envelope: Envelope, ref: string, binding: Sea
     // v2-only by design. The `allowV1` flag this replaced took a boolean when the real question
     // was WHICH KEY to derive, and an envelope built for v2 cannot answer it. The v1 fallback
     // lives in openNasSecret / openUamSecret, which hold the key and can derive either label.
-    throw new Error('v1 secret_ref must be opened through the column helper, not openBoundSecretRef');
+    throw new Error(
+      'v1 secret_ref must be opened through the column helper, not openBoundSecretRef',
+    );
   }
   return envelope.decryptBound(body, binding);
 }

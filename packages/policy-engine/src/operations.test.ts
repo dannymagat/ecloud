@@ -108,7 +108,10 @@ describe('schedule intersection (§10)', () => {
 
   it('an unlimited schedule_id on the specific layer removes every restriction below it', () => {
     const r = resolve(
-      layered({ unlimited_fields: ['schedule_id'] }, { schedule_id: AFTERNOONS.id, schedule: AFTERNOONS }),
+      layered(
+        { unlimited_fields: ['schedule_id'] },
+        { schedule_id: AFTERNOONS.id, schedule: AFTERNOONS },
+      ),
     );
     expect(r.effective.schedules).toEqual([]);
     expect(r.decision).toBe('accept');
@@ -129,9 +132,7 @@ describe('reconnect cooldown (§6, migration 044)', () => {
   const cooling = { reconnect_cooldown_s: 300 };
 
   it('refuses a subject whose last session ended inside the cooldown', () => {
-    const r = resolve(
-      layered(cooling, {}, { last_session_end: new Date(NOW.getTime() - 60_000) }),
-    );
+    const r = resolve(layered(cooling, {}, { last_session_end: new Date(NOW.getTime() - 60_000) }));
     expect(r.decision).toBe('reject');
     expect(r.reasonCode).toBe('reconnect_cooldown');
     expect(r.reasonDetail).toContain('240s of the 300s cooldown remain');
@@ -155,9 +156,7 @@ describe('reconnect cooldown (§6, migration 044)', () => {
   });
 
   it('reports the remaining wait as a control, so the portal can say how long', () => {
-    const r = resolve(
-      layered(cooling, {}, { last_session_end: new Date(NOW.getTime() - 60_000) }),
-    );
+    const r = resolve(layered(cooling, {}, { last_session_end: new Date(NOW.getTime() - 60_000) }));
     const control = r.controls.find((c) => c.kind === 'reconnect_cooldown');
     expect(control?.params?.remaining_s).toBe(240);
   });

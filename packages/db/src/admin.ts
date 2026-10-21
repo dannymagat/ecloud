@@ -178,9 +178,7 @@ export async function resetPlatformAdminPassword(
         )
       ).rows[0];
       if (existing === undefined) {
-        throw new Error(
-          `reset-platform-admin-password: no live administrator with email ${email}`,
-        );
+        throw new Error(`reset-platform-admin-password: no live administrator with email ${email}`);
       }
 
       const displayNameSet = input.displayName !== undefined && input.displayName.trim() !== '';

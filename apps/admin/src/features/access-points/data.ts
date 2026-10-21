@@ -1,8 +1,4 @@
-import type {
-  NasAdvisory,
-  NasPendingReason,
-  NasState,
-} from '@ecloud/shared/nas-eligibility';
+import type { NasAdvisory, NasPendingReason, NasState } from '@ecloud/shared/nas-eligibility';
 /**
  * Access Points page data (D-045): the overview payload (`GET …/access-points/overview`), the
  * secret reveal call and the MikroTik downloads. The revealed secret is NEVER put in the

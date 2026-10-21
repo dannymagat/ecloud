@@ -1,76 +1,332 @@
 <title>EZELINK Wi-Fi Sign-in</title>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap">
+<link
+  rel="stylesheet"
+  href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap"
+/>
 <style>
-/* Layout: one centred card, max 420px, on a signal-field backdrop. Phone-first — this is read on a
+  /* Layout: one centred card, max 420px, on a signal-field backdrop. Phone-first — this is read on a
    locked captive-portal webview at ~360px before anything else. */
-:root{
-  --bg:#eef1f0; --field:#dfe5e3; --card:#ffffff; --ink:#111a18; --muted:#5d6b66; --line:#d2dad7;
-  --brand:#0e6b5e; --brand-ink:#ffffff; --brand-soft:#e3f1ee; --signal:#d9661f;
-  --bad:#9f2d20; --bad-soft:#fbe9e6; --ok:#0e6b5e;
-  --display:"Barlow Condensed",system-ui,sans-serif; --body:"Inter",system-ui,-apple-system,sans-serif;
-  --mono:"JetBrains Mono",ui-monospace,Menlo,monospace;
-}
-@media (prefers-color-scheme:dark){ :root:not([data-theme="light"]){
-  --bg:#0c1210; --field:#121a18; --card:#141d1b; --ink:#e8eeec; --muted:#95a39e; --line:#263330;
-  --brand:#4fc3ad; --brand-ink:#06201b; --brand-soft:#11312b; --signal:#e8903f;
-  --bad:#f08a7c; --bad-soft:#2b1512; --ok:#4fc3ad; color-scheme:dark } }
-:root[data-theme="dark"]{
-  --bg:#0c1210; --field:#121a18; --card:#141d1b; --ink:#e8eeec; --muted:#95a39e; --line:#263330;
-  --brand:#4fc3ad; --brand-ink:#06201b; --brand-soft:#11312b; --signal:#e8903f;
-  --bad:#f08a7c; --bad-soft:#2b1512; --ok:#4fc3ad; color-scheme:dark }
-*{box-sizing:border-box}
-html,body{height:100%}
-body{background:var(--bg);color:var(--ink);font-family:var(--body);font-size:15px;line-height:1.5;
-  display:flex;align-items:center;justify-content:center;padding-block:24px;padding-inline:16px}
-.sheet{width:100%;max-width:420px;display:flex;flex-direction:column;gap:14px}
-.brand{display:flex;align-items:center;gap:10px;padding-inline:2px}
-.mark{width:34px;height:34px;flex:none}
-.brandname{font-family:var(--display);font-size:25px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;line-height:1}
-.brandsub{font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);margin-top:3px}
-.card{background:var(--card);border:1px solid var(--line);border-radius:14px;overflow:hidden}
-.net{display:flex;align-items:center;gap:10px;padding:14px 18px;border-bottom:1px solid var(--line);background:var(--brand-soft)}
-.net svg{flex:none}
-.net .ssid{font-family:var(--mono);font-size:14px;font-weight:500}
-.net .lbl{font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
-form{padding:18px}
-label{display:block;font-size:12px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);margin:0 0 6px}
-.f{margin-bottom:14px}
-input[type=text],input[type=password]{width:100%;font:inherit;font-size:16px;padding:12px 13px;
-  background:var(--field);color:var(--ink);border:1px solid var(--line);border-radius:9px}
-input:focus-visible{outline:2px solid var(--brand);outline-offset:1px;background:var(--card)}
-.pw{position:relative}
-.pw input{padding-right:62px}
-.reveal{position:absolute;right:6px;top:50%;transform:translateY(-50%);font:inherit;font-size:12px;
-  font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);background:none;
-  border:0;padding:8px 9px;border-radius:7px;cursor:pointer}
-.reveal:hover{color:var(--ink)}
-.reveal:focus-visible{outline:2px solid var(--brand);outline-offset:1px}
-.terms{display:flex;gap:9px;align-items:flex-start;font-size:12.5px;color:var(--muted);margin:2px 0 16px}
-.terms input{margin-top:2px;accent-color:var(--brand);width:16px;height:16px;flex:none}
-.terms a{color:var(--ink)}
-button.go{width:100%;font:inherit;font-weight:600;font-size:15px;letter-spacing:.02em;padding:13px;
-  background:var(--brand);color:var(--brand-ink);border:0;border-radius:9px;cursor:pointer}
-button.go:disabled{opacity:.45;cursor:not-allowed}
-button.go:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
-.msg{display:flex;gap:9px;align-items:flex-start;font-size:13px;padding:11px 13px;border-radius:9px;margin-bottom:14px}
-.msg.err{background:var(--bad-soft);color:var(--bad);border:1px solid var(--bad)}
-.msg b{font-weight:600}
-.plan{display:flex;border-top:1px solid var(--line)}
-.plan div{flex:1;padding:12px 14px;text-align:center}
-.plan div+div{border-left:1px solid var(--line)}
-.plan .v{font-family:var(--mono);font-size:17px;font-weight:500;font-variant-numeric:tabular-nums}
-.plan .k{font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin-top:3px}
-.foot{display:flex;justify-content:space-between;gap:12px;font-size:11px;color:var(--muted);padding-inline:4px;flex-wrap:wrap}
-.foot code{font-family:var(--mono);font-size:11px}
-@media (prefers-reduced-motion:no-preference){ button.go{transition:opacity .15s} }
+  :root {
+    --bg: #eef1f0;
+    --field: #dfe5e3;
+    --card: #ffffff;
+    --ink: #111a18;
+    --muted: #5d6b66;
+    --line: #d2dad7;
+    --brand: #0e6b5e;
+    --brand-ink: #ffffff;
+    --brand-soft: #e3f1ee;
+    --signal: #d9661f;
+    --bad: #9f2d20;
+    --bad-soft: #fbe9e6;
+    --ok: #0e6b5e;
+    --display: 'Barlow Condensed', system-ui, sans-serif;
+    --body: 'Inter', system-ui, -apple-system, sans-serif;
+    --mono: 'JetBrains Mono', ui-monospace, Menlo, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme='light']) {
+      --bg: #0c1210;
+      --field: #121a18;
+      --card: #141d1b;
+      --ink: #e8eeec;
+      --muted: #95a39e;
+      --line: #263330;
+      --brand: #4fc3ad;
+      --brand-ink: #06201b;
+      --brand-soft: #11312b;
+      --signal: #e8903f;
+      --bad: #f08a7c;
+      --bad-soft: #2b1512;
+      --ok: #4fc3ad;
+      color-scheme: dark;
+    }
+  }
+  :root[data-theme='dark'] {
+    --bg: #0c1210;
+    --field: #121a18;
+    --card: #141d1b;
+    --ink: #e8eeec;
+    --muted: #95a39e;
+    --line: #263330;
+    --brand: #4fc3ad;
+    --brand-ink: #06201b;
+    --brand-soft: #11312b;
+    --signal: #e8903f;
+    --bad: #f08a7c;
+    --bad-soft: #2b1512;
+    --ok: #4fc3ad;
+    color-scheme: dark;
+  }
+  * {
+    box-sizing: border-box;
+  }
+  html,
+  body {
+    height: 100%;
+  }
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: var(--body);
+    font-size: 15px;
+    line-height: 1.5;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding-block: 24px;
+    padding-inline: 16px;
+  }
+  .sheet {
+    width: 100%;
+    max-width: 420px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+  .brand {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding-inline: 2px;
+  }
+  .mark {
+    width: 34px;
+    height: 34px;
+    flex: none;
+  }
+  .brandname {
+    font-family: var(--display);
+    font-size: 25px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    line-height: 1;
+  }
+  .brandsub {
+    font-size: 11px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-top: 3px;
+  }
+  .card {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    overflow: hidden;
+  }
+  .net {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 14px 18px;
+    border-bottom: 1px solid var(--line);
+    background: var(--brand-soft);
+  }
+  .net svg {
+    flex: none;
+  }
+  .net .ssid {
+    font-family: var(--mono);
+    font-size: 14px;
+    font-weight: 500;
+  }
+  .net .lbl {
+    font-size: 11px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+  form {
+    padding: 18px;
+  }
+  label {
+    display: block;
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin: 0 0 6px;
+  }
+  .f {
+    margin-bottom: 14px;
+  }
+  input[type='text'],
+  input[type='password'] {
+    width: 100%;
+    font: inherit;
+    font-size: 16px;
+    padding: 12px 13px;
+    background: var(--field);
+    color: var(--ink);
+    border: 1px solid var(--line);
+    border-radius: 9px;
+  }
+  input:focus-visible {
+    outline: 2px solid var(--brand);
+    outline-offset: 1px;
+    background: var(--card);
+  }
+  .pw {
+    position: relative;
+  }
+  .pw input {
+    padding-right: 62px;
+  }
+  .reveal {
+    position: absolute;
+    right: 6px;
+    top: 50%;
+    transform: translateY(-50%);
+    font: inherit;
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--muted);
+    background: none;
+    border: 0;
+    padding: 8px 9px;
+    border-radius: 7px;
+    cursor: pointer;
+  }
+  .reveal:hover {
+    color: var(--ink);
+  }
+  .reveal:focus-visible {
+    outline: 2px solid var(--brand);
+    outline-offset: 1px;
+  }
+  .terms {
+    display: flex;
+    gap: 9px;
+    align-items: flex-start;
+    font-size: 12.5px;
+    color: var(--muted);
+    margin: 2px 0 16px;
+  }
+  .terms input {
+    margin-top: 2px;
+    accent-color: var(--brand);
+    width: 16px;
+    height: 16px;
+    flex: none;
+  }
+  .terms a {
+    color: var(--ink);
+  }
+  button.go {
+    width: 100%;
+    font: inherit;
+    font-weight: 600;
+    font-size: 15px;
+    letter-spacing: 0.02em;
+    padding: 13px;
+    background: var(--brand);
+    color: var(--brand-ink);
+    border: 0;
+    border-radius: 9px;
+    cursor: pointer;
+  }
+  button.go:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+  }
+  button.go:focus-visible {
+    outline: 2px solid var(--ink);
+    outline-offset: 2px;
+  }
+  .msg {
+    display: flex;
+    gap: 9px;
+    align-items: flex-start;
+    font-size: 13px;
+    padding: 11px 13px;
+    border-radius: 9px;
+    margin-bottom: 14px;
+  }
+  .msg.err {
+    background: var(--bad-soft);
+    color: var(--bad);
+    border: 1px solid var(--bad);
+  }
+  .msg b {
+    font-weight: 600;
+  }
+  .plan {
+    display: flex;
+    border-top: 1px solid var(--line);
+  }
+  .plan div {
+    flex: 1;
+    padding: 12px 14px;
+    text-align: center;
+  }
+  .plan div + div {
+    border-left: 1px solid var(--line);
+  }
+  .plan .v {
+    font-family: var(--mono);
+    font-size: 17px;
+    font-weight: 500;
+    font-variant-numeric: tabular-nums;
+  }
+  .plan .k {
+    font-size: 10.5px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-top: 3px;
+  }
+  .foot {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    font-size: 11px;
+    color: var(--muted);
+    padding-inline: 4px;
+    flex-wrap: wrap;
+  }
+  .foot code {
+    font-family: var(--mono);
+    font-size: 11px;
+  }
+  @media (prefers-reduced-motion: no-preference) {
+    button.go {
+      transition: opacity 0.15s;
+    }
+  }
 </style>
 <main class="sheet">
   <div class="brand">
     <svg class="mark" viewBox="0 0 34 34" role="img" aria-label="EZELINK">
-      <rect x="1" y="1" width="32" height="32" rx="9" fill="none" stroke="var(--brand)" stroke-width="2"/>
-      <path d="M9 21.5a11 11 0 0 1 16 0" fill="none" stroke="var(--brand)" stroke-width="2.2" stroke-linecap="round"/>
-      <path d="M12.5 25a6.4 6.4 0 0 1 9 0" fill="none" stroke="var(--signal)" stroke-width="2.2" stroke-linecap="round"/>
-      <circle cx="17" cy="9.5" r="2.1" fill="var(--brand)"/>
+      <rect
+        x="1"
+        y="1"
+        width="32"
+        height="32"
+        rx="9"
+        fill="none"
+        stroke="var(--brand)"
+        stroke-width="2"
+      />
+      <path
+        d="M9 21.5a11 11 0 0 1 16 0"
+        fill="none"
+        stroke="var(--brand)"
+        stroke-width="2.2"
+        stroke-linecap="round"
+      />
+      <path
+        d="M12.5 25a6.4 6.4 0 0 1 9 0"
+        fill="none"
+        stroke="var(--signal)"
+        stroke-width="2.2"
+        stroke-linecap="round"
+      />
+      <circle cx="17" cy="9.5" r="2.1" fill="var(--brand)" />
     </svg>
     <div>
       <div class="brandname">Ezelink</div>
@@ -81,8 +337,14 @@ button.go:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
   <div class="card">
     <div class="net">
       <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true">
-        <path d="M2 6.5a10 10 0 0 1 14 0M4.6 9.6a6.3 6.3 0 0 1 8.8 0" fill="none" stroke="var(--brand)" stroke-width="1.7" stroke-linecap="round"/>
-        <circle cx="9" cy="13.6" r="1.6" fill="var(--brand)"/>
+        <path
+          d="M2 6.5a10 10 0 0 1 14 0M4.6 9.6a6.3 6.3 0 0 1 8.8 0"
+          fill="none"
+          stroke="var(--brand)"
+          stroke-width="1.7"
+          stroke-linecap="round"
+        />
+        <circle cx="9" cy="13.6" r="1.6" fill="var(--brand)" />
       </svg>
       <div>
         <div class="lbl">Connected to</div>
@@ -93,23 +355,42 @@ button.go:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
     <form id="form" novalidate>
       <div class="msg err" id="err" hidden>
         <span aria-hidden="true">!</span>
-        <span><b id="errtitle">Sign-in failed.</b> <span id="errbody">Check the username and password and try again.</span></span>
+        <span
+          ><b id="errtitle">Sign-in failed.</b>
+          <span id="errbody">Check the username and password and try again.</span></span
+        >
       </div>
 
       <div class="f">
         <label for="username">Username</label>
-        <input id="username" name="username" type="text" autocomplete="username" autocapitalize="none"
-               autocorrect="off" spellcheck="false" inputmode="text" placeholder="ap1832test" required>
+        <input
+          id="username"
+          name="username"
+          type="text"
+          autocomplete="username"
+          autocapitalize="none"
+          autocorrect="off"
+          spellcheck="false"
+          inputmode="text"
+          placeholder="ap1832test"
+          required
+        />
       </div>
 
       <div class="f pw">
         <label for="password">Password</label>
-        <input id="password" name="password" type="password" autocomplete="current-password" required>
+        <input
+          id="password"
+          name="password"
+          type="password"
+          autocomplete="current-password"
+          required
+        />
         <button class="reveal" id="reveal" type="button" aria-controls="password">Show</button>
       </div>
 
       <label class="terms" for="agree">
-        <input id="agree" type="checkbox" checked>
+        <input id="agree" type="checkbox" checked />
         <span>I accept the <a href="#terms">acceptable-use terms</a> for this network.</span>
       </label>
 
@@ -117,9 +398,18 @@ button.go:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
     </form>
 
     <div class="plan">
-      <div><div class="v" id="down">10</div><div class="k">Mbps down</div></div>
-      <div><div class="v" id="up">10</div><div class="k">Mbps up</div></div>
-      <div><div class="v" id="mins">30</div><div class="k">Minutes</div></div>
+      <div>
+        <div class="v" id="down">10</div>
+        <div class="k">Mbps down</div>
+      </div>
+      <div>
+        <div class="v" id="up">10</div>
+        <div class="k">Mbps up</div>
+      </div>
+      <div>
+        <div class="v" id="mins">30</div>
+        <div class="k">Minutes</div>
+      </div>
     </div>
   </div>
 
@@ -129,58 +419,68 @@ button.go:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
   </div>
 </main>
 <script>
-(function () {
-  'use strict';
-  // The captive portal hands these in on the redirect from the access point:
-  //   res, uamip, uamport, challenge, mac, ip, called, nasid, ssid, sessionid, userurl, md
-  // On a real deployment the portal renders them server-side; here they are read from the query
-  // string when present so the page can be previewed and wired without changes.
-  var q = new URLSearchParams(location.search);
-  var set = function (id, v) { if (v) document.getElementById(id).textContent = v; };
-  set('ssid', q.get('ssid'));
-  set('nasid', q.get('nasid'));
-  set('sid', (q.get('sessionid') || '').slice(0, 12) || null);
+  (function () {
+    'use strict';
+    // The captive portal hands these in on the redirect from the access point:
+    //   res, uamip, uamport, challenge, mac, ip, called, nasid, ssid, sessionid, userurl, md
+    // On a real deployment the portal renders them server-side; here they are read from the query
+    // string when present so the page can be previewed and wired without changes.
+    var q = new URLSearchParams(location.search);
+    var set = function (id, v) {
+      if (v) document.getElementById(id).textContent = v;
+    };
+    set('ssid', q.get('ssid'));
+    set('nasid', q.get('nasid'));
+    set('sid', (q.get('sessionid') || '').slice(0, 12) || null);
 
-  var form = document.getElementById('form');
-  var go = document.getElementById('go');
-  var err = document.getElementById('err');
-  var errTitle = document.getElementById('errtitle');
-  var errBody = document.getElementById('errbody');
-  var agree = document.getElementById('agree');
-  var pw = document.getElementById('password');
+    var form = document.getElementById('form');
+    var go = document.getElementById('go');
+    var err = document.getElementById('err');
+    var errTitle = document.getElementById('errtitle');
+    var errBody = document.getElementById('errbody');
+    var agree = document.getElementById('agree');
+    var pw = document.getElementById('password');
 
-  document.getElementById('reveal').addEventListener('click', function () {
-    var shown = pw.type === 'text';
-    pw.type = shown ? 'password' : 'text';
-    this.textContent = shown ? 'Show' : 'Hide';
-    pw.focus();
-  });
+    document.getElementById('reveal').addEventListener('click', function () {
+      var shown = pw.type === 'text';
+      pw.type = shown ? 'password' : 'text';
+      this.textContent = shown ? 'Show' : 'Hide';
+      pw.focus();
+    });
 
-  var fail = function (title, body) {
-    errTitle.textContent = title;
-    errBody.textContent = body;
-    err.hidden = false;
-  };
+    var fail = function (title, body) {
+      errTitle.textContent = title;
+      errBody.textContent = body;
+      err.hidden = false;
+    };
 
-  agree.addEventListener('change', function () { go.disabled = !agree.checked; });
+    agree.addEventListener('change', function () {
+      go.disabled = !agree.checked;
+    });
 
-  form.addEventListener('submit', function (e) {
-    e.preventDefault();
-    err.hidden = true;
-    var u = form.username.value.trim();
-    var p = pw.value;
-    if (!u || !p) { fail('Missing details.', 'Enter both the username and the password.'); return; }
-    go.disabled = true;
-    go.textContent = 'Connecting…';
-    // Wiring: POST these to the portal's own sign-in endpoint. The portal verifies the password,
-    // mints a single-use credential (pc-<hex>, valid 90 s) and hands the browser to
-    //   http://<uamip>:<uamport>/logon?username=<pc-...>&response=<chap>&userurl=<original>
-    // The access point registers /logon, /logoff and /logout on port 3990 — never /login.
-    setTimeout(function () {
-      go.disabled = false;
-      go.textContent = 'Connect';
-      fail('Preview only.', 'This page is a design: connect it to the portal sign-in endpoint to go live.');
-    }, 700);
-  });
-})();
+    form.addEventListener('submit', function (e) {
+      e.preventDefault();
+      err.hidden = true;
+      var u = form.username.value.trim();
+      var p = pw.value;
+      if (!u || !p) {
+        fail('Missing details.', 'Enter both the username and the password.');
+        return;
+      }
+      go.disabled = true;
+      go.textContent = 'Connecting…';
+      // Wiring: POST these to the portal's own sign-in endpoint. The portal verifies the password,
+      // mints a single-use credential (pc-<hex>, valid 90 s) and hands the browser to
+      //   http://<uamip>:<uamport>/logon?username=<pc-...>&response=<chap>&userurl=<original>
+      // The access point registers /logon, /logoff and /logout on port 3990 — never /login.
+      setTimeout(function () {
+        go.disabled = false;
+        go.textContent = 'Connect';
+        fail(
+          'Preview only.',
+          'This page is a design: connect it to the portal sign-in endpoint to go live.',
+        );
+      }, 700);
+    });
+  })();
 </script>

@@ -7,7 +7,11 @@ import express, { type Express } from 'express';
 import request from 'supertest';
 import { afterAll, describe, expect, it } from 'vitest';
 import { closeDeps, unitDeps } from '../test-support/deps.js';
-import { INTERNAL_SECRET_TOKEN_HEADER, nasSecretHandler, type NasSecretById } from './nas-secret.js';
+import {
+  INTERNAL_SECRET_TOKEN_HEADER,
+  nasSecretHandler,
+  type NasSecretById,
+} from './nas-secret.js';
 
 const deps = unitDeps();
 afterAll(async () => {
@@ -58,7 +62,9 @@ describe('GET /internal/nas/:id/secret', () => {
       seen.push(id);
       return Promise.resolve(id === NAS.id ? NAS : null);
     });
-    const res = await request(app).get(`/internal/nas/${NAS.id}/secret`).set(INTERNAL_SECRET_TOKEN_HEADER, TOKEN);
+    const res = await request(app)
+      .get(`/internal/nas/${NAS.id}/secret`)
+      .set(INTERNAL_SECRET_TOKEN_HEADER, TOKEN);
     expect(res.status).toBe(200);
     expect(res.headers['cache-control']).toBe('no-store');
     expect(res.body).toMatchObject({ id: NAS.id, secret: NAS.secret });
@@ -69,7 +75,9 @@ describe('GET /internal/nas/:id/secret', () => {
   it('404 with no body for an unknown id, a non-UUID id and an unopenable row', async () => {
     const app = appWith(() => Promise.resolve(null));
     for (const id of ['22222222-2222-4333-8444-555555555555', 'not-a-uuid', 'nas {']) {
-      const res = await request(app).get(`/internal/nas/${encodeURIComponent(id)}/secret`).set(INTERNAL_SECRET_TOKEN_HEADER, TOKEN);
+      const res = await request(app)
+        .get(`/internal/nas/${encodeURIComponent(id)}/secret`)
+        .set(INTERNAL_SECRET_TOKEN_HEADER, TOKEN);
       expect(res.status).toBe(404);
       expect(res.text).toBe('');
     }
@@ -88,7 +96,10 @@ describe('GET /internal/nas/:id/secret', () => {
       .set(INTERNAL_SECRET_TOKEN_HEADER, TOKEN);
     expect(acked.status).toBe(200);
     const tls = await request(
-      appWith(() => Promise.resolve(NAS), { isProduction: true, internalTls: { certFile: 'c', keyFile: 'k' } }),
+      appWith(() => Promise.resolve(NAS), {
+        isProduction: true,
+        internalTls: { certFile: 'c', keyFile: 'k' },
+      }),
     )
       .get(`/internal/nas/${NAS.id}/secret`)
       .set(INTERNAL_SECRET_TOKEN_HEADER, TOKEN);
@@ -97,7 +108,9 @@ describe('GET /internal/nas/:id/secret', () => {
 
   it('503 with no body when the lookup itself fails', async () => {
     const app = appWith(() => Promise.reject(new Error('db down')));
-    const res = await request(app).get(`/internal/nas/${NAS.id}/secret`).set(INTERNAL_SECRET_TOKEN_HEADER, TOKEN);
+    const res = await request(app)
+      .get(`/internal/nas/${NAS.id}/secret`)
+      .set(INTERNAL_SECRET_TOKEN_HEADER, TOKEN);
     expect(res.status).toBe(503);
     expect(res.text).toBe('');
   });
@@ -109,7 +122,9 @@ describe('GET /internal/nas/:id/secret: its own token (D-061)', () => {
     const missing = await request(app).get(`/internal/nas/${NAS.id}/secret`);
     expect(missing.status).toBe(401);
     expect(missing.text).toBe('');
-    const wrong = await request(app).get(`/internal/nas/${NAS.id}/secret`).set(INTERNAL_SECRET_TOKEN_HEADER, `${TOKEN}x`);
+    const wrong = await request(app)
+      .get(`/internal/nas/${NAS.id}/secret`)
+      .set(INTERNAL_SECRET_TOKEN_HEADER, `${TOKEN}x`);
     expect(wrong.status).toBe(401);
     const shared = await request(app)
       .get(`/internal/nas/${NAS.id}/secret`)

@@ -351,8 +351,7 @@ export async function bootstrapTenant(
     .where('p.id', '=', portalId)
     .executeTakeFirst();
   const publishedId = published?.version_id ?? null;
-  const unchanged =
-    publishedId !== null && canonical(published?.snapshot) === canonical(snapshot);
+  const unchanged = publishedId !== null && canonical(published?.snapshot) === canonical(snapshot);
   if (unchanged) {
     steps.push({ entity: 'portal_version', id: String(publishedId), created: false });
   } else {

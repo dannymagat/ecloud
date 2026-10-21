@@ -62,9 +62,7 @@ await describeIntegration('@ecloud/api platform default policy loader', () => {
     // The migration deliberately creates no row. A loader that treated absence as an error, or
     // worse as an empty policy that grants everything, would be the failure this feature has to
     // avoid.
-    const intent = await withSingleton(null, (trx) =>
-      loadPlatformDefaultPolicy(trx, ORG),
-    );
+    const intent = await withSingleton(null, (trx) => loadPlatformDefaultPolicy(trx, ORG));
     expect(intent).toBeNull();
   });
 

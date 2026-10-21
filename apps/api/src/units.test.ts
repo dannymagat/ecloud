@@ -141,8 +141,14 @@ describe('RADIUS encoding (docs/contracts/aaa-authorize.md)', () => {
       'ECLOUD-Packet-Src-IP-Address': { value: ['192.0.2.1'] },
       'ECLOUD-Client-Shortname': { value: ['ecloud-radsec'] },
     };
-    const a = { ...base, 'ECLOUD-TLS-Client-Cert-CN': { value: ['0192aaaa-0000-7000-8000-000000000001'] } };
-    const b = { ...base, 'ECLOUD-TLS-Client-Cert-CN': { value: ['0192aaaa-0000-7000-8000-000000000002'] } };
+    const a = {
+      ...base,
+      'ECLOUD-TLS-Client-Cert-CN': { value: ['0192aaaa-0000-7000-8000-000000000001'] },
+    };
+    const b = {
+      ...base,
+      'ECLOUD-TLS-Client-Cert-CN': { value: ['0192aaaa-0000-7000-8000-000000000002'] },
+    };
     expect(retransmitKey(a)).not.toBe(retransmitKey(b));
     expect(decisionKey(a)).not.toBe(decisionKey(b));
   });

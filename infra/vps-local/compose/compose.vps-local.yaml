@@ -53,7 +53,7 @@ services:
       RADIUS_ADVERTISED_ADDRESS: ${ECLOUD_LAN_IP:?ECLOUD_LAN_IP is required}
       # D-066: the api gates the Sessions page Disconnect / Re-authorize buttons on the same
       # flag the worker dispatches on (accounting-views operationAvailability); both must agree.
-      ECLOUD_COA_ENABLED: "true"
+      ECLOUD_COA_ENABLED: 'true'
     # Only reachable through `edge` on the Compose network.
     ports: !reset []
     volumes:
@@ -71,7 +71,7 @@ services:
       <<: *lan-origins
       # D-066 (owner, 2026-10-16): CoA/Disconnect dispatch ON for the pilot. The D-065 device
       # test still waits; until dynamic-auth is enabled on the AP a Disconnect records a timeout.
-      ECLOUD_COA_ENABLED: "true"
+      ECLOUD_COA_ENABLED: 'true'
 
   freeradius:
     # LAN-only RADIUS (D-042). Binding a specific host address requires bond1 to hold it when
