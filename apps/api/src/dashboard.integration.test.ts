@@ -1112,10 +1112,12 @@ await describeIntegration('@ecloud/api P9-A dashboard & reports against ecloud_t
     it('dashboard aggregates are index-supported', async () => {
       const org = f.orgId;
       const since = ago(24 * HOUR).toISOString();
-      expect(
-        await plan(sql`SELECT count(*) FROM sessions WHERE organization_id = ${org}
-          AND status IN ('authorized', 'active') AND site_id IN (${f.siteA})`),
-      ).toContain('idx_sessions_open_org_site_nas');
+      // a partial index over open sessions (016 / 026), whichever the planner prefers for the
+      // shared test database's statistics; never a sequential scan
+      const openPlan = await plan(sql`SELECT count(*) FROM sessions WHERE organization_id = ${org}
+          AND status IN ('authorized', 'active') AND site_id IN (${f.siteA})`);
+      expect(openPlan).toMatch(/idx_sessions_open_(org_site_nas|user|device)/);
+      expect(openPlan).not.toMatch(/Seq Scan on sessions/);
       expect(
         await plan(sql`SELECT created_at FROM auth_events WHERE organization_id = ${org}
           AND nas_client_id = ${f.nasA.id} ORDER BY created_at DESC LIMIT 1`),
@@ -1167,7 +1169,9 @@ await describeIntegration('@ecloud/api P9-A dashboard & reports against ecloud_t
         // the live-subscriber join reads users through an index (primary key or organization)
         expect(open).toMatch(/Index Scan using (users_pkey|\w*users_org\w*) on users/);
         const active = await plan(activeUsersQuery(scope, since));
-        expect(active).toMatch(/idx_sessions_org_site_started|idx_sessions_org_user_started/);
+        // any of the (organization, …, started_at) indexes, depending on table statistics
+        expect(active).toMatch(/idx_sessions_org_(site_|user_)?started/);
+        expect(active).not.toMatch(/Seq Scan on sessions/);
         expect(active).toMatch(/idx_sessions_open_(org_site_nas|user|device)/);
         expect(active).toMatch(/Index Scan using (users_pkey|\w*users_org\w*) on users/);
         // the VALUES (site_id, local midnight) LEFT JOIN form

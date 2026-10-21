@@ -74,6 +74,8 @@ await describeIntegration('@ecloud/db schema', () => {
   let databaseUrl: string;
   /** deployment_mode of NAS rows inserted at schema 018, read after 019 ran (upgrade path). */
   let backfilled: Record<string, string> = {};
+  /** adapter_key / adapter_type_key of the same rows after 050 (D-077 rename). */
+  let renamed: Record<string, [string | null, string | null]> = {};
 
   beforeAll(async () => {
     const legacyOrg = newId();
@@ -93,9 +95,10 @@ await describeIntegration('@ecloud/db schema', () => {
             "INSERT INTO sites (id, organization_id, slug, name, timezone) VALUES ($1, $2, 's', 'S', 'UTC')",
             [site, legacyOrg],
           );
+          // keys as they were at schema 018; migration 050 renames them (D-077)
           for (const [name, ip, key] of [
-            ['chilli', '10.250.0.1', 'ezecloud-uam'],
-            ['uspot', '10.250.0.2', 'ezeap-uam'],
+            ['chilli', '10.250.0.1', 'coovachilli-uam'],
+            ['uspot', '10.250.0.2', 'openwifi-uspot-uam'],
           ] as const) {
             await client.query(
               `INSERT INTO nas_clients (organization_id, site_id, name, nas_ip, adapter_type_key, adapter_key, secret_ref)
@@ -115,10 +118,19 @@ await describeIntegration('@ecloud/db schema', () => {
     appPool = createPool(appUrl, { max: 4, applicationName: 'ecloud-db-test-app' });
     platform = createDb(platformPool);
     app = createDb(appPool);
-    const legacy = await sql<{ name: string; deployment_mode: string }>`
-      SELECT name, deployment_mode FROM nas_clients WHERE organization_id = ${legacyOrg}
+    const legacy = await sql<{
+      name: string;
+      deployment_mode: string;
+      adapter_key: string | null;
+      adapter_type_key: string | null;
+    }>`
+      SELECT name, deployment_mode, adapter_key, adapter_type_key
+        FROM nas_clients WHERE organization_id = ${legacyOrg}
     `.execute(platform);
     backfilled = Object.fromEntries(legacy.rows.map((r) => [r.name, r.deployment_mode]));
+    renamed = Object.fromEntries(
+      legacy.rows.map((r) => [r.name, [r.adapter_key, r.adapter_type_key]]),
+    );
     await truncateAll(platformPool, DATA_TABLES);
   }, 120_000);
 
@@ -668,8 +680,9 @@ await describeIntegration('@ecloud/db schema', () => {
     // the reconciled catalogue holds exactly the engine keys on a fresh database (+ 028..032 adapters)
     const keys = await platform.selectFrom('adapter_types').select('key').orderBy('key').execute();
     expect(keys.map((k) => k.key)).toEqual([
-      'ezecloud-uam',
       'external-portal-postback',
+      'ezeap-uam', // 050 (was openwifi-uspot-uam)
+      'ezecloud-uam', // 050 (was coovachilli-uam)
       'generic-radius-8021x',
       'meraki-splash', // 032
       'mikrotik-hotspot',
@@ -677,7 +690,6 @@ await describeIntegration('@ecloud/db schema', () => {
       'omada-api', // 031
       'openwifi-config',
       'openwifi-hostapd-radius',
-      'ezeap-uam',
       'unifi-external-portal', // 031
       'uspot-upstream-uam',
     ]);
@@ -1001,6 +1013,13 @@ await describeIntegration('@ecloud/db schema', () => {
 
   it('019 upgrade path: NAS rows that existed at 018 are backfilled (CoovaChilli -> gateway)', () => {
     expect(backfilled).toEqual({ chilli: 'gateway', uspot: 'native' });
+  });
+
+  it('050 upgrade path: NAS rows on the old adapter keys are renamed (D-077)', () => {
+    expect(renamed).toEqual({
+      chilli: ['ezecloud-uam', 'ezecloud-uam'],
+      uspot: ['ezeap-uam', 'ezeap-uam'],
+    });
   });
 
   it('seed mirrors the @ecloud/adapters registry exactly (hash check) and is idempotent', async () => {

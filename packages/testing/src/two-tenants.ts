@@ -89,6 +89,9 @@ export const TENANT_GRAPH_TABLES: readonly string[] = Object.freeze([
   'portal_assets',
   'portal_terms_versions',
   'portal_versions',
+  'portal_registrations',
+  'terms_acceptances',
+  'device_registrations',
   'sessions',
   'accounting_records',
   'auth_events',
@@ -511,6 +514,39 @@ export async function seedTenantGraph(
     portalVersionId,
     captivePortalId,
   ]);
+
+  // 049: a guest registration (partitioned), a terms acceptance and a registered device
+  const registrationId = await insertReturning<number>(
+    db,
+    `INSERT INTO portal_registrations (organization_id, captive_portal_id, portal_version_id,
+                                      nas_client_id, mac, fields)
+     VALUES ($1, $2, $3, $4, $5, $6::jsonb) RETURNING id`,
+    [
+      organizationId,
+      captivePortalId,
+      portalVersionId,
+      nasClientId,
+      randomMac(),
+      JSON.stringify({ name: `guest ${slug}` }),
+    ],
+  );
+  ref('portal_registrations', registrationId);
+
+  const termsAcceptanceId = await insertReturning<string>(
+    db,
+    `INSERT INTO terms_acceptances (organization_id, captive_portal_id, terms_version, mac)
+     VALUES ($1, $2, '1', $3) RETURNING id`,
+    [organizationId, captivePortalId, randomMac()],
+  );
+  ref('terms_acceptances', termsAcceptanceId);
+
+  const deviceRegistrationId = await insertReturning<string>(
+    db,
+    `INSERT INTO device_registrations (organization_id, site_id, mac, source, subscriber_id)
+     VALUES ($1, $2, $3, 'guest', $4) RETURNING id`,
+    [organizationId, siteId, randomMac(), userId],
+  );
+  ref('device_registrations', deviceRegistrationId);
 
   const acctUniqueId = `${slug}-${hex(8)}`;
   const sessionId = await insertReturning<string>(

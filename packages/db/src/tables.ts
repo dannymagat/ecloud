@@ -164,4 +164,13 @@ export const PARTITIONED_TABLES = Object.freeze([
   'webhook_deliveries',
 ] as const satisfies readonly TableName[]);
 
-export const APPEND_ONLY_TABLES = PARTITIONED_TABLES;
+/**
+ * Partitioned tables whose rows are immutable (`forbid_mutation()` trigger on parent and every
+ * partition). `portal_registrations` (049) is partitioned and INSERT/SELECT-only for `ecloud_app`
+ * but carries guest personal data that is purged per organization
+ * (`organizations.registration_retention_months`) and on erasure requests, so the platform role
+ * must be able to DELETE rows: it has no immutability trigger.
+ */
+export const APPEND_ONLY_TABLES = Object.freeze(
+  PARTITIONED_TABLES.filter((t) => t !== 'portal_registrations'),
+);

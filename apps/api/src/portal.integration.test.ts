@@ -32,7 +32,7 @@ import { createApp } from './app.js';
 import type { AppDeps } from './context.js';
 import { Envelope, sealSecretRef } from './crypto.js';
 import { PORTAL_RETRANSMIT_TTL_S, decisionKey } from './internal/aaa.js';
-import { UAM_SECRET_PURPOSE } from './internal/portal.js';
+import { UAM_FLAVOURS, UAM_SECRET_PURPOSE } from './internal/portal.js';
 import type { RadiusRequestBody } from './internal/radius.js';
 import { passwordVerifyGate } from './internal/verify-gate.js';
 import { MemoryKv, RedisKv, type KvStore } from './kv.js';
@@ -216,7 +216,9 @@ await describeIntegration('@ecloud/api captive portal broker (P6-A)', () => {
         ? 'uspot-upstream'
         : 'uspot-tip';
   const pathOf = (k: AdapterKey) => (k === 'ezecloud-uam' ? 'chilli' : 'uspot');
-  const uamServer = (k: AdapterKey) => `${deps.config.base.origins.portal}/uam/${pathOf(k)}/`;
+  /** Canonical UAM entry the api hands out (D-076/D-077: /uam/ezeap/, /uam/ezecloud/). */
+  const uamServer = (k: AdapterKey) =>
+    `${deps.config.base.origins.portal}${UAM_FLAVOURS[pathOf(k)].path}`;
 
   interface Device {
     mac: string;
@@ -508,6 +510,32 @@ await describeIntegration('@ecloud/api captive portal broker (P6-A)', () => {
   });
 
   // ------------------------------------------------------------------------- negative: redirect
+
+  it('D-076: an AP still on the legacy /uam/uspot/ entry is verified against the path it used', async () => {
+    const f = await fixture();
+    const origin = deps.config.base.origins.portal;
+    // md covers the UAM server URL the AP was configured with: the legacy one here
+    const legacy = redirectFor(f, newDevice(), { uamServer: `${origin}/uam/uspot/` });
+    const post = (entryPath?: string) =>
+      request(internal)
+        .post('/internal/portal/redirects')
+        .set('X-Internal-Token', TEST_INTERNAL_TOKEN)
+        .send({
+          flavour: 'uspot',
+          raw_query: legacy.query,
+          client_ip: randomIp(),
+          ...(entryPath === undefined ? {} : { entry_path: entryPath }),
+        });
+
+    // the portal reports the legacy entry it served -> accepted
+    const served = await post('/uam/uspot/');
+    expect(served.status).toBe(200);
+    expect(served.body.kind).toBe('flow');
+    // no entry path -> canonical /uam/ezeap/ is assumed -> signature mismatch, generic error
+    expect((await post()).body).toEqual({ kind: 'error' });
+    // an entry path that is not one of this flavour's paths is ignored (canonical assumed)
+    expect((await post('/uam/chilli/')).body).toEqual({ kind: 'error' });
+  });
 
   it('forged md, missing md, unknown NAS, wrong flavour, public uamip, duplicate params: one generic error', async () => {
     const f = await fixture();

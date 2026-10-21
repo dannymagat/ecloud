@@ -42,7 +42,10 @@ describe('table catalogue', () => {
       .filter((chunk) => /^\) PARTITION BY RANGE/m.test(chunk))
       .map((chunk) => chunk.split(' ')[0]);
     expect([...partitioned].sort()).toEqual([...PARTITIONED_TABLES].sort());
-    expect(APPEND_ONLY_TABLES).toBe(PARTITIONED_TABLES);
+    // portal_registrations is partitioned but deletable for retention / erasure (049, 051)
+    expect([...APPEND_ONLY_TABLES]).toEqual(
+      PARTITIONED_TABLES.filter((t) => t !== 'portal_registrations'),
+    );
     for (const t of PARTITIONED_TABLES) {
       expect(sql).toContain(`SELECT ensure_month_partitions('${t}'::regclass, 2);`);
       expect(sql).toContain(`CREATE TABLE ${t}_default PARTITION OF ${t} DEFAULT;`);

@@ -216,6 +216,55 @@ await describeIntegration(
       expectDenied(await sqlProbe(radius, 'SELECT secret FROM radius.nas LIMIT 1'));
     });
 
+    it('051: guest registration data is insert-only for ecloud_app; no partition is wider than its parent', async () => {
+      const privileges = await dbs.platformPool.query<{
+        t: string;
+        u: boolean;
+        d: boolean;
+        tr: boolean;
+      }>(
+        `SELECT t, has_table_privilege('ecloud_app', t, 'UPDATE') AS u,
+                has_table_privilege('ecloud_app', t, 'DELETE') AS d,
+                has_table_privilege('ecloud_app', t, 'TRUNCATE') AS tr
+           FROM unnest($1::text[]) AS t ORDER BY t`,
+        [['device_registrations', 'portal_registrations', 'terms_acceptances']],
+      );
+      expect(privileges.rows).toEqual([
+        // revocation is recorded (UPDATE), never deleted
+        { t: 'device_registrations', u: true, d: false, tr: false },
+        { t: 'portal_registrations', u: false, d: false, tr: false },
+        { t: 'terms_acceptances', u: true, d: false, tr: false },
+      ]);
+
+      const wider = await dbs.platformPool.query<{ part: string; priv: string }>(
+        `SELECT c.relname AS part, p.priv
+           FROM pg_inherits i
+           JOIN pg_class c ON c.oid = i.inhrelid
+           JOIN pg_namespace n ON n.oid = c.relnamespace
+          CROSS JOIN unnest(ARRAY['UPDATE', 'DELETE', 'TRUNCATE']) AS p(priv)
+          WHERE n.nspname = 'public'
+            AND has_table_privilege('ecloud_app', c.oid, p.priv)
+            AND NOT has_table_privilege('ecloud_app', i.inhparent, p.priv)
+          ORDER BY 1, 2`,
+      );
+      expect(wider.rows).toEqual([]);
+
+      // a partition created after 051 inherits the narrowing (ensure_month_partitions)
+      await inRolledBackTransaction(dbs.platformPool, null, async (client) => {
+        const created = await client.query<{ p: string }>(
+          "SELECT ensure_month_partitions('portal_registrations'::regclass, 60) AS p",
+        );
+        const newest = created.rows.at(-1)?.p;
+        expect(newest, 'ensure_month_partitions created a partition').toBeDefined();
+        const check = await client.query<{ u: boolean; d: boolean }>(
+          `SELECT has_table_privilege('ecloud_app', $1, 'UPDATE') AS u,
+                  has_table_privilege('ecloud_app', $1, 'DELETE') AS d`,
+          [newest],
+        );
+        expect(check.rows[0]).toEqual({ u: false, d: false });
+      });
+    });
+
     it('append-only tables: trigger on parent and every partition; UPDATE/DELETE raise even for the owner', async () => {
       for (const table of APPEND_ONLY_TABLES) {
         const missing = await dbs.platformPool.query<{ relname: string }>(

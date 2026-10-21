@@ -97,6 +97,9 @@ export const workspaceProjects: TestProjectConfiguration[] = [
         name: ws.name.replace('@ecloud/', ''),
         include: ['src/**/*.test.ts'],
         sequence: { groupOrder: DATABASE_RESET_WORKSPACES.includes(ws.name) ? 0 : 1 },
+        // The schema suite of a reset workspace drops and recreates the test database: its other
+        // DB-backed files (e.g. db/secret-version-trigger) must not run beside it.
+        ...(DATABASE_RESET_WORKSPACES.includes(ws.name) ? { fileParallelism: false } : {}),
       },
     })),
   crossPackageProject,
