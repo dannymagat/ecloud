@@ -1,0 +1,13 @@
+{
+  "format": "ecloud-backup/1",
+  "created_at": "20261021T022318Z",
+  "database": "ecloud",
+  "pg_dump": "pg_dump (PostgreSQL) 16.15",
+  "db_file": "ecloud-db-20261021T022318Z.dump.age",
+  "db_bytes": 672027,
+  "config_file": "ecloud-config-20261021T022318Z.tar.gz.age",
+  "config_bytes": 36676,
+  "dump_ms": 809,
+  "config_ms": 106,
+  "encryption": "age (X25519 recipients from BACKUP_AGE_RECIPIENTS_FILE)"
+}
